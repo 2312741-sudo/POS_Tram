@@ -1,0 +1,72 @@
+# ==========================================
+# POS Trạm (Tram FnB System) - Git Ignore
+# ==========================================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Node / Next.js
+node_modules/
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.vercel/
+web/*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Flutter / Dart
+.dart_tool/
+app_flutter/.dart_tool/
+app_flutter/build/
+app_flutter/.flutter-plugins
+app_flutter/.flutter-plugins-dependencies
+app_flutter/.pub-cache/
+app_flutter/.pub/
+app_flutter/ios/Pods/
+app_flutter/ios/.symlinks/
+app_flutter/ios/Flutter/Flutter.framework
+app_flutter/ios/Flutter/Flutter.podspec
+app_flutter/ios/Flutter/Generated.xcconfig
+app_flutter/ios/Flutter/app.flx
+app_flutter/ios/Flutter/app.zip
+app_flutter/ios/Flutter/flutter_assets/
+app_flutter/android/app/debug/
+app_flutter/android/app/profile/
+app_flutter/android/app/release/
+app_flutter/android/.gradle/
+app_flutter/android/local.properties
+app_flutter/windows/flutter/ephemeral/
+app_flutter/windows/runner/Debug/
+app_flutter/windows/runner/Release/
+app_flutter/windows/runner/Profile/
+
+# Build artifacts & symbols
+*.class
+*.log
+*.pyc
+*.swp
+*.apk
+*.aab
+app.*.symbols
+app.*.map.json
+
+# Scratch / Temp
+scratch/
+tmp/
