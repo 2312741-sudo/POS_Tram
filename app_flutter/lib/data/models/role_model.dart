@@ -1,5 +1,3 @@
-import '../../core/permissions/app_permissions.dart';
-
 // ==================== ROLE MODEL ====================
 class RoleModel {
   final String id;
