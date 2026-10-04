@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/reports/report_calculator.dart';
+import 'package:tram_flutter/core/reports/report_export_service.dart';
 import 'package:tram_flutter/core/reports/report_models.dart';
 import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/data/models/shift_model.dart';
@@ -412,6 +413,35 @@ void main() {
       expect(item.transferRevenue, equals(464400));
       expect(item.cardRevenue, equals(151200));
       expect(item.percentage, equals(100.0));
+    });
+
+    test('13. Quy ước đặt tên file xuất Excel/PDF chuẩn mục 7.1', () {
+      final fixedNow = DateTime(2026, 10, 4, 23, 5, 0);
+      final startDate = DateTime(2026, 10, 4);
+      final endDate = DateTime(2026, 10, 4);
+
+      final fileNameZ = ReportExportService.generateFileName(
+        reportCode: 'BC_CUOINGAY_Z',
+        storeCode: 'TRAM01',
+        startDate: startDate,
+        endDate: endDate,
+        extension: 'xlsx',
+        now: fixedNow,
+      );
+      expect(fileNameZ, equals('BC_CUOINGAY_Z_TRAM01_20261004_20261004_230500.xlsx'));
+
+      final startMonth = DateTime(2026, 10, 1);
+      final endMonth = DateTime(2026, 10, 31);
+      final fixedMorning = DateTime(2026, 10, 31, 8, 30, 15);
+      final fileNameProd = ReportExportService.generateFileName(
+        reportCode: 'BC_HANGHOA',
+        storeCode: 'TRAM01',
+        startDate: startMonth,
+        endDate: endMonth,
+        extension: 'xlsx',
+        now: fixedMorning,
+      );
+      expect(fileNameProd, equals('BC_HANGHOA_TRAM01_20261001_20261031_083015.xlsx'));
     });
   });
 }
