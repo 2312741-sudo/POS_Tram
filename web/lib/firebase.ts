@@ -2,6 +2,8 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
+import { getAuth } from "firebase/auth";
+
 const firebaseConfig = {
   apiKey: "AIzaSyDjsags-PVvGmO8YXC1UMYfnqOa7jAieCg",
   authDomain: "tramapp-36f53.firebaseapp.com",
@@ -14,4 +16,6 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getDatabase(app);
+export const auth = getAuth(app);
+export { firebaseConfig };
 export default app;
