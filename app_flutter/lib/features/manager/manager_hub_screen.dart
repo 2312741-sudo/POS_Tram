@@ -11,6 +11,7 @@ import 'tabs/revenue_tab.dart';
 import 'tabs/analytics_tab.dart';
 import 'tabs/bills_tab.dart';
 import 'tabs/audit_tab.dart';
+import '../reports/reports_hub_screen.dart';
 
 class ManagerHubScreen extends StatefulWidget {
   final int initialTab;
@@ -237,6 +238,17 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                 ),
               ),
               IconButton(
+                icon: const Icon(Icons.assessment_outlined, color: TramColors.brandPrimary, size: 20),
+                tooltip: 'Trung tâm Báo cáo',
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
+                  );
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.refresh, color: TramColors.textPrimary, size: 20),
                 tooltip: 'Làm mới',
                 visualDensity: VisualDensity.compact,
@@ -246,7 +258,12 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                 icon: const Icon(Icons.more_vert, color: TramColors.textPrimary, size: 20),
                 tooltip: 'Tuỳ chọn',
                 onSelected: (val) async {
-                  if (val == 'STORE') {
+                  if (val == 'REPORTS') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
+                    );
+                  } else if (val == 'STORE') {
                     _showStoreSwitcherDialog();
                   } else if (val == 'LOGOUT') {
                     await _auth.logout();
@@ -254,6 +271,16 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                   }
                 },
                 itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'REPORTS',
+                    child: Row(
+                      children: [
+                        Icon(Icons.assessment_outlined, size: 18, color: TramColors.brandPrimary),
+                        SizedBox(width: 8),
+                        Text('Trung tâm Báo cáo (12 BC)'),
+                      ],
+                    ),
+                  ),
                   if (_auth.canAccessManagerHub)
                     const PopupMenuItem(
                       value: 'STORE',

@@ -9,6 +9,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../../cash_shift/cash_shift_dialog.dart';
+import '../../reports/reports_hub_screen.dart';
 
 class OverviewTab extends StatefulWidget {
   final VoidCallback onGoToPOS;
@@ -366,7 +367,67 @@ class _OverviewTabState extends State<OverviewTab> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // BANNER TRUNG TÂM BÁO CÁO TOÀN DIỆN
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [TramColors.brandPrimary, Color(0xFFA03842)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: TramColors.brandPrimary.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.assessment, color: Colors.white, size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TRUNG TÂM BÁO CÁO TÀI CHÍNH & VẬN HÀNH',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '12 báo cáo chuyên sâu • Biểu đồ trực quan • Xuất Excel & PDF chuẩn kiểm toán',
+                          style: GoogleFonts.beVietnamPro(fontSize: 10, color: Colors.white.withValues(alpha: 0.9)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
 
           // 6. Phím Tắt Nghiệp Vụ Quản Lý
           Text(
