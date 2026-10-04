@@ -1,0 +1,121 @@
+{
+  "rules": {
+    "stores": {
+      "$storeCode": {
+        ".read": "auth != null && (root.child('stores').child($storeCode).child('users').child(auth.uid).exists() || auth.token.admin === true)",
+        "storeInfo": {
+          ".write": "auth != null && (root.child('stores').child($storeCode).child('users').child(auth.uid).child('isRootOwner').val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'owner')"
+        },
+        "categories": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "products": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "tables": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "zones": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "bills": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "kitchen_orders": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "online_orders": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "cash_shifts": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "promotions": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "users": {
+          "$uid": {
+            ".write": "auth != null && ((auth.uid === $uid && !newData.child('isRootOwner').changed() && !newData.child('roleId').changed() && !newData.child('isActive').changed()) || ((root.child('stores').child($storeCode).child('users').child(auth.uid).child('isRootOwner').val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'owner') && !(data.child('isRootOwner').val() === true && auth.uid !== $uid)))",
+            ".validate": "newData.hasChildren(['username', 'fullName', 'roleId']) && !newData.hasChild('password')"
+          }
+        },
+        "login_attempts": {
+          "$username": {
+            ".read": true,
+            ".write": true
+          }
+        },
+        "audit_logs": {
+          "$logId": {
+            ".write": "auth != null && !data.exists() && newData.exists()"
+          }
+        },
+        "inventory": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "suppliers": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        },
+        "receipts": {
+          ".write": "auth != null && root.child('stores').child($storeCode).child('users').child(auth.uid).exists()"
+        }
+      }
+    },
+    "users": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "tables": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "products": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "categories": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "zones": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "history": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "audit_logs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "online_orders": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "kitchen_orders": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "kmt_customers": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "cham_cong": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "timekeeping": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "employees": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "shifts": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
