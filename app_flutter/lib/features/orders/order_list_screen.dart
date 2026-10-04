@@ -844,12 +844,21 @@ class _ProductListRow extends StatelessWidget {
                   child: Container(
                     width: 58,
                     height: 58,
-                    color: AppColors.cardElevated,
-                    child: product.imageBase64 != null && product.imageBase64!.isNotEmpty
+                    child: (product.imageBase64 != null && product.imageBase64!.isNotEmpty)
                         ? _buildBase64Image(product.imageBase64!)
-                        : const Center(
-                            child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
-                          ),
+                        : (product.assetPath != null
+                            ? Image.asset(
+                                product.assetPath!,
+                                fit: BoxFit.cover,
+                                width: 58,
+                                height: 58,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+                                ),
+                              )
+                            : const Center(
+                                child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+                              )),
                   ),
                 ),
                 const SizedBox(width: 14),
