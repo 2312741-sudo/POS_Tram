@@ -25,6 +25,7 @@ import {
   Calendar,
   Phone,
   DollarSign,
+  XCircle,
 } from "lucide-react";
 
 interface OrderItem {
@@ -82,6 +83,7 @@ export default function TablesPage() {
     currentStore,
     stores,
     checkoutAndFreeTable,
+    cancelActiveTable,
     saveTable,
     deleteTable,
   } = useDashboardData();
@@ -270,6 +272,28 @@ export default function TablesPage() {
       }
     } catch (e: any) {
       alert("Lỗi khi trả bàn: " + e.message);
+    }
+    setCompletingPayment(false);
+  };
+
+  const handleCancelActiveTable = async (t: Table) => {
+    const reason = prompt(`Nhập lý do hủy đơn bàn ${t.name}:`, "Khách đổi ý hủy bàn");
+    if (!reason || !reason.trim()) return;
+
+    if (!confirm(`Xác nhận HỦY TOÀN BỘ đơn và TRẢ BÀN TRỐNG cho ${t.name}?\nLý do: ${reason.trim()}`)) return;
+
+    setCompletingPayment(true);
+    try {
+      const res = await cancelActiveTable(t, reason.trim());
+      if (res.success) {
+        setCheckoutToast(`✅ Đã hủy đơn bàn ${t.name} và trả bàn trống thành công!`);
+        setTimeout(() => setCheckoutToast(null), 5000);
+        setSelectedTableForOrder(null);
+      } else {
+        alert("Lỗi khi hủy đơn bàn: " + (res.error || "Không xác định"));
+      }
+    } catch (e: any) {
+      alert("Lỗi khi hủy đơn bàn: " + e.message);
     }
     setCompletingPayment(false);
   };
@@ -896,6 +920,44 @@ export default function TablesPage() {
                         </div>
                       </div>
 
+                      {/* Mã Hóa Đơn & Mã Đặt Món */}
+                      {(t.currentBillId || (t as any).currentOrderCode) && (
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px" }}>
+                          {t.currentBillId && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                color: "#7E2930",
+                                background: "#FFF0F2",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                border: "1px solid rgba(126, 41, 48, 0.2)",
+                                letterSpacing: "0.02em",
+                              }}
+                            >
+                              HĐ: {t.currentBillId}
+                            </span>
+                          )}
+                          {(t as any).currentOrderCode && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                color: "#146A65",
+                                background: "#E8F5F3",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                border: "1px solid rgba(20, 106, 101, 0.2)",
+                                letterSpacing: "0.02em",
+                              }}
+                            >
+                              Đơn: {(t as any).currentOrderCode}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Danh sách món tóm tắt */}
                       <div
                         style={{
@@ -1296,7 +1358,19 @@ export default function TablesPage() {
                   return (
                     <tr key={t.id}>
                       <td style={{ color: "#5D5B63" }}>{i + 1}</td>
-                      <td style={{ fontWeight: "700", color: "#1C1A2D", fontSize: "15px" }}>{t.name}</td>
+                      <td style={{ fontWeight: "700", color: "#1C1A2D", fontSize: "15px" }}>
+                        <div>{t.name}</div>
+                        {t.currentBillId && (
+                          <div style={{ fontSize: "11px", fontWeight: "600", color: "#7E2930", marginTop: "2px" }}>
+                            HĐ: {t.currentBillId}
+                          </div>
+                        )}
+                        {(t as any).currentOrderCode && (
+                          <div style={{ fontSize: "11px", fontWeight: "600", color: "#146A65", marginTop: "1px" }}>
+                            Đơn: {(t as any).currentOrderCode}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <span
                           className="badge"
@@ -1761,20 +1835,36 @@ export default function TablesPage() {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <button
                   className="btn-secondary"
                   onClick={() => printBill(selectedTableForOrder)}
-                  style={{ flex: 1, justifyContent: "center" }}
+                  style={{ flex: 1, minWidth: "110px", justifyContent: "center" }}
                 >
                   <Printer size={16} />
                   In tạm tính
                 </button>
                 <button
+                  className="btn-secondary"
+                  onClick={() => handleCancelActiveTable(selectedTableForOrder)}
+                  disabled={completingPayment}
+                  style={{
+                    flex: 1,
+                    minWidth: "125px",
+                    justifyContent: "center",
+                    color: "#ef4444",
+                    borderColor: "#fca5a5",
+                    backgroundColor: "#fef2f2",
+                  }}
+                >
+                  <XCircle size={16} />
+                  Hủy đơn bàn
+                </button>
+                <button
                   className="btn-primary"
                   onClick={() => handleCheckoutAndFreeTable(selectedTableForOrder)}
                   disabled={completingPayment}
-                  style={{ flex: 1, justifyContent: "center", opacity: completingPayment ? 0.7 : 1 }}
+                  style={{ flex: 1.5, minWidth: "160px", justifyContent: "center", opacity: completingPayment ? 0.7 : 1 }}
                 >
                   <CheckCircle2 size={16} />
                   {completingPayment ? "Đang xử lý..." : "Thanh toán & Trả bàn"}

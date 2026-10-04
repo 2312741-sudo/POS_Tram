@@ -1,6 +1,6 @@
-// lib/data/models/app_models.dart
 import 'dart:convert';
 import '../../core/permissions/app_permissions.dart';
+import '../../core/utils/format_utils.dart';
 
 // ==================== STORE INFO MODEL ====================
 class StoreInfoModel {
@@ -496,7 +496,8 @@ class TableModel {
   bool inUse;
   String currentOrderJson;
   String? mergedIntoTable; // Name of parent table if merged
-  String? currentBillId;
+  String? currentBillId; // Mã hóa đơn thanh toán (HD-yyMMdd-HHmmss)
+  String? currentOrderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
 
   // Đặt bàn trước KiotViet (Reservations)
   bool isReserved;
@@ -516,6 +517,7 @@ class TableModel {
     this.currentOrderJson = '',
     this.mergedIntoTable,
     this.currentBillId,
+    this.currentOrderCode,
     this.isReserved = false,
     this.reservationCustomer,
     this.reservationPhone,
@@ -595,6 +597,7 @@ class TableModel {
       currentOrderJson: map['currentOrderJson']?.toString() ?? '',
       mergedIntoTable: map['mergedIntoTable']?.toString(),
       currentBillId: map['currentBillId']?.toString(),
+      currentOrderCode: map['currentOrderCode']?.toString(),
       isReserved: isReserved,
       reservationCustomer: map['reservationCustomer']?.toString(),
       reservationPhone: map['reservationPhone']?.toString(),
@@ -614,6 +617,7 @@ class TableModel {
     'currentOrderJson': currentOrderJson,
     if (mergedIntoTable != null) 'mergedIntoTable': mergedIntoTable,
     if (currentBillId != null) 'currentBillId': currentBillId,
+    if (currentOrderCode != null) 'currentOrderCode': currentOrderCode,
     'isReserved': isReserved,
     if (reservationCustomer != null) 'reservationCustomer': reservationCustomer,
     if (reservationPhone != null) 'reservationPhone': reservationPhone,
@@ -659,6 +663,37 @@ class TableModel {
   Duration? get durationInUse {
     if (!inUse || openedAt == null) return null;
     return DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(openedAt!));
+  }
+
+  /// Đảm bảo luôn có đầy đủ cả Mã Hóa Đơn (HD-...) và Mã Đặt Món (OD-...)
+  void ensureCodes() {
+    // 1. Phục hồi hoặc sinh Mã Hóa Đơn chính thức (HD-...)
+    if (currentBillId == null || currentBillId!.isEmpty) {
+      currentBillId = FormatUtils.billCode();
+    } else if (currentBillId!.startsWith('OD-')) {
+      // Nếu dữ liệu cũ lưu nhầm OD- vào currentBillId thì chuyển sang currentOrderCode
+      if (currentOrderCode == null || currentOrderCode!.isEmpty) {
+        currentOrderCode = currentBillId;
+      }
+      currentBillId = FormatUtils.billCode();
+    }
+
+    // 2. Phục hồi hoặc sinh Mã Đặt Món kiểm soát (OD-...)
+    if (currentOrderCode == null || currentOrderCode!.isEmpty) {
+      currentOrderCode = FormatUtils.orderCode();
+    }
+  }
+
+  /// Đưa bàn về trạng thái hoàn toàn TRỐNG (sạch sẽ, xóa giỏ hàng và cả 2 mã đơn)
+  void clearTable() {
+    inUse = false;
+    currentOrderJson = '';
+    openedAt = null;
+    guestCount = null;
+    currentBillId = null;
+    currentOrderCode = null;
+    mergedIntoTable = null;
+    actionLogsJson = null;
   }
 }
 
@@ -743,6 +778,42 @@ class PromotionModel {
     'usageCount': usageCount,
     'maxUsage': maxUsage,
   };
+
+  PromotionModel copyWith({
+    String? id,
+    String? code,
+    String? name,
+    String? description,
+    String? type,
+    int? value,
+    int? maxDiscountAmount,
+    int? minBillAmount,
+    String? targetCategory,
+    int? targetProductId,
+    int? startDate,
+    int? endDate,
+    bool? isActive,
+    int? usageCount,
+    int? maxUsage,
+  }) {
+    return PromotionModel(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      value: value ?? this.value,
+      maxDiscountAmount: maxDiscountAmount ?? this.maxDiscountAmount,
+      minBillAmount: minBillAmount ?? this.minBillAmount,
+      targetCategory: targetCategory ?? this.targetCategory,
+      targetProductId: targetProductId ?? this.targetProductId,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      isActive: isActive ?? this.isActive,
+      usageCount: usageCount ?? this.usageCount,
+      maxUsage: maxUsage ?? this.maxUsage,
+    );
+  }
 
   /// Kiểm tra khuyến mãi có đang còn hiệu lực hay không
   bool isValid(int subTotal) {
@@ -843,7 +914,8 @@ class BillDiscountModel {
 // ==================== BILL MODEL ====================
 class BillModel {
   final String id;
-  final String billCode;
+  final String billCode; // Mã hóa đơn chính thức (HD-yyMMdd-HHmmss)
+  final String? orderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
   final String tableName;
   final String zone;
   final int createdAt;
@@ -873,6 +945,7 @@ class BillModel {
   BillModel({
     required this.id,
     required this.billCode,
+    this.orderCode,
     required this.tableName,
     required this.zone,
     required this.createdAt,
@@ -935,9 +1008,30 @@ class BillModel {
       } catch (_) {}
     }
 
+    final rawBillCode = map['billCode']?.toString();
+    final rawOrderCode = map['orderCode']?.toString();
+
+    String billCode;
+    String? orderCode = rawOrderCode;
+
+    if (rawBillCode != null && rawBillCode.isNotEmpty && !rawBillCode.startsWith('OD-')) {
+      billCode = rawBillCode;
+    } else if (rawOrderCode != null && rawOrderCode.startsWith('HD-')) {
+      billCode = rawOrderCode;
+    } else if (rawBillCode != null && rawBillCode.isNotEmpty) {
+      billCode = rawBillCode;
+    } else {
+      billCode = rawOrderCode ?? id;
+    }
+
+    if (orderCode == null && rawBillCode != null && rawBillCode.startsWith('OD-')) {
+      orderCode = rawBillCode;
+    }
+
     return BillModel(
       id: id,
-      billCode: map['billCode']?.toString() ?? id,
+      billCode: billCode,
+      orderCode: orderCode,
       tableName: map['tableName']?.toString() ?? '',
       zone: map['zone']?.toString() ?? '',
       createdAt: (map['createdAt'] as num?)?.toInt() ?? 0,
@@ -946,14 +1040,14 @@ class BillModel {
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
       items: items,
-      subTotal: (map['subTotal'] as num?)?.toInt() ?? 0,
+      subTotal: (map['subTotal'] as num?)?.toInt() ?? (map['totalAmount'] as num?)?.toInt() ?? 0,
       discounts: discounts,
-      totalDiscount: (map['totalDiscount'] as num?)?.toInt() ?? 0,
+      totalDiscount: (map['totalDiscount'] as num?)?.toInt() ?? (map['discountAmount'] as num?)?.toInt() ?? 0,
       vatRate: (map['vatRate'] as num?)?.toDouble() ?? 0.0,
       vatAmount: (map['vatAmount'] as num?)?.toInt() ?? 0,
-      finalAmount: (map['finalAmount'] as num?)?.toInt() ?? 0,
+      finalAmount: (map['finalAmount'] as num?)?.toInt() ?? (map['totalAmount'] as num?)?.toInt() ?? 0,
       paymentMethod: map['paymentMethod']?.toString() ?? 'CASH',
-      notes: map['notes']?.toString() ?? '',
+      notes: map['notes']?.toString() ?? map['note']?.toString() ?? '',
       parentBillId: map['parentBillId']?.toString(),
       mergedTableNames: merged,
       pointsUsed: (map['pointsUsed'] as num?)?.toInt() ?? 0,
@@ -965,6 +1059,8 @@ class BillModel {
       actionLogs: actionLogs,
     );
   }
+
+  String get note => notes;
 
   /// Danh sách nhân viên đã nhận order các món trong đơn
   String get orderStaffSummary {
@@ -981,6 +1077,7 @@ class BillModel {
   Map<String, dynamic> toMap() => {
     'id': id,
     'billCode': billCode,
+    if (orderCode != null) 'orderCode': orderCode,
     'tableName': tableName,
     'zone': zone,
     'createdAt': createdAt,
@@ -999,6 +1096,7 @@ class BillModel {
     'finalAmount': finalAmount,
     'paymentMethod': paymentMethod,
     'notes': notes,
+    'note': notes,
     if (parentBillId != null) 'parentBillId': parentBillId,
     if (mergedTableNames != null) 'mergedTableNames': mergedTableNames,
     if (pointsUsed > 0) 'pointsUsed': pointsUsed,
@@ -1286,6 +1384,8 @@ class AuditLogModel {
 class KitchenOrderModel {
   final String? firebaseKey;
   final String tableName;
+  final String? orderCode; // Mã đặt món (OD-...)
+  final String? billCode; // Mã hóa đơn (HD-...)
   final String itemsJson;
   final int timestamp;
   bool isDone;
@@ -1294,6 +1394,8 @@ class KitchenOrderModel {
   KitchenOrderModel({
     this.firebaseKey,
     required this.tableName,
+    this.orderCode,
+    this.billCode,
     required this.itemsJson,
     required this.timestamp,
     this.isDone = false,
@@ -1304,6 +1406,8 @@ class KitchenOrderModel {
     return KitchenOrderModel(
       firebaseKey: key,
       tableName: map['tableName']?.toString() ?? '',
+      orderCode: map['orderCode']?.toString(),
+      billCode: map['billCode']?.toString(),
       itemsJson: map['itemsJson']?.toString() ?? '[]',
       timestamp: (map['timestamp'] as num?)?.toInt() ?? 0,
       isDone: map['isDone'] == true,
@@ -1313,6 +1417,8 @@ class KitchenOrderModel {
 
   Map<String, dynamic> toMap() => {
     'tableName': tableName,
+    if (orderCode != null) 'orderCode': orderCode,
+    if (billCode != null) 'billCode': billCode,
     'itemsJson': itemsJson,
     'timestamp': timestamp,
     'isDone': isDone,

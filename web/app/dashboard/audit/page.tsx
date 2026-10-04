@@ -460,39 +460,33 @@ export default function AuditPage() {
           </div>
 
           {/* Action select */}
-          <div style={{ position: "relative" }}>
-            <Filter size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
-            <select
-              className="input-field"
-              value={filterAction}
-              onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
-              style={{ paddingLeft: "38px", minWidth: "200px" }}
-            >
-              <option value="">Tất cả loại hành động</option>
-              {uniqueActions.map((a) => {
-                const meta = getActionMeta(a);
-                return (
-                  <option key={a} value={a}>
-                    {meta.label} ({a})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          <select
+            className="input-field"
+            value={filterAction}
+            onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "200px" }}
+          >
+            <option value="">⚙️ Tất cả loại hành động</option>
+            {uniqueActions.map((a) => {
+              const meta = getActionMeta(a);
+              return (
+                <option key={a} value={a}>
+                  {meta.label} ({a})
+                </option>
+              );
+            })}
+          </select>
 
           {/* User select */}
-          <div style={{ position: "relative" }}>
-            <User size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
-            <select
-              className="input-field"
-              value={filterUser}
-              onChange={(e) => { setFilterUser(e.target.value); setPage(1); }}
-              style={{ paddingLeft: "38px", minWidth: "180px" }}
-            >
-              <option value="">Tất cả nhân viên</option>
-              {uniqueUsers.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </div>
+          <select
+            className="input-field"
+            value={filterUser}
+            onChange={(e) => { setFilterUser(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "180px" }}
+          >
+            <option value="">👤 Tất cả nhân viên</option>
+            {uniqueUsers.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
 
           {(search || filterAction || filterUser || categoryFilter !== "ALL") && (
             <button

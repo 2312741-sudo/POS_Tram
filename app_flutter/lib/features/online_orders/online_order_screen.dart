@@ -189,12 +189,36 @@ class _OnlineOrderCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Spacer(),
-                  Text('Bàn ${order.tableName}', style: GoogleFonts.beVietnamPro(
-                    color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
                   const SizedBox(width: 8),
-                  Text('• ${order.tableZone}', style: GoogleFonts.beVietnamPro(
-                    color: AppColors.textSecondary, fontSize: 12)),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Bàn ${order.tableName}',
+                              style: GoogleFonts.beVietnamPro(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                            if (order.tableZone.isNotEmpty)
+                              TextSpan(
+                                text: ' • ${order.tableZone}',
+                                style: GoogleFonts.beVietnamPro(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

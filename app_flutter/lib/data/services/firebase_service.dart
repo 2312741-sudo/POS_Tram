@@ -8,7 +8,10 @@ import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
+import 'inventory_service.dart';
+import 'campaign_service.dart';
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -602,7 +605,8 @@ class FirebaseService {
       'id': bill.id,
       'storeCode': _currentStoreCode,
       'storeName': _currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - Chi nhánh $_currentStoreCode',
-      'orderCode': bill.billCode,
+      'billCode': bill.billCode,
+      'orderCode': bill.orderCode ?? bill.billCode,
       'tableName': bill.tableName,
       'zone': bill.zone,
       'totalAmount': bill.finalAmount,
@@ -625,17 +629,59 @@ class FirebaseService {
     _root.child('history').child(bill.id).set(historyMap).catchError((_) {});
     _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
 
-    table.inUse = false;
-    table.currentOrderJson = '';
-    table.currentBillId = null;
-    table.mergedIntoTable = null;
-    table.actionLogsJson = null;
+    table.clearTable();
     await saveTable(table);
 
     for (final d in bill.discounts) {
       if (d.promoId != null) {
         incrementPromotionUsage(d.promoId!);
       }
+    }
+
+    // ── Kho: Trừ tồn kho theo công thức (nếu có recipe) ──
+    try {
+      await InventoryService().consumeStockForBill(
+        bill.items,
+        bill.id,
+        bill.staffUsername,
+      );
+    } catch (_) {
+      // Không block thanh toán nếu kho lỗi
+    }
+
+    // ── KM mới: Commit campaign usage & redeem voucher (nếu bill dùng campaign/voucher) ──
+    try {
+      for (final d in bill.discounts) {
+        if (d.promoCode != null && d.promoCode!.isNotEmpty) {
+          final v = await CampaignService().lookupVoucherByCode(d.promoCode!);
+          if (v != null) {
+            await CampaignService().commitPromotionUsage(
+              campaignId: v.campaignId,
+              discountMoney: d.amount,
+              billId: bill.id,
+              username: bill.staffUsername,
+              voucherCode: d.promoCode,
+              customerId: null,
+            );
+            continue;
+          }
+        }
+        if (d.promoId != null && d.promoId!.isNotEmpty) {
+          final cam = await CampaignService().getCampaign(d.promoId!);
+          if (cam != null) {
+            await CampaignService().commitPromotionUsage(
+              campaignId: cam.campaignId,
+              discountMoney: d.amount,
+              billId: bill.id,
+              username: bill.staffUsername,
+              voucherCode: d.promoCode,
+              customerId: null,
+            );
+          }
+        }
+      }
+    } catch (_) {
+      // Không block thanh toán nếu KM lỗi
     }
 
     await logAction(AuditLogModel(
@@ -647,6 +693,222 @@ class FirebaseService {
       targetType: 'BILL',
       targetId: bill.billCode,
       details: 'Thanh toán hóa đơn ${bill.billCode} bàn ${bill.tableName}: ${bill.finalAmount}đ (${bill.paymentMethod})',
+    ));
+  }
+
+  // ==================== CANCEL ACTIVE BILL ====================
+  Future<void> cancelActiveBill(
+    TableModel table, {
+    required String reason,
+    required String staffUsername,
+    required String staffFullName,
+    required String staffRole,
+  }) async {
+    final items = table.currentItems;
+    final totalAmount = items.fold(0, (sum, i) => sum + i.itemTotal);
+    final billCode = (table.currentBillId != null && table.currentBillId!.startsWith('HD-'))
+        ? table.currentBillId!
+        : FormatUtils.billCode();
+    final orderCode = table.currentOrderCode ?? FormatUtils.orderCode();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cancelBillId = 'BILL_CANCELLED_$now';
+
+    final billRecord = {
+      'id': cancelBillId,
+      'billCode': billCode,
+      'orderCode': orderCode,
+      'tableName': table.name,
+      'zone': table.zone,
+      'storeCode': _currentStoreCode,
+      'totalAmount': totalAmount,
+      'subTotal': totalAmount,
+      'discountAmount': 0,
+      'totalDiscount': 0,
+      'finalAmount': 0,
+      'status': 'CANCELLED',
+      'cancellationReason': reason,
+      'cancelReason': reason,
+      'timestamp': now,
+      'createdAt': table.openedAt ?? now,
+      'closedAt': now,
+      'staffUsername': staffUsername,
+      'staffFullName': staffFullName,
+      'orderStaff': staffFullName,
+      'items': items.map((i) => i.toMap()).toList(),
+      'itemsJson': jsonEncode(items.map((i) => i.toMap()).toList()),
+      'actionLogs': [
+        OrderActionLogModel(
+          timestamp: now,
+          staffUsername: staffUsername,
+          staffFullName: staffFullName,
+          action: 'CANCEL_BILL',
+          details: '$staffFullName hủy hóa đơn bàn ${table.name}. Lý do: $reason',
+        ).toMap(),
+      ],
+      'actionLogsJson': jsonEncode([
+        OrderActionLogModel(
+          timestamp: now,
+          staffUsername: staffUsername,
+          staffFullName: staffFullName,
+          action: 'CANCEL_BILL',
+          details: '$staffFullName hủy hóa đơn bàn ${table.name}. Lý do: $reason',
+        ).toMap(),
+      ]),
+    };
+
+    _root.child('history').child(cancelBillId).set(billRecord).catchError((_) {});
+    _root.child('stores/$_currentStoreCode/history').child(cancelBillId).set(billRecord).catchError((_) {});
+    billsRef.child(cancelBillId).set(billRecord).catchError((_) {});
+
+    // Clear the table completely back to EMPTY state
+    table.clearTable();
+    await saveTable(table);
+
+    // Audit log
+    await logAction(AuditLogModel(
+      timestamp: now,
+      username: staffUsername,
+      userFullName: staffFullName,
+      userRole: staffRole,
+      action: 'CANCEL_BILL',
+      targetType: 'TABLE',
+      targetId: table.name,
+      details: 'Hủy hóa đơn $billCode (Mã đơn: $orderCode) bàn ${table.name} (${items.length} món, ${FormatUtils.vnd(totalAmount)}). Lý do: $reason',
+      isSuspicious: true,
+    ));
+  }
+
+  // ==================== CANCEL OR DELETE PAID BILL ====================
+  Future<void> cancelPaidBill({
+    required BillModel bill,
+    required String reason,
+    required String staffUsername,
+    required String staffFullName,
+    required String staffRole,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    bill.status = 'CANCELLED';
+    final cancelLog = OrderActionLogModel(
+      timestamp: now,
+      staffUsername: staffUsername,
+      staffFullName: staffFullName,
+      action: 'CANCEL_BILL',
+      details: '$staffFullName hủy hóa đơn ${bill.billCode}. Lý do: $reason',
+    );
+    bill.actionLogs.add(cancelLog);
+
+    // 1. Cập nhật trạng thái trong nhánh bills của cửa hàng
+    await billsRef.child(bill.id).set(bill.toMap());
+
+    // 2. Đồng bộ trạng thái sang nhánh /history và store history
+    final historyMap = {
+      'id': bill.id,
+      'storeCode': _currentStoreCode,
+      'storeName': _currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - Chi nhánh $_currentStoreCode',
+      'billCode': bill.billCode,
+      'orderCode': bill.orderCode ?? bill.billCode,
+      'tableName': bill.tableName,
+      'zone': bill.zone,
+      'totalAmount': bill.finalAmount,
+      'subTotal': bill.subTotal,
+      'discountAmount': bill.totalDiscount,
+      'paymentMethod': bill.paymentMethod,
+      'status': 'CANCELLED',
+      'cancelReason': reason,
+      'cancelledAt': now,
+      'cancelledBy': staffFullName,
+      'timestamp': bill.closedAt ?? bill.createdAt,
+      'createdAt': bill.createdAt,
+      'closedAt': bill.closedAt,
+      'staffUsername': bill.staffUsername,
+      'staffFullName': bill.staffFullName,
+      'cashierName': bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername,
+      'orderStaff': bill.orderStaffSummary,
+      'items': bill.items.map((i) => i.toMap()).toList(),
+      'itemsJson': jsonEncode(bill.items.map((i) => i.toMap()).toList()),
+      'actionLogs': bill.actionLogs.map((a) => a.toMap()).toList(),
+      'actionLogsJson': jsonEncode(bill.actionLogs.map((a) => a.toMap()).toList()),
+    };
+    _root.child('history').child(bill.id).set(historyMap).catchError((_) {});
+    _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
+
+    // 3. Trừ doanh thu khỏi ca bán hàng nếu ca còn mở
+    try {
+      final shift = _activeShiftCache ?? await getCurrentOpenShift();
+      if (shift != null && shift.isOpen) {
+        final m = bill.paymentMethod.toUpperCase();
+        if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
+          shift.totalCashSales = (shift.totalCashSales - bill.finalAmount).clamp(0, 999999999);
+        } else if (m.contains('QR') || m.contains('TRANSFER')) {
+          shift.totalQrSales = (shift.totalQrSales - bill.finalAmount).clamp(0, 999999999);
+        } else if (m.contains('CARD') || m.contains('THẺ')) {
+          shift.totalCardSales = (shift.totalCardSales - bill.finalAmount).clamp(0, 999999999);
+        }
+        _activeShiftCache = shift;
+        await cashShiftsRef.child(shift.id).set(shift.toMap()).catchError((_) {});
+      }
+    } catch (_) {}
+
+    // 4. Ghi nhật ký kiểm toán (Audit Log)
+    await logAction(AuditLogModel(
+      timestamp: now,
+      username: staffUsername,
+      userFullName: staffFullName,
+      userRole: staffRole,
+      action: 'CANCEL_BILL',
+      targetType: 'BILL',
+      targetId: bill.billCode,
+      details: 'Hủy hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason',
+      isSuspicious: true,
+    ));
+  }
+
+  Future<void> deleteBill({
+    required BillModel bill,
+    required String reason,
+    required String staffUsername,
+    required String staffFullName,
+    required String staffRole,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // 1. Xóa khỏi nhánh bills của cửa hàng
+    await billsRef.child(bill.id).remove();
+
+    // 2. Xóa khỏi /history và store history
+    await _root.child('history').child(bill.id).remove().catchError((_) {});
+    await _root.child('stores/$_currentStoreCode/history').child(bill.id).remove().catchError((_) {});
+
+    // 3. Nếu hóa đơn chưa bị hủy trước đó (tức còn đang tính doanh số), trừ doanh số ca
+    if (bill.status == 'PAID') {
+      try {
+        final shift = _activeShiftCache ?? await getCurrentOpenShift();
+        if (shift != null && shift.isOpen) {
+          final m = bill.paymentMethod.toUpperCase();
+          if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
+            shift.totalCashSales = (shift.totalCashSales - bill.finalAmount).clamp(0, 999999999);
+          } else if (m.contains('QR') || m.contains('TRANSFER')) {
+            shift.totalQrSales = (shift.totalQrSales - bill.finalAmount).clamp(0, 999999999);
+          } else if (m.contains('CARD') || m.contains('THẺ')) {
+            shift.totalCardSales = (shift.totalCardSales - bill.finalAmount).clamp(0, 999999999);
+          }
+          _activeShiftCache = shift;
+          await cashShiftsRef.child(shift.id).set(shift.toMap()).catchError((_) {});
+        }
+      } catch (_) {}
+    }
+
+    // 4. Ghi nhật ký kiểm toán (Audit Log)
+    await logAction(AuditLogModel(
+      timestamp: now,
+      username: staffUsername,
+      userFullName: staffFullName,
+      userRole: staffRole,
+      action: 'DELETE_BILL',
+      targetType: 'BILL',
+      targetId: bill.billCode,
+      details: 'Xóa vĩnh viễn hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason',
+      isSuspicious: true,
     ));
   }
 
@@ -925,6 +1187,7 @@ class FirebaseService {
 
   Future<void> updateOnlineOrderStatus(String key, String status) async {
     await onlineOrdersRef.child(key).update({'status': status});
+    _root.child('online_orders').child(key).update({'status': status}).catchError((_) {});
   }
 
   // ==================== KIOTVIET CASH SHIFT (QUẢN LÝ KÉT TIỀN CA) ====================

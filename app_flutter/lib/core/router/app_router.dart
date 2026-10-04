@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../data/models/app_models.dart';
+import '../../data/models/campaign_models.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/tables/table_list_screen.dart';
 import '../../features/orders/order_list_screen.dart';
@@ -23,6 +24,14 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/manager/manager_hub_screen.dart';
 import '../../features/cash_shift/cash_shifts_screen.dart';
 import '../../features/reports/end_of_day_report_screen.dart';
+import '../../features/inventory/inventory_screen.dart';
+import '../../features/inventory/purchase_receipt_screen.dart';
+import '../../features/inventory/stock_card_screen.dart';
+import '../../features/promotions/campaign_list_screen.dart';
+import '../../features/promotions/campaign_form_screen.dart';
+import '../../features/promotions/voucher_management_screen.dart';
+import '../../features/reports/inventory_report_screen.dart';
+import '../../features/reports/promotion_report_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -75,7 +84,7 @@ class AppRouter {
       ),
       GoRoute(path: '/kitchen', builder: (_, __) => const KitchenScreen()),
       GoRoute(path: '/history', builder: (_, __) => const HistoryScreen()),
-      GoRoute(path: '/promotions', builder: (_, __) => const PromotionsScreen()),
+      GoRoute(path: '/promotions', builder: (_, __) => const CampaignListScreen()),
       GoRoute(path: '/audit-logs', builder: (_, __) => const AuditLogsScreen()),
       GoRoute(path: '/permissions-matrix', builder: (_, __) => const PermissionsMatrixScreen()),
       GoRoute(path: '/menu-management', builder: (_, __) => const MenuManagementScreen()),
@@ -97,6 +106,51 @@ class AppRouter {
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
       GoRoute(path: '/cash-shifts', builder: (_, __) => const CashShiftsScreen()),
       GoRoute(path: '/end-of-day-report', builder: (_, __) => const EndOfDayReportScreen()),
+      GoRoute(
+        path: '/inventory',
+        builder: (context, state) => const InventoryScreen(),
+      ),
+      GoRoute(
+        path: '/purchase-receipt',
+        builder: (context, state) {
+          final docId = state.extra as String?;
+          return PurchaseReceiptScreen(documentId: docId);
+        },
+      ),
+      GoRoute(
+        path: '/stock-card',
+        builder: (context, state) {
+          final itemId = state.uri.queryParameters['itemId'] ?? '';
+          final branchId = state.uri.queryParameters['branchId'] ?? '';
+          return StockCardScreen(itemId: itemId, branchId: branchId);
+        },
+      ),
+      GoRoute(
+        path: '/campaigns',
+        builder: (context, state) => const CampaignListScreen(),
+      ),
+      GoRoute(
+        path: '/campaign-form',
+        builder: (context, state) {
+          final campaign = state.extra as CampaignModel?;
+          return CampaignFormScreen(campaign: campaign);
+        },
+      ),
+      GoRoute(
+        path: '/voucher-management',
+        builder: (context, state) {
+          final campaign = state.extra as CampaignModel;
+          return VoucherManagementScreen(campaign: campaign);
+        },
+      ),
+      GoRoute(
+        path: '/inventory-report',
+        builder: (context, state) => const InventoryReportScreen(),
+      ),
+      GoRoute(
+        path: '/promotion-report',
+        builder: (context, state) => const PromotionReportScreen(),
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Không tìm thấy trang: ${state.error}')),

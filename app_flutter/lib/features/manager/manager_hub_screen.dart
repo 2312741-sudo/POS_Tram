@@ -205,6 +205,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       Text(
                         'CH: $storeCode • ${_auth.currentUser?.fullName ?? ""}',
                         style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -214,35 +216,30 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
             actions: [
               // Nút nhỏ chuyển sang chế độ Bán Hàng (Full POS nghiệp vụ nhân viên)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: TramColors.brandPrimary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    minimumSize: const Size(0, 30),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.point_of_sale, size: 14),
+                  icon: const Icon(Icons.point_of_sale, size: 13),
                   label: Text(
                     'Bán Hàng',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
                     context.go('/tables');
                   },
                 ),
               ),
-              if (_auth.canAccessManagerHub)
-                IconButton(
-                  icon: const Icon(Icons.storefront, color: TramColors.brandPrimary, size: 20),
-                  tooltip: 'Đổi chi nhánh',
-                  onPressed: _showStoreSwitcherDialog,
-                ),
               IconButton(
                 icon: const Icon(Icons.refresh, color: TramColors.textPrimary, size: 20),
                 tooltip: 'Làm mới',
+                visualDensity: VisualDensity.compact,
                 onPressed: () => setState(() {}),
               ),
               PopupMenuButton<String>(

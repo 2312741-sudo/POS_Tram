@@ -429,6 +429,11 @@ tbody tr:last-child td {
   background-clip: text;
 }
 
+select.input-field {
+  background-color: #FFFFFF;
+  cursor: pointer;
+}
+
 select.input-field option {
   background: #FFFFFF;
   color: var(--text);

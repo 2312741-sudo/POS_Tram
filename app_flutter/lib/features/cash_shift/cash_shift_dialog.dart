@@ -318,12 +318,19 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               child: const Icon(Icons.lock_open_rounded, color: TramColors.warningInk, size: 24),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Mở Ca Bán Hàng & Két Tiền', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text('Khai báo tiền mặt đầu ca để bắt đầu nhận đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mở Ca Bán Hàng & Két Tiền', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                    'Khai báo tiền mặt đầu ca để bắt đầu nhận đơn',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -409,33 +416,46 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         ),
         const SizedBox(height: 12),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: shift.isOpen ? TramColors.successSurface : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10),
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: shift.isOpen ? TramColors.successSurface : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.point_of_sale,
+                      color: shift.isOpen ? TramColors.success : TramColors.textSecondary,
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.point_of_sale,
-                    color: shift.isOpen ? TramColors.success : TramColors.textSecondary,
-                    size: 20,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          shift.shiftCode,
+                          style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'NV: ${shift.staffFullName} • Mở lúc ${DateFormat('HH:mm').format(DateTime.fromMillisecondsSinceEpoch(shift.openedAt))}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(shift.shiftCode, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('NV: ${shift.staffFullName} • Mở lúc ${DateFormat('HH:mm').format(DateTime.fromMillisecondsSinceEpoch(shift.openedAt))}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary)),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(

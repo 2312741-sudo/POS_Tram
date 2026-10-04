@@ -172,16 +172,28 @@ export default function RevenuePage() {
       {/* Tab + Navigation */}
       <div className="card" style={{ padding: "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {tabs.map((t) => (
               <button
                 key={t.key}
-                className={`tab-btn ${tab === t.key ? "active" : ""}`}
+                className={`tab-btn ${tab === t.key && (t.key !== "month" || (offset !== 0 && offset !== 1)) ? "active" : ""}`}
                 onClick={() => { setTab(t.key); setOffset(0); }}
               >
                 {t.label}
               </button>
             ))}
+            <button
+              className={`tab-btn ${tab === "month" && offset === 0 ? "active" : ""}`}
+              onClick={() => { setTab("month"); setOffset(0); }}
+            >
+              📅 Tháng này
+            </button>
+            <button
+              className={`tab-btn ${tab === "month" && offset === 1 ? "active" : ""}`}
+              onClick={() => { setTab("month"); setOffset(1); }}
+            >
+              ⏪ Tháng trước
+            </button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <button className="btn-secondary" onClick={() => setOffset(o => o + 1)} style={{ padding: "6px 12px" }}>‹ Trước</button>
@@ -205,6 +217,13 @@ export default function RevenuePage() {
           },
           ...(tab === "day"
             ? [
+                {
+                  label: "Ước tính cả ngày",
+                  value: formatVND(totalRevenue + servingTotal),
+                  sub: "= Đã thu + Đang phục vụ",
+                  icon: <TrendingUp size={20} />,
+                  color: "#059669",
+                },
                 {
                   label: "Đang phục vụ",
                   value: formatVND(servingTotal),

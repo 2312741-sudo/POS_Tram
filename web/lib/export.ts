@@ -33,7 +33,8 @@ export function exportHistory(data: any[]) {
     const itemCount = Array.isArray(item.items) ? item.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0) : 0;
 
     return {
-      "Mã đơn": item.orderCode || item.id?.slice(0, 8) || "",
+      "Mã HĐ": item.billCode || item.orderCode || item.id?.slice(0, 8) || "",
+      "Mã đặt món": item.orderCode || item.billCode || "",
       "Bàn": item.tableName || "",
       "Khu vực": item.zone || "",
       "Tổng tiền (VNĐ)": Number(item.totalAmount) || 0,
@@ -56,7 +57,8 @@ export function exportHistory(data: any[]) {
   // 2. Sheet Chi tiết Món trong Đơn (Item Breakdown)
   const itemRows: any[] = [];
   data.forEach((item) => {
-    const billCode = item.orderCode || item.id?.slice(0, 8) || "";
+    const billCode = item.billCode || item.orderCode || item.id?.slice(0, 8) || "";
+    const orderCode = item.orderCode || billCode;
     const tableName = item.tableName || "";
     const cashier = item.cashierName || item.staffFullName || "—";
     const ts = typeof item.timestamp === "number" ? item.timestamp : new Date(item.timestamp || 0).getTime();
@@ -72,7 +74,8 @@ export function exportHistory(data: any[]) {
         const total = unitPrice * qty;
 
         itemRows.push({
-          "Mã đơn": billCode,
+          "Mã HĐ": billCode,
+          "Mã đặt món": orderCode,
           "Bàn": tableName,
           "Tên món": it.name || "",
           "Tùy chọn (Size/Đường/Đá)": it.optionsSummary || it.selectedSize ? `Size ${it.selectedSize || ""}` : "Chuẩn",
@@ -91,7 +94,7 @@ export function exportHistory(data: any[]) {
   if (itemRows.length > 0) {
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
     wsItems["!cols"] = [
-      { wch: 18 }, { wch: 12 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
       { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
     ];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món & Người nhận");
@@ -100,7 +103,8 @@ export function exportHistory(data: any[]) {
   // 3. Sheet Lịch sử Thao tác (Action Logs / Timeline)
   const logRows: any[] = [];
   data.forEach((item) => {
-    const billCode = item.orderCode || item.id?.slice(0, 8) || "";
+    const billCode = item.billCode || item.orderCode || item.id?.slice(0, 8) || "";
+    const orderCode = item.orderCode || billCode;
     const tableName = item.tableName || "";
 
     if (Array.isArray(item.actionLogs) && item.actionLogs.length > 0) {
@@ -109,7 +113,8 @@ export function exportHistory(data: any[]) {
           ? format(new Date(typeof log.timestamp === "number" ? log.timestamp : new Date(log.timestamp).getTime()), "dd/MM/yyyy HH:mm:ss", { locale: vi })
           : "—";
         logRows.push({
-          "Mã đơn": billCode,
+          "Mã HĐ": billCode,
+          "Mã đặt món": orderCode,
           "Bàn": tableName,
           "Thời gian": logTime,
           "Nhân viên thực hiện": log.staffFullName || log.staffUsername || "—",
@@ -122,7 +127,7 @@ export function exportHistory(data: any[]) {
   if (logRows.length > 0) {
     const wsLogs = XLSX.utils.json_to_sheet(logRows);
     wsLogs["!cols"] = [
-      { wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 45 }
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 45 }
     ];
     XLSX.utils.book_append_sheet(wb, wsLogs, "Lịch sử Thao tác");
   }
@@ -132,13 +137,15 @@ export function exportHistory(data: any[]) {
 
 export function exportSingleBillExcel(order: any) {
   const wb = XLSX.utils.book_new();
-  const billCode = order.orderCode || order.id?.slice(0, 8) || "HD";
+  const billCode = order.billCode || order.orderCode || order.id?.slice(0, 8) || "HD";
+  const orderCode = order.orderCode || billCode;
   const ts = typeof order.timestamp === "number" ? order.timestamp : new Date(order.timestamp || 0).getTime();
   const billTime = order.timestamp ? format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: vi }) : "—";
 
   // 1. Info Sheet
   const infoRows = [
     { "Thuộc tính": "Mã hóa đơn", "Giá trị": billCode },
+    { "Thuộc tính": "Mã đặt món", "Giá trị": orderCode },
     { "Thuộc tính": "Tên bàn", "Giá trị": order.tableName || "—" },
     { "Thuộc tính": "Khu vực", "Giá trị": order.zone || "—" },
     { "Thuộc tính": "Tổng thanh toán", "Giá trị": `${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(order.totalAmount || 0)}` },
@@ -193,13 +200,16 @@ export function exportUsers(data: any[]) {
   const rows = data.map((item) => ({
     "Họ tên": item.fullName || "",
     "Tài khoản": item.username || "",
-    "Vai trò": item.role || "",
+    "Số điện thoại": item.phone || "",
+    "Chi nhánh": item.storeName || item.storeCode || "Tất cả",
+    "Vai trò": item.role || item.roleId || "",
+    "Trạng thái": item.isActive !== false ? "Đang hoạt động" : "Đã khóa",
     "Doanh số (VNĐ)": item.totalSales || 0,
     "Số đơn": item.totalOrders || 0,
   }));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 12 }, { wch: 18 }, { wch: 12 }];
+  ws["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, ws, "Nhân viên");
   downloadWorkbook(wb, `NhanVien_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }

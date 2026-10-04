@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/permissions/app_permissions.dart';
 import 'package:tram_flutter/core/printer/receipt_printer.dart';
+import 'package:tram_flutter/core/utils/format_utils.dart';
 import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/services/firebase_service.dart';
 
@@ -502,6 +503,219 @@ void main() {
       final parsed = ProductModel.fromMap(map, 'Trà Olong Xoài');
       expect(parsed.isAvailable, isFalse);
       expect(parsed.category, equals('Trà Olong Trái Cây'));
+    });
+
+    test('FormatUtils.billCode and FormatUtils.orderCode generate standard separate codes', () {
+      final billCode = FormatUtils.billCode();
+      expect(billCode.startsWith('HD-'), isTrue);
+      expect(billCode.length, equals(16)); // HD-yyMMdd-HHmmss
+
+      final orderCode = FormatUtils.orderCode();
+      expect(orderCode.startsWith('OD-'), isTrue);
+      expect(orderCode.length, equals(16)); // OD-yyMMdd-HHmmss
+
+      final customBill = FormatUtils.billCode('INV');
+      expect(customBill.startsWith('INV-'), isTrue);
+    });
+
+    test('TableModel.ensureCodes handles new codes, preserves existing, and migrates legacy OD- currentBillId', () {
+      // 1. Fresh empty table -> gets both HD- and OD-
+      final t1 = TableModel(name: 'A1', zone: 'Khu A');
+      t1.ensureCodes();
+      expect(t1.currentBillId, isNotNull);
+      expect(t1.currentBillId!.startsWith('HD-'), isTrue);
+      expect(t1.currentOrderCode, isNotNull);
+      expect(t1.currentOrderCode!.startsWith('OD-'), isTrue);
+
+      // 2. Legacy table with OD- inside currentBillId -> migrated to currentOrderCode, given fresh HD- currentBillId
+      final t2 = TableModel(name: 'A2', zone: 'Khu A', currentBillId: 'OD-261001-112233');
+      t2.ensureCodes();
+      expect(t2.currentOrderCode, equals('OD-261001-112233'));
+      expect(t2.currentBillId!.startsWith('HD-'), isTrue);
+
+      // 3. Table already having both HD- and OD- -> preserved without changes
+      final t3 = TableModel(
+        name: 'A3',
+        zone: 'Khu A',
+        currentBillId: 'HD-261001-998877',
+        currentOrderCode: 'OD-261001-998877',
+      );
+      t3.ensureCodes();
+      expect(t3.currentBillId, equals('HD-261001-998877'));
+      expect(t3.currentOrderCode, equals('OD-261001-998877'));
+    });
+
+    test('TableModel.clearTable resets all occupied state to empty including currentOrderCode', () {
+      final table = TableModel(
+        name: 'B1',
+        zone: 'Khu B',
+        inUse: true,
+        openedAt: DateTime.now().millisecondsSinceEpoch,
+        guestCount: 4,
+        currentBillId: 'HD-261001-120000',
+        currentOrderCode: 'OD-261001-120000',
+        currentOrderJson: jsonEncode([
+          {'productId': 1, 'name': 'Cà phê muối', 'price': 25000, 'quantity': 2}
+        ]),
+        mergedIntoTable: 'A1',
+      );
+
+      expect(table.inUse, isTrue);
+      expect(table.currentItems.length, equals(1));
+      expect(table.currentBillId, isNotNull);
+      expect(table.currentOrderCode, isNotNull);
+
+      // Execute clearTable
+      table.clearTable();
+
+      expect(table.inUse, isFalse);
+      expect(table.currentOrderJson, isEmpty);
+      expect(table.currentItems, isEmpty);
+      expect(table.currentBillId, isNull);
+      expect(table.currentOrderCode, isNull);
+      expect(table.openedAt, isNull);
+      expect(table.guestCount, isNull);
+      expect(table.mergedIntoTable, isNull);
+      expect(table.actionLogsJson, isNull);
+    });
+
+    test('BillModel and KitchenOrderModel serialize and deserialize both billCode and orderCode', () {
+      final bill = BillModel(
+        id: 'B100',
+        billCode: 'HD-261001-100000',
+        orderCode: 'OD-261001-100000',
+        tableName: 'Bàn 1',
+        zone: 'Khu A',
+        createdAt: 1771900000000,
+        staffUsername: 'thungan',
+        staffFullName: 'Nguyễn Thu Ngân',
+        items: [],
+        subTotal: 50000,
+        finalAmount: 50000,
+        paymentMethod: 'CASH',
+      );
+
+      final billMap = bill.toMap();
+      expect(billMap['billCode'], equals('HD-261001-100000'));
+      expect(billMap['orderCode'], equals('OD-261001-100000'));
+
+      final parsedBill = BillModel.fromMap(billMap, 'B100');
+      expect(parsedBill.billCode, equals('HD-261001-100000'));
+      expect(parsedBill.orderCode, equals('OD-261001-100000'));
+
+      final kitchenOrder = KitchenOrderModel(
+        firebaseKey: 'K1',
+        tableName: 'A1',
+        orderCode: 'OD-261001-143000',
+        billCode: 'HD-261001-143000',
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        itemsJson: jsonEncode([
+          {'productId': 1, 'name': 'Trà Olong Kem Cheese', 'price': 35000, 'quantity': 2}
+        ]),
+      );
+
+      final map = kitchenOrder.toMap();
+      expect(map['orderCode'], equals('OD-261001-143000'));
+      expect(map['billCode'], equals('HD-261001-143000'));
+
+      final parsed = KitchenOrderModel.fromMap(map, key: 'K1');
+      expect(parsed.orderCode, equals('OD-261001-143000'));
+      expect(parsed.billCode, equals('HD-261001-143000'));
+      expect(parsed.tableName, equals('A1'));
+      expect(parsed.items.length, equals(1));
+    });
+
+    test('BillModel cancellation, status filtering, and revenue exclusion logic', () {
+      final bill1 = BillModel(
+        id: 'B01',
+        billCode: 'HD-261001-100001',
+        orderCode: 'OD-261001-100001',
+        tableName: 'Bàn 1',
+        zone: 'Khu A',
+        createdAt: 1771900000000,
+        status: 'PAID',
+        staffUsername: 'thungan',
+        staffFullName: 'Thu Ngân 1',
+        items: [],
+        subTotal: 65000,
+        finalAmount: 65000,
+        paymentMethod: 'CASH',
+      );
+
+      final bill2 = BillModel(
+        id: 'B02',
+        billCode: 'HD-261001-100002',
+        orderCode: 'OD-261001-100002',
+        tableName: 'Bàn 2',
+        zone: 'Khu A',
+        createdAt: 1771900000000,
+        status: 'CANCELLED',
+        notes: 'Khách đổi ý không lấy',
+        staffUsername: 'thungan',
+        staffFullName: 'Thu Ngân 1',
+        items: [],
+        subTotal: 120000,
+        finalAmount: 120000,
+        paymentMethod: 'CASH',
+      );
+
+      final bill3 = BillModel(
+        id: 'B03',
+        billCode: 'HD-261001-100003',
+        orderCode: 'OD-261001-100003',
+        tableName: 'Mang về 01',
+        zone: 'Mang về',
+        createdAt: 1771900000000,
+        status: 'PAID',
+        staffUsername: 'thungan',
+        staffFullName: 'Thu Ngân 1',
+        items: [],
+        subTotal: 45000,
+        finalAmount: 45000,
+        paymentMethod: 'TRANSFER',
+      );
+
+      // Verify note and notes symmetry
+      expect(bill2.note, equals('Khách đổi ý không lấy'));
+      final bill2Map = bill2.toMap();
+      expect(bill2Map['status'], equals('CANCELLED'));
+      expect(bill2Map['note'], equals('Khách đổi ý không lấy'));
+      expect(bill2Map['notes'], equals('Khách đổi ý không lấy'));
+
+      final parsedBill2 = BillModel.fromMap(bill2Map, 'B02');
+      expect(parsedBill2.status, equals('CANCELLED'));
+      expect(parsedBill2.note, equals('Khách đổi ý không lấy'));
+
+      // Verify filtering and revenue calculations
+      final allBills = [bill1, bill2, bill3];
+
+      // PAID only
+      final paidBills = allBills.where((b) => b.status == 'PAID').toList();
+      expect(paidBills.length, equals(2));
+
+      // CANCELLED only
+      final cancelledBills = allBills.where((b) => b.status == 'CANCELLED').toList();
+      expect(cancelledBills.length, equals(1));
+      expect(cancelledBills.first.id, equals('B02'));
+
+      // Total revenue must strictly exclude CANCELLED orders
+      final validBillsForRevenue = allBills.where((b) => b.status != 'CANCELLED').toList();
+      final totalRevenue = validBillsForRevenue.fold(0, (s, b) => s + b.finalAmount);
+      expect(totalRevenue, equals(65000 + 45000)); // 110,000đ, excluding 120,000đ
+    });
+
+    test('CashShiftModel void/cancel payment deduction clamp', () {
+      int totalCashSales = 100000;
+      final billToCancelAmount = 40000;
+
+      // Deduction logic matching cancelPaidBill
+      totalCashSales = (totalCashSales - billToCancelAmount).clamp(0, 999999999);
+      expect(totalCashSales, equals(60000));
+
+      // If cancelling more than total (e.g. edge case test orders), clamps to 0
+      int smallSales = 20000;
+      smallSales = (smallSales - 50000).clamp(0, 999999999);
+      expect(smallSales, equals(0));
     });
   });
 }

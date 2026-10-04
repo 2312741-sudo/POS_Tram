@@ -12,6 +12,8 @@ import '../../core/utils/format_utils.dart';
 import '../../core/vietqr/vietqr_generator.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../data/services/campaign_service.dart';
+import '../../core/domain/promotion_migration.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 
 class OrderCartScreen extends StatefulWidget {
@@ -47,6 +49,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   void initState() {
     super.initState();
     _isShiftOpen = _fb.activeShiftCache != null && _fb.activeShiftCache!.isOpen;
+    widget.table.ensureCodes();
     _cart = List.from(widget.initialProducts.isNotEmpty ? widget.initialProducts : widget.table.currentItems);
     _guestCount = widget.table.guestCount ?? 2;
     _storeInfo = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _fb.currentStoreCode, storeName: 'POS Trạm');
@@ -92,6 +95,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     try {
       final info = await _fb.getStoreInfo();
       final promos = await _fb.getPromotions();
+
+      try {
+        final campaigns = await CampaignService().getCampaigns();
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final storeCode = _fb.currentStoreCode;
+        for (final c in campaigns) {
+          if (!c.active) continue;
+          if (c.schedule.absoluteStart != null && now < c.schedule.absoluteStart!) continue;
+          if (c.schedule.absoluteEnd != null && now > c.schedule.absoluteEnd!) continue;
+          if (c.branchIds.isNotEmpty && !c.branchIds.contains(storeCode)) continue;
+
+          final legacy = PromotionMigration.toLegacy(c);
+          if (!promos.any((p) => p.id == legacy.id)) {
+            promos.add(legacy);
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading campaigns into cart: $e');
+      }
+
       if (mounted) {
         setState(() {
           _storeInfo = info;
@@ -116,6 +139,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   int get _vatAmount => (_afterDiscount * (_vatRate / 100)).round();
 
   int get _finalTotal => _afterDiscount + _vatAmount;
+
+  int get _cartCount => _cart.fold(0, (s, p) => s + p.quantity);
 
   // ==================== CART ACTIONS ====================
   Future<void> _incrementItem(int index) async {
@@ -143,6 +168,91 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity - 1);
       });
       _recalculateDiscounts();
+    }
+  }
+
+  Future<void> _confirmRemoveItem(int index) async {
+    if (!await _ensureShiftOpen()) return;
+    final item = _cart[index];
+    final bool isKitchen = item.isSentKitchen;
+
+    if (isKitchen && !_auth.can(AppPermissions.cancelKitchenItem)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Bạn không có quyền hủy món đã gửi bếp!'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_outline, color: AppColors.danger, size: 24),
+            const SizedBox(width: 8),
+            Text('Xác nhận xóa món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bạn có chắc muốn xóa món "${item.name}" (x${item.quantity}) khỏi bàn ${widget.table.name}?',
+              style: GoogleFonts.beVietnamPro(fontSize: 14),
+            ),
+            if (isKitchen) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Món này đã gửi bếp, việc hủy món sẽ được ghi nhật ký kiểm toán.',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.amber.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (_cart.length == 1) ...[
+              const SizedBox(height: 10),
+              Text(
+                '💡 Đây là món cuối cùng. Xóa xong bàn sẽ tự động về trạng thái TRỐNG.',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.primary, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xác nhận xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeItem(index);
     }
   }
 
@@ -198,9 +308,194 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     setState(() {
       _cart.removeAt(index);
     });
+
+    // Nếu giỏ hàng đã bị xóa hết món -> Chuyển bàn về trạng thái TRỐNG hoàn toàn!
+    if (_cart.isEmpty) {
+      widget.table.clearTable();
+      await _fb.saveTable(widget.table).catchError((_) {});
+      _recalculateDiscounts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã xóa hết món trong bàn ${widget.table.name}. Bàn đã chuyển về trạng thái TRỐNG.'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
     widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
     await _fb.saveTable(widget.table).catchError((_) {});
     _recalculateDiscounts();
+  }
+
+  // ==================== CANCEL ENTIRE BILL ====================
+  Future<void> _showCancelBillDialog() async {
+    if (!await _ensureShiftOpen()) return;
+    if (_cart.isEmpty) {
+      widget.table.clearTable();
+      await _fb.saveTable(widget.table);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    final hasKitchen = _cart.any((i) => i.isSentKitchen);
+    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
+    final reasonCtrl = TextEditingController(text: 'Khách đổi ý/không đợi được');
+    final staffUser = _auth.currentUser?.username ?? 'staff';
+    final staffName = _auth.currentUser?.fullName ?? 'Nhân Viên';
+    final staffRole = _auth.currentUser?.roleId ?? 'ROLE_STAFF';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          final quickReasons = [
+            'Khách đổi ý/không đợi được',
+            'Nhập nhầm bàn',
+            'Khách về gấp',
+            'Khách chuyển bàn khác',
+            'Sự cố món/bếp hết hàng',
+          ];
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 24),
+                const SizedBox(width: 8),
+                Text('Hủy Hóa Đơn Bàn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF0F1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(widget.table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primaryDark)),
+                            Text('${widget.table.zone}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Mã HĐ: ${widget.table.currentBillId ?? "Chưa có"}${widget.table.currentOrderCode != null ? " • Đơn: ${widget.table.currentOrderCode}" : ""}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                        Text('Số món: ${_cart.length} món (${_cartCount} phần) • Tổng: ${FormatUtils.vnd(_finalTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Lý do hủy hóa đơn *:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) {
+                      final isSelected = reasonCtrl.text == r;
+                      return ChoiceChip(
+                        label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                        selected: isSelected,
+                        selectedColor: AppColors.primary,
+                        backgroundColor: Colors.grey.shade100,
+                        onSelected: (val) {
+                          if (val) {
+                            setDlgState(() => reasonCtrl.text = r);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: reasonCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập chi tiết lý do hủy đơn...',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '⚠️ Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.red.shade700, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Bỏ qua'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                icon: const Icon(Icons.delete_forever, size: 16, color: Colors.white),
+                label: const Text('Xác nhận Hủy Đơn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  if (reasonCtrl.text.trim().isEmpty) return;
+                  Navigator.pop(ctx, true);
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirmed == true) {
+      final reason = reasonCtrl.text.trim();
+      setState(() => _isLoading = true);
+      try {
+        await _fb.cancelActiveBill(
+          widget.table,
+          reason: reason,
+          staffUsername: staffUser,
+          staffFullName: staffName,
+          staffRole: staffRole,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Đã hủy hóa đơn bàn ${widget.table.name} thành công. Bàn đã chuyển về trạng thái TRỐNG!'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi hủy hóa đơn: $e'), backgroundColor: AppColors.danger),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _recalculateDiscounts() {
@@ -208,9 +503,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     for (final d in _appliedDiscounts) {
       if (d.promoId != null) {
         final p = _allPromotions.where((pr) => pr.id == d.promoId).firstOrNull;
-        if (p != null && p.isValid(_subTotal)) {
-          final amt = p.calculateDiscount(_subTotal, _cart);
-          valid.add(BillDiscountModel(promoId: p.id, promoCode: p.code, description: p.name, amount: amt));
+        if (p != null) {
+          if (p.isValid(_subTotal)) {
+            final amt = p.calculateDiscount(_subTotal, _cart);
+            valid.add(BillDiscountModel(
+              promoId: p.id,
+              promoCode: d.promoCode ?? p.code,
+              description: p.name,
+              amount: amt,
+            ));
+          }
+        } else {
+          valid.add(d);
         }
       } else {
         valid.add(d);
@@ -359,7 +663,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                   final newBill = BillModel(
                     id: 'BILL_${DateTime.now().millisecondsSinceEpoch}',
-                    billCode: FormatUtils.orderCode(),
+                    billCode: FormatUtils.billCode(),
+                    orderCode: FormatUtils.orderCode(),
                     tableName: '${widget.table.name} (Tách)',
                     zone: widget.table.zone,
                     createdAt: DateTime.now().millisecondsSinceEpoch,
@@ -772,33 +1077,70 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
                             final code = voucherCtrl.text.trim().toUpperCase();
-                            final promo = _allPromotions.where((p) => p.code == code && p.isActive).firstOrNull;
+                            if (code.isEmpty) return;
+
+                            PromotionModel? promo = _allPromotions.where((p) => p.code == code && p.isActive).firstOrNull;
+
                             if (promo == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Mã voucher không tồn tại hoặc đã hết hạn!')),
-                              );
+                              try {
+                                final voucher = await CampaignService().lookupVoucherByCode(code);
+                                if (voucher != null) {
+                                  if (!voucher.isUsable) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Mã voucher này ${voucher.state == "REDEEMED" ? "đã được sử dụng" : "không khả dụng"}!')),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                  final campaign = await CampaignService().getCampaign(voucher.campaignId);
+                                  if (campaign != null && campaign.active) {
+                                    promo = PromotionMigration.toLegacy(campaign).copyWith(
+                                      code: code,
+                                    );
+                                  }
+                                }
+                              } catch (e) {
+                                debugPrint('Error looking up voucher: $e');
+                              }
+                            }
+
+                            if (promo == null) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Mã voucher không tồn tại hoặc đã hết hạn!')),
+                                );
+                              }
                               return;
                             }
                             if (!promo.isValid(_subTotal)) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Đơn hàng chưa đạt điều kiện tối thiểu ${FormatUtils.vnd(promo.minBillAmount)}!')),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Đơn hàng chưa đạt điều kiện tối thiểu ${FormatUtils.vnd(promo.minBillAmount)}!')),
+                                );
+                              }
                               return;
                             }
 
                             final amt = promo.calculateDiscount(_subTotal, _cart);
                             setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
+                              _appliedDiscounts.removeWhere((d) => d.promoCode == code || d.promoId == promo!.id);
                               _appliedDiscounts.add(BillDiscountModel(
-                                promoId: promo.id,
-                                promoCode: promo.code,
+                                promoId: promo!.id,
+                                promoCode: code,
                                 description: promo.name,
                                 amount: amt,
                               ));
                             });
                             voucherCtrl.clear();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Đã áp dụng mã $code: -${FormatUtils.vnd(amt)}')),
+                              );
+                            }
                           },
                           child: const Text('Áp Dụng'),
                         ),
@@ -1388,9 +1730,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     widget.table.guestCount = _guestCount;
 
+    final billCode = (widget.table.currentBillId != null && widget.table.currentBillId!.startsWith('HD-'))
+        ? widget.table.currentBillId!
+        : FormatUtils.billCode();
+    final orderCode = widget.table.currentOrderCode ?? FormatUtils.orderCode();
+
     return BillModel(
       id: 'BILL_${DateTime.now().millisecondsSinceEpoch}',
-      billCode: FormatUtils.orderCode(),
+      billCode: billCode,
+      orderCode: orderCode,
       tableName: widget.table.name,
       zone: widget.table.zone,
       createdAt: widget.table.openedAt ?? DateTime.now().millisecondsSinceEpoch,
@@ -1421,23 +1769,30 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hóa Đơn - ${widget.table.name} (${widget.table.zone})'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bàn ${widget.table.name} (${widget.table.zone})',
+              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (widget.table.currentBillId != null && widget.table.currentBillId!.isNotEmpty)
+              Text(
+                'Mã HĐ: ${widget.table.currentBillId}',
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle, color: AppColors.primary, size: 26),
-            tooltip: 'Thêm món',
-            onPressed: _goToAddItems,
-          ),
-          IconButton(
-            icon: const Icon(Icons.call_split),
-            tooltip: 'Tách hóa đơn',
-            onPressed: _showSplitBillDialog,
-          ),
           IconButton(
             icon: Icon(
               _autoPrintBill ? Icons.print : Icons.print_disabled_outlined,
-              color: _autoPrintBill ? AppColors.primary : Colors.grey,
-              size: 24,
+              color: _autoPrintBill ? Colors.white : Colors.white60,
+              size: 22,
             ),
             tooltip: _autoPrintBill ? 'In bill khi thanh toán: ĐANG BẬT' : 'In bill khi thanh toán: ĐANG TẮT',
             onPressed: () {
@@ -1453,10 +1808,47 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.merge_type),
-            tooltip: 'Ghép bàn',
-            onPressed: _showMergeTableDialog,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            tooltip: 'Thao tác bàn',
+            onSelected: (val) {
+              if (val == 'SPLIT') _showSplitBillDialog();
+              if (val == 'MERGE') _showMergeTableDialog();
+              if (val == 'CANCEL') _showCancelBillDialog();
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'SPLIT',
+                child: Row(
+                  children: [
+                    Icon(Icons.call_split, size: 20, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Text('Tách hóa đơn'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'MERGE',
+                child: Row(
+                  children: [
+                    Icon(Icons.merge_type, size: 20, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Text('Ghép bàn'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'CANCEL',
+                child: Row(
+                  children: [
+                    Icon(Icons.cancel_outlined, size: 20, color: AppColors.danger),
+                    SizedBox(width: 10),
+                    Text('Hủy hóa đơn bàn', style: TextStyle(color: AppColors.danger)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1517,6 +1909,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.table_restaurant, size: 16, color: AppColors.primaryDark),
                             const SizedBox(width: 6),
@@ -1545,6 +1938,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             color: Colors.grey.shade50,
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               InkWell(
                                 onTap: _guestCount > 1 ? () => _updateGuestCount(_guestCount - 1) : null,
@@ -1591,12 +1985,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                       // "+ Thêm món" Button
                       ElevatedButton.icon(
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Thêm món'),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Thêm món', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1637,6 +2031,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final item = _cart[index];
+                            final hasSize = item.selectedSize != null && item.selectedSize!.trim().isNotEmpty;
+                            final hasSugar = item.selectedSugar != null && item.selectedSugar!.trim().isNotEmpty;
+                            final hasIce = item.selectedIce != null && item.selectedIce!.trim().isNotEmpty;
+                            final hasToppings = item.selectedToppings.isNotEmpty;
 
                             return Card(
                               elevation: 1,
@@ -1670,18 +2068,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                           const SizedBox(height: 4),
 
                                           // KiotViet Size, Sugar, Ice, Toppings detail badges
-                                          if (item.selectedSize != null || item.selectedSugar != null || item.selectedToppings.isNotEmpty) ...[
+                                          if (hasSize || hasSugar || hasIce || hasToppings) ...[
                                             Wrap(
                                               spacing: 4,
                                               runSpacing: 2,
                                               children: [
-                                                if (item.selectedSize != null)
-                                                  _buildAttrChip('Size ${item.selectedSize}', Colors.blue.shade800, Colors.blue.shade50),
-                                                if (item.selectedSugar != null)
-                                                  _buildAttrChip(item.selectedSugar!, Colors.green.shade800, Colors.green.shade50),
-                                                if (item.selectedIce != null)
-                                                  _buildAttrChip(item.selectedIce!, Colors.teal.shade800, Colors.teal.shade50),
-                                                if (item.selectedToppings.isNotEmpty)
+                                                if (hasSize)
+                                                  _buildAttrChip('Size ${item.selectedSize!.trim()}', Colors.blue.shade800, Colors.blue.shade50),
+                                                if (hasSugar)
+                                                  _buildAttrChip(item.selectedSugar!.trim(), Colors.green.shade800, Colors.green.shade50),
+                                                if (hasIce)
+                                                  _buildAttrChip(item.selectedIce!.trim(), Colors.teal.shade800, Colors.teal.shade50),
+                                                if (hasToppings)
                                                   _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
                                               ],
                                             ),
@@ -1715,6 +2113,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                         IconButton(
                                           icon: const Icon(Icons.add_circle_outline, size: 22, color: AppColors.primary),
                                           onPressed: () => _incrementItem(index),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, size: 22, color: AppColors.danger),
+                                          tooltip: 'Xóa món này',
+                                          onPressed: () => _confirmRemoveItem(index),
                                         ),
                                       ],
                                     ),
@@ -1844,20 +2247,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                           return Column(
                             children: [
-                              // Row 1: Khuyến Mãi & In Tạm Tính
+                              // Row 1: Khuyến Mãi, In Tạm Tính & Hủy Đơn
                               Row(
                                 children: [
                                   Expanded(
                                     child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.discount_outlined, size: 16),
+                                      icon: const Icon(Icons.discount_outlined, size: 15),
                                       label: Text(
                                         _appliedDiscounts.isEmpty ? 'Khuyến Mãi' : 'KM (${_appliedDiscounts.length})',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                                         foregroundColor: AppColors.primary,
                                         side: const BorderSide(color: AppColors.primary),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1865,17 +2268,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                       onPressed: _showDiscountDialog,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Expanded(
                                     child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                                      icon: const Icon(Icons.receipt_long_outlined, size: 15),
                                       label: Text(
                                         'In Tạm Tính',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
                                         maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                                         foregroundColor: AppColors.textPrimary,
                                         side: BorderSide(color: Colors.grey.shade400),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1898,6 +2302,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                                 ).catchError((_) => false);
                                               }).catchError((_) {});
                                             },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.cancel_outlined, size: 15, color: AppColors.danger),
+                                      label: Text(
+                                        'Hủy Đơn',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.danger),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                        foregroundColor: AppColors.danger,
+                                        side: BorderSide(color: AppColors.danger.withOpacity(0.5)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: _showCancelBillDialog,
                                     ),
                                   ),
                                 ],
@@ -1959,10 +2382,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   Widget _buildAttrChip(String label, Color textColor, Color bgColor) {
+    if (label.trim().isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(4)),
-      child: Text(label, style: TextStyle(fontSize: 10, color: textColor, fontWeight: FontWeight.bold)),
+      child: Text(label.trim(), style: TextStyle(fontSize: 10, color: textColor, fontWeight: FontWeight.bold)),
     );
   }
 

@@ -16,6 +16,8 @@ import {
   ClipboardCheck,
   Receipt,
   ShoppingCart,
+  Warehouse,
+  Tag,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +30,9 @@ const navItems = [
   { href: "/dashboard/orders", label: "Giao dịch / Hóa đơn", icon: ShoppingBag },
   { href: "/dashboard/revenue", label: "Báo cáo Doanh thu", icon: TrendingUp },
   { href: "/dashboard/products", label: "Thực đơn & Sản phẩm", icon: Package },
+  { href: "/dashboard/inventory", label: "Kho hàng & NVL", icon: Warehouse },
+  { href: "/dashboard/promotions", label: "Khuyến mãi & Voucher", icon: Tag },
+  { href: "/dashboard/reports/inventory", label: "Báo cáo Kho hàng", icon: ClipboardCheck },
   { href: "/dashboard/users", label: "Nhân viên & Ca trực", icon: Users },
   { href: "/dashboard/audit", label: "Nhật ký Kiểm soát", icon: Shield },
   { href: "/dashboard/analytics", label: "Phân tích Kinh doanh", icon: BarChart3 },

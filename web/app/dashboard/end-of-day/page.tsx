@@ -15,13 +15,14 @@ import {
   UtensilsCrossed,
   Layers,
   Filter,
+  User,
 } from "lucide-react";
 
 export default function EndOfDayReportPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, historyData, tables } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, historyData, tables, usersList } = useDashboardData();
 
   const [activeTab, setActiveTab] = useState<"tonghop" | "thuchi" | "hanghoa" | "phongban">("tonghop");
-  const [dateRange, setDateRange] = useState<"TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "CUSTOM">("TODAY");
+  const [dateRange, setDateRange] = useState<"TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("TODAY");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [showServingModal, setShowServingModal] = useState<boolean>(false);
@@ -30,6 +31,7 @@ export default function EndOfDayReportPage() {
   const [productSearch, setProductSearch] = useState<string>("");
   const [productSortBy, setProductSortBy] = useState<"QTY_DESC" | "REV_DESC" | "NAME_ASC">("REV_DESC");
   const [productViewMode, setProductViewMode] = useState<"AMOUNT" | "QUANTITY">("AMOUNT");
+  const [productStaffFilter, setProductStaffFilter] = useState<string>("ALL");
 
   // Date filtering logic
   const filteredBills = useMemo(() => {
@@ -62,6 +64,10 @@ export default function EndOfDayReportPage() {
         }
         case "THIS_MONTH":
           return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+        case "LAST_MONTH": {
+          const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          return dt.getFullYear() === lm.getFullYear() && dt.getMonth() === lm.getMonth();
+        }
         case "CUSTOM": {
           if (!customStart) return true;
           const s = new Date(customStart + "T00:00:00");
@@ -174,13 +180,81 @@ export default function EndOfDayReportPage() {
     return paidBills.filter((b) => b.paymentMethod === "TRANSFER" || b.paymentMethod?.includes("QR")).reduce((sum, b) => sum + (b.totalAmount || 0), 0);
   }, [paidBills]);
 
-  // Tab 3: Hàng hoá bán ra
-  const productSalesList = useMemo(() => {
-    const map = new Map<string, { name: string; quantity: number; revenue: number; unitPrice: number }>();
-
-    paidBills.forEach((b) => {
+  // Extract available staff list
+  const availableStaffList = useMemo(() => {
+    const staffSet = new Set<string>();
+    if (Array.isArray(usersList)) {
+      usersList.forEach((u) => {
+        const name = (u.fullName || u.username || "").trim();
+        if (name) staffSet.add(name);
+      });
+    }
+    historyData.forEach((b) => {
+      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "").trim();
+      if (billStaff) staffSet.add(billStaff);
       if (Array.isArray(b.items)) {
         b.items.forEach((it: any) => {
+          const itStaff = (it.orderedByName || it.orderedBy || "").trim();
+          if (itStaff) staffSet.add(itStaff);
+        });
+      }
+    });
+    return Array.from(staffSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [usersList, historyData]);
+
+  // Date range label
+  const dateRangeLabel = useMemo(() => {
+    const now = new Date();
+    switch (dateRange) {
+      case "TODAY":
+        return `Hôm nay (${now.toLocaleDateString("vi-VN")})`;
+      case "YESTERDAY": {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        return `Hôm qua (${y.toLocaleDateString("vi-VN")})`;
+      }
+      case "7DAYS": {
+        const s = new Date(now);
+        s.setDate(s.getDate() - 7);
+        return `7 ngày qua (${s.toLocaleDateString("vi-VN")} - ${now.toLocaleDateString("vi-VN")})`;
+      }
+      case "THIS_MONTH":
+        return `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+      case "LAST_MONTH": {
+        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        return `Tháng ${lm.getMonth() + 1}/${lm.getFullYear()}`;
+      }
+      case "CUSTOM":
+        return customStart
+          ? `Từ ${new Date(customStart).toLocaleDateString("vi-VN")} đến ${new Date(customEnd || customStart).toLocaleDateString("vi-VN")}`
+          : "Tùy chọn ngày";
+      default:
+        return "Hôm nay";
+    }
+  }, [dateRange, customStart, customEnd]);
+
+  // Tab 3: Hàng hoá bán ra (hỗ trợ lọc theo nhân viên)
+  const productSalesList = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        quantity: number;
+        revenue: number;
+        unitPrice: number;
+        staffSales: { [staff: string]: { quantity: number; revenue: number } };
+      }
+    >();
+
+    paidBills.forEach((b) => {
+      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "Nhân viên chung").trim();
+      if (Array.isArray(b.items)) {
+        b.items.forEach((it: any) => {
+          const itemStaff = (it.orderedByName || it.orderedBy || billStaff).trim();
+          if (productStaffFilter !== "ALL" && itemStaff !== productStaffFilter) {
+            return;
+          }
+
           const name = it.name || "Món không tên";
           const qty = it.quantity || it.count || 1;
           const price = Number(it.price || 0);
@@ -191,11 +265,22 @@ export default function EndOfDayReportPage() {
           const itemRev = (price + toppingSum) * qty - (it.discountAmount || 0);
 
           if (!map.has(name)) {
-            map.set(name, { name, quantity: 0, revenue: 0, unitPrice: price + toppingSum });
+            map.set(name, {
+              name,
+              quantity: 0,
+              revenue: 0,
+              unitPrice: price + toppingSum,
+              staffSales: {},
+            });
           }
           const cur = map.get(name)!;
           cur.quantity += qty;
           cur.revenue += itemRev;
+          if (!cur.staffSales[itemStaff]) {
+            cur.staffSales[itemStaff] = { quantity: 0, revenue: 0 };
+          }
+          cur.staffSales[itemStaff].quantity += qty;
+          cur.staffSales[itemStaff].revenue += itemRev;
         });
       }
     });
@@ -222,7 +307,7 @@ export default function EndOfDayReportPage() {
     }
 
     return list;
-  }, [paidBills, productSearch, productSortBy, productViewMode]);
+  }, [paidBills, productSearch, productSortBy, productViewMode, productStaffFilter]);
 
   const totalProductQty = useMemo(() => productSalesList.reduce((s, it) => s + it.quantity, 0), [productSalesList]);
   const totalProductRev = useMemo(() => productSalesList.reduce((s, it) => s + it.revenue, 0), [productSalesList]);
@@ -251,20 +336,40 @@ export default function EndOfDayReportPage() {
 
   const exportProductSalesCSV = () => {
     const isAmt = productViewMode === "AMOUNT";
-    const headers = `Xếp hạng,Tên món,Đơn giá,Số lượng bán,Doanh thu món,Tỷ trọng theo ${isAmt ? "doanh thu" : "số lượng"} (%)\n`;
-    const rows = productSalesList
-      .map((p, idx) => {
-        const pct = isAmt
-          ? (totalProductRev > 0 ? ((p.revenue / totalProductRev) * 100).toFixed(1) : "0.0")
-          : (totalProductQty > 0 ? ((p.quantity / totalProductQty) * 100).toFixed(1) : "0.0");
-        return `${idx + 1},"${p.name}",${p.unitPrice},${p.quantity},${p.revenue},${pct}%`;
-      })
-      .join("\n");
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const nowStr = new Date().toLocaleString("vi-VN");
+
+    let content = "\uFEFF"; // UTF-8 BOM
+    content += `BÁO CÁO HÀNG HÓA BÁN RA\n`;
+    content += `Thời gian:,"${dateRangeLabel}"\n`;
+    content += `Nhân viên:,"${productStaffFilter === "ALL" ? "Tất cả nhân viên" : productStaffFilter}"\n`;
+    content += `Chi nhánh:,"${currentStoreCode === "ALL" ? "Tất cả chi nhánh" : currentStoreCode}"\n`;
+    content += `Thời điểm xuất:,"${nowStr}"\n\n`;
+
+    content += `Xếp hạng,Tên món,Nhân viên bán,Đơn giá,Số lượng bán,Doanh thu món,Tỷ trọng theo ${isAmt ? "doanh thu" : "số lượng"} (%)\n`;
+
+    productSalesList.forEach((p, idx) => {
+      const pct = isAmt
+        ? (totalProductRev > 0 ? ((p.revenue / totalProductRev) * 100).toFixed(1) : "0.0")
+        : (totalProductQty > 0 ? ((p.quantity / totalProductQty) * 100).toFixed(1) : "0.0");
+
+      let staffStr = "";
+      if (productStaffFilter !== "ALL") {
+        staffStr = productStaffFilter;
+      } else {
+        const staffEntries = Object.entries(p.staffSales || {});
+        staffStr = staffEntries.map(([sName, sData]) => `${sName} (${sData.quantity})`).join("; ");
+        if (!staffStr) staffStr = "Nhân viên chung";
+      }
+
+      content += `${idx + 1},"${p.name}","${staffStr}",${p.unitPrice},${p.quantity},${p.revenue},${pct}%\n`;
+    });
+
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `Bao_Cao_Hang_Hoa_${isAmt ? "Doanh_Thu" : "So_Luong"}_${new Date().toISOString().slice(0, 10)}.csv`);
+    const safeStaff = productStaffFilter === "ALL" ? "Tat_Ca_NV" : productStaffFilter.replace(/[^a-zA-Z0-9]/g, "_");
+    link.setAttribute("download", `Bao_Cao_Hang_Hoa_${safeStaff}_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -341,6 +446,7 @@ export default function EndOfDayReportPage() {
                 <option value="YESTERDAY">Hôm qua</option>
                 <option value="7DAYS">7 ngày qua</option>
                 <option value="THIS_MONTH">Tháng này</option>
+                <option value="LAST_MONTH">Tháng trước</option>
                 <option value="CUSTOM">Tùy chọn ngày</option>
               </select>
             </div>
@@ -446,48 +552,104 @@ export default function EndOfDayReportPage() {
 
       {/* ==================== TAB 1: TỔNG HỢP ==================== */}
       {activeTab === "tonghop" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))", gap: "20px" }}>
-          {/* Card 1: TỔNG KẾT BÁN HÀNG */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Ô DOANH THU ƯỚC TÍNH NGÀY = TỔNG DOANH THU + ĐƠN ĐANG PHỤC VỤ */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "linear-gradient(135deg, #FFF9F5 0%, #FFFFFF 100%)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
-              padding: "20px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+              border: "2px solid #7E2930",
+              padding: "20px 24px",
+              boxShadow: "0 4px 16px rgba(126, 41, 48, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "16px",
             }}
           >
-            <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
-              TỔNG KẾT BÁN HÀNG
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span
+                  style={{
+                    background: "#7E2930",
+                    color: "#FFFFFF",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: "800",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  KPI TRỌNG TÂM
+                </span>
+                <span style={{ fontSize: "15px", fontWeight: "800", color: "#1C1A2D" }}>
+                  DOANH THU ƯỚC TÍNH NGÀY
+                </span>
+              </div>
+              <div style={{ fontSize: "13px", color: "#666", marginTop: "6px" }}>
+                Công thức: <strong>Tổng doanh thu</strong> ({fmtVND(netRevenue)}) + <strong>Đơn đang phục vụ</strong> ({fmtVND(servingMetrics.estimatedRevenue)} từ {servingMetrics.tableCount} bàn)
+              </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <ReportRow label="Doanh thu tổng" value={fmtVND(grossRevenue)} />
-              <ReportRow label="Tổng giảm giá món" value={fmtVND(itemDiscounts)} />
-              <ReportRow label="Tổng giảm giá hóa đơn" value={fmtVND(billDiscounts)} />
-              <ReportRow
-                label="Doanh thu"
-                value={fmtVND(netRevenue)}
-                subtitle={`Bao gồm ${fmtVND(vatTotal)} tiền thuế`}
-                valueColor="#7E2930"
-                isBold
-              />
-              <ReportRow label="Thu khác" value={fmtVND(otherIncome)} />
-              <ReportRow label="Trả hàng" value={fmtVND(refundAmount)} />
-              <ReportRow
-                label="Doanh thu thuần"
-                subtitle="Bao gồm thu khác"
-                value={fmtVND(netRevenueWithOther)}
-                isBold
-                valueColor="#146A65"
-              />
-              <ReportRow
-                label="Doanh thu thuần"
-                subtitle="Không bao gồm thu khác"
-                value={fmtVND(netRevenueWithoutOther)}
-                isBold
-              />
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "28px", fontWeight: "900", color: "#7E2930" }}>
+                {fmtVND(netRevenue + servingMetrics.estimatedRevenue)}
+              </div>
+              <div style={{ fontSize: "12px", color: "#888", fontWeight: "600" }}>
+                Tổng doanh thu thực tế + Giá trị bàn đang sử dụng
+              </div>
             </div>
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))", gap: "20px" }}>
+            {/* Card 1: TỔNG KẾT BÁN HÀNG */}
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                border: "1px solid #E6DEC8",
+                padding: "20px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                TỔNG KẾT BÁN HÀNG
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <ReportRow label="Doanh thu tổng" value={fmtVND(grossRevenue)} />
+                <ReportRow label="Tổng giảm giá món" value={fmtVND(itemDiscounts)} />
+                <ReportRow label="Tổng giảm giá hóa đơn" value={fmtVND(billDiscounts)} />
+                <ReportRow
+                  label="Doanh thu (Đã thu)"
+                  value={fmtVND(netRevenue)}
+                  subtitle={`Bao gồm ${fmtVND(vatTotal)} tiền thuế`}
+                  valueColor="#7E2930"
+                  isBold
+                />
+                <ReportRow
+                  label="Doanh thu ước tính cả ngày"
+                  subtitle="Tổng doanh thu + Đơn đang phục vụ"
+                  value={fmtVND(netRevenue + servingMetrics.estimatedRevenue)}
+                  valueColor="#C47820"
+                  isBold
+                />
+                <ReportRow label="Thu khác" value={fmtVND(otherIncome)} />
+                <ReportRow label="Trả hàng" value={fmtVND(refundAmount)} />
+                <ReportRow
+                  label="Doanh thu thuần"
+                  subtitle="Bao gồm thu khác"
+                  value={fmtVND(netRevenueWithOther)}
+                  isBold
+                  valueColor="#146A65"
+                />
+                <ReportRow
+                  label="Doanh thu thuần"
+                  subtitle="Không bao gồm thu khác"
+                  value={fmtVND(netRevenueWithoutOther)}
+                  isBold
+                />
+              </div>
+            </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             {/* Card 2: ĐANG PHỤC VỤ > */}
@@ -577,7 +739,8 @@ export default function EndOfDayReportPage() {
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* ==================== TAB 2: THU CHI ==================== */}
       {activeTab === "thuchi" && (
@@ -710,6 +873,41 @@ export default function EndOfDayReportPage() {
                 </button>
               </div>
 
+              {/* Staff Filter Dropdown */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#F8F4EE",
+                  border: "1px solid #E6DEC8",
+                  borderRadius: "10px",
+                  padding: "6px 10px",
+                }}
+              >
+                <User size={15} color="#7E2930" />
+                <select
+                  value={productStaffFilter}
+                  onChange={(e) => setProductStaffFilter(e.target.value)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#1C1A2D",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="ALL">👤 Tất cả nhân viên</option>
+                  {availableStaffList.map((st) => (
+                    <option key={st} value={st}>
+                      👤 {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <select
                 value={productSortBy}
                 onChange={(e: any) => setProductSortBy(e.target.value)}
@@ -779,6 +977,7 @@ export default function EndOfDayReportPage() {
                 <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
                   <th style={{ padding: "10px 12px" }}>Hạng</th>
                   <th style={{ padding: "10px 12px" }}>Tên sản phẩm</th>
+                  <th style={{ padding: "10px 12px" }}>Nhân viên bán</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Đơn giá</th>
                   <th
                     style={{
@@ -808,7 +1007,7 @@ export default function EndOfDayReportPage() {
               <tbody>
                 {productSalesList.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
                       Không có sản phẩm nào bán ra trong khoảng thời gian đã chọn
                     </td>
                   </tr>
@@ -819,12 +1018,38 @@ export default function EndOfDayReportPage() {
                       ? (totalProductRev > 0 ? ((p.revenue / totalProductRev) * 100).toFixed(1) : "0.0")
                       : (totalProductQty > 0 ? ((p.quantity / totalProductQty) * 100).toFixed(1) : "0.0");
 
+                    const staffEntries = Object.entries(p.staffSales || {});
+
                     return (
                       <tr key={p.name} style={{ borderBottom: "1px solid #F0ECE1" }}>
                         <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "#7E2930" : "#555" }}>
                           #{idx + 1}
                         </td>
                         <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{p.name}</td>
+                        <td style={{ padding: "10px 12px", fontSize: "12px", color: "#555" }}>
+                          {productStaffFilter !== "ALL" ? (
+                            <span style={{ color: "#7E2930", fontWeight: "700" }}>👤 {productStaffFilter}</span>
+                          ) : staffEntries.length === 0 ? (
+                            <span style={{ color: "#888" }}>Nhân viên chung</span>
+                          ) : (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {staffEntries.map(([sName, sData]) => (
+                                <span
+                                  key={sName}
+                                  style={{
+                                    background: "#F2EFE9",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  👤 {sName}: <b>{sData.quantity}</b>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmtVND(p.unitPrice)}</td>
                         <td
                           style={{

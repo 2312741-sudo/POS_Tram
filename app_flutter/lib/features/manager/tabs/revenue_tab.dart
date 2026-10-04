@@ -289,6 +289,43 @@ class _RevenueTabState extends State<RevenueTab> {
               ],
             ),
           ),
+          const SizedBox(height: 10),
+
+          // Quick Filter Chips (Hôm nay, Hôm qua, Tháng này, Tháng trước)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildQuickFilterChip('Hôm nay', () {
+                  setState(() {
+                    _tab = RevenueTabType.day;
+                    _offset = 0;
+                  });
+                }, _tab == RevenueTabType.day && _offset == 0),
+                const SizedBox(width: 8),
+                _buildQuickFilterChip('Hôm qua', () {
+                  setState(() {
+                    _tab = RevenueTabType.day;
+                    _offset = 1;
+                  });
+                }, _tab == RevenueTabType.day && _offset == 1),
+                const SizedBox(width: 8),
+                _buildQuickFilterChip('Tháng này', () {
+                  setState(() {
+                    _tab = RevenueTabType.month;
+                    _offset = 0;
+                  });
+                }, _tab == RevenueTabType.month && _offset == 0),
+                const SizedBox(width: 8),
+                _buildQuickFilterChip('Tháng trước', () {
+                  setState(() {
+                    _tab = RevenueTabType.month;
+                    _offset = 1;
+                  });
+                }, _tab == RevenueTabType.month && _offset == 1),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
 
           // 3. Navigation Controls (Trước / Sau / DatePicker)
@@ -307,20 +344,27 @@ class _RevenueTabState extends State<RevenueTab> {
                   tooltip: 'Kỳ trước',
                   onPressed: () => setState(() => _offset++),
                 ),
-                InkWell(
-                  onTap: _pickCustomDate,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_month, size: 16, color: TramColors.brandPrimary),
-                        const SizedBox(width: 6),
-                        Text(
-                          range['label'],
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
-                        ),
-                      ],
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickCustomDate,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.calendar_month, size: 16, color: TramColors.brandPrimary),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              range['label'],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -336,6 +380,15 @@ class _RevenueTabState extends State<RevenueTab> {
 
           // 4. Grid Thẻ Thống Kê
           if (_tab == RevenueTabType.day) ...[
+            _buildSummaryCard(
+              title: 'Doanh thu ước tính ngày',
+              value: FormatUtils.vnd(_totalRevenue + _servingTotal),
+              subtitle: 'Công thức: Đã thu (${FormatUtils.vnd(_totalRevenue)}) + Phục vụ (${FormatUtils.vnd(_servingTotal)})',
+              icon: Icons.trending_up,
+              color: const Color(0xFF059669),
+              fullWidth: true,
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -670,15 +723,19 @@ class _RevenueTabState extends State<RevenueTab> {
                                     style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                   const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      bill.tableName,
-                                      style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                                  Flexible(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        bill.tableName.isNotEmpty ? bill.tableName : 'Mang về',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -897,6 +954,31 @@ class _RevenueTabState extends State<RevenueTab> {
             ],
           );
         }),
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterChip(String label, VoidCallback onTap, bool active) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? TramColors.brandPrimary : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: active ? TramColors.brandPrimary : TramColors.borderLight,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.w500,
+            color: active ? Colors.white : TramColors.textPrimary,
+          ),
+        ),
       ),
     );
   }

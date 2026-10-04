@@ -213,6 +213,11 @@ class _KitchenOrderCard extends StatelessWidget {
     final timerColor = _timerColor(waiting);
     final items = order.items;
 
+    final tName = order.tableName.trim();
+    final tableDisplayName = tName.toLowerCase().startsWith('bàn') || tName.toLowerCase().contains('mang')
+        ? tName
+        : 'Bàn $tName';
+
     return Dismissible(
       key: Key(order.firebaseKey ?? order.tableName + order.timestamp.toString()),
       direction: DismissDirection.endToStart,
@@ -266,7 +271,7 @@ class _KitchenOrderCard extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('Bàn ${order.tableName}', style: GoogleFonts.beVietnamPro(
+                    child: Text(tableDisplayName, style: GoogleFonts.beVietnamPro(
                       color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16,
                     )),
                   ),

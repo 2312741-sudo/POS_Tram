@@ -40,6 +40,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _products = _fb.defaultProducts;
     _categories = _fb.defaultCategories;
     _loadData();
+    // Ensure table has both Bill Code (Mã hóa đơn) and Order Code (Mã đặt món)
+    widget.table.ensureCodes();
     // Carry over existing order items from table
     _cart = List.from(widget.table.currentItems);
 
@@ -463,8 +465,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
     try {
       final updatedCart = _cart.map((i) => i.copyWith(isSentKitchen: true)).toList();
 
+      widget.table.ensureCodes();
       final kitchenOrder = KitchenOrderModel(
         tableName: widget.table.name,
+        orderCode: widget.table.currentOrderCode ?? widget.table.currentBillId,
+        billCode: widget.table.currentBillId,
         itemsJson: jsonEncode(unsentItems.map((e) => e.toMap()).toList()),
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
@@ -490,7 +495,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         action: 'SEND_KITCHEN',
         targetType: 'TABLE',
         targetId: widget.table.name,
-        details: 'Gửi bếp bàn ${widget.table.name}: ${unsentItems.length} món mới',
+        details: 'Gửi bếp bàn ${widget.table.name} (Mã: ${widget.table.currentBillId ?? ""}): ${unsentItems.length} món mới',
       ));
 
       if (mounted) {
@@ -526,9 +531,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            // Save state to table before leaving
-            widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
-            if (_cart.isNotEmpty) widget.table.inUse = true;
+            // If cart is empty, return table to completely EMPTY state
+            if (_cart.isEmpty) {
+              widget.table.clearTable();
+            } else {
+              widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+              widget.table.inUse = true;
+            }
             _fb.saveTable(widget.table);
             Navigator.of(context).pop(_cart);
           },
@@ -539,7 +548,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
               widget.isAddingMore ? 'Thêm Món - ${widget.table.name}' : 'Chọn Món - ${widget.table.name}',
               style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            Text('Khu vực: ${widget.table.zone}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70)),
+            Text(
+              '${widget.table.zone} • ${widget.table.currentBillId ?? widget.table.currentOrderCode ?? ""}',
+              style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),

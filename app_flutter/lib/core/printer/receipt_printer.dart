@@ -59,6 +59,10 @@ class ReceiptPrinter {
     final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(bill.createdAt));
     bytes.addAll(_vietnameseAscii('So HD: ${bill.billCode}'));
     bytes.add(0x0A);
+    if (bill.orderCode != null && bill.orderCode!.isNotEmpty && bill.orderCode != bill.billCode) {
+      bytes.addAll(_vietnameseAscii('Ma dat mon: ${bill.orderCode}'));
+      bytes.add(0x0A);
+    }
     bytes.addAll(_vietnameseAscii('Ban: ${bill.tableName} (${bill.zone})'));
     bytes.add(0x0A);
     bytes.addAll(_vietnameseAscii('Thoi gian: $dateStr'));

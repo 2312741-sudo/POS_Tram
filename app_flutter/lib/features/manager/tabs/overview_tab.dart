@@ -70,6 +70,7 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   int get _todayRevenue => _todayPaidBills.fold(0, (s, b) => s + b.finalAmount);
+  int get _todayServingTotal => _tables.where((t) => t.inUse && !t.isMerged).fold<int>(0, (s, t) => s + t.currentTotal);
   int get _todayDiscounts => _todayPaidBills.fold(0, (s, b) => s + b.totalDiscount);
   int get _occupiedTables => _tables.where((t) => t.inUse).length;
   int get _pendingOnlineOrders => _onlineOrders.where((o) => o.isPending).length;
@@ -189,6 +190,17 @@ class _OverviewTabState extends State<OverviewTab> {
             ),
             const SizedBox(height: 16),
           ],
+
+          // Ô DOANH THU ƯỚC TÍNH NGÀY = TỔNG DOANH THU + ĐƠN ĐANG PHỤC VỤ
+          _buildKpiCard(
+            title: 'Doanh thu ước tính ngày (Đã thu + Phục vụ)',
+            value: FormatUtils.vnd(_todayRevenue + _todayServingTotal),
+            subtitle: 'Đã thu: ${FormatUtils.vnd(_todayRevenue)} + Đang phục vụ: ${FormatUtils.vnd(_todayServingTotal)}',
+            icon: Icons.trending_up,
+            color: const Color(0xFF059669),
+            onTap: widget.onGoToRevenue,
+          ),
+          const SizedBox(height: 12),
 
           // 3. Grid 4 Thẻ KPI Hôm Nay
           Row(
@@ -424,10 +436,10 @@ class _OverviewTabState extends State<OverviewTab> {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildActionShortcut(
-                  label: 'Hàng Bán Ra',
+                  label: 'Kho Hàng',
                   icon: Icons.inventory_2_outlined,
                   color: TramColors.accent,
-                  onTap: () => context.push('/end-of-day-report'),
+                  onTap: () => context.push('/inventory'),
                 ),
               ),
               const SizedBox(width: 10),

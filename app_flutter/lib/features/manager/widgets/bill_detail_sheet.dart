@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../core/permissions/app_permissions.dart';
 import '../../../core/printer/receipt_printer.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -30,6 +31,10 @@ class BillDetailSheet extends StatelessWidget {
     final createdTime = FormatUtils.dateTime(bill.createdAt);
     final closedTime = bill.closedAt != null ? FormatUtils.dateTime(bill.closedAt!) : 'Chưa đóng';
 
+    final tableStr = bill.tableName.trim().isNotEmpty
+        ? 'Bàn: ${bill.tableName}${bill.zone.trim().isNotEmpty ? " (${bill.zone})" : ""}'
+        : 'Mang về';
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
@@ -55,32 +60,40 @@ class BillDetailSheet extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          bill.billCode,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: TramColors.textPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              bill.billCode,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: TramColors.textPrimary,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusBadge(bill.status),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Bàn: ${bill.tableName} (${bill.zone}) • $closedTime',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: TramColors.textSecondary,
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(bill.status),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '$tableStr • $closedTime',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: TramColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -259,6 +272,18 @@ class BillDetailSheet extends StatelessWidget {
             ),
             child: Row(
               children: [
+                IconButton(
+                  tooltip: bill.status == 'CANCELLED' ? 'Xóa vĩnh viễn' : 'Hủy hóa đơn',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.red.shade50,
+                    foregroundColor: TramColors.danger,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.all(12),
+                  ),
+                  icon: Icon(bill.status == 'CANCELLED' ? Icons.delete_forever : Icons.cancel_outlined),
+                  onPressed: () => _confirmCancelOrDeleteBill(context, bill, auth, fb),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -542,5 +567,191 @@ class BillDetailSheet extends StatelessWidget {
     if (m.contains('transfer') || m.contains('chuyển') || m.contains('qr')) return '🏦 Chuyển khoản (VietQR)';
     if (m.contains('card') || m.contains('thẻ')) return '💳 Thẻ ngân hàng';
     return method;
+  }
+
+  Future<void> _confirmCancelOrDeleteBill(
+    BuildContext context,
+    BillModel bill,
+    AuthService auth,
+    FirebaseService fb,
+  ) async {
+    if (!auth.can(AppPermissions.cancelBill)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bạn không có quyền hủy hoặc xóa hóa đơn!'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
+    final reasonCtrl = TextEditingController();
+    final quickReasons = [
+      'Khách đổi ý hủy món',
+      'Nhập nhầm bàn / nhầm món',
+      'Thu ngân tính nhầm tiền',
+      'Hóa đơn thử nghiệm / test',
+      'Khách không đủ tiền thanh toán',
+    ];
+    String selectedReason = quickReasons.first;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  bill.status == 'CANCELLED' ? 'Xóa Hóa Đơn Khỏi Hệ Thống' : 'Hủy / Xóa Hóa Đơn',
+                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark)),
+                          Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? AppColors.danger : AppColors.success)),
+                        ],
+                      ),
+                      if (bill.orderCode != null && bill.orderCode!.isNotEmpty)
+                        Text('Mã đặt món: ${bill.orderCode}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blueGrey)),
+                      const SizedBox(height: 4),
+                      Text('Bàn: ${bill.tableName} (${bill.zone}) • Tổng tiền: ${FormatUtils.vnd(bill.finalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('Lý do hủy / xóa *:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: quickReasons.map((r) {
+                    final isSel = selectedReason == r;
+                    return ChoiceChip(
+                      label: Text(r, style: TextStyle(fontSize: 11, color: isSel ? Colors.white : AppColors.textPrimary)),
+                      selected: isSel,
+                      selectedColor: AppColors.danger,
+                      backgroundColor: Colors.grey.shade100,
+                      onSelected: (val) {
+                        if (val) {
+                          setDlgState(() {
+                            selectedReason = r;
+                            reasonCtrl.text = r;
+                          });
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: reasonCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Nhập chi tiết lý do...',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng'),
+            ),
+            if (bill.status != 'CANCELLED')
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.cancel_outlined, size: 16),
+                label: const Text('Hủy hóa đơn'),
+                onPressed: () async {
+                  final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
+                  Navigator.pop(ctx);
+                  Navigator.pop(context); // Close detail sheet
+                  await fb.cancelPaidBill(
+                    bill: bill,
+                    reason: reason,
+                    staffUsername: auth.currentUser?.username ?? 'staff',
+                    staffFullName: auth.currentUser?.fullName ?? 'Thu Ngân',
+                    staffRole: auth.currentUser?.roleId ?? 'ROLE_STAFF',
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Đã hủy hóa đơn ${bill.billCode}!'),
+                        backgroundColor: AppColors.danger,
+                      ),
+                    );
+                  }
+                },
+              ),
+            // Tùy chọn Xóa vĩnh viễn (Chủ quán hoặc quản lý có quyền)
+            if (auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill))
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade800,
+                  side: BorderSide(color: Colors.red.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.delete_forever, size: 16),
+                label: const Text('Xóa hẳn khỏi máy'),
+                onPressed: () async {
+                  final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
+                  Navigator.pop(ctx);
+                  Navigator.pop(context); // Close detail sheet
+                  await fb.deleteBill(
+                    bill: bill,
+                    reason: reason,
+                    staffUsername: auth.currentUser?.username ?? 'staff',
+                    staffFullName: auth.currentUser?.fullName ?? 'Thu Ngân',
+                    staffRole: auth.currentUser?.roleId ?? 'ROLE_STAFF',
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Đã xóa vĩnh viễn hóa đơn ${bill.billCode}!'),
+                        backgroundColor: Colors.black87,
+                      ),
+                    );
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -460,10 +460,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Thực đơn [$_selectedStoreCode]: ${_products.length} món • ${_categories.length} nhóm',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                Expanded(
+                  child: Text(
+                    'Thực đơn [$_selectedStoreCode]: ${_products.length} món • ${_categories.length} nhóm',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   'Đang bán: ${_products.where((p) => p.isAvailable).length}',
                   style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.success, fontWeight: FontWeight.bold),
@@ -546,7 +551,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showProductDialog(),
         icon: const Icon(Icons.add),
-        label: Text('Thêm món vào [$_selectedStoreCode]', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+        label: Text('Thêm món mới', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
       ),
     );

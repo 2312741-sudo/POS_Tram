@@ -1,8 +1,12 @@
 // lib/features/reports/end_of_day_report_screen.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -34,6 +38,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   DateTime? _customStartDate;
   DateTime? _customEndDate;
   String _selectedStoreCode = ''; // '' = current or ALL
+  String _selectedStaff = 'ALL'; // 'ALL' or staff full name / username
 
   // Tab 3 (Hàng hoá) search and sort
   String _productSearch = '';
@@ -93,6 +98,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         return dt.isAfter(sevenDaysAgo) && dt.isBefore(now.add(const Duration(days: 1)));
       case 'THIS_MONTH':
         return dt.year == now.year && dt.month == now.month;
+      case 'LAST_MONTH':
+        final lastMonth = DateTime(now.year, now.month - 1, 1);
+        return dt.year == lastMonth.year && dt.month == lastMonth.month;
       case 'CUSTOM':
         if (_customStartDate == null) return true;
         final start = DateTime(_customStartDate!.year, _customStartDate!.month, _customStartDate!.day);
@@ -116,6 +124,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         return '7 ngày qua';
       case 'THIS_MONTH':
         return 'Tháng này';
+      case 'LAST_MONTH':
+        return 'Tháng trước';
       case 'CUSTOM':
         if (_customStartDate != null) {
           final s = DateFormat('dd/MM').format(_customStartDate!);
@@ -258,12 +268,40 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         .fold(0, (sum, s) => sum + s.cashOut);
   }
 
+  // Available staff list
+  List<String> get _staffList {
+    final Set<String> staffSet = {};
+    for (final b in _bills) {
+      final billStaff = b.staffFullName.isNotEmpty
+          ? b.staffFullName
+          : (b.orderStaffSummary.isNotEmpty ? b.orderStaffSummary : b.staffUsername);
+      if (billStaff.isNotEmpty) staffSet.add(billStaff);
+      for (final it in b.items) {
+        if (it.orderedByName.isNotEmpty) staffSet.add(it.orderedByName);
+      }
+    }
+    final list = staffSet.toList();
+    list.sort();
+    return list;
+  }
+
   // ==================== TAB 3: HÀNG HÓA CALCULATIONS ====================
   List<Map<String, dynamic>> get _productSalesList {
     final Map<String, Map<String, dynamic>> productMap = {};
 
     for (final bill in _paidBills) {
+      final billStaff = bill.staffFullName.isNotEmpty
+          ? bill.staffFullName
+          : (bill.orderStaffSummary.isNotEmpty
+              ? bill.orderStaffSummary
+              : (bill.staffUsername.isNotEmpty ? bill.staffUsername : 'Nhân viên chung'));
+
       for (final item in bill.items) {
+        final itemStaff = item.orderedByName.isNotEmpty ? item.orderedByName : billStaff;
+        if (_selectedStaff != 'ALL' && itemStaff != _selectedStaff) {
+          continue;
+        }
+
         final key = item.name.trim();
         if (!productMap.containsKey(key)) {
           productMap[key] = {
@@ -273,10 +311,14 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             'revenue': 0,
             'unitPrice': item.unitPrice,
             'category': 'Đồ uống & Món ăn',
+            'staffSales': <String, int>{},
           };
         }
         productMap[key]!['quantity'] = (productMap[key]!['quantity'] as int) + item.quantity;
         productMap[key]!['revenue'] = (productMap[key]!['revenue'] as int) + item.itemTotal;
+
+        final staffMap = productMap[key]!['staffSales'] as Map<String, int>;
+        staffMap[itemStaff] = (staffMap[itemStaff] ?? 0) + item.quantity;
       }
     }
 
@@ -346,6 +388,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               _buildDateOption('Hôm qua', 'YESTERDAY', ctx),
               _buildDateOption('7 ngày qua', '7DAYS', ctx),
               _buildDateOption('Tháng này', 'THIS_MONTH', ctx),
+              _buildDateOption('Tháng trước', 'LAST_MONTH', ctx),
               ListTile(
                 leading: const Icon(Icons.date_range, color: TramColors.brandPrimary),
                 title: const Text('Tùy chọn ngày...'),
@@ -440,6 +483,209 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ),
       ),
     );
+  }
+
+  // Dialog to select Staff
+  void _showStaffPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Lọc hàng hóa theo nhân viên', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Icon(
+                  _selectedStaff == 'ALL' ? Icons.check_circle : Icons.circle_outlined,
+                  color: _selectedStaff == 'ALL' ? TramColors.brandPrimary : Colors.grey,
+                ),
+                title: Text(
+                  'Tất cả nhân viên (${_staffList.length})',
+                  style: TextStyle(
+                    fontWeight: _selectedStaff == 'ALL' ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedStaff == 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                  ),
+                ),
+                onTap: () {
+                  setState(() => _selectedStaff = 'ALL');
+                  Navigator.pop(ctx);
+                },
+              ),
+              ..._staffList.map((staff) {
+                final isSelected = _selectedStaff == staff;
+                return ListTile(
+                  leading: Icon(
+                    isSelected ? Icons.check_circle : Icons.person_outline,
+                    color: isSelected ? TramColors.brandPrimary : Colors.grey,
+                  ),
+                  title: Text(
+                    staff,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? TramColors.brandPrimary : Colors.black87,
+                    ),
+                  ),
+                  onTap: () {
+                    setState(() => _selectedStaff = staff);
+                    Navigator.pop(ctx);
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Export Product Sales Report to Excel
+  Future<void> _exportHangHoaExcel() async {
+    try {
+      final excel = Excel.createExcel();
+      const sheetName = 'HangHoaBanRa';
+      final sheet = excel[sheetName];
+      excel.setDefaultSheet(sheetName);
+
+      final currentStoreName = _stores.firstWhere(
+        (s) => s.storeCode == _selectedStoreCode,
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'Chi nhánh trung tâm'),
+      ).storeName;
+
+      // Header Info
+      sheet.appendRow([TextCellValue('BÁO CÁO HÀNG HÓA BÁN RA THEO NHÂN VIÊN')]);
+      sheet.appendRow([TextCellValue('Chi nhánh: $currentStoreName')]);
+      sheet.appendRow([TextCellValue('Thời gian: $_dateRangeLabel')]);
+      sheet.appendRow([TextCellValue('Nhân viên: ${_selectedStaff == 'ALL' ? 'Tất cả nhân viên' : _selectedStaff}')]);
+      final nowStr = DateFormat('HH:mm - dd/MM/yyyy').format(DateTime.now());
+      sheet.appendRow([TextCellValue('Thời điểm xuất file: $nowStr')]);
+      sheet.appendRow([]);
+
+      // Table Headers
+      final isAmt = _productViewMode == 'AMOUNT';
+      sheet.appendRow([
+        TextCellValue('Xếp hạng'),
+        TextCellValue('Tên món ăn / Đồ uống'),
+        TextCellValue('Nhân viên bán'),
+        TextCellValue('Đơn giá (VNĐ)'),
+        TextCellValue('Số lượng bán'),
+        TextCellValue('Doanh thu món (VNĐ)'),
+        TextCellValue('Tỷ trọng ${isAmt ? "doanh thu" : "số lượng"} (%)'),
+      ]);
+
+      final list = _productSalesList;
+      final totalQty = list.fold<int>(0, (s, it) => s + (it['quantity'] as int));
+      final totalRev = list.fold<int>(0, (s, it) => s + (it['revenue'] as int));
+
+      for (int i = 0; i < list.length; i++) {
+        final item = list[i];
+        final qty = item['quantity'] as int;
+        final rev = item['revenue'] as int;
+        final double pctNum = isAmt
+            ? (totalRev > 0 ? (rev / totalRev * 100) : 0.0)
+            : (totalQty > 0 ? (qty / totalQty * 100) : 0.0);
+        final pct = pctNum.toStringAsFixed(1);
+
+        String staffStr = '';
+        if (_selectedStaff != 'ALL') {
+          staffStr = _selectedStaff;
+        } else {
+          final staffSales = item['staffSales'] as Map<String, int>? ?? {};
+          staffStr = staffSales.entries.map((e) => '${e.key} (${e.value})').join('; ');
+          if (staffStr.isEmpty) staffStr = 'Nhân viên chung';
+        }
+
+        sheet.appendRow([
+          DoubleCellValue((i + 1).toDouble()),
+          TextCellValue(item['name'] as String),
+          TextCellValue(staffStr),
+          DoubleCellValue((item['unitPrice'] as int).toDouble()),
+          DoubleCellValue(qty.toDouble()),
+          DoubleCellValue(rev.toDouble()),
+          TextCellValue('$pct%'),
+        ]);
+      }
+
+      // Sheet 2: Chi tiết theo từng nhân viên nếu chọn Tất cả nhân viên
+      if (_selectedStaff == 'ALL') {
+        final staffSheet = excel['ChiTietTheoNhanVien'];
+        staffSheet.appendRow([TextCellValue('CHI TIẾT MÓN BÁN CỦA TỪNG NHÂN VIÊN')]);
+        staffSheet.appendRow([TextCellValue('Thời gian: $_dateRangeLabel')]);
+        staffSheet.appendRow([]);
+        staffSheet.appendRow([
+          TextCellValue('Nhân viên'),
+          TextCellValue('Tên món'),
+          TextCellValue('Đơn giá (VNĐ)'),
+          TextCellValue('Số lượng bán'),
+          TextCellValue('Doanh thu (VNĐ)'),
+        ]);
+
+        final Map<String, Map<String, Map<String, dynamic>>> staffMap = {};
+        for (final bill in _paidBills) {
+          final billStaff = bill.staffFullName.isNotEmpty
+              ? bill.staffFullName
+              : (bill.orderStaffSummary.isNotEmpty
+                  ? bill.orderStaffSummary
+                  : (bill.staffUsername.isNotEmpty ? bill.staffUsername : 'Nhân viên chung'));
+          for (final item in bill.items) {
+            final itemStaff = item.orderedByName.isNotEmpty ? item.orderedByName : billStaff;
+            if (!staffMap.containsKey(itemStaff)) {
+              staffMap[itemStaff] = {};
+            }
+            final pMap = staffMap[itemStaff]!;
+            final key = item.name.trim();
+            if (!pMap.containsKey(key)) {
+              pMap[key] = {
+                'name': key,
+                'unitPrice': item.unitPrice,
+                'quantity': 0,
+                'revenue': 0,
+              };
+            }
+            pMap[key]!['quantity'] = (pMap[key]!['quantity'] as int) + item.quantity;
+            pMap[key]!['revenue'] = (pMap[key]!['revenue'] as int) + item.itemTotal;
+          }
+        }
+
+        for (final entry in staffMap.entries) {
+          final sName = entry.key;
+          for (final p in entry.value.values) {
+            staffSheet.appendRow([
+              TextCellValue(sName),
+              TextCellValue(p['name'] as String),
+              DoubleCellValue((p['unitPrice'] as int).toDouble()),
+              DoubleCellValue((p['quantity'] as int).toDouble()),
+              DoubleCellValue((p['revenue'] as int).toDouble()),
+            ]);
+          }
+        }
+      }
+
+      final safeStaff = _selectedStaff == 'ALL' ? 'Tat_Ca_NV' : FirebaseService.sanitizeFileName(_selectedStaff);
+      final dateStr = DateFormat('yyyyMMdd').format(DateTime.now());
+      final fileName = 'BaoCao_HangHoa_${safeStaff}_${_selectedDateRange}_$dateStr.xlsx';
+
+      final dir = await getApplicationDocumentsDirectory();
+      final filePath = '${dir.path}/$fileName';
+      final fileBytes = excel.save();
+      if (fileBytes != null) {
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Báo cáo hàng hóa bán ra - $currentStoreName (${_selectedStaff == 'ALL' ? 'Tất cả NV' : _selectedStaff})',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi xuất file Excel: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   // Active serving tables modal sheet
@@ -709,6 +955,79 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 12),
       children: [
+        // Ô DOANH THU ƯỚC TÍNH NGÀY = TỔNG DOANH THU + ĐƠN ĐANG PHỤC VỤ
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: TramColors.brandPrimary, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: TramColors.brandPrimary.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: TramColors.brandPrimary,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'KPI TRỌNG TÂM',
+                          style: GoogleFonts.beVietnamPro(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Doanh thu ước tính ngày',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: TramColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Icon(Icons.calculate_outlined, color: TramColors.brandPrimary, size: 20),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                FormatUtils.vnd(_netRevenue + _servingEstimatedRevenue),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: TramColors.brandPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Công thức: Tổng doanh thu (${FormatUtils.vnd(_netRevenue)}) + Đang phục vụ (${FormatUtils.vnd(_servingEstimatedRevenue)} từ ${_servingTables.length} bàn)',
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
         // 1. TỔNG KẾT BÁN HÀNG
         _buildSectionCard(
           title: 'TỔNG KẾT BÁN HÀNG',
@@ -717,9 +1036,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             _buildReportRow('Tổng giảm giá món', FormatUtils.vnd(_itemDiscounts)),
             _buildReportRow('Tổng giảm giá hóa đơn', FormatUtils.vnd(_billDiscounts)),
             _buildReportRow(
-              'Doanh thu',
+              'Doanh thu (Đã thu)',
               FormatUtils.vnd(_netRevenue),
               subtitle: 'Bao gồm ${FormatUtils.vnd(_vatTotal)} tiền thuế',
+            ),
+            _buildReportRow(
+              'Doanh thu ước tính cả ngày',
+              FormatUtils.vnd(_netRevenue + _servingEstimatedRevenue),
+              subtitle: 'Tổng doanh thu + Đơn đang phục vụ',
+              isBold: true,
             ),
             _buildReportRow('Thu khác', FormatUtils.vnd(_otherIncome)),
             _buildReportRow('Trả hàng', FormatUtils.vnd(_refundAmount)),
@@ -886,6 +1211,80 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               ),
               const SizedBox(height: 10),
 
+              // Staff filter chip & Export Excel row
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _showStaffPicker,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _selectedStaff != 'ALL' ? const Color(0xFFFBECEE) : const Color(0xFFF0F2F5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 16,
+                              color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _selectedStaff == 'ALL' ? 'Tất cả nhân viên (${_staffList.length})' : _selectedStaff,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12,
+                                  fontWeight: _selectedStaff != 'ALL' ? FontWeight.bold : FontWeight.w500,
+                                  color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const Icon(Icons.arrow_drop_down, size: 18, color: Colors.black54),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _exportHangHoaExcel,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.file_download_outlined, size: 16, color: Colors.green),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Xuất Excel',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
               // Segmented Toggle: [Số tiền bán] vs [Số lượng bán]
               Container(
                 decoration: BoxDecoration(
@@ -1040,6 +1439,14 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         : (totalQty > 0 ? (qty / totalQty * 100) : 0.0);
                     final pct = pctNum.toStringAsFixed(1);
 
+                    final staffSales = item['staffSales'] as Map<String, int>? ?? {};
+                    String staffLabel = '';
+                    if (_selectedStaff != 'ALL') {
+                      staffLabel = 'NV bán: $_selectedStaff';
+                    } else if (staffSales.isNotEmpty) {
+                      staffLabel = 'NV: ${staffSales.entries.map((e) => "${e.key} (${e.value})").join(", ")}';
+                    }
+
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -1084,6 +1491,20 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                       : 'Đơn giá: ${FormatUtils.vnd(item['unitPrice'])} • Doanh thu: ${FormatUtils.vnd(rev)}',
                                   style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
                                 ),
+                                if (staffLabel.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      staffLabel,
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: TramColors.brandPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),

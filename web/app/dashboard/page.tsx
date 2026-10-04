@@ -46,6 +46,26 @@ export default function DashboardPage() {
   const tablesInUse = tablesData.filter((t) => t.inUse).length;
   const pendingOnline = onlineOrders.filter((o) => o.status === "PENDING" || o.status === "pending").length;
 
+  const todayServingTotal = tablesData
+    .filter((t) => t.inUse && !t.mergedIntoTable)
+    .reduce((sum, t) => {
+      if (!t.currentOrderJson) return sum;
+      try {
+        const items = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
+        if (!Array.isArray(items)) return sum;
+        return sum + items.reduce((isum: number, it: any) => {
+          const qty = it.quantity || it.count || 1;
+          let toppingSum = 0;
+          if (Array.isArray(it.selectedToppings)) {
+            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
+          }
+          return isum + ((Number(it.price) || 0) + toppingSum) * qty;
+        }, 0);
+      } catch {
+        return sum;
+      }
+    }, 0);
+
   // 7-day revenue chart
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(today, 6 - i);
@@ -83,6 +103,14 @@ export default function DashboardPage() {
     .slice(0, 5);
 
   const statCards: StatCard[] = [
+    {
+      title: "Ước tính cả ngày",
+      value: formatVND(todayRevenue + todayServingTotal),
+      subtitle: `${formatVND(todayRevenue)} đã thu + ${formatVND(todayServingTotal)} phục vụ`,
+      icon: <TrendingUp size={22} />,
+      color: "#059669",
+      bgColor: "#ECFDF5",
+    },
     {
       title: "Doanh thu hôm nay",
       value: formatVND(todayRevenue),

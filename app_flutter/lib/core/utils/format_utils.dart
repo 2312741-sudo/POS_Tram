@@ -34,11 +34,20 @@ class FormatUtils {
     return DateFormat('dd/MM/yyyy').format(dt);
   }
 
-  static String orderCode() {
+  /// Mã hóa đơn thanh toán chính thức (HD-yyMMdd-HHmmss)
+  static String billCode([String prefix = 'HD']) {
     final now = DateTime.now();
     final dateStr = DateFormat('yyMMdd').format(now);
     final timeStr = DateFormat('HHmmss').format(now);
-    return 'HD-$dateStr-$timeStr';
+    return '$prefix-$dateStr-$timeStr';
+  }
+
+  /// Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
+  static String orderCode([String prefix = 'OD']) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('yyMMdd').format(now);
+    final timeStr = DateFormat('HHmmss').format(now);
+    return '$prefix-$dateStr-$timeStr';
   }
 
   static String roleLabel(String role) {

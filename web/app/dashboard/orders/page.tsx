@@ -23,7 +23,9 @@ import {
   ShoppingBag,
   MapPin,
   DollarSign,
-  Banknote
+  Banknote,
+  Trash2,
+  XCircle,
 } from "lucide-react";
 import { exportHistory, exportSingleBillExcel } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
@@ -35,11 +37,13 @@ function formatVND(amount: number) {
 const PAGE_SIZE = 20;
 
 export default function OrdersPage() {
-  const { historyData, historyLoaded, tables } = useDashboardData();
+  const { historyData, historyLoaded, tables, cancelOrder, deleteOrder } = useDashboardData();
   const loading = !historyLoaded && historyData.length === 0;
   const [search, setSearch] = useState("");
+  const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("ALL");
   const [filterDate, setFilterDate] = useState("");
   const [filterMethod, setFilterMethod] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [filterZone, setFilterZone] = useState("");
   const [filterTable, setFilterTable] = useState("");
   const [page, setPage] = useState(1);
@@ -76,17 +80,39 @@ export default function OrdersPage() {
   }, [tables, historyData, filterZone]);
 
   const filtered = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     return historyData.filter((h) => {
       const matchSearch =
         !search ||
+        (h.billCode || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.orderCode || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.tableName || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.orderStaff || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.cashierName || "").toLowerCase().includes(search.toLowerCase());
-      const matchDate =
-        !filterDate ||
-        (h.timestamp &&
-          format(new Date(typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()), "yyyy-MM-dd") === filterDate);
+
+      const dt = new Date(typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime());
+      let matchDate = true;
+      if (datePreset === "TODAY") {
+        matchDate = dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth() && dt.getDate() === now.getDate();
+      } else if (datePreset === "YESTERDAY") {
+        const yest = new Date(today);
+        yest.setDate(yest.getDate() - 1);
+        matchDate = dt.getFullYear() === yest.getFullYear() && dt.getMonth() === yest.getMonth() && dt.getDate() === yest.getDate();
+      } else if (datePreset === "7DAYS") {
+        const d7 = new Date(today);
+        d7.setDate(d7.getDate() - 7);
+        matchDate = dt >= d7 && dt <= now;
+      } else if (datePreset === "THIS_MONTH") {
+        matchDate = dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+      } else if (datePreset === "LAST_MONTH") {
+        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        matchDate = dt.getFullYear() === lm.getFullYear() && dt.getMonth() === lm.getMonth();
+      } else if (datePreset === "CUSTOM") {
+        matchDate = !filterDate || format(dt, "yyyy-MM-dd") === filterDate;
+      }
+
       const matchMethod =
         !filterMethod || (h.paymentMethod || "").toLowerCase().includes(filterMethod.toLowerCase());
       const matchZone =
@@ -94,14 +120,18 @@ export default function OrdersPage() {
         (filterZone === "Mang về" ? isTakeaway(h) : (h.zone || "").toLowerCase() === filterZone.toLowerCase());
       const matchTable =
         !filterTable || (h.tableName || "").toLowerCase() === filterTable.toLowerCase();
+      const matchStatus =
+        !filterStatus || (h.status || "PAID") === filterStatus;
 
-      return matchSearch && matchDate && matchMethod && matchZone && matchTable;
+      return matchSearch && matchDate && matchMethod && matchZone && matchTable && matchStatus;
     });
-  }, [historyData, search, filterDate, filterMethod, filterZone, filterTable]);
+  }, [historyData, search, datePreset, filterDate, filterMethod, filterStatus, filterZone, filterTable]);
 
-  // Aggregate stats
+  // Aggregate stats (Chỉ tính đơn hợp lệ, loại trừ đơn đã hủy)
   const totalAmount = useMemo(() => {
-    return filtered.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
+    return filtered
+      .filter((h) => h.status !== "CANCELLED")
+      .reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
   }, [filtered]);
 
   const takeawayOrders = useMemo(() => {
@@ -154,7 +184,7 @@ export default function OrdersPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Hóa đơn ${order.orderCode || order.id}</title>
+          <title>Hóa đơn ${order.billCode || order.orderCode || order.id}</title>
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; color: #333; }
             .header { text-align: center; border-bottom: 2px dashed #7E2930; padding-bottom: 12px; margin-bottom: 12px; }
@@ -169,7 +199,7 @@ export default function OrdersPage() {
           <div class="header">
             <h2 class="title">TRẠM F&B SYSTEM</h2>
             <div class="meta">HÓA ĐƠN THANH TOÁN</div>
-            <div class="meta">Mã: <strong>${order.orderCode || order.id?.slice(0, 8)}</strong> | Bàn: <strong>${order.tableName || "—"}</strong></div>
+            <div class="meta">Số HĐ: <strong>${order.billCode || order.orderCode || order.id?.slice(0, 8)}</strong>${order.orderCode && order.billCode && order.orderCode !== order.billCode ? ` | Mã đơn: <strong>${order.orderCode}</strong>` : ''} | Bàn: <strong>${order.tableName || "—"}</strong></div>
             <div class="meta">Giờ: ${timeStr}</div>
             <div class="meta">Người nhận order: <strong>${order.orderStaff || "—"}</strong></div>
             <div class="meta">Thu ngân: <strong>${order.cashierName || "—"}</strong></div>
@@ -316,59 +346,78 @@ export default function OrdersPage() {
               style={{ paddingLeft: "38px" }}
             />
           </div>
-          <div style={{ position: "relative" }}>
-            <Calendar size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
+          <select
+            className="input-field"
+            value={datePreset}
+            onChange={(e: any) => { setDatePreset(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "160px" }}
+          >
+            <option value="ALL">📅 Tất cả thời gian</option>
+            <option value="TODAY">Hôm nay</option>
+            <option value="YESTERDAY">Hôm qua</option>
+            <option value="7DAYS">7 ngày qua</option>
+            <option value="THIS_MONTH">Tháng này</option>
+            <option value="LAST_MONTH">Tháng trước</option>
+            <option value="CUSTOM">Tùy chọn ngày...</option>
+          </select>
+
+          {datePreset === "CUSTOM" && (
             <input
               type="date"
               className="input-field"
               value={filterDate}
               onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
-              style={{ paddingLeft: "38px", width: "170px", colorScheme: "dark" }}
+              style={{ width: "160px", colorScheme: "dark" }}
             />
-          </div>
-          <div style={{ position: "relative" }}>
-            <MapPin size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
-            <select
-              className="input-field"
-              value={filterZone}
-              onChange={(e) => { setFilterZone(e.target.value); setFilterTable(""); setPage(1); }}
-              style={{ paddingLeft: "38px", minWidth: "160px" }}
-            >
-              <option value="">Tất cả phòng / khu vực</option>
-              {availableZones.map((z) => (
-                <option key={z} value={z}>{z === "Mang về" ? "🥡 Mang về" : `📍 ${z}`}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ position: "relative" }}>
-            <Utensils size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
-            <select
-              className="input-field"
-              value={filterTable}
-              onChange={(e) => { setFilterTable(e.target.value); setPage(1); }}
-              style={{ paddingLeft: "38px", minWidth: "140px" }}
-            >
-              <option value="">Tất cả bàn</option>
-              {availableTables.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ position: "relative" }}>
-            <Filter size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
-            <select
-              className="input-field"
-              value={filterMethod}
-              onChange={(e) => { setFilterMethod(e.target.value); setPage(1); }}
-              style={{ paddingLeft: "38px", width: "160px" }}
-            >
-              <option value="">Tất cả phương thức</option>
-              <option value="cash">Tiền mặt</option>
-              <option value="transfer">Chuyển khoản</option>
-            </select>
-          </div>
-          {(search || filterDate || filterMethod || filterZone || filterTable) && (
-            <button className="btn-secondary" onClick={() => { setSearch(""); setFilterDate(""); setFilterMethod(""); setFilterZone(""); setFilterTable(""); setPage(1); }}>
+          )}
+
+          <select
+            className="input-field"
+            value={filterZone}
+            onChange={(e) => { setFilterZone(e.target.value); setFilterTable(""); setPage(1); }}
+            style={{ width: "auto", minWidth: "185px" }}
+          >
+            <option value="">📍 Tất cả phòng / khu vực</option>
+            {availableZones.map((z) => (
+              <option key={z} value={z}>{z === "Mang về" ? "🥡 Mang về" : `📍 ${z}`}</option>
+            ))}
+          </select>
+
+          <select
+            className="input-field"
+            value={filterTable}
+            onChange={(e) => { setFilterTable(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "140px" }}
+          >
+            <option value="">🍽️ Tất cả bàn</option>
+            {availableTables.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+
+          <select
+            className="input-field"
+            value={filterMethod}
+            onChange={(e) => { setFilterMethod(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "175px" }}
+          >
+            <option value="">💳 Tất cả phương thức</option>
+            <option value="cash">💵 Tiền mặt</option>
+            <option value="transfer">📱 Chuyển khoản</option>
+          </select>
+
+          <select
+            className="input-field"
+            value={filterStatus}
+            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            style={{ width: "auto", minWidth: "165px" }}
+          >
+            <option value="">🏷️ Tất cả trạng thái</option>
+            <option value="PAID">✅ Đã thanh toán</option>
+            <option value="CANCELLED">❌ Đã hủy</option>
+          </select>
+          {(search || filterDate || filterMethod || filterStatus || filterZone || filterTable) && (
+            <button className="btn-secondary" onClick={() => { setSearch(""); setFilterDate(""); setFilterMethod(""); setFilterStatus(""); setFilterZone(""); setFilterTable(""); setPage(1); }}>
               Xóa lọc
             </button>
           )}
@@ -408,8 +457,13 @@ export default function OrdersPage() {
                     <td style={{ color: "#8B8FA8" }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
                     <td>
                       <span style={{ fontFamily: "monospace", fontWeight: "700", color: "#7E2930", fontSize: "13px" }}>
-                        {h.orderCode || h.id?.slice(0, 8) || "N/A"}
+                        {h.billCode || h.orderCode || h.id?.slice(0, 8) || "N/A"}
                       </span>
+                      {h.orderCode && h.billCode && h.orderCode !== h.billCode && (
+                        <div style={{ fontSize: "11px", color: "#8B8FA8", fontFamily: "monospace" }}>
+                          Đơn: {h.orderCode}
+                        </div>
+                      )}
                     </td>
                     <td style={{ fontWeight: "700", color: "#1C1A2D" }}>
                       {h.tableName || "—"}
@@ -463,8 +517,8 @@ export default function OrdersPage() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${h.status === "PAID" || h.status === "paid" || h.status === "Đã thanh toán" ? "badge-success" : "badge-warning"}`}>
-                        {h.status || "PAID"}
+                      <span className={`badge ${h.status === "CANCELLED" ? "badge-danger" : h.status === "PAID" || h.status === "paid" || h.status === "Đã thanh toán" ? "badge-success" : "badge-warning"}`}>
+                        {h.status === "CANCELLED" ? "Đã hủy" : (h.status || "Đã thanh toán")}
                       </span>
                     </td>
                     <td style={{ color: "#8B8FA8", fontSize: "13px" }}>
@@ -580,15 +634,18 @@ export default function OrdersPage() {
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <h2 style={{ fontSize: "20px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
-                    Chi tiết Hóa đơn #{selectedOrder.orderCode || selectedOrder.id?.slice(0, 8)}
+                    Chi tiết Hóa đơn #{selectedOrder.billCode || selectedOrder.orderCode || selectedOrder.id?.slice(0, 8)}
                   </h2>
-                  <span className="badge badge-success">
-                    {selectedOrder.status || "Đã thanh toán"}
+                  <span className={`badge ${selectedOrder.status === "CANCELLED" ? "badge-danger" : "badge-success"}`}>
+                    {selectedOrder.status === "CANCELLED" ? "Đã hủy" : (selectedOrder.status || "Đã thanh toán")}
                   </span>
                 </div>
                 <p style={{ fontSize: "13px", color: "#5D5B63", marginTop: "4px" }}>
                   Bàn: <strong style={{ color: "#7E2930" }}>{selectedOrder.tableName || "—"}</strong>
-                  {selectedOrder.zone ? ` (${selectedOrder.zone})` : ""} •
+                  {selectedOrder.zone ? ` (${selectedOrder.zone})` : ""}
+                  {selectedOrder.orderCode && selectedOrder.billCode && selectedOrder.orderCode !== selectedOrder.billCode && (
+                    <span> • Mã đặt món: <strong style={{ fontFamily: "monospace", color: "#146A65" }}>{selectedOrder.orderCode}</strong></span>
+                  )} •
                   Thời gian: {selectedOrder.timestamp ? format(new Date(typeof selectedOrder.timestamp === "number" ? selectedOrder.timestamp : new Date(selectedOrder.timestamp || 0).getTime()), "dd/MM/yyyy HH:mm:ss", { locale: vi }) : "—"}
                 </p>
               </div>
@@ -847,6 +904,57 @@ export default function OrdersPage() {
                 flexWrap: "wrap",
               }}
             >
+              {selectedOrder.status !== "CANCELLED" && (
+                <button
+                  className="btn-secondary"
+                  onClick={async () => {
+                    const reason = window.prompt("Nhập lý do hủy hóa đơn này:", "Khách đổi ý hủy đơn");
+                    if (!reason) return;
+                    const res = await cancelOrder(selectedOrder.id, reason);
+                    if (res.success) {
+                      alert("Đã hủy hóa đơn thành công!");
+                      setSelectedOrder(null);
+                    } else {
+                      alert(res.error || "Lỗi khi hủy hóa đơn");
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#D9383A",
+                    borderColor: "rgba(217, 56, 58, 0.4)",
+                    background: "#FFF0F2"
+                  }}
+                >
+                  <XCircle size={16} />
+                  Hủy Hóa Đơn
+                </button>
+              )}
+              <button
+                className="btn-secondary"
+                onClick={async () => {
+                  const ok = window.confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN hóa đơn #${selectedOrder.billCode || selectedOrder.orderCode || selectedOrder.id?.slice(0, 8)} khỏi hệ thống không?\nHành động này không thể hoàn tác!`);
+                  if (!ok) return;
+                  const res = await deleteOrder(selectedOrder.id);
+                  if (res.success) {
+                    alert("Đã xóa vĩnh viễn hóa đơn khỏi hệ thống!");
+                    setSelectedOrder(null);
+                  } else {
+                    alert(res.error || "Lỗi khi xóa hóa đơn");
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  color: "#B22222",
+                  borderColor: "rgba(178, 34, 34, 0.3)",
+                }}
+              >
+                <Trash2 size={16} />
+                Xóa Vĩnh Viễn
+              </button>
               <button
                 className="btn-secondary"
                 onClick={() => handlePrint(selectedOrder)}

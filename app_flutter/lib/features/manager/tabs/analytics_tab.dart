@@ -19,6 +19,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   List<BillModel> _bills = [];
   bool _loading = true;
   int _touchedPieIndex = -1;
+  String _period = 'THIS_MONTH'; // 'TODAY', 'YESTERDAY', '7DAYS', 'THIS_MONTH', 'LAST_MONTH', 'ALL'
 
   @override
   void initState() {
@@ -37,6 +38,35 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     });
   }
 
+  List<BillModel> get _filteredBills {
+    if (_period == 'ALL') return _bills;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final sevenDaysAgo = today.subtract(const Duration(days: 7));
+    final lastMonth = DateTime(now.year, now.month - 1, 1);
+
+    return _bills.where((b) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+      if (_period == 'TODAY') {
+        return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+      }
+      if (_period == 'YESTERDAY') {
+        return dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+      }
+      if (_period == '7DAYS') {
+        return dt.isAfter(sevenDaysAgo) && dt.isBefore(now.add(const Duration(days: 1)));
+      }
+      if (_period == 'THIS_MONTH') {
+        return dt.year == now.year && dt.month == now.month;
+      }
+      if (_period == 'LAST_MONTH') {
+        return dt.year == lastMonth.year && dt.month == lastMonth.month;
+      }
+      return true;
+    }).toList();
+  }
+
   // 1. Payment Breakdown
   Map<String, dynamic> get _paymentData {
     int cash = 0;
@@ -46,7 +76,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     int other = 0;
     int otherAmount = 0;
 
-    for (final b in _bills) {
+    final targetList = _filteredBills;
+    for (final b in targetList) {
       final m = b.paymentMethod.toLowerCase();
       if (m.contains('cash') || m.contains('tiền mặt')) {
         cash++;
@@ -60,7 +91,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       }
     }
 
-    final total = _bills.length;
+    final total = targetList.length;
     return {
       'cash': {'count': cash, 'amount': cashAmount, 'pct': total > 0 ? (cash / total * 100).toStringAsFixed(1) : '0'},
       'transfer': {'count': transfer, 'amount': transferAmount, 'pct': total > 0 ? (transfer / total * 100).toStringAsFixed(1) : '0'},
@@ -71,8 +102,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   // 2. Hourly revenue across all data
   List<Map<String, dynamic>> get _hourlyData {
+    final targetList = _filteredBills;
     return List.generate(24, (h) {
-      final rev = _bills.where((b) {
+      final rev = targetList.where((b) {
         final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
         return dt.hour == h;
       }).fold(0, (s, b) => s + b.finalAmount);
@@ -83,7 +115,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   // 3. Top 10 Best Selling Items
   List<Map<String, dynamic>> get _top10Products {
     final Map<String, Map<String, dynamic>> map = {};
-    for (final b in _bills) {
+    for (final b in _filteredBills) {
       for (final item in b.items) {
         final key = item.name;
         if (!map.containsKey(key)) {
@@ -101,7 +133,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   // 4. Revenue by Zone
   List<Map<String, dynamic>> get _zoneData {
     final Map<String, int> map = {};
-    for (final b in _bills) {
+    for (final b in _filteredBills) {
       final zone = b.zone.isNotEmpty ? b.zone : 'Khu vực chung';
       map[zone] = (map[zone] ?? 0) + b.finalAmount;
     }
@@ -138,10 +170,31 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
               ),
               Text(
-                'Tổng hợp ${_bills.length} đơn hàng đã thanh toán',
+                'Tổng hợp ${_filteredBills.length} đơn hàng trong kỳ đã chọn',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+
+          // Period Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildPeriodFilterChip('Hôm nay', 'TODAY'),
+                const SizedBox(width: 8),
+                _buildPeriodFilterChip('Hôm qua', 'YESTERDAY'),
+                const SizedBox(width: 8),
+                _buildPeriodFilterChip('7 ngày qua', '7DAYS'),
+                const SizedBox(width: 8),
+                _buildPeriodFilterChip('Tháng này', 'THIS_MONTH'),
+                const SizedBox(width: 8),
+                _buildPeriodFilterChip('Tháng trước', 'LAST_MONTH'),
+                const SizedBox(width: 8),
+                _buildPeriodFilterChip('Tất cả', 'ALL'),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -660,6 +713,32 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildPeriodFilterChip(String label, String value) {
+    final active = _period == value;
+    return InkWell(
+      onTap: () => setState(() => _period = value),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? TramColors.brandPrimary : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: active ? TramColors.brandPrimary : TramColors.borderLight,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.bold : FontWeight.w500,
+            color: active ? Colors.white : TramColors.textPrimary,
+          ),
+        ),
+      ),
     );
   }
 }

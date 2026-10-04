@@ -176,8 +176,10 @@ class _TableListScreenState extends State<TableListScreen> {
                     ],
                   ),
                   Text(
-                    'Mã CH: ${_auth.currentStoreCode} • ${_auth.currentUser?.fullName} (${_auth.currentUser?.roleId})',
+                    'CH: ${_auth.currentStoreCode} • ${_auth.currentUser?.fullName ?? ""}',
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -585,10 +587,13 @@ class _TableListScreenState extends State<TableListScreen> {
         if (table.guestCount == null || table.guestCount! <= 0) {
           table.guestCount = 2; // Số khách mặc định, nhân viên có thể sửa trong màn hình đơn
         }
+        table.ensureCodes();
         context.push('/order-list', extra: table);
       },
       onLongPress: () {
-        if (!inUse && !isReserved) {
+        if (inUse) {
+          _showInUseTableActionsDialog(table, allTables);
+        } else if (!isReserved) {
           _showReserveTableDialog(table);
         }
       },
@@ -640,7 +645,7 @@ class _TableListScreenState extends State<TableListScreen> {
                         child: Text(
                           table.name,
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: inUse ? AppColors.primaryDark : AppColors.textPrimary,
                           ),
@@ -696,30 +701,59 @@ class _TableListScreenState extends State<TableListScreen> {
             ] else if (inUse) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Khu vực: ${table.zone}',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary),
+                    if ((table.currentBillId != null && table.currentBillId!.isNotEmpty) ||
+                        (table.currentOrderCode != null && table.currentOrderCode!.isNotEmpty)) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 0.5),
+                        ),
+                        child: Text(
+                          table.currentBillId != null && table.currentBillId!.isNotEmpty
+                              ? 'HĐ: ${table.currentBillId}'
+                              : (table.currentOrderCode != null ? 'Đơn: ${table.currentOrderCode}' : ''),
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 9.0,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryDark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                    Row(
+                      children: [
+                        Text(
+                          'Khu vực: ${table.zone}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                        if (table.guestCount != null && table.guestCount! > 0) ...[
+                          const SizedBox(width: 4),
+                          Text('•', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '👥 ${table.guestCount}k',
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                        if (table.durationInUse != null) ...[
+                          const SizedBox(width: 4),
+                          Text('•', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '⏱ ${table.durationInUse!.inMinutes}p',
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (table.guestCount != null && table.guestCount! > 0) ...[
-                      const SizedBox(width: 4),
-                      Text('•', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '👥 ${table.guestCount}k',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                    if (table.durationInUse != null) ...[
-                      const SizedBox(width: 4),
-                      Text('•', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '⏱ ${table.durationInUse!.inMinutes}p',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -812,6 +846,8 @@ class _TableListScreenState extends State<TableListScreen> {
                       _showTransferTableDialog(table, allTables);
                     } else if (val == 'MERGE') {
                       _showMergeTableDialog(table, allTables);
+                    } else if (val == 'CANCEL_BILL') {
+                      _confirmCancelTableBill(table);
                     }
                   },
                   itemBuilder: (ctx) => [
@@ -844,6 +880,16 @@ class _TableListScreenState extends State<TableListScreen> {
                             Icon(Icons.call_merge, size: 18, color: Colors.orange),
                             SizedBox(width: 8),
                             Text('Ghép vào bàn khác'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'CANCEL_BILL',
+                        child: Row(
+                          children: [
+                            Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Hủy hóa đơn', style: TextStyle(color: Colors.red)),
                           ],
                         ),
                       ),
@@ -1138,6 +1184,304 @@ class _TableListScreenState extends State<TableListScreen> {
     );
   }
 
+  void _showInUseTableActionsDialog(TableModel table, List<TableModel> allTables) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final int itemCount = table.currentItems.fold(0, (sum, i) => sum + i.quantity);
+        final int total = table.currentItems.fold(0, (sum, i) => sum + i.itemTotal);
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.table_restaurant, color: AppColors.primary, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  table.name,
+                                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    table.zone,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.primaryDark, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${table.currentBillId != null ? "HĐ: ${table.currentBillId} • " : ""}${table.currentOrderCode != null ? "Đơn: ${table.currentOrderCode} • " : ""}$itemCount món (${FormatUtils.vnd(total)})',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.shopping_cart_checkout, color: AppColors.primary),
+                  title: Text('Xem giỏ hàng & Thanh toán', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Xem chi tiết các món, giảm giá, in tạm tính và thanh toán'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/order-cart', extra: table);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_shopping_cart, color: TramColors.brandPrimary),
+                  title: Text('Gọi thêm món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Mở thực đơn chọn món thêm vào bàn này'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/order-list', extra: table);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.swap_horiz, color: Colors.blue),
+                  title: Text('Chuyển sang bàn khác', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showTransferTableDialog(table, allTables);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.call_merge, color: Colors.orange),
+                  title: Text('Ghép vào bàn khác', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showMergeTableDialog(table, allTables);
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.cancel_outlined, color: Colors.red),
+                  title: Text('Hủy hóa đơn (Trả bàn trống)', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: Colors.red)),
+                  subtitle: const Text('Xóa toàn bộ món và đặt lại bàn về trạng thái trống', style: TextStyle(color: Colors.redAccent)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmCancelTableBill(table);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmCancelTableBill(TableModel table) async {
+    final openShift = _fb.activeShiftCache ?? await _fb.getCurrentOpenShift();
+    if (openShift == null || !openShift.isOpen) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Chức năng hủy đơn bị khóa! Vui lòng mở ca trước.'),
+            backgroundColor: TramColors.warningInk,
+          ),
+        );
+      }
+      return;
+    }
+
+    final hasKitchen = table.currentItems.any((i) => i.isSentKitchen);
+    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+      return;
+    }
+
+    final reasonCtrl = TextEditingController(text: 'Khách đổi ý/không đợi được');
+    final staffUser = _auth.currentUser?.username ?? 'staff';
+    final staffName = _auth.currentUser?.fullName ?? 'Nhân Viên';
+    final staffRole = _auth.currentUser?.roleId ?? 'ROLE_STAFF';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          final quickReasons = [
+            'Khách đổi ý/không đợi được',
+            'Nhập nhầm bàn',
+            'Khách về gấp',
+            'Khách chuyển bàn khác',
+            'Sự cố món/bếp hết hàng',
+          ];
+
+          final int itemsCount = table.currentItems.fold(0, (sum, i) => sum + i.quantity);
+          final int totalAmount = table.currentItems.fold(0, (sum, i) => sum + i.itemTotal);
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 24),
+                const SizedBox(width: 8),
+                Text('Hủy Hóa Đơn Bàn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF0F1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primaryDark)),
+                            Text(table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            if (table.currentBillId != null)
+                              Text('Mã HĐ: ${table.currentBillId}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                            if (table.currentOrderCode != null)
+                              Text('Mã đơn: ${table.currentOrderCode}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blueGrey)),
+                          ],
+                        ),
+                        Text('Số món: ${table.currentItems.length} món ($itemsCount phần) • Tổng: ${FormatUtils.vnd(totalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Lý do hủy hóa đơn *:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) {
+                      final isSelected = reasonCtrl.text == r;
+                      return ChoiceChip(
+                        label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                        selected: isSelected,
+                        selectedColor: AppColors.primary,
+                        backgroundColor: Colors.grey.shade100,
+                        onSelected: (val) {
+                          if (val) {
+                            setDlgState(() => reasonCtrl.text = r);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: reasonCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập chi tiết lý do hủy đơn...',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '⚠️ Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.red.shade700, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Bỏ qua'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                icon: const Icon(Icons.delete_forever, size: 16, color: Colors.white),
+                label: const Text('Xác nhận Hủy Đơn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  if (reasonCtrl.text.trim().isEmpty) return;
+                  Navigator.pop(ctx, true);
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (confirmed == true) {
+      final reason = reasonCtrl.text.trim();
+      try {
+        await _fb.cancelActiveBill(
+          table,
+          reason: reason,
+          staffUsername: staffUser,
+          staffFullName: staffName,
+          staffRole: staffRole,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Đã hủy hóa đơn bàn ${table.name}. Bàn đã về trạng thái TRỐNG!'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi khi hủy hóa đơn: $e'), backgroundColor: AppColors.danger),
+          );
+        }
+      }
+    }
+  }
+
   Widget _buildDrawer() {
     return Drawer(
       child: ListView(
@@ -1270,6 +1614,33 @@ class _TableListScreenState extends State<TableListScreen> {
               leading: const Icon(Icons.discount_outlined, color: AppColors.accent),
               title: const Text('Khuyến Mãi & Voucher'),
               onTap: () => _navigateTo('/promotions'),
+            ),
+          if (_auth.isRootOwner || _auth.can(AppPermissions.viewInventory))
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Kho hàng'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/inventory');
+              },
+            ),
+          if (_auth.isRootOwner || _auth.can(AppPermissions.viewInventory))
+            ListTile(
+              leading: const Icon(Icons.assessment_outlined, color: AppColors.info),
+              title: const Text('Báo cáo Kho hàng'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/inventory-report');
+              },
+            ),
+          if (_auth.isRootOwner || _auth.can(AppPermissions.managePromotions))
+            ListTile(
+              leading: const Icon(Icons.insights_outlined, color: AppColors.accent),
+              title: const Text('Hiệu suất Khuyến mãi'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/promotion-report');
+              },
             ),
           if (_auth.isRootOwner || _auth.can(AppPermissions.viewAuditLogs))
             ListTile(

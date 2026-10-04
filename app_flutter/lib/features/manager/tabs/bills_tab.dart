@@ -28,6 +28,7 @@ class _BillsTabState extends State<BillsTab> {
   String _search = '';
   String _dateFilter = 'TODAY'; // 'TODAY', 'YESTERDAY', 'WEEK', 'ALL', 'CUSTOM'
   DateTime? _customDate;
+  String _statusFilter = 'ALL'; // 'ALL', 'PAID', 'CANCELLED'
   String _paymentFilter = 'ALL'; // 'ALL', 'CASH', 'TRANSFER'
   String _zoneFilter = 'ALL'; // 'ALL', 'MANG_VE', or specific zone name
   String _tableFilter = 'ALL'; // 'ALL' or specific table name
@@ -104,8 +105,10 @@ class _BillsTabState extends State<BillsTab> {
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
 
     return _allBills.where((b) {
-      // 1. Only paid or relevant bills
-      if (b.status != 'PAID') return false;
+      // 1. Status Filter
+      if (_statusFilter == 'PAID' && b.status != 'PAID') return false;
+      if (_statusFilter == 'CANCELLED' && b.status != 'CANCELLED') return false;
+      if (_statusFilter == 'ALL' && b.status != 'PAID' && b.status != 'CANCELLED') return false;
 
       // 2. Date Filter
       final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
@@ -117,6 +120,11 @@ class _BillsTabState extends State<BillsTab> {
         if (billDay != yesterday) return false;
       } else if (_dateFilter == 'WEEK') {
         if (billDay.isBefore(weekStart)) return false;
+      } else if (_dateFilter == 'THIS_MONTH') {
+        if (dt.year != now.year || dt.month != now.month) return false;
+      } else if (_dateFilter == 'LAST_MONTH') {
+        final lastMonth = DateTime(now.year, now.month - 1, 1);
+        if (dt.year != lastMonth.year || dt.month != lastMonth.month) return false;
       } else if (_dateFilter == 'CUSTOM' && _customDate != null) {
         final cDay = DateTime(_customDate!.year, _customDate!.month, _customDate!.day);
         if (billDay != cDay) return false;
@@ -146,7 +154,7 @@ class _BillsTabState extends State<BillsTab> {
       // 5. Search Filter
       if (_search.isNotEmpty) {
         final q = _search.toLowerCase();
-        final matchCode = b.billCode.toLowerCase().contains(q);
+        final matchCode = b.billCode.toLowerCase().contains(q) || (b.orderCode != null && b.orderCode!.toLowerCase().contains(q));
         final matchTable = b.tableName.toLowerCase().contains(q);
         final matchZone = b.zone.toLowerCase().contains(q);
         final matchStaff = b.staffFullName.toLowerCase().contains(q) || b.staffUsername.toLowerCase().contains(q);
@@ -207,8 +215,10 @@ class _BillsTabState extends State<BillsTab> {
     }
 
     final filtered = _filteredBills;
-    final totalAmount = filtered.fold(0, (s, b) => s + b.finalAmount);
-    final takeawayBills = filtered.where(_isTakeaway).toList();
+    final paidBills = filtered.where((b) => b.status != 'CANCELLED').toList();
+    final cancelledBills = filtered.where((b) => b.status == 'CANCELLED').toList();
+    final totalAmount = paidBills.fold(0, (s, b) => s + b.finalAmount);
+    final takeawayBills = paidBills.where(_isTakeaway).toList();
     final takeawayCount = takeawayBills.length;
     final takeawayRevenue = takeawayBills.fold(0, (s, b) => s + b.finalAmount);
 
@@ -263,6 +273,10 @@ class _BillsTabState extends State<BillsTab> {
                       _buildDateChip('Hôm qua', 'YESTERDAY'),
                       const SizedBox(width: 8),
                       _buildDateChip('Tuần này', 'WEEK'),
+                      const SizedBox(width: 8),
+                      _buildDateChip('Tháng này', 'THIS_MONTH'),
+                      const SizedBox(width: 8),
+                      _buildDateChip('Tháng trước', 'LAST_MONTH'),
                       const SizedBox(width: 8),
                       _buildDateChip('Tất cả', 'ALL'),
                       const SizedBox(width: 8),
@@ -373,22 +387,36 @@ class _BillsTabState extends State<BillsTab> {
                 ),
                 const SizedBox(height: 8),
 
-                // Payment Filters & Export Bar
+                // Status & Payment Filters & Export Bar in a single neat row
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        _buildPaymentChip('Tất cả HTTT', 'ALL'),
-                        const SizedBox(width: 6),
-                        _buildPaymentChip('💵 Tiền mặt', 'CASH'),
-                        const SizedBox(width: 6),
-                        _buildPaymentChip('🏦 VietQR', 'TRANSFER'),
-                      ],
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildStatusChip('Tất cả', 'ALL'),
+                            const SizedBox(width: 6),
+                            _buildStatusChip('Đã thanh toán', 'PAID'),
+                            const SizedBox(width: 6),
+                            _buildStatusChip('Đã hủy', 'CANCELLED'),
+                            const SizedBox(width: 8),
+                            Container(width: 1, height: 16, color: Colors.grey.shade300),
+                            const SizedBox(width: 8),
+                            _buildPaymentChip('Tất cả HTTT', 'ALL'),
+                            const SizedBox(width: 6),
+                            _buildPaymentChip('💵 Tiền mặt', 'CASH'),
+                            const SizedBox(width: 6),
+                            _buildPaymentChip('🏦 VietQR', 'TRANSFER'),
+                          ],
+                        ),
+                      ),
                     ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.file_download_outlined, color: TramColors.brandPrimary),
                       tooltip: 'Xuất file Excel',
+                      visualDensity: VisualDensity.compact,
                       onPressed: _exportFilteredExcel,
                     ),
                   ],
@@ -412,7 +440,9 @@ class _BillsTabState extends State<BillsTab> {
                         const Icon(Icons.receipt_long, size: 16, color: TramColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
-                          'Tổng: ${filtered.length} hóa đơn',
+                          cancelledBills.isEmpty
+                              ? 'Tổng: ${paidBills.length} hóa đơn'
+                              : 'Tổng: ${paidBills.length} h/đơn (${cancelledBills.length} đã hủy)',
                           style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
                         ),
                       ],
@@ -559,9 +589,53 @@ class _BillsTabState extends State<BillsTab> {
     );
   }
 
+  Widget _buildStatusChip(String label, String key) {
+    final isSelected = _statusFilter == key;
+    final isDanger = key == 'CANCELLED';
+    return InkWell(
+      onTap: () => setState(() => _statusFilter = key),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDanger ? TramColors.danger : TramColors.brandPrimary)
+              : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? (isDanger ? TramColors.danger : TramColors.brandPrimary)
+                : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : TramColors.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBillCard(BillModel bill) {
     final isCash = bill.paymentMethod.toLowerCase().contains('cash') || bill.paymentMethod.toLowerCase().contains('tiền mặt');
+    final isCancelled = bill.status == 'CANCELLED';
     final timeStr = FormatUtils.dateTime(bill.closedAt ?? bill.createdAt);
+
+    final tableName = bill.tableName.trim();
+    final zone = bill.zone.trim();
+    final hasTable = tableName.isNotEmpty || zone.isNotEmpty;
+    final tableDisplay = tableName.isNotEmpty
+        ? (zone.isNotEmpty ? '$tableName ($zone)' : tableName)
+        : zone;
+
+    // Only show orderCode chip if distinct from billCode
+    final showOrderCode = bill.orderCode != null &&
+        bill.orderCode!.trim().isNotEmpty &&
+        bill.orderCode!.trim() != bill.billCode.trim();
 
     return InkWell(
       onTap: () => BillDetailSheet.show(context, bill),
@@ -569,9 +643,11 @@ class _BillsTabState extends State<BillsTab> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isCancelled ? Colors.red.shade50.withValues(alpha: 0.3) : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: TramColors.borderLight),
+          border: Border.all(
+            color: isCancelled ? TramColors.danger.withValues(alpha: 0.3) : TramColors.borderLight,
+          ),
           boxShadow: const [
             BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
           ],
@@ -579,52 +655,121 @@ class _BillsTabState extends State<BillsTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Bill code + Table + Total
+            // Row 1: Bill code + Order code on Left, Final Amount on Right
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      bill.billCode,
-                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14, color: TramColors.textPrimary),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: TramColors.brandPrimary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(
+                        bill.billCode,
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14, color: TramColors.textPrimary),
                       ),
-                      child: Text(
-                        '${bill.tableName} (${bill.zone})',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
-                      ),
-                    ),
-                  ],
+                      if (showOrderCode) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: Colors.blueGrey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '#${bill.orderCode}',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blueGrey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 Text(
                   FormatUtils.vnd(bill.finalAmount),
                   style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
-                    color: TramColors.brandPrimary,
+                    color: isCancelled ? TramColors.danger : TramColors.brandPrimary,
+                    decoration: isCancelled ? TextDecoration.lineThrough : null,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
-            // Row 2: Items preview
+            // Row 2: Table / Room Badge + Cancelled status badge (if any)
+            if (hasTable || isCancelled) ...[
+              Row(
+                children: [
+                  if (hasTable)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: TramColors.brandPrimary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isTakeaway(bill) ? Icons.shopping_bag_outlined : Icons.table_restaurant_outlined,
+                            size: 13,
+                            color: TramColors.brandPrimary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            tableDisplay,
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (isCancelled) ...[
+                    if (hasTable) const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: TramColors.danger.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: TramColors.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        'ĐÃ HỦY',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: TramColors.danger,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+
+            // Row 3: Items preview
             Text(
               bill.items.map((i) => '${i.quantity}x ${i.name}').join(', '),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
             ),
+            if (isCancelled && bill.note.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Lý do hủy: ${bill.note}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: TramColors.danger),
+              ),
+            ],
             const SizedBox(height: 8),
 
-            // Row 3: Meta & Staff & Payment Method Badge
+            // Row 4: Meta & Staff & Payment Method Badge
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -643,15 +788,21 @@ class _BillsTabState extends State<BillsTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: (isCash ? TramColors.success : TramColors.info).withValues(alpha: 0.12),
+                        color: (isCancelled
+                            ? TramColors.danger
+                            : (isCash ? TramColors.success : TramColors.info)).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        isCash ? '💵 Tiền mặt' : '🏦 VietQR',
+                        isCancelled
+                            ? '🚫 Đã hủy'
+                            : (isCash ? '💵 Tiền mặt' : '🏦 VietQR'),
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: isCash ? TramColors.success : TramColors.info,
+                          color: isCancelled
+                              ? TramColors.danger
+                              : (isCash ? TramColors.success : TramColors.info),
                         ),
                       ),
                     ),
