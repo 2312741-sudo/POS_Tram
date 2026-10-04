@@ -1,7 +1,9 @@
 "use client";
+import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { useAuth, canAccessRoute } from "@/lib/auth";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -40,12 +42,26 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, storeCode } = useAuth();
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
+
+  const getRoleLabel = () => {
+    if (!user) return "Nhân viên";
+    if (user.isRootOwner || (user.roleId || user.role || "").toUpperCase().includes("OWNER")) {
+      return "👑 CHỦ QUÁN";
+    }
+    const r = (user.roleId || user.role || "").toUpperCase();
+    if (r.includes("MANAGER_1")) return "⭐ QUẢN LÝ 1";
+    if (r.includes("MANAGER_2") || r.includes("MANAGER")) return "⭐ QUẢN LÝ 2";
+    return "👤 NHÂN VIÊN";
+  };
+
+  // Lọc danh mục hiển thị theo quyền người dùng (RBAC)
+  const visibleNavItems = navItems.filter((item) => canAccessRoute(user, item.href));
 
   return (
     <aside
@@ -67,7 +83,7 @@ export default function Sidebar() {
       {/* Brand Header */}
       <div
         style={{
-          padding: "20px 20px",
+          padding: "20px",
           borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
           display: "flex",
           alignItems: "center",
@@ -87,9 +103,16 @@ export default function Sidebar() {
             flexShrink: 0,
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
             overflow: "hidden",
+            position: "relative",
           }}
         >
-          <img src="/logo.jpg" alt="Trạm Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "9px" }} />
+          <Image
+            src="/logo.jpg"
+            alt="Trạm Logo"
+            width={36}
+            height={36}
+            style={{ objectFit: "cover", borderRadius: "9px" }}
+          />
         </div>
         <div>
           <div
@@ -136,7 +159,7 @@ export default function Sidebar() {
             boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
           }}
         >
-          {user?.fullName?.[0]?.toUpperCase() || "M"}
+          {user?.fullName?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || "M"}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -149,33 +172,70 @@ export default function Sidebar() {
               whiteSpace: "nowrap",
             }}
           >
-            {user?.fullName || "Quản Lý Ca"}
+            {user?.fullName || user?.username || "Quản Trị Viên"}
           </div>
           <div
             style={{
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              gap: "4px",
-              fontSize: "10px",
-              fontWeight: "700",
-              color: "#FFFFFF",
-              background: "rgba(255, 255, 255, 0.2)",
-              borderRadius: "4px",
-              padding: "1px 6px",
+              gap: "6px",
               marginTop: "2px",
+              flexWrap: "wrap",
             }}
           >
-            {user?.role === "OWNER" ? "👑 CHỦ QUÁN" : "⭐ QUẢN LÝ"}
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: "700",
+                color: "#FFFFFF",
+                background: "rgba(255, 255, 255, 0.2)",
+                borderRadius: "4px",
+                padding: "1px 6px",
+              }}
+            >
+              {getRoleLabel()}
+            </span>
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: "700",
+                color: "#FFEAA7",
+                background: "rgba(0, 0, 0, 0.25)",
+                borderRadius: "4px",
+                padding: "1px 5px",
+              }}
+            >
+              {user?.storeCode || storeCode || "TRAM01"}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: "16px 12px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "5px" }}>
-        <div style={{ fontSize: "10px", fontWeight: "700", color: "rgba(255, 255, 255, 0.5)", textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 8px", marginBottom: "4px" }}>
+      <nav
+        style={{
+          flex: 1,
+          padding: "16px 12px",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "5px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "10px",
+            fontWeight: "700",
+            color: "rgba(255, 255, 255, 0.5)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            padding: "4px 8px",
+            marginBottom: "4px",
+          }}
+        >
           DANH MỤC QUẢN TRỊ
         </div>
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
@@ -209,7 +269,13 @@ export default function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div style={{ padding: "14px", borderTop: "1px solid rgba(255, 255, 255, 0.1)", background: "rgba(0,0,0,0.1)" }}>
+      <div
+        style={{
+          padding: "14px",
+          borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+          background: "rgba(0,0,0,0.1)",
+        }}
+      >
         <button
           onClick={logout}
           style={{
