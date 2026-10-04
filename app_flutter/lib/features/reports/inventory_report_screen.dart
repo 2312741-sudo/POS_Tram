@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
-import '../../widgets/common_widgets.dart';
 import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
 
 class InventoryReportScreen extends StatefulWidget {
-  const InventoryReportScreen({Key? key}) : super(key: key);
+  const InventoryReportScreen({super.key});
 
   @override
   State<InventoryReportScreen> createState() => _InventoryReportScreenState();
