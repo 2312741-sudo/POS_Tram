@@ -237,6 +237,24 @@ class ProductModel {
     this.hasIceSugarOptions = false,
   });
 
+  String? get assetPath {
+    if (imageResourceName == null || imageResourceName!.trim().isEmpty) {
+      return null;
+    }
+    final res = imageResourceName!.trim();
+    if (res.startsWith('assets/')) {
+      return res;
+    }
+    if (res.contains('.')) {
+      return 'assets/images/products/$res';
+    }
+    return 'assets/images/products/$res.jpg';
+  }
+
+  bool get hasImage =>
+      (imageBase64 != null && imageBase64!.trim().isNotEmpty) ||
+      (imageResourceName != null && imageResourceName!.trim().isNotEmpty);
+
   factory ProductModel.fromMap(dynamic val, [String? key]) {
     if (val is Map) {
       final map = Map<dynamic, dynamic>.from(val);

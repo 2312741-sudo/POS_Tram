@@ -148,14 +148,25 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(11),
                           child: Image.memory(base64Decode(base64Image!.contains(',') ? base64Image!.split(',').last : base64Image!), fit: BoxFit.cover))
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary, size: 32),
-                            SizedBox(height: 4),
-                            Text('Chọn ảnh', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                          ],
-                        ),
+                      : (existing?.assetPath != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(11),
+                              child: Image.asset(existing!.assetPath!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary, size: 32),
+                                  SizedBox(height: 4),
+                                  Text('Chọn ảnh', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                ],
+                              )))
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary, size: 32),
+                                SizedBox(height: 4),
+                                Text('Chọn ảnh', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                              ],
+                            )),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -193,6 +204,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
                   category: selectedCat.isEmpty ? 'Món khác' : selectedCat,
                   imageBase64: base64Image,
+                  imageResourceName: base64Image == null ? existing?.imageResourceName : null,
                   isAvailable: existing?.isAvailable ?? true,
                 );
                 await _fb.saveProduct(product, storeCode: _selectedStoreCode);
@@ -584,16 +596,25 @@ class _ProductItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
                 width: 60, height: 60,
-                child: product.imageBase64 != null && product.imageBase64!.isNotEmpty
+                child: (product.imageBase64 != null && product.imageBase64!.isNotEmpty)
                   ? Image.memory(base64Decode(product.imageBase64!.contains(',') ? product.imageBase64!.split(',').last : product.imageBase64!), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: AppColors.cardElevated,
                         child: const Icon(Icons.restaurant, color: AppColors.textHint),
                       ))
-                  : Container(
-                      color: AppColors.cardElevated,
-                      child: const Icon(Icons.restaurant, color: AppColors.textHint),
-                    ),
+                  : (product.assetPath != null
+                      ? Image.asset(
+                          product.assetPath!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: AppColors.cardElevated,
+                            child: const Icon(Icons.restaurant, color: AppColors.textHint),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.cardElevated,
+                          child: const Icon(Icons.restaurant, color: AppColors.textHint),
+                        )),
               ),
             ),
             const SizedBox(width: 14),
