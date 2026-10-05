@@ -1,25 +1,27 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { useDashboardData } from "@/lib/data-context";
+import { useDashboardData, TableItem, ProductItem } from "@/lib/data-context";
+import {
+  generateEndOfDayZReport,
+  calculateCancellationReport,
+  formatVND,
+  getBillTimestamp,
+  getUTC7Date,
+  HistoryOrder,
+} from "@/lib/reports";
+import { exportEndOfDayZReport, exportProductSalesReport, ReportStoreInfo } from "@/lib/export";
 import {
   Calendar,
   Store,
   ChevronRight,
-  TrendingUp,
-  Receipt,
-  AlertCircle,
-  HelpCircle,
-  ArrowUpDown,
   Search,
   Download,
-  UtensilsCrossed,
-  Layers,
-  Filter,
+  Printer,
   User,
 } from "lucide-react";
 
 export default function EndOfDayReportPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, historyData, tables, usersList } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, historyData, tables, usersList, cashShifts, products } = useDashboardData();
 
   const [activeTab, setActiveTab] = useState<"tonghop" | "thuchi" | "hanghoa" | "phongban">("tonghop");
   const [dateRange, setDateRange] = useState<"TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("TODAY");
@@ -32,175 +34,6 @@ export default function EndOfDayReportPage() {
   const [productSortBy, setProductSortBy] = useState<"QTY_DESC" | "REV_DESC" | "NAME_ASC">("REV_DESC");
   const [productViewMode, setProductViewMode] = useState<"AMOUNT" | "QUANTITY">("AMOUNT");
   const [productStaffFilter, setProductStaffFilter] = useState<string>("ALL");
-
-  // Date filtering logic
-  const filteredBills = useMemo(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    return historyData.filter((b) => {
-      const dt = new Date(b.closedAt || b.createdAt || b.timestamp || Date.now());
-
-      switch (dateRange) {
-        case "TODAY":
-          return (
-            dt.getFullYear() === now.getFullYear() &&
-            dt.getMonth() === now.getMonth() &&
-            dt.getDate() === now.getDate()
-          );
-        case "YESTERDAY": {
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return (
-            dt.getFullYear() === yesterday.getFullYear() &&
-            dt.getMonth() === yesterday.getMonth() &&
-            dt.getDate() === yesterday.getDate()
-          );
-        }
-        case "7DAYS": {
-          const sevenDaysAgo = new Date(today);
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          return dt >= sevenDaysAgo && dt <= now;
-        }
-        case "THIS_MONTH":
-          return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
-        case "LAST_MONTH": {
-          const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          return dt.getFullYear() === lm.getFullYear() && dt.getMonth() === lm.getMonth();
-        }
-        case "CUSTOM": {
-          if (!customStart) return true;
-          const s = new Date(customStart + "T00:00:00");
-          const e = customEnd ? new Date(customEnd + "T23:59:59") : new Date(customStart + "T23:59:59");
-          return dt >= s && dt <= e;
-        }
-        default:
-          return true;
-      }
-    });
-  }, [historyData, dateRange, customStart, customEnd]);
-
-  const paidBills = useMemo(() => filteredBills.filter((b) => b.status === "PAID"), [filteredBills]);
-  const cancelledBills = useMemo(() => filteredBills.filter((b) => b.status === "CANCELLED"), [filteredBills]);
-
-  // Serving tables logic
-  const activeTables = useMemo(() => tables.filter((t) => t.inUse), [tables]);
-
-  const servingMetrics = useMemo(() => {
-    let totalItems = 0;
-    let totalGuests = 0;
-    let estimatedRevenue = 0;
-
-    activeTables.forEach((t) => {
-      totalGuests += t.guestCount || 1;
-      let items: any[] = [];
-      if (t.currentOrderJson) {
-        try {
-          const parsed = JSON.parse(t.currentOrderJson);
-          if (Array.isArray(parsed)) items = parsed;
-        } catch {}
-      }
-      items.forEach((it) => {
-        const qty = it.quantity || it.count || 1;
-        const price = Number(it.price || 0);
-        let toppingSum = 0;
-        if (Array.isArray(it.selectedToppings)) {
-          toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-        }
-        totalItems += qty;
-        estimatedRevenue += (price + toppingSum) * qty;
-      });
-    });
-
-    return {
-      tableCount: activeTables.length,
-      itemCount: totalItems,
-      guestCount: totalGuests,
-      estimatedRevenue,
-    };
-  }, [activeTables]);
-
-  // Tab 1 calculations
-  const grossRevenue = useMemo(() => {
-    return paidBills.reduce((sum, b) => sum + (b.subTotal || b.totalAmount || 0), 0);
-  }, [paidBills]);
-
-  const itemDiscounts = useMemo(() => {
-    return paidBills.reduce((sum, b) => {
-      let bSum = 0;
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          if (it.discountAmount) bSum += Number(it.discountAmount) * (it.quantity || 1);
-        });
-      }
-      return sum + bSum;
-    }, 0);
-  }, [paidBills]);
-
-  const billDiscounts = useMemo(() => {
-    return paidBills.reduce((sum, b) => {
-      const totalDisc = b.discountAmount || 0;
-      return sum + totalDisc;
-    }, 0);
-  }, [paidBills]);
-
-  const netRevenue = useMemo(() => {
-    return paidBills.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-  }, [paidBills]);
-
-  const vatTotal = useMemo(() => {
-    // 8% VAT estimate if not explicitly set
-    return Math.round(netRevenue * 0.08 / 1.08);
-  }, [netRevenue]);
-
-  const otherIncome = 0;
-  const refundAmount = 0;
-  const netRevenueWithOther = netRevenue + otherIncome - refundAmount;
-  const netRevenueWithoutOther = netRevenue - refundAmount;
-
-  const totalPaidGuests = useMemo(() => {
-    return paidBills.reduce((sum, b) => sum + (b.guestCount || 1), 0);
-  }, [paidBills]);
-
-  const avgRevenuePerBill = useMemo(() => {
-    if (paidBills.length === 0) return 0;
-    return Math.round(netRevenue / paidBills.length);
-  }, [netRevenue, paidBills.length]);
-
-  const cancelledValue = useMemo(() => {
-    return cancelledBills.reduce((sum, b) => sum + (b.totalAmount || b.subTotal || 0), 0);
-  }, [cancelledBills]);
-
-  // Tab 2: Thu chi
-  const cashSales = useMemo(() => {
-    return paidBills.filter((b) => b.paymentMethod === "CASH").reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-  }, [paidBills]);
-
-  const transferSales = useMemo(() => {
-    return paidBills.filter((b) => b.paymentMethod === "TRANSFER" || b.paymentMethod?.includes("QR")).reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-  }, [paidBills]);
-
-  // Extract available staff list
-  const availableStaffList = useMemo(() => {
-    const staffSet = new Set<string>();
-    if (Array.isArray(usersList)) {
-      usersList.forEach((u) => {
-        const name = (u.fullName || u.username || "").trim();
-        if (name) staffSet.add(name);
-      });
-    }
-    historyData.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "").trim();
-      if (billStaff) staffSet.add(billStaff);
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          const itStaff = (it.orderedByName || it.orderedBy || "").trim();
-          if (itStaff) staffSet.add(itStaff);
-        });
-      }
-    });
-    return Array.from(staffSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [usersList, historyData]);
 
   // Date range label
   const dateRangeLabel = useMemo(() => {
@@ -233,153 +66,224 @@ export default function EndOfDayReportPage() {
     }
   }, [dateRange, customStart, customEnd]);
 
-  // Tab 3: Hàng hoá bán ra (hỗ trợ lọc theo nhân viên)
-  const productSalesList = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        quantity: number;
-        revenue: number;
-        unitPrice: number;
-        staffSales: { [staff: string]: { quantity: number; revenue: number } };
+  // Filter bills by store and date (UTC+7)
+  const filteredBills = useMemo(() => {
+    const now = new Date();
+    const nowUTC7 = getUTC7Date(now.getTime());
+    const todayYear = nowUTC7.getUTCFullYear();
+    const todayMonth = nowUTC7.getUTCMonth();
+    const todayDate = nowUTC7.getUTCDate();
+
+    return historyData.filter((b) => {
+      if (currentStoreCode !== "ALL" && b.storeCode && b.storeCode !== currentStoreCode) {
+        return false;
       }
-    >();
 
-    paidBills.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "Nhân viên chung").trim();
+      const ts = getBillTimestamp(b);
+      const bDate = getUTC7Date(ts);
+      const bYear = bDate.getUTCFullYear();
+      const bMonth = bDate.getUTCMonth();
+      const bDay = bDate.getUTCDate();
+
+      switch (dateRange) {
+        case "TODAY":
+          return bYear === todayYear && bMonth === todayMonth && bDay === todayDate;
+        case "YESTERDAY": {
+          const yest = new Date(Date.UTC(todayYear, todayMonth, todayDate - 1));
+          return bYear === yest.getUTCFullYear() && bMonth === yest.getUTCMonth() && bDay === yest.getUTCDate();
+        }
+        case "7DAYS": {
+          const sevenDaysAgo = Date.UTC(todayYear, todayMonth, todayDate - 7);
+          return ts >= sevenDaysAgo && ts <= now.getTime();
+        }
+        case "THIS_MONTH":
+          return bYear === todayYear && bMonth === todayMonth;
+        case "LAST_MONTH": {
+          const lm = new Date(Date.UTC(todayYear, todayMonth - 1, 1));
+          return bYear === lm.getUTCFullYear() && bMonth === lm.getUTCMonth();
+        }
+        case "CUSTOM": {
+          if (!customStart) return true;
+          const s = new Date(customStart + "T00:00:00").getTime();
+          const e = customEnd ? new Date(customEnd + "T23:59:59").getTime() : new Date(customStart + "T23:59:59").getTime();
+          return ts >= s && ts <= e;
+        }
+        default:
+          return true;
+      }
+    });
+  }, [historyData, currentStoreCode, dateRange, customStart, customEnd]);
+
+  // Filter shifts by store and date
+  const filteredShifts = useMemo(() => {
+    return cashShifts.filter((s) => {
+      if (currentStoreCode !== "ALL" && s.storeCode && s.storeCode !== currentStoreCode) {
+        return false;
+      }
+      return true;
+    });
+  }, [cashShifts, currentStoreCode]);
+
+  // Products lookup map
+  const productsMap = useMemo(() => {
+    const map: Record<string | number, ProductItem> = {};
+    products.forEach((p) => {
+      if (p.id != null) map[p.id] = p;
+      if ((p as any).productId != null) map[(p as any).productId] = p;
+      if (p.name) map[p.name] = p;
+    });
+    return map;
+  }, [products]);
+
+  // Current store metadata
+  const currentStore = useMemo(() => {
+    if (currentStoreCode === "ALL") return stores[0];
+    return stores.find((s) => s.storeCode === currentStoreCode) || stores[0];
+  }, [stores, currentStoreCode]);
+
+  // Generate pure EndOfDay Z-Report
+  const zReport = useMemo(() => {
+    return generateEndOfDayZReport(
+      filteredBills,
+      filteredShifts,
+      tables,
+      productsMap,
+      {
+        date: dateRangeLabel,
+        storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+        storeName: currentStoreCode === "ALL" ? "Tất cả chi nhánh" : currentStore?.storeName,
+      }
+    );
+  }, [filteredBills, filteredShifts, tables, productsMap, dateRangeLabel, currentStoreCode, currentStore]);
+
+  // Cancellation audit stats
+  const cancellationReport = useMemo(() => {
+    return calculateCancellationReport(filteredBills);
+  }, [filteredBills]);
+
+  // Active serving tables metrics
+  const activeTables = useMemo(() => {
+    return tables.filter((t) => {
+      if (currentStoreCode !== "ALL" && t.storeCode && t.storeCode !== currentStoreCode) return false;
+      return t.inUse && !t.mergedIntoTable;
+    });
+  }, [tables, currentStoreCode]);
+
+  const servingMetrics = useMemo(() => {
+    let totalItems = 0;
+    let totalGuests = 0;
+    let estimatedRevenue = 0;
+
+    activeTables.forEach((t) => {
+      totalGuests += t.guestCount || 1;
+      let items: Array<{ quantity?: number; count?: number; price?: number; selectedToppings?: Array<{ price?: number }> }> = [];
+      if (t.currentOrderJson) {
+        try {
+          const parsed = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
+          if (Array.isArray(parsed)) items = parsed;
+        } catch {
+          // ignore parsing error
+        }
+      }
+      items.forEach((it) => {
+        const qty = it.quantity || it.count || 1;
+        const price = Number(it.price || 0);
+        let toppingSum = 0;
+        if (Array.isArray(it.selectedToppings)) {
+          toppingSum = it.selectedToppings.reduce((ts: number, tp) => ts + (tp.price || 0), 0);
+        }
+        totalItems += qty;
+        estimatedRevenue += (price + toppingSum) * qty;
+      });
+    });
+
+    return {
+      tableCount: activeTables.length,
+      itemCount: totalItems,
+      guestCount: totalGuests,
+      estimatedRevenue,
+    };
+  }, [activeTables]);
+
+  // Extract available staff list
+  const availableStaffList = useMemo(() => {
+    const staffSet = new Set<string>();
+    if (Array.isArray(usersList)) {
+      usersList.forEach((u) => {
+        const name = (u.fullName || u.username || "").trim();
+        if (name) staffSet.add(name);
+      });
+    }
+    historyData.forEach((b) => {
+      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "").trim();
+      if (billStaff) staffSet.add(billStaff);
       if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          const itemStaff = (it.orderedByName || it.orderedBy || billStaff).trim();
-          if (productStaffFilter !== "ALL" && itemStaff !== productStaffFilter) {
-            return;
-          }
-
-          const name = it.name || "Món không tên";
-          const qty = it.quantity || it.count || 1;
-          const price = Number(it.price || 0);
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          const itemRev = (price + toppingSum) * qty - (it.discountAmount || 0);
-
-          if (!map.has(name)) {
-            map.set(name, {
-              name,
-              quantity: 0,
-              revenue: 0,
-              unitPrice: price + toppingSum,
-              staffSales: {},
-            });
-          }
-          const cur = map.get(name)!;
-          cur.quantity += qty;
-          cur.revenue += itemRev;
-          if (!cur.staffSales[itemStaff]) {
-            cur.staffSales[itemStaff] = { quantity: 0, revenue: 0 };
-          }
-          cur.staffSales[itemStaff].quantity += qty;
-          cur.staffSales[itemStaff].revenue += itemRev;
+        b.items.forEach((it) => {
+          const itStaff = (it.orderedByName || it.orderedBy || "").trim();
+          if (itStaff) staffSet.add(itStaff);
         });
       }
     });
+    return Array.from(staffSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [usersList, historyData]);
 
-    let list = Array.from(map.values());
+  // Tab 3: Filtered Product list
+  const productSalesList = useMemo(() => {
+    let list = [...zReport.tab3_hangHoa.products];
 
     if (productSearch.trim()) {
       const q = productSearch.toLowerCase();
-      list = list.filter((p) => p.name.toLowerCase().includes(q));
+      list = list.filter((p) => p.productName.toLowerCase().includes(q) || (p.productCode || "").toLowerCase().includes(q));
     }
 
     if (productSortBy === "QTY_DESC") {
       list.sort((a, b) => b.quantity - a.quantity);
     } else if (productSortBy === "REV_DESC") {
-      list.sort((a, b) => b.revenue - a.revenue);
+      list.sort((a, b) => b.netRevenue - a.netRevenue);
     } else if (productSortBy === "NAME_ASC") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    } else {
-      if (productViewMode === "AMOUNT") {
-        list.sort((a, b) => b.revenue - a.revenue);
-      } else {
-        list.sort((a, b) => b.quantity - a.quantity);
-      }
+      list.sort((a, b) => a.productName.localeCompare(b.productName));
     }
 
     return list;
-  }, [paidBills, productSearch, productSortBy, productViewMode, productStaffFilter]);
+  }, [zReport.tab3_hangHoa.products, productSearch, productSortBy]);
 
   const totalProductQty = useMemo(() => productSalesList.reduce((s, it) => s + it.quantity, 0), [productSalesList]);
-  const totalProductRev = useMemo(() => productSalesList.reduce((s, it) => s + it.revenue, 0), [productSalesList]);
+  const totalProductRev = useMemo(() => productSalesList.reduce((s, it) => s + it.netRevenue, 0), [productSalesList]);
 
-  // Tab 4: Phòng bàn
-  const tableSalesList = useMemo(() => {
-    const map = new Map<string, { zone: string; tableName: string; orderCount: number; revenue: number }>();
-
-    paidBills.forEach((b) => {
-      const zone = b.zone || "Khu A";
-      const name = b.tableName || "Mang về";
-      const key = `${zone}_${name}`;
-
-      if (!map.has(key)) {
-        map.set(key, { zone, tableName: name, orderCount: 0, revenue: 0 });
-      }
-      const cur = map.get(key)!;
-      cur.orderCount += 1;
-      cur.revenue += b.totalAmount || 0;
-    });
-
-    const list = Array.from(map.values());
-    list.sort((a, b) => b.revenue - a.revenue);
-    return list;
-  }, [paidBills]);
-
-  const exportProductSalesCSV = () => {
-    const isAmt = productViewMode === "AMOUNT";
-    const nowStr = new Date().toLocaleString("vi-VN");
-
-    let content = "\uFEFF"; // UTF-8 BOM
-    content += `BÁO CÁO HÀNG HÓA BÁN RA\n`;
-    content += `Thời gian:,"${dateRangeLabel}"\n`;
-    content += `Nhân viên:,"${productStaffFilter === "ALL" ? "Tất cả nhân viên" : productStaffFilter}"\n`;
-    content += `Chi nhánh:,"${currentStoreCode === "ALL" ? "Tất cả chi nhánh" : currentStoreCode}"\n`;
-    content += `Thời điểm xuất:,"${nowStr}"\n\n`;
-
-    content += `Xếp hạng,Tên món,Nhân viên bán,Đơn giá,Số lượng bán,Doanh thu món,Tỷ trọng theo ${isAmt ? "doanh thu" : "số lượng"} (%)\n`;
-
-    productSalesList.forEach((p, idx) => {
-      const pct = isAmt
-        ? (totalProductRev > 0 ? ((p.revenue / totalProductRev) * 100).toFixed(1) : "0.0")
-        : (totalProductQty > 0 ? ((p.quantity / totalProductQty) * 100).toFixed(1) : "0.0");
-
-      let staffStr = "";
-      if (productStaffFilter !== "ALL") {
-        staffStr = productStaffFilter;
-      } else {
-        const staffEntries = Object.entries(p.staffSales || {});
-        staffStr = staffEntries.map(([sName, sData]) => `${sName} (${sData.quantity})`).join("; ");
-        if (!staffStr) staffStr = "Nhân viên chung";
-      }
-
-      content += `${idx + 1},"${p.name}","${staffStr}",${p.unitPrice},${p.quantity},${p.revenue},${pct}%\n`;
-    });
-
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    const safeStaff = productStaffFilter === "ALL" ? "Tat_Ca_NV" : productStaffFilter.replace(/[^a-zA-Z0-9]/g, "_");
-    link.setAttribute("download", `Bao_Cao_Hang_Hoa_${safeStaff}_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Handle Export Excel & PDF
+  const handleExportExcel = () => {
+    const storeInfo: ReportStoreInfo = {
+      storeName: currentStore?.storeName || "POS Trạm",
+      address: currentStore?.address || "Đà Lạt, Lâm Đồng",
+      phone: currentStore?.phone || "0987.654.321",
+      storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+    };
+    exportEndOfDayZReport(zReport, storeInfo).toExcel();
   };
 
-  const fmtVND = (num: number) => new Intl.NumberFormat("vi-VN").format(num) + "đ";
+  const handlePrintPDF = () => {
+    const storeInfo: ReportStoreInfo = {
+      storeName: currentStore?.storeName || "POS Trạm",
+      address: currentStore?.address || "Đà Lạt, Lâm Đồng",
+      phone: currentStore?.phone || "0987.654.321",
+      storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+    };
+    exportEndOfDayZReport(zReport, storeInfo).toPDF();
+  };
+
+  const handleExportProductSales = () => {
+    const storeInfo: ReportStoreInfo = {
+      storeName: currentStore?.storeName || "POS Trạm",
+      address: currentStore?.address || "Đà Lạt, Lâm Đồng",
+      phone: currentStore?.phone || "0987.654.321",
+      storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+    };
+    exportProductSalesReport(productSalesList, storeInfo, dateRangeLabel).toExcel();
+  };
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1280px", margin: "0 auto" }}>
-      {/* Top Header Card with Title and Filter Dropdowns */}
+      {/* Top Header Card */}
       <div
         style={{
           background: "#FFFFFF",
@@ -394,7 +298,7 @@ export default function EndOfDayReportPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
-                Báo cáo tổng hợp cuối ngày
+                Báo cáo tổng hợp cuối ngày (Z-Report)
               </h1>
               <span
                 style={{
@@ -410,12 +314,50 @@ export default function EndOfDayReportPage() {
               </span>
             </div>
             <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
-              Thống kê tổng kết bán hàng, thu chi, hàng hoá bán ra và hiệu suất phòng bàn theo thời gian thực
+              Thống kê tổng kết bán hàng, thu chi, hàng hoá bán ra và hiệu suất phòng bàn theo thời gian thực (UTC+7)
             </p>
           </div>
 
-          {/* Filters: Date and Store */}
+          {/* Action buttons & Filters */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {/* Export buttons */}
+            <button
+              onClick={handleExportExcel}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#146A65",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "10px",
+                padding: "8px 14px",
+                fontSize: "13px",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              <Download size={15} /> Xuất Excel
+            </button>
+            <button
+              onClick={handlePrintPDF}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#7E2930",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "10px",
+                padding: "8px 14px",
+                fontSize: "13px",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              <Printer size={15} /> In / PDF
+            </button>
+
             {/* Date Range Selector */}
             <div
               style={{
@@ -431,7 +373,7 @@ export default function EndOfDayReportPage() {
               <Calendar size={16} color="#7E2930" />
               <select
                 value={dateRange}
-                onChange={(e: any) => setDateRange(e.target.value)}
+                onChange={(e) => setDateRange(e.target.value as any)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -516,7 +458,7 @@ export default function EndOfDayReportPage() {
           </div>
         </div>
 
-        {/* 4 Tabs Bar matching mobile exact tabs */}
+        {/* 4 Tabs Bar */}
         <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid #E6DEC8", paddingBottom: "1px" }}>
           {[
             { id: "tonghop", label: "Tổng hợp" },
@@ -553,7 +495,7 @@ export default function EndOfDayReportPage() {
       {/* ==================== TAB 1: TỔNG HỢP ==================== */}
       {activeTab === "tonghop" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Ô DOANH THU ƯỚC TÍNH NGÀY = TỔNG DOANH THU + ĐƠN ĐANG PHỤC VỤ */}
+          {/* Ô DOANH THU ƯỚC TÍNH NGÀY */}
           <div
             style={{
               background: "linear-gradient(135deg, #FFF9F5 0%, #FFFFFF 100%)",
@@ -588,12 +530,12 @@ export default function EndOfDayReportPage() {
                 </span>
               </div>
               <div style={{ fontSize: "13px", color: "#666", marginTop: "6px" }}>
-                Công thức: <strong>Tổng doanh thu</strong> ({fmtVND(netRevenue)}) + <strong>Đơn đang phục vụ</strong> ({fmtVND(servingMetrics.estimatedRevenue)} từ {servingMetrics.tableCount} bàn)
+                Công thức: <strong>Tổng doanh thu</strong> ({formatVND(zReport.tab1_tongHop.netRevenue)}) + <strong>Đơn đang phục vụ</strong> ({formatVND(servingMetrics.estimatedRevenue)} từ {servingMetrics.tableCount} bàn)
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "28px", fontWeight: "900", color: "#7E2930" }}>
-                {fmtVND(netRevenue + servingMetrics.estimatedRevenue)}
+                {formatVND(zReport.tab1_tongHop.netRevenue + servingMetrics.estimatedRevenue)}
               </div>
               <div style={{ fontSize: "12px", color: "#888", fontWeight: "600" }}>
                 Tổng doanh thu thực tế + Giá trị bàn đang sử dụng
@@ -616,131 +558,126 @@ export default function EndOfDayReportPage() {
                 TỔNG KẾT BÁN HÀNG
               </div>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <ReportRow label="Doanh thu tổng" value={fmtVND(grossRevenue)} />
-                <ReportRow label="Tổng giảm giá món" value={fmtVND(itemDiscounts)} />
-                <ReportRow label="Tổng giảm giá hóa đơn" value={fmtVND(billDiscounts)} />
+                <ReportRow label="Doanh thu gộp" value={formatVND(zReport.tab1_tongHop.grossRevenue)} />
+                <ReportRow label="Tổng giảm giá món" value={formatVND(zReport.tab1_tongHop.itemDiscounts)} />
+                <ReportRow label="Tổng giảm giá hóa đơn / Điểm" value={formatVND(zReport.tab1_tongHop.billDiscounts)} />
+                <ReportRow label="Tổng tiền giảm giá" value={formatVND(zReport.tab1_tongHop.totalDiscount)} valueColor="#C93B2B" isBold />
+                <ReportRow label="Doanh thu sau giảm giá (Pre-VAT)" value={formatVND(zReport.tab1_tongHop.afterDiscount)} />
                 <ReportRow
                   label="Doanh thu (Đã thu)"
-                  value={fmtVND(netRevenue)}
-                  subtitle={`Bao gồm ${fmtVND(vatTotal)} tiền thuế`}
+                  value={formatVND(zReport.tab1_tongHop.netRevenue)}
+                  subtitle={`Bao gồm ${formatVND(zReport.tab1_tongHop.vatTotal)} tiền thuế VAT`}
                   valueColor="#7E2930"
                   isBold
                 />
                 <ReportRow
                   label="Doanh thu ước tính cả ngày"
                   subtitle="Tổng doanh thu + Đơn đang phục vụ"
-                  value={fmtVND(netRevenue + servingMetrics.estimatedRevenue)}
-                  valueColor="#C47820"
-                  isBold
-                />
-                <ReportRow label="Thu khác" value={fmtVND(otherIncome)} />
-                <ReportRow label="Trả hàng" value={fmtVND(refundAmount)} />
-                <ReportRow
-                  label="Doanh thu thuần"
-                  subtitle="Bao gồm thu khác"
-                  value={fmtVND(netRevenueWithOther)}
-                  isBold
-                  valueColor="#146A65"
-                />
-                <ReportRow
-                  label="Doanh thu thuần"
-                  subtitle="Không bao gồm thu khác"
-                  value={fmtVND(netRevenueWithoutOther)}
-                  isBold
-                />
-              </div>
-            </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            {/* Card 2: ĐANG PHỤC VỤ > */}
-            <div
-              style={{
-                background: "#FFFFFF",
-                borderRadius: "16px",
-                border: "1px solid #E6DEC8",
-                padding: "20px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-              }}
-            >
-              <div
-                onClick={() => setShowServingModal(true)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  cursor: "pointer",
-                  marginBottom: "12px",
-                }}
-              >
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  ĐANG PHỤC VỤ
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#7E2930", fontWeight: "600" }}>
-                  Xem chi tiết bàn <ChevronRight size={14} />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <ReportRow label="Đơn đang phục vụ" value={`${servingMetrics.tableCount} bàn`} />
-                <ReportRow label="Số lượng sản phẩm" value={`${servingMetrics.itemCount} món`} />
-                <ReportRow label="Số khách" value={`${servingMetrics.guestCount} người`} />
-                <ReportRow
-                  label="Doanh thu ước tính"
-                  value={fmtVND(servingMetrics.estimatedRevenue)}
+                  value={formatVND(zReport.tab1_tongHop.netRevenue + servingMetrics.estimatedRevenue)}
                   valueColor="#C47820"
                   isBold
                 />
                 <ReportRow label="Thu khác" value="0đ" />
-              </div>
-            </div>
-
-            {/* Card 3: HÓA ĐƠN */}
-            <div
-              style={{
-                background: "#FFFFFF",
-                borderRadius: "16px",
-                border: "1px solid #E6DEC8",
-                padding: "20px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-              }}
-            >
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
-                HÓA ĐƠN
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <ReportRow label="Số hóa đơn" value={`${paidBills.length} đơn`} />
-                <ReportRow label="Số khách" value={`${totalPaidGuests} người`} />
-                <ReportRow label="Doanh thu TB/Đơn" value={fmtVND(avgRevenuePerBill)} isBold />
-              </div>
-            </div>
-
-            {/* Card 4: HÓA ĐƠN ĐÃ HỦY */}
-            <div
-              style={{
-                background: "#FFFFFF",
-                borderRadius: "16px",
-                border: "1px solid #E6DEC8",
-                padding: "20px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-              }}
-            >
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
-                HÓA ĐƠN ĐÃ HỦY
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <ReportRow label="Số lượng đơn hủy" value={`${cancelledBills.length} đơn`} />
+                <ReportRow label="Trả hàng / Hoàn tiền" value={formatVND(zReport.tab1_tongHop.refundAmount)} valueColor="#C93B2B" />
                 <ReportRow
-                  label="Giá trị hủy"
-                  value={fmtVND(cancelledValue)}
-                  valueColor="#C93B2B"
+                  label="Doanh thu thực thu cuối ngày"
+                  subtitle="Doanh thu thuần trừ tiền hoàn trả"
+                  value={formatVND(zReport.tab1_tongHop.netRevenueWithoutRefund)}
                   isBold
+                  valueColor="#146A65"
                 />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Card 2: ĐANG PHỤC VỤ */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px solid #E6DEC8",
+                  padding: "20px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                }}
+              >
+                <div
+                  onClick={() => setShowServingModal(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    ĐANG PHỤC VỤ
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#7E2930", fontWeight: "600" }}>
+                    Xem chi tiết bàn <ChevronRight size={14} />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <ReportRow label="Đơn đang phục vụ" value={`${servingMetrics.tableCount} bàn`} />
+                  <ReportRow label="Số lượng sản phẩm" value={`${servingMetrics.itemCount} món`} />
+                  <ReportRow label="Số khách" value={`${servingMetrics.guestCount} người`} />
+                  <ReportRow
+                    label="Doanh thu ước tính"
+                    value={formatVND(servingMetrics.estimatedRevenue)}
+                    valueColor="#C47820"
+                    isBold
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: HÓA ĐƠN */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px solid #E6DEC8",
+                  padding: "20px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                }}
+              >
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                  HÓA ĐƠN
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <ReportRow label="Số hóa đơn hoàn tất" value={`${zReport.tab1_tongHop.paidBillsCount} đơn`} isBold />
+                  <ReportRow label="Số khách phục vụ" value={`${zReport.tab1_tongHop.totalGuests} người`} />
+                  <ReportRow label="Doanh thu TB / Đơn" value={formatVND(zReport.tab1_tongHop.avgRevenuePerBill)} isBold />
+                </div>
+              </div>
+
+              {/* Card 4: HÓA ĐƠN ĐÃ HỦY */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px solid #E6DEC8",
+                  padding: "20px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                }}
+              >
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                  HÓA ĐƠN ĐÃ HỦY (KIỂM TOÁN THẤT THOÁT)
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <ReportRow label="Số lượng đơn hủy" value={`${cancellationReport.cancelledBillsCount} đơn`} />
+                  <ReportRow
+                    label="Giá trị thất thoát"
+                    value={formatVND(cancellationReport.totalLossValue)}
+                    valueColor="#C93B2B"
+                    isBold
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* ==================== TAB 2: THU CHI ==================== */}
       {activeTab === "thuchi" && (
@@ -756,11 +693,12 @@ export default function EndOfDayReportPage() {
             <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", marginBottom: "14px" }}>
               PHƯƠNG THỨC THANH TOÁN BÁN HÀNG
             </div>
-            <ReportRow label="Tiền mặt (CASH)" value={fmtVND(cashSales)} isBold valueColor="#146A65" />
-            <ReportRow label="Chuyển khoản VietQR" value={fmtVND(transferSales)} isBold valueColor="#1877F2" />
+            <ReportRow label="Tiền mặt (CASH)" value={formatVND(zReport.tab2_thuChi.cashSales)} isBold valueColor="#146A65" />
+            <ReportRow label="Chuyển khoản VietQR" value={formatVND(zReport.tab2_thuChi.transferSales)} isBold valueColor="#1877F2" />
+            <ReportRow label="Thẻ ngân hàng / POS" value={formatVND(zReport.tab2_thuChi.cardSales)} isBold valueColor="#D97706" />
             <ReportRow
               label="TỔNG THỰC THU BÁN HÀNG"
-              value={fmtVND(netRevenue)}
+              value={formatVND(zReport.tab2_thuChi.totalRevenue)}
               isBold
               valueColor="#7E2930"
             />
@@ -775,16 +713,18 @@ export default function EndOfDayReportPage() {
             }}
           >
             <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", marginBottom: "14px" }}>
-              ĐỐI SOÁT & THU THUẾ
+              DÒNG TIỀN KÉT & THUẾ
             </div>
-            <ReportRow label="Tiền thuế GTGT (VAT)" value={fmtVND(vatTotal)} />
-            <ReportRow label="Tổng chiết khấu / Khuyến mãi" value={fmtVND(billDiscounts + itemDiscounts)} valueColor="#C93B2B" />
-            <ReportRow label="Số lượng hóa đơn hợp lệ" value={`${paidBills.length} đơn`} isBold />
+            <ReportRow label="Tiền nộp thêm vào két (Cash In)" value={formatVND(zReport.tab2_thuChi.cashInTotal)} />
+            <ReportRow label="Tiền chi vặt từ két (Cash Out)" value={formatVND(zReport.tab2_thuChi.cashOutTotal)} valueColor="#C93B2B" />
+            <ReportRow label="Tổng tiền hoàn lại khách (Refund)" value={formatVND(zReport.tab2_thuChi.refundTotal)} valueColor="#C93B2B" />
+            <ReportRow label="Tiền thuế GTGT (VAT) chốt trên bill" value={formatVND(zReport.tab1_tongHop.vatTotal)} />
+            <ReportRow label="Tổng chiết khấu / Khuyến mãi" value={formatVND(zReport.tab1_tongHop.totalDiscount)} valueColor="#C93B2B" />
           </div>
         </div>
       )}
 
-      {/* ==================== TAB 3: HÀNG HÓA (BÁO CÁO HÀNG HÓA BÁN RA) ==================== */}
+      {/* ==================== TAB 3: HÀNG HÓA ==================== */}
       {activeTab === "hanghoa" && (
         <div
           style={{
@@ -812,7 +752,7 @@ export default function EndOfDayReportPage() {
                 <Search size={16} color="#666" />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm tên món..."
+                  placeholder="Tìm kiếm tên món, mã món..."
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   style={{
@@ -910,7 +850,7 @@ export default function EndOfDayReportPage() {
 
               <select
                 value={productSortBy}
-                onChange={(e: any) => setProductSortBy(e.target.value)}
+                onChange={(e) => setProductSortBy(e.target.value as any)}
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",
@@ -927,7 +867,7 @@ export default function EndOfDayReportPage() {
               </select>
 
               <button
-                onClick={exportProductSalesCSV}
+                onClick={handleExportProductSales}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -942,7 +882,7 @@ export default function EndOfDayReportPage() {
                   cursor: "pointer",
                 }}
               >
-                <Download size={14} /> Xuất Excel / CSV
+                <Download size={14} /> Xuất Excel Hàng hóa
               </button>
             </div>
           </div>
@@ -966,7 +906,7 @@ export default function EndOfDayReportPage() {
               Tổng sản lượng: <strong style={{ color: productViewMode === "QUANTITY" ? "#7E2930" : "#1C1A2D" }}>{totalProductQty} phần</strong>
             </div>
             <div>
-              Tổng doanh số món: <strong style={{ color: productViewMode === "AMOUNT" ? "#7E2930" : "#1C1A2D" }}>{fmtVND(totalProductRev)}</strong>
+              Tổng doanh số món: <strong style={{ color: productViewMode === "AMOUNT" ? "#7E2930" : "#1C1A2D" }}>{formatVND(totalProductRev)}</strong>
             </div>
           </div>
 
@@ -976,8 +916,9 @@ export default function EndOfDayReportPage() {
               <thead>
                 <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
                   <th style={{ padding: "10px 12px" }}>Hạng</th>
+                  <th style={{ padding: "10px 12px" }}>Mã món</th>
                   <th style={{ padding: "10px 12px" }}>Tên sản phẩm</th>
-                  <th style={{ padding: "10px 12px" }}>Nhân viên bán</th>
+                  <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Đơn giá</th>
                   <th
                     style={{
@@ -1007,7 +948,7 @@ export default function EndOfDayReportPage() {
               <tbody>
                 {productSalesList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
                       Không có sản phẩm nào bán ra trong khoảng thời gian đã chọn
                     </td>
                   </tr>
@@ -1015,42 +956,20 @@ export default function EndOfDayReportPage() {
                   productSalesList.map((p, idx) => {
                     const isAmt = productViewMode === "AMOUNT";
                     const pct = isAmt
-                      ? (totalProductRev > 0 ? ((p.revenue / totalProductRev) * 100).toFixed(1) : "0.0")
+                      ? (totalProductRev > 0 ? ((p.netRevenue / totalProductRev) * 100).toFixed(1) : "0.0")
                       : (totalProductQty > 0 ? ((p.quantity / totalProductQty) * 100).toFixed(1) : "0.0");
 
-                    const staffEntries = Object.entries(p.staffSales || {});
-
                     return (
-                      <tr key={p.name} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <tr key={String(p.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
                         <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "#7E2930" : "#555" }}>
                           #{idx + 1}
                         </td>
-                        <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{p.name}</td>
-                        <td style={{ padding: "10px 12px", fontSize: "12px", color: "#555" }}>
-                          {productStaffFilter !== "ALL" ? (
-                            <span style={{ color: "#7E2930", fontWeight: "700" }}>👤 {productStaffFilter}</span>
-                          ) : staffEntries.length === 0 ? (
-                            <span style={{ color: "#888" }}>Nhân viên chung</span>
-                          ) : (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                              {staffEntries.map(([sName, sData]) => (
-                                <span
-                                  key={sName}
-                                  style={{
-                                    background: "#F2EFE9",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "11px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  👤 {sName}: <b>{sData.quantity}</b>
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#8B8FA8" }}>
+                          {p.productCode || "—"}
                         </td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmtVND(p.unitPrice)}</td>
+                        <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{p.productName}</td>
+                        <td style={{ padding: "10px 12px", color: "#666" }}>{p.category}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.basePrice)}</td>
                         <td
                           style={{
                             padding: "10px 12px",
@@ -1060,7 +979,7 @@ export default function EndOfDayReportPage() {
                             background: !isAmt ? "#FFF5F6" : "transparent",
                           }}
                         >
-                          {p.quantity}
+                          {p.quantity} {p.unit}
                         </td>
                         <td
                           style={{
@@ -1071,7 +990,7 @@ export default function EndOfDayReportPage() {
                             background: isAmt ? "#FFF5F6" : "transparent",
                           }}
                         >
-                          {fmtVND(p.revenue)}
+                          {formatVND(p.netRevenue)}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{pct}%</td>
                       </tr>
@@ -1102,33 +1021,32 @@ export default function EndOfDayReportPage() {
               <thead>
                 <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
                   <th style={{ padding: "10px 12px" }}>Khu vực</th>
-                  <th style={{ padding: "10px 12px" }}>Tên bàn</th>
-                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượt phục vụ</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượt hóa đơn</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Tổng doanh thu</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Tỷ trọng</th>
                 </tr>
               </thead>
               <tbody>
-                {tableSalesList.length === 0 ? (
+                {zReport.tab4_phongBan.zones.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
+                    <td colSpan={4} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
                       Không có dữ liệu bàn nào trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
-                  tableSalesList.map((t) => {
-                    const pct = netRevenue > 0 ? ((t.revenue / netRevenue) * 100).toFixed(1) : "0.0";
+                  zReport.tab4_phongBan.zones.map((z) => {
+                    const totalZRev = zReport.tab1_tongHop.netRevenue;
+                    const pct = totalZRev > 0 ? ((z.netRevenue / totalZRev) * 100).toFixed(1) : "0.0";
                     return (
-                      <tr key={`${t.zone}_${t.tableName}`} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <tr key={z.zone} style={{ borderBottom: "1px solid #F0ECE1" }}>
                         <td style={{ padding: "10px 12px" }}>
-                          <span style={{ padding: "2px 8px", background: "#FBECEE", color: "#7E2930", borderRadius: "4px", fontSize: "11px", fontWeight: "700" }}>
-                            {t.zone}
+                          <span style={{ padding: "3px 10px", background: "#FBECEE", color: "#7E2930", borderRadius: "6px", fontSize: "12px", fontWeight: "700" }}>
+                            {z.zone}
                           </span>
                         </td>
-                        <td style={{ padding: "10px 12px", fontWeight: "700" }}>{t.tableName}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>{t.orderCount} lượt</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{z.billCount} hóa đơn</td>
                         <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
-                          {fmtVND(t.revenue)}
+                          {formatVND(z.netRevenue)}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{pct}%</td>
                       </tr>
@@ -1192,14 +1110,16 @@ export default function EndOfDayReportPage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {activeTables.map((t) => {
-                  let items: any[] = [];
+                  let items: Array<{ quantity?: number; count?: number; price?: number }> = [];
                   if (t.currentOrderJson) {
                     try {
-                      const p = JSON.parse(t.currentOrderJson);
+                      const p = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
                       if (Array.isArray(p)) items = p;
-                    } catch {}
+                    } catch {
+                      // ignore
+                    }
                   }
-                  const total = items.reduce((s, it) => s + (Number(it.price || 0) * (it.quantity || 1)), 0);
+                  const total = items.reduce((s, it) => s + (Number(it.price || 0) * (it.quantity || it.count || 1)), 0);
 
                   return (
                     <div
@@ -1222,7 +1142,7 @@ export default function EndOfDayReportPage() {
                         </div>
                       </div>
                       <div style={{ fontSize: "15px", fontWeight: "700", color: "#7E2930" }}>
-                        {fmtVND(total)}
+                        {formatVND(total)}
                       </div>
                     </div>
                   );

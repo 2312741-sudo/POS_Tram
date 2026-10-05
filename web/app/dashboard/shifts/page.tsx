@@ -1,28 +1,39 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { useDashboardData, CashShiftItem } from "@/lib/data-context";
+import { useDashboardData } from "@/lib/data-context";
 import {
-  Calendar,
+  calculateCashShiftReport,
+  formatVND,
+  formatNumber,
+  CashShiftAuditItem,
+} from "@/lib/reports";
+import { exportCashShiftReport } from "@/lib/export";
+import {
   Store,
   Search,
   Printer,
-  ShieldCheck,
   Eye,
   EyeOff,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  Receipt,
   FileSpreadsheet,
+  Coins,
+  Wallet,
+  ArrowUpDown,
+  History,
 } from "lucide-react";
 
 export default function ShiftsPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, cashShifts, updateStoreShiftDifferenceSetting } =
-    useDashboardData();
+  const {
+    stores,
+    currentStoreCode,
+    setCurrentStoreCode,
+    cashShifts,
+    historyData,
+    updateStoreShiftDifferenceSetting,
+  } = useDashboardData();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
-  const [selectedShift, setSelectedShift] = useState<CashShiftItem | null>(null);
+  const [selectedShift, setSelectedShift] = useState<CashShiftAuditItem | null>(null);
   const [updatingSetting, setUpdatingSetting] = useState(false);
 
   // Current store info for setting toggle
@@ -40,10 +51,16 @@ export default function ShiftsPage() {
     setUpdatingSetting(false);
   };
 
+  // Run pure calculation function to audit cash shifts
+  const auditedShifts = useMemo(() => {
+    return calculateCashShiftReport(cashShifts, historyData);
+  }, [cashShifts, historyData]);
+
   const filteredShifts = useMemo(() => {
-    return cashShifts.filter((s) => {
+    return auditedShifts.filter((s) => {
       if (statusFilter === "OPEN" && s.status !== "OPEN") return false;
       if (statusFilter === "CLOSED" && s.status === "OPEN") return false;
+      if (currentStoreCode !== "ALL" && s.storeCode && s.storeCode !== currentStoreCode) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -54,17 +71,48 @@ export default function ShiftsPage() {
       }
       return true;
     });
-  }, [cashShifts, statusFilter, searchQuery]);
+  }, [auditedShifts, statusFilter, currentStoreCode, searchQuery]);
 
-  const fmtVND = (num: number) => new Intl.NumberFormat("vi-VN").format(num) + "đ";
+  // Aggregate KPI summary
+  const summaryKpi = useMemo(() => {
+    const totalShifts = filteredShifts.length;
+    const openShifts = filteredShifts.filter((s) => s.status === "OPEN").length;
+    const totalCashSales = filteredShifts.reduce((acc, s) => acc + s.cashSales, 0);
+    const totalActualCash = filteredShifts.reduce((acc, s) => acc + s.actualCash, 0);
+    const totalDiff = filteredShifts.reduce((acc, s) => acc + s.difference, 0);
 
-  const fmtDate = (timestamp?: number) => {
+    return { totalShifts, openShifts, totalCashSales, totalActualCash, totalDiff };
+  }, [filteredShifts]);
+
+  const fmtDate = (timestamp?: number | null) => {
     if (!timestamp) return "Chưa đóng";
     const d = new Date(timestamp);
     return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")} - ${d
       .getDate()
       .toString()
       .padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
+  };
+
+  const handleExportExcel = () => {
+    const storeInfo =
+      currentStoreCode === "ALL"
+        ? { storeName: "Tất cả chi nhánh", storeCode: "ALL" }
+        : stores.find((s) => s.storeCode === currentStoreCode) || {
+            storeName: "POS Trạm",
+            storeCode: currentStoreCode,
+          };
+    exportCashShiftReport(filteredShifts, storeInfo).toExcel();
+  };
+
+  const handleExportPDF = () => {
+    const storeInfo =
+      currentStoreCode === "ALL"
+        ? { storeName: "Tất cả chi nhánh", storeCode: "ALL" }
+        : stores.find((s) => s.storeCode === currentStoreCode) || {
+            storeName: "POS Trạm",
+            storeCode: currentStoreCode,
+          };
+    exportCashShiftReport(filteredShifts, storeInfo).toPDF();
   };
 
   return (
@@ -205,6 +253,79 @@ export default function ShiftsPage() {
         </div>
       </div>
 
+      {/* KPI Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "16px",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+            <span>Tổng số ca giao két</span>
+            <History size={18} color="#7E2930" />
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+            {formatNumber(summaryKpi.totalShifts)}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+            {summaryKpi.openShifts} ca đang mở
+          </div>
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+            <span>Doanh số tiền mặt ca</span>
+            <Coins size={18} color="#146A65" />
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "#146A65", marginTop: "8px" }}>
+            {formatVND(summaryKpi.totalCashSales)}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+            Tổng tiền mặt thu qua đơn
+          </div>
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+            <span>Tiền kiểm đếm thực tế</span>
+            <Wallet size={18} color="#1877F2" />
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+            {formatVND(summaryKpi.totalActualCash)}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+            Khai báo két khi chốt ca
+          </div>
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+            <span>Chênh lệch két ròng</span>
+            <ArrowUpDown
+              size={18}
+              color={summaryKpi.totalDiff === 0 ? "#146A65" : summaryKpi.totalDiff > 0 ? "#1877F2" : "#C93B2B"}
+            />
+          </div>
+          <div
+            style={{
+              fontSize: "24px",
+              fontWeight: "800",
+              color: summaryKpi.totalDiff === 0 ? "#146A65" : summaryKpi.totalDiff > 0 ? "#1877F2" : "#C93B2B",
+              marginTop: "8px",
+            }}
+          >
+            {summaryKpi.totalDiff >= 0 ? "+" : ""}
+            {formatVND(summaryKpi.totalDiff)}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+            {summaryKpi.totalDiff === 0 ? "Khớp chuẩn 100%" : summaryKpi.totalDiff > 0 ? "Thừa tiền két" : "Thiếu hụt két"}
+          </div>
+        </div>
+      </div>
+
       {/* Shifts Filter & Table */}
       <div
         style={{
@@ -246,7 +367,7 @@ export default function ShiftsPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ display: "flex", border: "1px solid #E6DEC8", borderRadius: "10px", overflow: "hidden" }}>
               {[
                 { id: "ALL", label: "Tất cả" },
@@ -255,7 +376,7 @@ export default function ShiftsPage() {
               ].map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setStatusFilter(item.id as any)}
+                  onClick={() => setStatusFilter(item.id as "ALL" | "OPEN" | "CLOSED")}
                   style={{
                     padding: "6px 12px",
                     background: statusFilter === item.id ? "#7E2930" : "#FFFFFF",
@@ -270,6 +391,44 @@ export default function ShiftsPage() {
                 </button>
               ))}
             </div>
+
+            {/* Export Buttons */}
+            <button
+              onClick={handleExportExcel}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 14px",
+                background: "#107C41",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              <FileSpreadsheet size={15} /> Xuất Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 14px",
+                background: "#7E2930",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              <Printer size={15} /> In / PDF
+            </button>
           </div>
         </div>
 
@@ -283,7 +442,7 @@ export default function ShiftsPage() {
                 <th style={{ padding: "10px 12px" }}>Thu ngân</th>
                 <th style={{ padding: "10px 12px" }}>Thời gian</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Tiền đầu ca</th>
-                <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu ca</th>
+                <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh số ca</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Tiền đếm thực</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Chênh lệch</th>
                 <th style={{ padding: "10px 12px", textAlign: "center" }}>Trạng thái</th>
@@ -303,13 +462,13 @@ export default function ShiftsPage() {
                   const isOpen = shift.status === "OPEN";
 
                   return (
-                    <tr key={shift.id} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                    <tr key={shift.shiftId || shift.shiftCode} style={{ borderBottom: "1px solid #F0ECE1" }}>
                       <td style={{ padding: "10px 12px", fontWeight: "700", color: "#7E2930" }}>
                         {shift.shiftCode}
                       </td>
                       <td style={{ padding: "10px 12px" }}>
                         <span style={{ padding: "2px 8px", background: "#F8F4EE", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
-                          {shift.storeCode}
+                          {shift.storeCode || "TRAM01"}
                         </span>
                       </td>
                       <td style={{ padding: "10px 12px" }}>
@@ -317,25 +476,25 @@ export default function ShiftsPage() {
                         <div style={{ fontSize: "11px", color: "#888" }}>@{shift.staffUsername}</div>
                       </td>
                       <td style={{ padding: "10px 12px", fontSize: "12px", color: "#666" }}>
-                        <div>Mở: {fmtDate(shift.openedAt || shift.startTime)}</div>
-                        <div>Đóng: {fmtDate(shift.closedAt || shift.endTime)}</div>
+                        <div>Mở: {fmtDate(shift.openedAt)}</div>
+                        <div>Đóng: {fmtDate(shift.closedAt)}</div>
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                        {fmtVND(shift.initialCash || 0)}
+                        {formatVND(shift.initialCash || 0)}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>
-                        {fmtVND(shift.totalRevenue || 0)}
+                        {formatVND(shift.totalSales || 0)}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>
-                        {isOpen ? <span style={{ color: "#999" }}>Đang mở</span> : fmtVND(shift.actualCash || 0)}
+                        {isOpen ? <span style={{ color: "#999" }}>Đang mở</span> : formatVND(shift.actualCash || 0)}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>
                         {isOpen ? (
-                          <span style={{ color: "#999" }}>-</span>
+                          <span style={{ color: "#999" }}>—</span>
                         ) : (
                           <span style={{ color: diff === 0 ? "#146A65" : diff > 0 ? "#1877F2" : "#C93B2B" }}>
                             {diff >= 0 ? "+" : ""}
-                            {fmtVND(diff)}
+                            {formatVND(diff)}
                           </span>
                         )}
                       </td>
@@ -410,7 +569,7 @@ export default function ShiftsPage() {
             {/* Slip Paper Header */}
             <div style={{ textAlign: "center", borderBottom: "1px dashed #CCC", paddingBottom: "16px", marginBottom: "16px" }}>
               <div style={{ fontSize: "16px", fontWeight: "800", color: "#1C1A2D", letterSpacing: "0.5px" }}>
-                POS TRẠM F&B - CHI NHÁNH {selectedShift.storeCode}
+                POS TRẠM F&B - CHI NHÁNH {selectedShift.storeCode || "TRAM01"}
               </div>
               <div style={{ fontSize: "18px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>
                 PHIẾU BÀN GIAO CA BÁN HÀNG
@@ -422,28 +581,32 @@ export default function ShiftsPage() {
                 Thu ngân: <strong>{selectedShift.staffFullName}</strong> (@{selectedShift.staffUsername})
               </div>
               <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-                Mở ca: {fmtDate(selectedShift.openedAt || selectedShift.startTime)}
+                Mở ca: {fmtDate(selectedShift.openedAt)}
               </div>
               <div style={{ fontSize: "11px", color: "#888" }}>
-                Kết ca: {fmtDate(selectedShift.closedAt || selectedShift.endTime)}
+                Kết ca: {fmtDate(selectedShift.closedAt)}
               </div>
             </div>
 
             {/* Slip Paper Details */}
             <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px" }}>
-              <SlipLine label="1. Tiền mặt đầu ca:" value={fmtVND(selectedShift.initialCash || 0)} />
-              <SlipLine label="2. Doanh số tiền mặt (+):" value={fmtVND(selectedShift.totalCashSales || 0)} color="#146A65" />
-              <SlipLine label="3. Doanh số VietQR (+):" value={fmtVND(selectedShift.totalQrSales || 0)} color="#1877F2" />
-              <SlipLine label="4. Tiền nộp thêm vào két (Cash In):" value={fmtVND(selectedShift.cashIn || 0)} />
-              <SlipLine label="5. Tiền chi vặt từ két (Cash Out):" value={fmtVND(selectedShift.cashOut || 0)} color="#C93B2B" />
+              <SlipLine label="1. Tiền mặt đầu ca:" value={formatVND(selectedShift.initialCash || 0)} />
+              <SlipLine label="2. Doanh số tiền mặt (+):" value={formatVND(selectedShift.cashSales || 0)} color="#146A65" />
+              <SlipLine label="3. Doanh số VietQR (+):" value={formatVND(selectedShift.qrSales || 0)} color="#1877F2" />
+              <SlipLine label="4. Doanh số Thẻ / Khác (+):" value={formatVND(selectedShift.cardSales || 0)} color="#8A5B00" />
+              <SlipLine label="5. Tiền nộp thêm vào két (Cash In):" value={formatVND(selectedShift.cashIn || 0)} />
+              <SlipLine label="6. Tiền chi vặt từ két (Cash Out):" value={formatVND(selectedShift.cashOut || 0)} color="#C93B2B" />
+              {selectedShift.refundCash > 0 && (
+                <SlipLine label="7. Tiền hoàn trả tiền mặt (-):" value={formatVND(selectedShift.refundCash || 0)} color="#C93B2B" />
+              )}
               <div style={{ borderBottom: "1px dashed #CCC", margin: "6px 0" }} />
-              <SlipLine label="TỔNG DOANH THU CA:" value={fmtVND(selectedShift.totalRevenue || 0)} isBold />
+              <SlipLine label="TỔNG DOANH THU CA:" value={formatVND(selectedShift.totalSales || 0)} isBold />
               <div style={{ borderBottom: "1px dashed #CCC", margin: "6px 0" }} />
-              <SlipLine label="TIỀN KÉT KỲ VỌNG (Lý thuyết):" value={fmtVND(selectedShift.expectedCash || 0)} isBold color="#7E2930" />
-              <SlipLine label="TIỀN KIỂM ĐẾM THỰC TẾ:" value={fmtVND(selectedShift.actualCash || 0)} isBold />
+              <SlipLine label="TIỀN KÉT KỲ VỌNG (Lý thuyết):" value={formatVND(selectedShift.expectedCash || 0)} isBold color="#7E2930" />
+              <SlipLine label="TIỀN KIỂM ĐẾM THỰC TẾ:" value={formatVND(selectedShift.actualCash || 0)} isBold />
               <SlipLine
                 label="CHÊNH LỆCH KÉT:"
-                value={`${(selectedShift.difference || 0) >= 0 ? "+" : ""}${fmtVND(selectedShift.difference || 0)}`}
+                value={`${(selectedShift.difference || 0) >= 0 ? "+" : ""}${formatVND(selectedShift.difference || 0)}`}
                 isBold
                 color={(selectedShift.difference || 0) === 0 ? "#146A65" : (selectedShift.difference || 0) > 0 ? "#1877F2" : "#C93B2B"}
               />

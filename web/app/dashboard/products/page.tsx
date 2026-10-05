@@ -28,6 +28,7 @@ function formatVND(amount: number) {
 interface ProductFormData {
   name: string;
   price: string;
+  costPrice: string;
   unit: string;
   category: string;
   imageBase64: string;
@@ -37,6 +38,7 @@ interface ProductFormData {
 const emptyProductForm: ProductFormData = {
   name: "",
   price: "",
+  costPrice: "",
   unit: "",
   category: "",
   imageBase64: "",
@@ -153,10 +155,11 @@ export default function ProductsPage() {
   };
 
   const openEditProduct = (p: ProductItem) => {
-    setEditProductId(p.id);
+    setEditProductId(String(p.id));
     setProductForm({
       name: p.name,
       price: String(p.price),
+      costPrice: p.costPrice != null ? String(p.costPrice) : "",
       unit: p.unit || "",
       category: p.category || "",
       imageBase64: p.imageBase64 || "",
@@ -199,6 +202,11 @@ export default function ProductsPage() {
       setProductError("Giá không hợp lệ");
       return;
     }
+    const costPriceNum = productForm.costPrice.trim() ? Number(productForm.costPrice) : 0;
+    if (isNaN(costPriceNum) || costPriceNum < 0) {
+      setProductError("Giá vốn không hợp lệ (phải >= 0)");
+      return;
+    }
     setProductSaving(true);
     setProductError("");
     try {
@@ -209,6 +217,7 @@ export default function ProductsPage() {
           id: editProductId || undefined,
           name: productForm.name.trim(),
           price: Number(productForm.price),
+          costPrice: costPriceNum,
           unit: productForm.unit.trim(),
           category: productForm.category.trim(),
           imageBase64: productForm.imageBase64,
@@ -634,6 +643,7 @@ export default function ProductsPage() {
                   {currentStoreCode === "ALL" && <th>Chi nhánh</th>}
                   <th>Danh mục</th>
                   <th>Giá bán</th>
+                  <th>Giá vốn</th>
                   <th>Đơn vị</th>
                   <th>Thao tác</th>
                 </tr>
@@ -642,7 +652,7 @@ export default function ProductsPage() {
                 {filteredProducts.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={currentStoreCode === "ALL" ? 7 : 6}
+                      colSpan={currentStoreCode === "ALL" ? 8 : 7}
                       style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}
                     >
                       <div style={{ fontSize: "36px", marginBottom: "8px" }}>🍽️</div>
@@ -736,6 +746,9 @@ export default function ProductsPage() {
                         )}
                       </td>
                       <td style={{ fontWeight: "700", color: "#1C1A2D" }}>{formatVND(p.price)}</td>
+                      <td style={{ fontWeight: "600", color: "#146A65" }}>
+                        {p.costPrice != null && p.costPrice > 0 ? formatVND(p.costPrice) : <span style={{ color: "#8B8FA8" }}>—</span>}
+                      </td>
                       <td style={{ color: "#5D5B63" }}>{p.unit || "Phần"}</td>
                       <td>
                         <div style={{ display: "flex", gap: "6px" }}>
@@ -1139,6 +1152,7 @@ export default function ProductsPage() {
               {[
                 { label: "Tên sản phẩm *", key: "name" as const, placeholder: "Ví dụ: Cà phê sữa đá, Bạc xỉu..." },
                 { label: "Giá bán (VNĐ) *", key: "price" as const, placeholder: "Ví dụ: 35000", type: "number" },
+                { label: "Giá vốn (VNĐ)", key: "costPrice" as const, placeholder: "Ví dụ: 12000 (dùng để tính Lợi nhuận gộp & COGS)", type: "number" },
                 { label: "Đơn vị tính", key: "unit" as const, placeholder: "Ví dụ: Ly, Cốc, Phần, Đĩa..." },
               ].map((field) => (
                 <div key={field.key}>

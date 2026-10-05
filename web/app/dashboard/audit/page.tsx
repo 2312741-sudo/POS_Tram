@@ -26,10 +26,12 @@ import {
   X,
   CheckCircle2,
   Copy,
-  Check
+  Check,
+  Printer,
 } from "lucide-react";
-import { exportAuditLogs } from "@/lib/export";
+import { exportAuditLogs, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, AuditLogItem } from "@/lib/data-context";
+import { calculateCancellationReport, formatVND } from "@/lib/reports";
 
 // Cấu hình định danh các hành động
 interface ActionConfig {
@@ -216,7 +218,7 @@ function getRoleName(role?: string): string {
 const PAGE_SIZE = 25;
 
 export default function AuditPage() {
-  const { auditLogs: logs, loading: ctxLoading } = useDashboardData();
+  const { auditLogs: logs, historyData, stores, currentStoreCode, loading: ctxLoading } = useDashboardData();
   const loading = ctxLoading && logs.length === 0;
 
   const [search, setSearch] = useState("");
@@ -226,6 +228,20 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const cancellationReport = useMemo(() => {
+    return calculateCancellationReport(historyData);
+  }, [historyData]);
+
+  const targetStoreInfo = useMemo(() => {
+    if (currentStoreCode === "ALL") return { storeName: "Tất cả chi nhánh", storeCode: "ALL" };
+    return (
+      stores.find((s) => s.storeCode === currentStoreCode) || {
+        storeName: "POS Trạm",
+        storeCode: currentStoreCode,
+      }
+    );
+  }, [stores, currentStoreCode]);
 
   // Danh sách các hành động và người dùng duy nhất
   const uniqueActions = useMemo(() => {
@@ -313,6 +329,14 @@ export default function AuditPage() {
     exportAuditLogs(exportData);
   };
 
+  const handleExportCancellationExcel = () => {
+    exportCancellationReport(cancellationReport, targetStoreInfo).toExcel();
+  };
+
+  const handleExportCancellationPDF = () => {
+    exportCancellationReport(cancellationReport, targetStoreInfo).toPDF();
+  };
+
   const handleCopyDetails = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -339,11 +363,30 @@ export default function AuditPage() {
             Theo dõi chi tiết từng thao tác: nhập món, gửi bếp, thanh toán, ghép bàn, tách hóa đơn, hủy món theo thời gian thực.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <button className="btn-primary" onClick={handleExport}>
-            <Download size={16} />
-            Xuất Excel ({filtered.length} bản ghi)
-          </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          {categoryFilter === "CANCEL" ? (
+            <>
+              <button
+                className="btn-primary"
+                style={{ background: "#107C41" }}
+                onClick={handleExportCancellationExcel}
+              >
+                <Download size={16} /> Xuất Báo cáo Hủy món (Excel)
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: "#7E2930" }}
+                onClick={handleExportCancellationPDF}
+              >
+                <Printer size={16} /> In / PDF Kiểm toán Thất thoát
+              </button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={handleExport}>
+              <Download size={16} />
+              Xuất Excel ({filtered.length} bản ghi)
+            </button>
+          )}
         </div>
       </div>
 
@@ -443,6 +486,35 @@ export default function AuditPage() {
           <div style={{ fontSize: "20px", fontWeight: "800", color: "#DC2626", marginTop: "4px" }}>{stats.suspiciousCount}</div>
         </div>
       </div>
+
+      {/* Cancellation Loss Audit Banner */}
+      {categoryFilter === "CANCEL" && (
+        <div
+          style={{
+            padding: "16px 20px",
+            background: "#FFF1F2",
+            border: "1px solid #FECDD3",
+            borderRadius: "12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <AlertTriangle size={20} color="#DC2626" />
+            <div>
+              <div style={{ fontWeight: "700", color: "#991B1B", fontSize: "14px" }}>
+                Kiểm toán Thất thoát: {cancellationReport.cancelledBillsCount} hóa đơn bị hủy
+              </div>
+              <div style={{ fontSize: "12px", color: "#B91C1C" }}>
+                Tổng giá trị thất thoát tài chính từ các đơn hủy: <strong>{formatVND(cancellationReport.totalLossValue)}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters Toolbar */}
       <div className="card" style={{ padding: "16px 20px" }}>

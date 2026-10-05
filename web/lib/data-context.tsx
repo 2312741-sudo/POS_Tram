@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { db } from "./firebase";
 import { ref, onValue, query, limitToLast, set, update, remove, get, push } from "firebase/database";
+import { deduplicateBills } from "./reports";
 
 export interface OrderActionLog {
   timestamp: number | string;
@@ -13,8 +14,12 @@ export interface OrderActionLog {
 
 export interface OrderItem {
   id?: number | string;
+  productId?: number | string;
   name: string;
   price: number;
+  costPrice?: number;
+  unitCost?: number;
+  lineCostPrice?: number;
   quantity?: number;
   count?: number;
   unit?: string;
@@ -25,6 +30,9 @@ export interface OrderItem {
   selectedToppings?: any[];
   toppingPrice?: number;
   sizeExtraPrice?: number;
+  discountAmount?: number;
+  lineGrossAmount?: number;
+  lineTotal?: number;
   note?: string;
   orderedBy?: string;
   orderedByName?: string;
@@ -36,14 +44,26 @@ export interface HistoryOrder {
   id: string;
   storeCode?: string;
   storeName?: string;
+  billCode?: string;
   orderCode?: string;
   tableName?: string;
   zone?: string;
+  guestCount?: number;
   paymentMethod?: string;
   status?: string;
   totalAmount?: number;
   subTotal?: number;
+  finalAmount?: number;
   discountAmount?: number;
+  totalDiscount?: number;
+  itemDiscounts?: number;
+  billDiscounts?: number;
+  pointsDiscount?: number;
+  pointsUsed?: number;
+  vatRate?: number;
+  vatAmount?: number;
+  refundAmount?: number;
+  cogs?: number;
   timestamp?: number | string;
   createdAt?: number | string;
   closedAt?: number | string;
@@ -51,8 +71,12 @@ export interface HistoryOrder {
   createdBy?: string;
   creatorName?: string;
   staffFullName?: string;
+  staffUsername?: string;
   cashierName?: string;
   orderStaff?: string;
+  shiftId?: string;
+  parentBillId?: string | null;
+  mergedTableNames?: string[] | null;
   items?: OrderItem[];
   actionLogs?: OrderActionLog[];
   [key: string]: any;
@@ -77,8 +101,11 @@ export interface ProductItem {
   id: string;
   storeCode?: string;
   storeName?: string;
+  code?: string;
+  productCode?: string;
   name: string;
   price: number;
+  costPrice?: number;
   unit: string;
   category: string;
   imageBase64?: string;
@@ -192,7 +219,7 @@ interface DashboardContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   deleteTable: (tableId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
   saveProduct: (
-    productData: { id?: string; name: string; price: number; unit?: string; category?: string; imageBase64?: string },
+    productData: { id?: string; name: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string },
     storeCode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (productId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
@@ -284,20 +311,29 @@ const DashboardContext = createContext<DashboardContextType>({
 
 // Helper to strip heavy base64 strings from history items to optimize memory & render speed
 function sanitizeHistoryOrder(raw: any, id: string): HistoryOrder {
+  const mapItem = (it: any): OrderItem => {
+    const { imageBase64, ...rest } = it;
+    return {
+      ...rest,
+      price: Number(rest.price || 0),
+      quantity: Number(rest.quantity || rest.count || 1),
+      costPrice: rest.costPrice != null ? Number(rest.costPrice) : (rest.unitCost != null ? Number(rest.unitCost) : 0),
+      unitCost: rest.unitCost != null ? Number(rest.unitCost) : (rest.costPrice != null ? Number(rest.costPrice) : 0),
+      lineCostPrice: rest.lineCostPrice != null ? Number(rest.lineCostPrice) : undefined,
+      lineGrossAmount: rest.lineGrossAmount != null ? Number(rest.lineGrossAmount) : undefined,
+      lineTotal: rest.lineTotal != null ? Number(rest.lineTotal) : undefined,
+      discountAmount: Number(rest.discountAmount || 0),
+    };
+  };
+
   let items: OrderItem[] = [];
   if (Array.isArray(raw.items)) {
-    items = raw.items.map((it: any) => {
-      const { imageBase64, ...rest } = it;
-      return rest;
-    });
+    items = raw.items.map(mapItem);
   } else if (raw.itemsJson) {
     try {
       const parsed = typeof raw.itemsJson === "string" ? JSON.parse(raw.itemsJson) : raw.itemsJson;
       if (Array.isArray(parsed)) {
-        items = parsed.map((it: any) => {
-          const { imageBase64, ...rest } = it;
-          return rest;
-        });
+        items = parsed.map(mapItem);
       }
     } catch {
       items = [];
@@ -351,19 +387,42 @@ function sanitizeHistoryOrder(raw: any, id: string): HistoryOrder {
         timestamp: timeClosed,
         staffFullName: cashierName,
         action: "PAY_BILL",
-        details: `${cashierName} thanh toán hóa đơn ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(raw.totalAmount) || 0)} (${raw.paymentMethod || "Tiền mặt"})`,
+        details: `${cashierName} thanh toán hóa đơn ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(raw.totalAmount || raw.finalAmount) || 0)} (${raw.paymentMethod || "Tiền mặt"})`,
       },
     ];
   }
 
   const storeCode = raw.storeCode || (raw.id && raw.id.includes("TRAM02") ? "TRAM02" : "TRAM01");
+  const subTotal = Number(raw.subTotal != null ? raw.subTotal : (raw.totalAmount || 0));
+  const finalAmount = Number(raw.finalAmount != null ? raw.finalAmount : (raw.totalAmount || 0));
+  const totalAmount = finalAmount;
+  const totalDiscount = Number(raw.totalDiscount != null ? raw.totalDiscount : (raw.discountAmount || 0));
+  const discountAmount = totalDiscount;
+  const vatAmount = Number(raw.vatAmount || 0);
+  const vatRate = Number(raw.vatRate || 0);
+  const pointsDiscount = Number(raw.pointsDiscount || 0);
+  const pointsUsed = Number(raw.pointsUsed || 0);
+  const refundAmount = Number(raw.refundAmount || 0);
+  const guestCount = Number(raw.guestCount || 0);
+  const cogs = Number(raw.cogs || 0);
 
   return {
     ...raw,
     id,
     storeCode,
     items,
-    totalAmount: Number(raw.totalAmount) || 0,
+    totalAmount,
+    finalAmount,
+    subTotal,
+    totalDiscount,
+    discountAmount,
+    vatAmount,
+    vatRate,
+    pointsDiscount,
+    pointsUsed,
+    refundAmount,
+    guestCount,
+    cogs,
     orderStaff,
     cashierName,
     actionLogs,
@@ -455,6 +514,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
               pList.push({
                 ...p,
                 id,
+                price: Number(p.price || 0),
+                costPrice: p.costPrice != null ? Number(p.costPrice) : 0,
                 storeCode: code,
                 storeName: info.storeName || code,
               });
@@ -587,12 +648,13 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       if (snap.exists()) {
         const data = snap.val();
         const arr = Object.entries(data).map(([id, v]: any) => sanitizeHistoryOrder(v, id));
-        arr.sort((a, b) => {
+        const deduped = deduplicateBills(arr);
+        deduped.sort((a, b) => {
           const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
           const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
           return tb - ta;
         });
-        setAllHistory(arr);
+        setAllHistory(deduped);
         setHistoryLoaded(true);
       } else {
         setAllHistory([]);
@@ -608,7 +670,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     const prodRef = ref(db, "products");
     const unsubProd = onValue(prodRef, (snap) => {
       if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({ ...v, id }));
+        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({
+          ...v,
+          id,
+          price: Number(v.price || 0),
+          costPrice: v.costPrice != null ? Number(v.costPrice) : 0,
+        }));
         setRawProducts(arr);
       } else {
         setRawProducts([]);
@@ -1390,7 +1457,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const saveProduct = useCallback(
     async (
-      productData: { id?: string; name: string; price: number; unit?: string; category?: string; imageBase64?: string },
+      productData: { id?: string; name: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string },
       storeCode?: string
     ) => {
       try {
@@ -1398,6 +1465,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const payload: any = {
           name: productData.name.trim(),
           price: Number(productData.price),
+          costPrice: productData.costPrice != null ? Number(productData.costPrice) : 0,
           unit: (productData.unit || "").trim(),
           category: (productData.category || "").trim(),
         };

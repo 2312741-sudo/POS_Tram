@@ -1,105 +1,53 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { useDashboardData } from "@/lib/data-context";
+import { useDashboardData, ProductItem } from "@/lib/data-context";
+import {
+  calculateProductReport,
+  calculateCategoryReport,
+  calculateGrossProfitReport,
+  formatVND,
+  formatNumber,
+  getBillTimestamp,
+  getUTC7Date,
+  ProductReportItem,
+  CategoryReportItem,
+  GrossProfitReportResult,
+} from "@/lib/reports";
+import {
+  exportProductSalesReport,
+  exportCategorySalesReport,
+  exportGrossProfitReport,
+  ReportStoreInfo,
+} from "@/lib/export";
 import {
   Calendar,
   Store,
   Search,
   Download,
+  Printer,
   Package,
-  ArrowUpDown,
+  Layers,
   TrendingUp,
-  BarChart2,
-  PieChart,
-  User,
-  Users,
 } from "lucide-react";
 
 export default function ProductSalesReportPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, historyData, categories, usersList } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, historyData, products, categories } = useDashboardData();
 
+  const [activeTab, setActiveTab] = useState<"product" | "category" | "profit">("product");
   const [dateRange, setDateRange] = useState<"TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("TODAY");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [selectedStaff, setSelectedStaff] = useState("ALL");
-  const [viewGroupBy, setViewGroupBy] = useState<"PRODUCT" | "STAFF">("PRODUCT");
-  const [productViewMode, setProductViewMode] = useState<"AMOUNT" | "QUANTITY">("AMOUNT");
-  const [sortBy, setSortBy] = useState<"QTY_DESC" | "REV_DESC" | "NAME_ASC">("REV_DESC");
+  const [sortBy, setSortBy] = useState<"REV_DESC" | "QTY_DESC" | "NAME_ASC">("REV_DESC");
 
-  // Date filtering logic
-  const filteredBills = useMemo(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Current store info
+  const currentStore = useMemo(() => {
+    if (currentStoreCode === "ALL") return stores[0];
+    return stores.find((s) => s.storeCode === currentStoreCode) || stores[0];
+  }, [stores, currentStoreCode]);
 
-    return historyData.filter((b) => {
-      if (currentStoreCode !== "ALL" && b.storeCode && b.storeCode !== currentStoreCode) return false;
-      if (b.status !== "PAID") return false;
-      const dt = new Date(b.closedAt || b.createdAt || b.timestamp || Date.now());
-
-      switch (dateRange) {
-        case "TODAY":
-          return (
-            dt.getFullYear() === now.getFullYear() &&
-            dt.getMonth() === now.getMonth() &&
-            dt.getDate() === now.getDate()
-          );
-        case "YESTERDAY": {
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return (
-            dt.getFullYear() === yesterday.getFullYear() &&
-            dt.getMonth() === yesterday.getMonth() &&
-            dt.getDate() === yesterday.getDate()
-          );
-        }
-        case "7DAYS": {
-          const sevenDaysAgo = new Date(today);
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          return dt >= sevenDaysAgo && dt <= now;
-        }
-        case "THIS_MONTH":
-          return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
-        case "LAST_MONTH": {
-          const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          return dt.getFullYear() === lm.getFullYear() && dt.getMonth() === lm.getMonth();
-        }
-        case "CUSTOM": {
-          if (!customStart) return true;
-          const s = new Date(customStart + "T00:00:00");
-          const e = customEnd ? new Date(customEnd + "T23:59:59") : new Date(customStart + "T23:59:59");
-          return dt >= s && dt <= e;
-        }
-        default:
-          return true;
-      }
-    });
-  }, [historyData, currentStoreCode, dateRange, customStart, customEnd]);
-
-  // Extract available staff list
-  const availableStaffList = useMemo(() => {
-    const staffSet = new Set<string>();
-    if (Array.isArray(usersList)) {
-      usersList.forEach((u) => {
-        const name = (u.fullName || u.username || "").trim();
-        if (name) staffSet.add(name);
-      });
-    }
-    historyData.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "").trim();
-      if (billStaff) staffSet.add(billStaff);
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          const itStaff = (it.orderedByName || it.orderedBy || "").trim();
-          if (itStaff) staffSet.add(itStaff);
-        });
-      }
-    });
-    return Array.from(staffSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [usersList, historyData]);
-
-  // Human-readable date range label
+  // Date range label
   const dateRangeLabel = useMemo(() => {
     const now = new Date();
     switch (dateRange) {
@@ -130,237 +78,132 @@ export default function ProductSalesReportPage() {
     }
   }, [dateRange, customStart, customEnd]);
 
-  // Aggregate product sales (filtered by staff if selected)
-  const productList = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        category: string;
-        quantity: number;
-        revenue: number;
-        unitPrice: number;
-        ordersCount: number;
-        staffSales: { [staff: string]: { quantity: number; revenue: number } };
-      }
-    >();
+  // Date filtering logic (UTC+7)
+  const filteredBills = useMemo(() => {
+    const now = new Date();
+    const nowUTC7 = getUTC7Date(now.getTime());
+    const todayYear = nowUTC7.getUTCFullYear();
+    const todayMonth = nowUTC7.getUTCMonth();
+    const todayDate = nowUTC7.getUTCDate();
 
-    filteredBills.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "Nhân viên chung").trim();
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          const itemStaff = (it.orderedByName || it.orderedBy || billStaff).trim();
-          if (selectedStaff !== "ALL" && itemStaff !== selectedStaff) {
-            return;
-          }
+    return historyData.filter((b) => {
+      if (currentStoreCode !== "ALL" && b.storeCode && b.storeCode !== currentStoreCode) return false;
 
-          const name = it.name || "Món không tên";
-          const qty = it.quantity || it.count || 1;
-          const price = Number(it.price || 0);
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          const itemRev = (price + toppingSum) * qty - (it.discountAmount || 0);
+      const ts = getBillTimestamp(b);
+      const bDate = getUTC7Date(ts);
+      const bYear = bDate.getUTCFullYear();
+      const bMonth = bDate.getUTCMonth();
+      const bDay = bDate.getUTCDate();
 
-          if (!map.has(name)) {
-            map.set(name, {
-              name,
-              category: it.category || "Thực đơn chính",
-              quantity: 0,
-              revenue: 0,
-              unitPrice: price + toppingSum,
-              ordersCount: 0,
-              staffSales: {},
-            });
-          }
-          const cur = map.get(name)!;
-          cur.quantity += qty;
-          cur.revenue += itemRev;
-          cur.ordersCount += 1;
-          if (!cur.staffSales[itemStaff]) {
-            cur.staffSales[itemStaff] = { quantity: 0, revenue: 0 };
-          }
-          cur.staffSales[itemStaff].quantity += qty;
-          cur.staffSales[itemStaff].revenue += itemRev;
-        });
+      switch (dateRange) {
+        case "TODAY":
+          return bYear === todayYear && bMonth === todayMonth && bDay === todayDate;
+        case "YESTERDAY": {
+          const yest = new Date(Date.UTC(todayYear, todayMonth, todayDate - 1));
+          return bYear === yest.getUTCFullYear() && bMonth === yest.getUTCMonth() && bDay === yest.getUTCDate();
+        }
+        case "7DAYS": {
+          const sevenDaysAgo = Date.UTC(todayYear, todayMonth, todayDate - 7);
+          return ts >= sevenDaysAgo && ts <= now.getTime();
+        }
+        case "THIS_MONTH":
+          return bYear === todayYear && bMonth === todayMonth;
+        case "LAST_MONTH": {
+          const lm = new Date(Date.UTC(todayYear, todayMonth - 1, 1));
+          return bYear === lm.getUTCFullYear() && bMonth === lm.getUTCMonth();
+        }
+        case "CUSTOM": {
+          if (!customStart) return true;
+          const s = new Date(customStart + "T00:00:00").getTime();
+          const e = customEnd ? new Date(customEnd + "T23:59:59").getTime() : new Date(customStart + "T23:59:59").getTime();
+          return ts >= s && ts <= e;
+        }
+        default:
+          return true;
       }
     });
+  }, [historyData, currentStoreCode, dateRange, customStart, customEnd]);
 
-    let list = Array.from(map.values());
+  // Build products lookup map with costPrice
+  const productsMap = useMemo(() => {
+    const map: Record<string | number, ProductItem> = {};
+    products.forEach((p) => {
+      if (p.id != null) map[p.id] = p;
+      if ((p as any).productId != null) map[(p as any).productId] = p;
+      if (p.name) map[p.name] = p;
+    });
+    return map;
+  }, [products]);
 
+  // Pure report calculations
+  const productReports = useMemo<ProductReportItem[]>(() => {
+    const list = calculateProductReport(filteredBills, productsMap);
+    let res = list;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter((p) => p.name.toLowerCase().includes(q));
+      res = res.filter((p) => p.productName.toLowerCase().includes(q) || (p.productCode || "").toLowerCase().includes(q));
     }
-
     if (selectedCategory !== "ALL") {
-      list = list.filter((p) => p.category === selectedCategory);
+      res = res.filter((p) => p.category === selectedCategory);
     }
-
     if (sortBy === "QTY_DESC") {
-      list.sort((a, b) => b.quantity - a.quantity);
+      res.sort((a, b) => b.quantity - a.quantity);
     } else if (sortBy === "REV_DESC") {
-      list.sort((a, b) => b.revenue - a.revenue);
+      res.sort((a, b) => b.netRevenue - a.netRevenue);
     } else {
-      list.sort((a, b) => a.name.localeCompare(b.name));
+      res.sort((a, b) => a.productName.localeCompare(b.productName));
     }
+    return res;
+  }, [filteredBills, productsMap, searchQuery, selectedCategory, sortBy]);
 
-    return list;
-  }, [filteredBills, searchQuery, selectedCategory, selectedStaff, sortBy]);
+  const categoryReports = useMemo<CategoryReportItem[]>(() => {
+    return calculateCategoryReport(filteredBills, productsMap);
+  }, [filteredBills, productsMap]);
 
-  // Aggregate by Staff (grouped view)
-  const staffGroupedList = useMemo(() => {
-    const staffMap = new Map<
-      string,
-      {
-        staffName: string;
-        totalQuantity: number;
-        totalRevenue: number;
-        products: Map<
-          string,
-          {
-            name: string;
-            category: string;
-            quantity: number;
-            revenue: number;
-            unitPrice: number;
-          }
-        >;
-      }
-    >();
+  const grossProfitReport = useMemo<GrossProfitReportResult>(() => {
+    return calculateGrossProfitReport(filteredBills, productsMap);
+  }, [filteredBills, productsMap]);
 
-    filteredBills.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "Nhân viên chung").trim();
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it: any) => {
-          const itemStaff = (it.orderedByName || it.orderedBy || billStaff).trim();
-          if (selectedStaff !== "ALL" && itemStaff !== selectedStaff) return;
+  // Summary Metrics
+  const totalQuantity = useMemo(() => productReports.reduce((s, p) => s + p.quantity, 0), [productReports]);
+  const totalNetRevenue = useMemo(() => productReports.reduce((s, p) => s + p.netRevenue, 0), [productReports]);
+  const totalCOGS = useMemo(() => productReports.reduce((s, p) => s + p.costPrice, 0), [productReports]);
+  const totalGrossProfit = totalNetRevenue - totalCOGS;
+  const grossProfitMargin = totalNetRevenue > 0 ? Number(((totalGrossProfit / totalNetRevenue) * 100).toFixed(2)) : 0;
 
-          const name = it.name || "Món không tên";
-          const qty = it.quantity || it.count || 1;
-          const price = Number(it.price || 0);
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          const itemRev = (price + toppingSum) * qty - (it.discountAmount || 0);
+  // Export Handlers
+  const handleExportExcel = () => {
+    const storeInfo: ReportStoreInfo = {
+      storeName: currentStore?.storeName || "POS Trạm",
+      address: currentStore?.address || "Đà Lạt, Lâm Đồng",
+      phone: currentStore?.phone || "0987.654.321",
+      storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+    };
 
-          if (!staffMap.has(itemStaff)) {
-            staffMap.set(itemStaff, {
-              staffName: itemStaff,
-              totalQuantity: 0,
-              totalRevenue: 0,
-              products: new Map(),
-            });
-          }
-          const curStaff = staffMap.get(itemStaff)!;
-          curStaff.totalQuantity += qty;
-          curStaff.totalRevenue += itemRev;
-
-          if (!curStaff.products.has(name)) {
-            curStaff.products.set(name, {
-              name,
-              category: it.category || "Thực đơn chính",
-              quantity: 0,
-              revenue: 0,
-              unitPrice: price + toppingSum,
-            });
-          }
-          const curProd = curStaff.products.get(name)!;
-          curProd.quantity += qty;
-          curProd.revenue += itemRev;
-        });
-      }
-    });
-
-    const list = Array.from(staffMap.values()).map((s) => {
-      let prods = Array.from(s.products.values());
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        prods = prods.filter((p) => p.name.toLowerCase().includes(q));
-      }
-      if (selectedCategory !== "ALL") {
-        prods = prods.filter((p) => p.category === selectedCategory);
-      }
-      if (sortBy === "QTY_DESC") {
-        prods.sort((a, b) => b.quantity - a.quantity);
-      } else if (sortBy === "REV_DESC") {
-        prods.sort((a, b) => b.revenue - a.revenue);
-      } else {
-        prods.sort((a, b) => a.name.localeCompare(b.name));
-      }
-      return {
-        ...s,
-        products: prods,
-      };
-    });
-
-    if (sortBy === "QTY_DESC") {
-      list.sort((a, b) => b.totalQuantity - a.totalQuantity);
+    if (activeTab === "product") {
+      exportProductSalesReport(productReports, storeInfo, dateRangeLabel).toExcel();
+    } else if (activeTab === "category") {
+      exportCategorySalesReport(categoryReports, storeInfo, dateRangeLabel).toExcel();
     } else {
-      list.sort((a, b) => b.totalRevenue - a.totalRevenue);
+      exportGrossProfitReport(grossProfitReport, storeInfo, dateRangeLabel).toExcel();
     }
+  };
 
-    return list;
-  }, [filteredBills, selectedStaff, searchQuery, selectedCategory, sortBy]);
+  const handlePrintPDF = () => {
+    const storeInfo: ReportStoreInfo = {
+      storeName: currentStore?.storeName || "POS Trạm",
+      address: currentStore?.address || "Đà Lạt, Lâm Đồng",
+      phone: currentStore?.phone || "0987.654.321",
+      storeCode: currentStoreCode === "ALL" ? "ALL" : currentStore?.storeCode,
+    };
 
-  const totalSoldQty = useMemo(() => productList.reduce((s, p) => s + p.quantity, 0), [productList]);
-  const totalRevenue = useMemo(() => productList.reduce((s, p) => s + p.revenue, 0), [productList]);
-
-  const fmtVND = (num: number) => new Intl.NumberFormat("vi-VN").format(num) + "đ";
-
-  // Excel / CSV Export with custom timeframe and staff
-  const exportCSV = () => {
-    const isAmt = productViewMode === "AMOUNT";
-    const nowStr = new Date().toLocaleString("vi-VN");
-
-    let content = "\uFEFF"; // UTF-8 BOM for Microsoft Excel
-    content += `BÁO CÁO HÀNG HÓA BÁN RA THEO NHÂN VIÊN\n`;
-    content += `Thời gian:,"${dateRangeLabel}"\n`;
-    content += `Nhân viên:,"${selectedStaff === "ALL" ? "Tất cả nhân viên" : selectedStaff}"\n`;
-    content += `Chi nhánh:,"${currentStoreCode === "ALL" ? "Tất cả chi nhánh" : currentStoreCode}"\n`;
-    content += `Thời điểm xuất:,"${nowStr}"\n\n`;
-
-    if (viewGroupBy === "STAFF") {
-      content += `Nhân viên,Thứ hạng,Tên sản phẩm,Nhóm hàng,Đơn giá,Số lượng bán,Doanh thu món,Tỷ trọng NV (%)\n`;
-      staffGroupedList.forEach((staffGroup) => {
-        staffGroup.products.forEach((p, idx) => {
-          const pct = isAmt
-            ? (staffGroup.totalRevenue > 0 ? ((p.revenue / staffGroup.totalRevenue) * 100).toFixed(1) : "0.0")
-            : (staffGroup.totalQuantity > 0 ? ((p.quantity / staffGroup.totalQuantity) * 100).toFixed(1) : "0.0");
-          content += `"${staffGroup.staffName}",${idx + 1},"${p.name}","${p.category}",${p.unitPrice},${p.quantity},${p.revenue},${pct}%\n`;
-        });
-      });
+    if (activeTab === "product") {
+      exportProductSalesReport(productReports, storeInfo, dateRangeLabel).toPDF();
+    } else if (activeTab === "category") {
+      exportCategorySalesReport(categoryReports, storeInfo, dateRangeLabel).toPDF();
     } else {
-      content += `Thứ hạng,Tên sản phẩm,Nhóm hàng,Nhân viên bán,Đơn giá,Số lượng bán,Doanh thu món,Tỷ trọng (${isAmt ? "Doanh thu" : "Số lượng"}) (%)\n`;
-      productList.forEach((p, idx) => {
-        const pct = isAmt
-          ? (totalRevenue > 0 ? ((p.revenue / totalRevenue) * 100).toFixed(1) : "0.0")
-          : (totalSoldQty > 0 ? ((p.quantity / totalSoldQty) * 100).toFixed(1) : "0.0");
-
-        let staffStr = "";
-        if (selectedStaff !== "ALL") {
-          staffStr = selectedStaff;
-        } else {
-          const staffEntries = Object.entries(p.staffSales || {});
-          staffStr = staffEntries.map(([sName, sData]) => `${sName} (${sData.quantity})`).join("; ");
-          if (!staffStr) staffStr = "Nhân viên chung";
-        }
-
-        content += `${idx + 1},"${p.name}","${p.category}","${staffStr}",${p.unitPrice},${p.quantity},${p.revenue},${pct}%\n`;
-      });
+      exportGrossProfitReport(grossProfitReport, storeInfo, dateRangeLabel).toPDF();
     }
-
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    const safeStaff = selectedStaff === "ALL" ? "Tat_Ca_NV" : selectedStaff.replace(/[^a-zA-Z0-9]/g, "_");
-    link.setAttribute("download", `Bao_Cao_Hang_Hoa_${safeStaff}_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -380,7 +223,7 @@ export default function ProductSalesReportPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
-                Báo cáo hàng hoá bán ra
+                Báo cáo hàng hoá & Hiệu suất món ăn 🍹
               </h1>
               <span
                 style={{
@@ -392,16 +235,54 @@ export default function ProductSalesReportPage() {
                   fontWeight: "700",
                 }}
               >
-                KiotViet Product Sales
+                KiotViet Dual Parity
               </span>
             </div>
             <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
-              Theo dõi chi tiết sản phẩm từng nhân viên bán được, số lượng tiêu thụ và doanh số theo mốc thời gian tự chọn
+              Thống kê sản lượng tiêu thụ, doanh số nhóm hàng và biên lợi nhuận gộp theo giá vốn (COGS)
             </p>
           </div>
 
-          {/* Filters */}
+          {/* Action buttons & Filters */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              onClick={handlePrintPDF}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#7E2930",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "10px",
+                padding: "8px 14px",
+                fontSize: "13px",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              <Printer size={15} /> In / PDF
+            </button>
+
+            <button
+              onClick={handleExportExcel}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "#146A65",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "10px",
+                padding: "8px 14px",
+                fontSize: "13px",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              <Download size={15} /> Xuất Excel
+            </button>
+
             {/* Date Range Selector */}
             <div
               style={{
@@ -417,7 +298,7 @@ export default function ProductSalesReportPage() {
               <Calendar size={16} color="#7E2930" />
               <select
                 value={dateRange}
-                onChange={(e: any) => setDateRange(e.target.value)}
+                onChange={(e) => setDateRange(e.target.value as any)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -437,7 +318,6 @@ export default function ProductSalesReportPage() {
               </select>
             </div>
 
-            {/* Custom Date Inputs if CUSTOM is selected */}
             {dateRange === "CUSTOM" && (
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <input
@@ -449,7 +329,6 @@ export default function ProductSalesReportPage() {
                     borderRadius: "8px",
                     border: "1px solid #E6DEC8",
                     fontSize: "12px",
-                    background: "#FFFFFF",
                   }}
                 />
                 <span style={{ fontSize: "12px", color: "#666" }}>đến</span>
@@ -462,46 +341,10 @@ export default function ProductSalesReportPage() {
                     borderRadius: "8px",
                     border: "1px solid #E6DEC8",
                     fontSize: "12px",
-                    background: "#FFFFFF",
                   }}
                 />
               </div>
             )}
-
-            {/* Staff Selector */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
-                borderRadius: "10px",
-                padding: "6px 12px",
-              }}
-            >
-              <User size={16} color="#7E2930" />
-              <select
-                value={selectedStaff}
-                onChange={(e) => setSelectedStaff(e.target.value)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#1C1A2D",
-                  cursor: "pointer",
-                }}
-              >
-                <option value="ALL">👤 Tất cả nhân viên</option>
-                {availableStaffList.map((staff) => (
-                  <option key={staff} value={staff}>
-                    👤 {staff}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Store Selector */}
             <div
@@ -529,10 +372,10 @@ export default function ProductSalesReportPage() {
                   cursor: "pointer",
                 }}
               >
-                <option value="ALL">🌐 Tất cả chi nhánh</option>
+                <option value="ALL">Tất cả chi nhánh</option>
                 {stores.map((s) => (
                   <option key={s.storeCode} value={s.storeCode}>
-                    🏪 {s.storeCode} - {s.storeName}
+                    {s.storeName}
                   </option>
                 ))}
               </select>
@@ -540,467 +383,388 @@ export default function ProductSalesReportPage() {
           </div>
         </div>
 
-        {/* 3 KPI Summary Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px", marginTop: "18px" }}>
-          <div style={{ padding: "14px", background: "#F8F4EE", borderRadius: "12px", border: "1px solid #E6DEC8" }}>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>
-              {selectedStaff === "ALL" ? "Mặt hàng tiêu thụ" : `Món của: ${selectedStaff}`}
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: "800", color: "#1C1A2D", marginTop: "2px" }}>
-              {productList.length} món
-            </div>
-            <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-              {selectedStaff === "ALL" ? `${availableStaffList.length} nhân viên bán hàng` : `Nhân viên được chọn`}
-            </div>
-          </div>
+        {/* 3 Tabs Bar */}
+        <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid #E6DEC8", paddingBottom: "1px" }}>
+          {[
+            { id: "product", label: "Món ăn / Hàng hóa (BC 4)", icon: <Package size={16} /> },
+            { id: "category", label: "Nhóm hàng / Danh mục (BC 3)", icon: <Layers size={16} /> },
+            { id: "profit", label: "Lợi nhuận gộp & Giá vốn (BC 11)", icon: <TrendingUp size={16} /> },
+          ].map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "10px 18px",
+                  fontSize: "14px",
+                  fontWeight: active ? "700" : "500",
+                  color: active ? "#7E2930" : "#666",
+                  borderBottom: active ? "3px solid #7E2930" : "3px solid transparent",
+                  background: "transparent",
+                  borderTop: "none",
+                  borderLeft: "none",
+                  borderRight: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-          <div
-            onClick={() => {
-              setProductViewMode("QUANTITY");
-              setSortBy("QTY_DESC");
-            }}
-            style={{
-              padding: "14px",
-              background: productViewMode === "QUANTITY" ? "#FBECEE" : "#F8F4EE",
-              borderRadius: "12px",
-              border: productViewMode === "QUANTITY" ? "2px solid #7E2930" : "1px solid #E6DEC8",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-          >
-            <div style={{ fontSize: "12px", color: productViewMode === "QUANTITY" ? "#7E2930" : "#666", fontWeight: "700" }}>
-              Tổng sản lượng bán {productViewMode === "QUANTITY" ? "✓" : ""}
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: "800", color: productViewMode === "QUANTITY" ? "#7E2930" : "#146A65", marginTop: "2px" }}>
-              {totalSoldQty} phần
-            </div>
-            <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-              {dateRangeLabel}
-            </div>
+      {/* KPI Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px", marginBottom: "20px" }}>
+        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Tổng sản lượng bán</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", marginTop: "4px" }}>
+            {formatNumber(totalQuantity)} phần/ly
           </div>
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+            {productReports.length} mặt hàng phát sinh
+          </div>
+        </div>
 
-          <div
-            onClick={() => {
-              setProductViewMode("AMOUNT");
-              setSortBy("REV_DESC");
-            }}
-            style={{
-              padding: "14px",
-              background: productViewMode === "AMOUNT" ? "#FBECEE" : "#F8F4EE",
-              borderRadius: "12px",
-              border: productViewMode === "AMOUNT" ? "2px solid #7E2930" : "1px solid #E6DEC8",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-          >
-            <div style={{ fontSize: "12px", color: productViewMode === "AMOUNT" ? "#7E2930" : "#666", fontWeight: "700" }}>
-              Tổng doanh thu món {productViewMode === "AMOUNT" ? "✓" : ""}
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: "800", color: "#7E2930", marginTop: "2px" }}>
-              {fmtVND(totalRevenue)}
-            </div>
-            <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-              Đã trừ giảm giá dòng món
-            </div>
+        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Doanh thu thực tế</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>
+            {formatVND(totalNetRevenue)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+            Đã trừ giảm giá dòng món
+          </div>
+        </div>
+
+        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Tổng giá vốn (COGS)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#146A65", marginTop: "4px" }}>
+            {formatVND(totalCOGS)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+            Dựa trên costPrice của món
+          </div>
+        </div>
+
+        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Lợi nhuận gộp & Tỷ suất</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#D97706", marginTop: "4px" }}>
+            {formatVND(totalGrossProfit)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+            Biên lợi nhuận: <strong style={{ color: "#D97706" }}>{grossProfitMargin}%</strong>
           </div>
         </div>
       </div>
 
-      {/* Main Table & Grouping Card */}
-      <div
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "16px",
-          border: "1px solid #E6DEC8",
-          padding: "20px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-        }}
-      >
-        {/* Controls Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, maxWidth: "420px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
-                borderRadius: "10px",
-                padding: "6px 12px",
-                width: "100%",
-              }}
-            >
-              <Search size={16} color="#666" />
-              <input
-                type="text"
-                placeholder="Tìm kiếm theo tên sản phẩm..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+      {/* ==================== TAB 1: MÓN ĂN / HÀNG HÓA ==================== */}
+      {activeTab === "product" && (
+        <div
+          style={{
+            background: "#FFFFFF",
+            borderRadius: "16px",
+            border: "1px solid #E6DEC8",
+            padding: "20px",
+          }}
+        >
+          {/* Controls Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, maxWidth: "420px" }}>
+              <div
                 style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  fontSize: "13px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "#F8F4EE",
+                  border: "1px solid #E6DEC8",
+                  borderRadius: "10px",
+                  padding: "6px 12px",
                   width: "100%",
                 }}
-              />
+              >
+                <Search size={16} color="#666" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm theo mã món, tên món..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontSize: "13px",
+                    width: "100%",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              {/* Category Filter */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E6DEC8",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  background: "#FFFFFF",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="ALL">📁 Tất cả nhóm hàng</option>
+                {categories.map((c) => (
+                  <option key={c.id || c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Sort by */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E6DEC8",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  background: "#FFFFFF",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="REV_DESC">Doanh thu giảm dần</option>
+                <option value="QTY_DESC">Số lượng bán giảm dần</option>
+                <option value="NAME_ASC">Tên món A-Z</option>
+              </select>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            {/* View Grouping: By Product vs By Staff */}
-            <div style={{ display: "flex", border: "1px solid #E6DEC8", borderRadius: "10px", overflow: "hidden", background: "#F8F4EE" }}>
-              <button
-                onClick={() => setViewGroupBy("PRODUCT")}
-                style={{
-                  padding: "6px 12px",
-                  background: viewGroupBy === "PRODUCT" ? "#7E2930" : "transparent",
-                  color: viewGroupBy === "PRODUCT" ? "#FFFFFF" : "#555",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  transition: "all 0.15s",
-                }}
-              >
-                <Package size={14} /> Xem theo món
-              </button>
-              <button
-                onClick={() => setViewGroupBy("STAFF")}
-                style={{
-                  padding: "6px 12px",
-                  background: viewGroupBy === "STAFF" ? "#7E2930" : "transparent",
-                  color: viewGroupBy === "STAFF" ? "#FFFFFF" : "#555",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  transition: "all 0.15s",
-                }}
-              >
-                <Users size={14} /> Chi tiết theo nhân viên
-              </button>
-            </div>
-
-            {/* Segmented View Mode Toggle: Amount vs Quantity */}
-            <div style={{ display: "flex", border: "1px solid #E6DEC8", borderRadius: "10px", overflow: "hidden", background: "#F8F4EE" }}>
-              <button
-                onClick={() => {
-                  setProductViewMode("AMOUNT");
-                  setSortBy("REV_DESC");
-                }}
-                style={{
-                  padding: "6px 12px",
-                  background: productViewMode === "AMOUNT" ? "#7E2930" : "transparent",
-                  color: productViewMode === "AMOUNT" ? "#FFFFFF" : "#555",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  transition: "all 0.15s",
-                }}
-              >
-                💰 Số tiền bán
-              </button>
-              <button
-                onClick={() => {
-                  setProductViewMode("QUANTITY");
-                  setSortBy("QTY_DESC");
-                }}
-                style={{
-                  padding: "6px 12px",
-                  background: productViewMode === "QUANTITY" ? "#7E2930" : "transparent",
-                  color: productViewMode === "QUANTITY" ? "#FFFFFF" : "#555",
-                  border: "none",
-                  fontSize: "12px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  transition: "all 0.15s",
-                }}
-              >
-                📦 Số lượng bán
-              </button>
-            </div>
-
-            <select
-              value={sortBy}
-              onChange={(e: any) => setSortBy(e.target.value)}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "10px",
-                border: "1px solid #E6DEC8",
-                fontSize: "13px",
-                fontWeight: "600",
-                background: "#FFFFFF",
-                cursor: "pointer",
-              }}
-            >
-              <option value="REV_DESC">Doanh thu giảm dần</option>
-              <option value="QTY_DESC">Số lượng bán giảm dần</option>
-              <option value="NAME_ASC">Tên món A-Z</option>
-            </select>
-
-            <button
-              onClick={exportCSV}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                background: "#7E2930",
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "10px",
-                padding: "7px 14px",
-                fontSize: "13px",
-                fontWeight: "600",
-                cursor: "pointer",
-              }}
-            >
-              <Download size={14} /> Xuất Excel / CSV
-            </button>
-          </div>
-        </div>
-
-        {/* Mode 1: Table by Product */}
-        {viewGroupBy === "PRODUCT" && (
+          {/* Table */}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
-                  <th style={{ padding: "10px 12px" }}>Hạng</th>
-                  <th style={{ padding: "10px 12px" }}>Tên sản phẩm</th>
+                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                  <th style={{ padding: "10px 12px" }}>Mã món</th>
+                  <th style={{ padding: "10px 12px" }}>Tên món ăn / Đồ uống</th>
                   <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
-                  <th style={{ padding: "10px 12px" }}>Nhân viên bán</th>
+                  <th style={{ padding: "10px 12px", textAlign: "center" }}>ĐVT</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Đơn giá</th>
-                  <th
-                    style={{
-                      padding: "10px 12px",
-                      textAlign: "right",
-                      background: productViewMode === "QUANTITY" ? "#FBECEE" : "transparent",
-                      color: productViewMode === "QUANTITY" ? "#7E2930" : "#666",
-                    }}
-                  >
-                    Số lượng bán
-                  </th>
-                  <th
-                    style={{
-                      padding: "10px 12px",
-                      textAlign: "right",
-                      background: productViewMode === "AMOUNT" ? "#FBECEE" : "transparent",
-                      color: productViewMode === "AMOUNT" ? "#7E2930" : "#666",
-                    }}
-                  >
-                    Doanh thu món
-                  </th>
-                  <th style={{ padding: "10px 12px", textAlign: "right" }}>
-                    Tỷ trọng ({productViewMode === "AMOUNT" ? "Doanh thu" : "Số lượng"})
-                  </th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>SL bán</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu gộp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giảm giá món</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu thực tế</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giá vốn / ly</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Lợi nhuận gộp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Tỷ suất LN</th>
                 </tr>
               </thead>
               <tbody>
-                {productList.length === 0 ? (
+                {productReports.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#999" }}>
-                      Không có sản phẩm nào bán ra theo điều kiện lọc đã chọn
+                    <td colSpan={12} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                      Không có sản phẩm nào bán ra trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
-                  productList.map((p, idx) => {
-                    const isAmt = productViewMode === "AMOUNT";
-                    const pct = isAmt
-                      ? (totalRevenue > 0 ? ((p.revenue / totalRevenue) * 100).toFixed(1) : "0.0")
-                      : (totalSoldQty > 0 ? ((p.quantity / totalSoldQty) * 100).toFixed(1) : "0.0");
-
-                    const staffEntries = Object.entries(p.staffSales || {});
-
-                    return (
-                      <tr key={p.name} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                        <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "#7E2930" : "#555" }}>
-                          #{idx + 1}
-                        </td>
-                        <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{p.name}</td>
-                        <td style={{ padding: "10px 12px" }}>
-                          <span style={{ padding: "2px 8px", background: "#F8F4EE", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
-                            {p.category}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: "12px", color: "#555" }}>
-                          {selectedStaff !== "ALL" ? (
-                            <span style={{ color: "#7E2930", fontWeight: "700" }}>👤 {selectedStaff}</span>
-                          ) : staffEntries.length === 0 ? (
-                            <span style={{ color: "#888" }}>Nhân viên chung</span>
-                          ) : (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                              {staffEntries.map(([sName, sData]) => (
-                                <span
-                                  key={sName}
-                                  style={{
-                                    background: "#F2EFE9",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "11px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  👤 {sName}: <b>{sData.quantity}</b>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>{fmtVND(p.unitPrice)}</td>
-                        <td
-                          style={{
-                            padding: "10px 12px",
-                            textAlign: "right",
-                            fontWeight: isAmt ? "600" : "800",
-                            color: isAmt ? "#1C1A2D" : "#7E2930",
-                            background: !isAmt ? "#FFF5F6" : "transparent",
-                          }}
-                        >
-                          {p.quantity}
-                        </td>
-                        <td
-                          style={{
-                            padding: "10px 12px",
-                            textAlign: "right",
-                            fontWeight: isAmt ? "800" : "600",
-                            color: isAmt ? "#7E2930" : "#1C1A2D",
-                            background: isAmt ? "#FFF5F6" : "transparent",
-                          }}
-                        >
-                          {fmtVND(p.revenue)}
-                        </td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px" }}>
-                            <div
-                              style={{
-                                width: "48px",
-                                height: "6px",
-                                background: "#F0ECE1",
-                                borderRadius: "3px",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${pct}%`,
-                                  height: "100%",
-                                  background: "#7E2930",
-                                }}
-                              />
-                            </div>
-                            <span>{pct}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  productReports.map((p, idx) => (
+                    <tr key={String(p.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#8B8FA8" }}>
+                        {p.productCode || "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{p.productName}</td>
+                      <td style={{ padding: "10px 12px", color: "#666" }}>{p.category}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "center" }}>{p.unit}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.basePrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#1C1A2D" }}>
+                        {p.quantity}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.grossRevenue)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: p.itemDiscount > 0 ? "#C93B2B" : "#8B8FA8" }}>
+                        {formatVND(p.itemDiscount)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "#7E2930", background: "#FFF5F6" }}>
+                        {formatVND(p.netRevenue)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>
+                        {formatVND(p.quantity > 0 ? Math.round(p.costPrice / p.quantity) : 0)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: p.grossProfit >= 0 ? "#146A65" : "#C93B2B" }}>
+                        {formatVND(p.grossProfit)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>
+                        {p.grossProfitMarginPercent}%
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Mode 2: Breakdown Grouped by Staff */}
-        {viewGroupBy === "STAFF" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {staffGroupedList.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "32px", color: "#999" }}>
-                Không có dữ liệu nhân viên bán hàng trong khoảng thời gian đã chọn
-              </div>
-            ) : (
-              staffGroupedList.map((sg) => (
-                <div
-                  key={sg.staffName}
-                  style={{
-                    border: "1px solid #E6DEC8",
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                    background: "#FAFAF8",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#F8F4EE",
-                      padding: "12px 16px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderBottom: "1px solid #E6DEC8",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "16px" }}>👤</span>
-                      <strong style={{ fontSize: "15px", color: "#1C1A2D" }}>{sg.staffName}</strong>
-                      <span style={{ fontSize: "12px", color: "#777" }}>({sg.products.length} món đã bán)</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                      <span style={{ fontSize: "13px", color: "#555" }}>
-                        Tổng sản lượng: <b style={{ color: "#146A65" }}>{sg.totalQuantity} phần</b>
-                      </span>
-                      <span style={{ fontSize: "13px", color: "#555" }}>
-                        Tổng doanh số: <b style={{ color: "#7E2930" }}>{fmtVND(sg.totalRevenue)}</b>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ padding: "8px 16px", overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                      <thead>
-                        <tr style={{ color: "#888", borderBottom: "1px solid #EDE8DC" }}>
-                          <th style={{ padding: "8px", textAlign: "left" }}>Tên sản phẩm</th>
-                          <th style={{ padding: "8px", textAlign: "left" }}>Nhóm hàng</th>
-                          <th style={{ padding: "8px", textAlign: "right" }}>Đơn giá</th>
-                          <th style={{ padding: "8px", textAlign: "right" }}>Số lượng</th>
-                          <th style={{ padding: "8px", textAlign: "right" }}>Doanh thu</th>
-                          <th style={{ padding: "8px", textAlign: "right" }}>Tỷ trọng cá nhân</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sg.products.map((p) => {
-                          const isAmt = productViewMode === "AMOUNT";
-                          const pct = isAmt
-                            ? (sg.totalRevenue > 0 ? ((p.revenue / sg.totalRevenue) * 100).toFixed(1) : "0.0")
-                            : (sg.totalQuantity > 0 ? ((p.quantity / sg.totalQuantity) * 100).toFixed(1) : "0.0");
-
-                          return (
-                            <tr key={p.name} style={{ borderBottom: "1px solid #F5F1E9" }}>
-                              <td style={{ padding: "8px", fontWeight: "600", color: "#1C1A2D" }}>{p.name}</td>
-                              <td style={{ padding: "8px", color: "#666" }}>{p.category}</td>
-                              <td style={{ padding: "8px", textAlign: "right" }}>{fmtVND(p.unitPrice)}</td>
-                              <td style={{ padding: "8px", textAlign: "right", fontWeight: "700", color: "#146A65" }}>
-                                {p.quantity}
-                              </td>
-                              <td style={{ padding: "8px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
-                                {fmtVND(p.revenue)}
-                              </td>
-                              <td style={{ padding: "8px", textAlign: "right" }}>{pct}%</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))
-            )}
+      {/* ==================== TAB 2: NHÓM HÀNG / DANH MỤC ==================== */}
+      {activeTab === "category" && (
+        <div
+          style={{
+            background: "#FFFFFF",
+            borderRadius: "16px",
+            border: "1px solid #E6DEC8",
+            padding: "20px",
+          }}
+        >
+          <div style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", marginBottom: "16px" }}>
+            Báo cáo Doanh thu theo Nhóm hàng / Danh mục ({categoryReports.length} nhóm)
           </div>
-        )}
-      </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                  <th style={{ padding: "10px 12px" }}>STT</th>
+                  <th style={{ padding: "10px 12px" }}>Nhóm hàng / Danh mục</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượng bán</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu gộp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giảm giá món</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu thực tế</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giá vốn (COGS)</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Lợi nhuận gộp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Tỷ suất LN (%)</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Tỷ trọng (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                      Không có dữ liệu nhóm hàng trong khoảng thời gian đã chọn
+                    </td>
+                  </tr>
+                ) : (
+                  categoryReports.map((cat, idx) => (
+                    <tr key={cat.category} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <td style={{ padding: "10px 12px", color: "#8B8FA8" }}>{idx + 1}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{cat.category}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{cat.quantity}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(cat.grossRevenue)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: cat.itemDiscount > 0 ? "#C93B2B" : "#8B8FA8" }}>
+                        {formatVND(cat.itemDiscount)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "#7E2930", background: "#FFF5F6" }}>
+                        {formatVND(cat.netRevenue)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(cat.costPrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: cat.grossProfit >= 0 ? "#146A65" : "#C93B2B" }}>
+                        {formatVND(cat.grossProfit)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{cat.grossProfitMarginPercent}%</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600", color: "#5D5B63" }}>
+                        {cat.proportion}%
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 3: LỢI NHUẬN GỘP & GIÁ VỐN ==================== */}
+      {activeTab === "profit" && (
+        <div
+          style={{
+            background: "#FFFFFF",
+            borderRadius: "16px",
+            border: "1px solid #E6DEC8",
+            padding: "20px",
+          }}
+        >
+          <div style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", marginBottom: "16px" }}>
+            Báo cáo Phân tích Lợi nhuận gộp & Giá vốn hàng bán (COGS)
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                  <th style={{ padding: "10px 12px" }}>Tên món ăn / Đồ uống</th>
+                  <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượng bán</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giá bán bình quân</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Giá vốn bình quân</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu thực tế</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Tổng giá vốn (COGS)</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Lợi nhuận gộp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Tỷ suất LN (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grossProfitReport.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                      Không có dữ liệu lợi nhuận trong khoảng thời gian đã chọn
+                    </td>
+                  </tr>
+                ) : (
+                  grossProfitReport.items.map((it, idx) => (
+                    <tr key={String(it.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{it.productName}</td>
+                      <td style={{ padding: "10px 12px", color: "#666" }}>{it.category}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{it.quantity}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(it.avgSellingPrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(it.avgCostPrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                        {formatVND(it.netRevenue)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(it.cogs)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: it.grossProfit >= 0 ? "#146A65" : "#C93B2B", background: "#FFF5F6" }}>
+                        {formatVND(it.grossProfit)}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#D97706" }}>
+                        {it.grossProfitMarginPercent}%
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {grossProfitReport.items.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: "#F8F4EE", fontWeight: "800", borderTop: "2px solid #7E2930" }}>
+                    <td style={{ padding: "12px", color: "#7E2930" }}>TỔNG CỘNG</td>
+                    <td style={{ padding: "12px" }}>—</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>{formatNumber(grossProfitReport.summary.totalQuantity)}</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>—</td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>—</td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#7E2930" }}>
+                      {formatVND(grossProfitReport.summary.netRevenue)}
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#146A65" }}>
+                      {formatVND(grossProfitReport.summary.totalCOGS)}
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#146A65" }}>
+                      {formatVND(grossProfitReport.summary.grossProfit)}
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "right", color: "#D97706" }}>
+                      {grossProfitReport.summary.grossProfitMarginPercent}%
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
