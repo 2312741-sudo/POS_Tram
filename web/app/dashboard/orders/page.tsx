@@ -27,17 +27,14 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { exportHistory, exportSingleBillExcel } from "@/lib/export";
+import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-
-function formatVND(amount: number) {
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
-}
+import { calculateCancellationReport, formatVND } from "@/lib/reports";
 
 const PAGE_SIZE = 20;
 
 export default function OrdersPage() {
-  const { historyData, historyLoaded, tables, cancelOrder, deleteOrder } = useDashboardData();
+  const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder } = useDashboardData();
   const loading = !historyLoaded && historyData.length === 0;
   const [search, setSearch] = useState("");
   const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("ALL");
@@ -155,6 +152,28 @@ export default function OrdersPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const cancellationReport = useMemo(() => {
+    return calculateCancellationReport(filtered);
+  }, [filtered]);
+
+  const targetStoreInfo = useMemo(() => {
+    if (currentStoreCode === "ALL") return { storeName: "Tất cả chi nhánh", storeCode: "ALL" };
+    return (
+      stores.find((s) => s.storeCode === currentStoreCode) || {
+        storeName: "POS Trạm",
+        storeCode: currentStoreCode,
+      }
+    );
+  }, [stores, currentStoreCode]);
+
+  const handleExportCancellationExcel = () => {
+    exportCancellationReport(cancellationReport, targetStoreInfo).toExcel();
+  };
+
+  const handleExportCancellationPDF = () => {
+    exportCancellationReport(cancellationReport, targetStoreInfo).toPDF();
+  };
+
   const handleExportAll = () => {
     exportHistory(filtered);
   };
@@ -265,11 +284,57 @@ export default function OrdersPage() {
             Quản lý {filtered.length} hóa đơn, chi tiết món theo người nhận order & lịch sử thao tác
           </p>
         </div>
-        <button className="btn-primary" onClick={handleExportAll}>
-          <Download size={16} />
-          Xuất Toàn bộ Excel (3 Sheets)
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          {filterStatus === "CANCELLED" ? (
+            <>
+              <button
+                className="btn-primary"
+                style={{ background: "#107C41" }}
+                onClick={handleExportCancellationExcel}
+              >
+                <Download size={16} /> Xuất Báo cáo Hủy món (Excel)
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: "#7E2930" }}
+                onClick={handleExportCancellationPDF}
+              >
+                <Printer size={16} /> In / PDF Kiểm toán Thất thoát
+              </button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={handleExportAll}>
+              <Download size={16} />
+              Xuất Toàn bộ Excel (3 Sheets)
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Cancellation Loss Audit Banner */}
+      {filterStatus === "CANCELLED" && (
+        <div
+          style={{
+            padding: "16px 20px",
+            background: "#FFF1F2",
+            border: "1px solid #FECDD3",
+            borderRadius: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <XCircle size={22} color="#DC2626" />
+          <div>
+            <div style={{ fontWeight: "700", color: "#991B1B", fontSize: "14px" }}>
+              Báo cáo Kiểm toán Thất thoát: {cancellationReport.cancelledBillsCount} hóa đơn bị hủy
+            </div>
+            <div style={{ fontSize: "12px", color: "#B91C1C", marginTop: "2px" }}>
+              Tổng giá trị thất thoát tài chính ghi nhận: <strong>{formatVND(cancellationReport.totalLossValue)}</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
