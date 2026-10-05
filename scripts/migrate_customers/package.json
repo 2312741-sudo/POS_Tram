@@ -1,0 +1,13 @@
+{
+  "name": "migrate-customers",
+  "version": "1.0.0",
+  "description": "Script di chuyển dữ liệu khách hàng tích điểm từ node gốc /kmt_customers sang stores/{storeCode}/customers",
+  "main": "migrate.js",
+  "scripts": {
+    "dry-run": "node migrate.js",
+    "apply": "node migrate.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

@@ -1,47 +1,39 @@
-# Ghi Chú Phân Quyền & Rà Soát Nút Dữ Liệu (docs/RULES_NOTES.md)
+# Ghi Chú Security Rules POS Trạm (Chốt Chính Thức)
 
-## 1. Kết quả rà soát các nút gốc cũ trong codebase
-| Nút gốc | Tình trạng trong Code | Quyết định trong Rules | Ghi chú |
+> **LƯU Ý QUAN TRỌNG:**
+> Bộ Security Rules này (`database.rules.json`) được thiết kế và áp dụng cho project Firebase mà **POS Trạm là ứng dụng duy nhất sử dụng Realtime Database** (`tramapp-36f53`).
+> Cấp gốc (`rules/`) được cấu hình chặn mặc định (`.read: false, .write: false`), triệt tiêu hoàn toàn mọi nút gốc cũ.
+
+---
+
+## 1. Phân Quyền Theo Nhánh Dữ Liệu
+
+| Nhánh dữ liệu | Quyền Đọc (`.read`) | Quyền Ghi (`.write`) | Ghi chú bảo mật |
 | :--- | :--- | :--- | :--- |
-| `users` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Khóa với người dùng vãng lai |
-| `tables` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
-| `products` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
-| `categories` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
-| `zones` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
-| `history` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
-| `audit_logs` | Đã cắt triệt để dual-sync (Agent G) | Thêm mới nếu thuộc quán, cấm sửa/xóa | Không thể xóa vết audit |
-| `online_orders` | Đã cắt triệt để dual-sync (Agent G) | **`.read: false, .write: false`** | Khóa hoàn toàn |
-| `kitchen_orders` | Đã cắt triệt để dual-sync (Agent G) | **`.read: false, .write: false`** | Khóa hoàn toàn |
-| `kmt_customers` | Thuộc app khác (Chăm sóc khách hàng / KMT) | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
-| `cham_cong` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
-| `timekeeping` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
-| `employees` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
-| `shifts` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
+| **Gốc (`/`)** | ❌ Chặn (`false`) | ❌ Chặn (`false`) | Chặn mặc định mọi truy cập không xác định |
+| **`userIndex/{uid}`** | Chỉ chính chủ (`auth.uid === $uid`) | ❌ Chặn (`false`) | Chỉ Cloud Functions & Admin SDK được ghi |
+| **`stores/{storeCode}`** | Thành viên quán đang `isActive !== false` | (Theo chi tiết từng nút con bên dưới) | Kiểm tra `userIndex` hoặc hồ sơ người dùng trong store |
+| `├── storeInfo` | Kế thừa từ store | Chủ quán (`isRootOwner` / `owner`) | Thông tin cấu hình chi nhánh |
+| `├── users/{uid}` | Kế thừa từ store | - Chính chủ (không đổi role/status)<br>- Quản lý/Chủ quán (quản lý nhân viên) | - Cấm trường `password`<br>- Cấm hạ quyền `isRootOwner` |
+| `├── products` | Kế thừa từ store | Chủ quán & Quản lý | Menu món ăn, đồ uống |
+| `├── categories` | Kế thừa từ store | Chủ quán & Quản lý | Nhóm thực đơn |
+| `├── zones` | Kế thừa từ store | Chủ quán & Quản lý | Khu vực bàn |
+| `├── promotions` | Kế thừa từ store | Chủ quán & Quản lý | Chương trình khuyến mãi, voucher |
+| `├── inventory` | Kế thừa từ store | Chủ quán & Quản lý | Quản lý kho nguyên vật liệu |
+| `├── suppliers` | Kế thừa từ store | Chủ quán & Quản lý | Nhà cung cấp |
+| `├── receipts` | Kế thừa từ store | Chủ quán & Quản lý | Phiếu nhập kho |
+| `├── tables` | Kế thừa từ store | Toàn bộ nhân viên active | Trạng thái bàn |
+| `├── bills` | Kế thừa từ store | - Thêm/sửa: Nhân viên active<br>- Xóa: Quản lý & Chủ quán | Hóa đơn bán lẻ |
+| `├── history` | Kế thừa từ store | - Thêm/sửa: Nhân viên active<br>- Xóa: Quản lý & Chủ quán | Lịch sử đơn hàng |
+| `├── kitchen_orders` | Kế thừa từ store | Toàn bộ nhân viên active (kể cả bếp) | Báo món và trạng thái chế biến |
+| `├── online_orders` | Kế thừa từ store | Chủ quán, Quản lý & Thu ngân | Đơn hàng trực tuyến |
+| `├── cash_shifts` | Kế thừa từ store | Chủ quán, Quản lý & Thu ngân | Quản lý két tiền đầu/cuối ca |
+| `├── customers` | Chủ quán, Quản lý & Thu ngân | Chủ quán, Quản lý & Thu ngân | Phục vụ và Bếp bị từ chối truy cập |
+| `├── audit_logs` | Kế thừa từ store | Thêm mới (`!data.exists() && newData.exists()`) | Append-only; cấm sửa/xóa; validate timestamp, action, username |
+| `└── login_attempts` | ❌ Chặn (`false`) | ❌ Chặn (`false`) | Chống brute-force; chỉ Functions/Admin SDK xử lý |
 
 ---
 
-## 2. Bảng phân quyền theo vai trò trong `stores/{storeCode}`
-- **`userIndex/{uid}`:** Chỉ Admin SDK (Cloud Functions và script di chuyển dữ liệu) mới được ghi. Client chỉ được đọc `userIndex/{auth.uid}` của chính mình.
-- **`storeInfo`:** Chỉ Chủ quán (`isRootOwner: true` hoặc `roleId: 'owner' | 'ROLE_OWNER'`).
-- **`users`:**
-  - Chủ quán và Quản lý được tạo và sửa nhân viên.
-  - Người dùng tự sửa được hồ sơ của mình nhưng bị cấm tự sửa các trường: `roleId`, `isRootOwner`, `isActive`, `customPermissions`.
-  - Quản lý không được khóa, xóa hoặc hạ quyền của Chủ quán gốc (`isRootOwner`).
-  - Cấm tuyệt đối trường `password`.
-- **`products`, `categories`, `zones`, `promotions`, `inventory`, `suppliers`, `receipts`:** Chỉ Chủ quán và Quản lý được ghi. Thu ngân, phục vụ, bếp chỉ được đọc.
-- **`tables`:** Nhân viên thuộc quán được cập nhật trạng thái bàn (`inUse`, `guestCount`, `isReserved`...).
-- **`bills` / `history`:** Nhân viên thuộc quán được tạo và sửa. Chỉ Chủ quán và Quản lý được xóa hóa đơn.
-- **`kitchen_orders`:** Mọi nhân viên thuộc quán (kể cả bếp) được tạo và cập nhật trạng thái chế biến.
-- **`online_orders`, `cash_shifts`:** Chủ quán, quản lý và thu ngân được ghi.
-- **`audit_logs`:**
-  - Chỉ cho ghi thêm (`!data.exists() && newData.exists()`), tuyệt đối không cho sửa hoặc xóa.
-  - Kiểm tra tính hợp lệ dữ liệu (validate): Bản ghi phải chứa các trường bắt buộc `timestamp` (số, `<= now`), `action` (chuỗi không rỗng), và `username` (chuỗi không rỗng).
-- **`login_attempts`:**
-  - **Khóa triệt để** `.read: false, .write: false` đối với toàn bộ client để ngăn chặn việc người dùng đọc được lịch sử thử sai mật khẩu của nhau hoặc tự ý chỉnh sửa bộ đếm khóa brute-force. Quản lý trạng thái khóa được thực hiện qua backend/Cloud Functions.
-
----
-
-## 3. Cần chủ dự án quyết định
-1. **Bảo tồn Rules của 2 app dùng chung Firebase:**
-   - Các nút của app bên ngoài (`kmt_customers`, `cham_cong`, `timekeeping`, `employees`, `shifts`) vẫn mở cho mọi tài khoản Firebase Auth đã đăng nhập nhằm bảo đảm 100% không làm gián đoạn ứng dụng Chấm Công Trạm.
-   - Để đảm bảo an toàn tuyệt đối trước khi deploy rules lên production: Cần đối chiếu với file `docs/rules_hien_tai_tramapp.json` (lấy từ Firebase Console của `tramapp-36f53`) để đảm bảo không bỏ sót bất kỳ node dữ liệu tùy biến nào của app Chấm công và Tích điểm.
+## 2. Danh Sách Nút Gốc Đã Xóa Bỏ
+Toàn bộ các khối rules của các nút gốc sau đã được gỡ bỏ khỏi file rules và bị chặn mặc định bởi rule gốc:
+- `users`, `tables`, `products`, `categories`, `zones`, `history`, `audit_logs`, `online_orders`, `kitchen_orders`, `kmt_customers`, `cham_cong`, `timekeeping`, `employees`, `shifts`.

@@ -1,5 +1,7 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "userIndex": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
@@ -61,6 +63,10 @@
         "cash_shifts": {
           ".write": "auth != null && (root.child('stores').child($storeCode).child('users').child(auth.uid).child('isRootOwner').val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'owner' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_OWNER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_1' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_2' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_MANAGER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'cashier' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_CASHIER')"
         },
+        "customers": {
+          ".read": "auth != null && (root.child('stores').child($storeCode).child('users').child(auth.uid).child('isRootOwner').val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'owner' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_OWNER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_1' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_2' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_MANAGER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'cashier' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_CASHIER')",
+          ".write": "auth != null && (root.child('stores').child($storeCode).child('users').child(auth.uid).child('isRootOwner').val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'owner' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_OWNER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_1' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'manager_2' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_MANAGER' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'cashier' || root.child('stores').child($storeCode).child('users').child(auth.uid).child('roleId').val() === 'ROLE_CASHIER')"
+        },
         "audit_logs": {
           "$logId": {
             ".write": "auth != null && (root.child('userIndex').child(auth.uid).child($storeCode).val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).exists()) && root.child('stores').child($storeCode).child('users').child(auth.uid).child('isActive').val() !== false && !data.exists() && newData.exists()",
@@ -74,62 +80,6 @@
           }
         }
       }
-    },
-    "users": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "tables": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "products": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "categories": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "zones": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "history": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
-    },
-    "audit_logs": {
-      ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('userIndex').child(auth.uid).exists() && !data.exists() && newData.exists()"
-    },
-    "online_orders": {
-      ".read": false,
-      ".write": false
-    },
-    "kitchen_orders": {
-      ".read": false,
-      ".write": false
-    },
-    "kmt_customers": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "cham_cong": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "timekeeping": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "employees": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "shifts": {
-      ".read": "auth != null",
-      ".write": "auth != null"
     }
   }
 }

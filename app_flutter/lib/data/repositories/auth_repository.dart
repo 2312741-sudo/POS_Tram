@@ -44,11 +44,6 @@ class AuthRepository {
           }
         }
       }
-      // Kiểm tra node gốc /users fallback tương thích
-      final rootSnap = await _root.child('users').child(username).get().timeout(const Duration(seconds: 3));
-      if (rootSnap.exists && rootSnap.value != null && rootSnap.value is Map) {
-        return UserModel.fromMap(rootSnap.value as Map, username);
-      }
     } catch (_) {}
     return null;
   }
@@ -110,15 +105,6 @@ class AuthRepository {
       final snap = await usersRef.get().timeout(const Duration(seconds: 3));
       if (snap.exists && snap.value != null && snap.value is Map) {
         final map = snap.value as Map;
-        return map.entries
-            .where((e) => e.value is Map)
-            .map((e) => UserModel.fromMap(e.value as Map, e.key.toString()))
-            .toList();
-      }
-      // Fallback node gốc /users tương thích
-      final rootSnap = await _root.child('users').get().timeout(const Duration(seconds: 2));
-      if (rootSnap.exists && rootSnap.value != null && rootSnap.value is Map) {
-        final map = rootSnap.value as Map;
         return map.entries
             .where((e) => e.value is Map)
             .map((e) => UserModel.fromMap(e.value as Map, e.key.toString()))

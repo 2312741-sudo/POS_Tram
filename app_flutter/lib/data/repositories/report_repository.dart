@@ -42,7 +42,11 @@ class ReportRepository {
   DatabaseReference get storeInfoRef => _getStoreInfoRef();
   DatabaseReference get auditLogsRef => _getAuditLogsRef();
   DatabaseReference get cashShiftsRef => _getCashShiftsRef();
-  DatabaseReference get customersRef => _root.child('kmt_customers');
+  DatabaseReference get customersRef => storeRef.child('customers');
+
+  /// Cờ cấu hình truy vấn Firestore CRM kế thừa.
+  /// Mặc định: false (POS hoàn toàn dùng Realtime Database tại stores/{storeCode}/customers).
+  static bool useFirestoreCustomers = false;
 
   void clearShiftCache() {
     activeShiftCache = null;
@@ -219,15 +223,7 @@ class ReportRepository {
       final map = log.toMap();
       map['storeCode'] ??= _currentStoreCode;
       await auditLogsRef.child(key).set(map);
-      _root.child('audit_logs').child(key).set(map).catchError((_) {});
-    } catch (_) {
-      try {
-        final key = DateTime.now().millisecondsSinceEpoch.toString();
-        final map = log.toMap();
-        map['storeCode'] ??= _currentStoreCode;
-        _root.child('audit_logs').child(key).set(map).catchError((_) {});
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   // ==================== KIOTVIET CASH SHIFT (QUẢN LÝ KÉT TIỀN CA) ====================
@@ -412,21 +408,23 @@ class ReportRepository {
     final clean = query.trim();
     if (clean.isEmpty) return null;
     try {
-      // 1. Try Firestore
-      try {
-        final firestoreSnap = await FirebaseFirestore.instance
-            .collection('kmt_customers')
-            .where('phone', isEqualTo: clean)
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 2));
-        if (firestoreSnap.docs.isNotEmpty) {
-          final doc = firestoreSnap.docs.first;
-          return KmtCustomerModel.fromMap(doc.data(), doc.id);
-        }
-      } catch (_) {}
+      // 1. Try Firestore (chỉ khi bật useFirestoreCustomers)
+      if (useFirestoreCustomers) {
+        try {
+          final firestoreSnap = await FirebaseFirestore.instance
+              .collection('kmt_customers')
+              .where('phone', isEqualTo: clean)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 2));
+          if (firestoreSnap.docs.isNotEmpty) {
+            final doc = firestoreSnap.docs.first;
+            return KmtCustomerModel.fromMap(doc.data(), doc.id);
+          }
+        } catch (_) {}
+      }
 
-      // 2. Fallback RTDB
+      // 2. Tra cứu từ RTDB stores/{storeCode}/customers
       final snap = await customersRef.get().timeout(const Duration(seconds: 2));
       if (snap.exists && snap.value != null) {
         final map = Map<dynamic, dynamic>.from(snap.value as Map);
@@ -445,9 +443,11 @@ class ReportRepository {
 
   Future<void> saveCustomer(KmtCustomerModel customer) async {
     await customersRef.child(customer.id).set(customer.toMap());
-    try {
-      await FirebaseFirestore.instance.collection('kmt_customers').doc(customer.id).set(customer.toMap());
-    } catch (_) {}
+    if (useFirestoreCustomers) {
+      try {
+        await FirebaseFirestore.instance.collection('kmt_customers').doc(customer.id).set(customer.toMap());
+      } catch (_) {}
+    }
   }
 
   Future<void> awardPoints({required String customerId, required int billAmount, double rate = 1.0}) async {

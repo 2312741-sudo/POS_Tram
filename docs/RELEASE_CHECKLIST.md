@@ -1,198 +1,105 @@
-# HƯỚNG DẪN QUY TRÌNH PHÁT HÀNH AN TOÀN (RELEASE CHECKLIST)
-## HỆ THỐNG POS TRẠM F&B (PHIÊN BẢN 2.2.0 - DỰ ÁN GỐC TRAMAPP-36F53)
+# HƯỚNG DẪN QUY TRÌNH PHÁT HÀNH THỰC TẾ (RELEASE CHECKLIST)
+## HỆ THỐNG POS TRẠM F&B (CHỐT DỰ ÁN GỐC TRAMAPP-36F53 & CHẶN NÚT GỐC)
 
-> **Mục tiêu:** Đảm bảo quá trình thống nhất hệ thống POS về một project Firebase gốc duy nhất (`tramapp-36f53`), cắt triệt để dual-sync vào các nút gốc cũ, triển khai Cloud Functions với codebase "pos" độc lập và **tuyệt đối không xóa hay ảnh hưởng đến 13 Cloud Functions cùng hạ tầng của app Chấm công Trạm**.
-
----
-
-## 📌 BẢNG TỔNG HỢP CÁC GIAI ĐOẠN TRIỂN KHAI
-
-| Giai đoạn | Nội dung công việc | Rủi ro | Người phụ trách |
-| :---: | :--- | :--- :--- | :---: |
-| **Giai đoạn 0** | Chuẩn bị, bật gói Blaze, tải bản sao lưu (Backup) | Rất thấp | Kỹ thuật viên / Chủ quán |
-| **Giai đoạn 1** | Thử nghiệm trên Firebase Project thử nghiệm (Staging) | Không có | Kỹ thuật viên |
-| **Giai đoạn 2** | Chạy Migrate tài khoản trên Project thật (Dry-run $\rightarrow$ Apply) | Trung bình | Kỹ thuật viên |
-| **Giai đoạn 3** | Triển khai Firebase Cloud Functions (codebase `pos` độc lập) | Thấp | Kỹ thuật viên |
-| **Giai đoạn 4** | Triển khai Firebase Security Rules | Trung bình | Kỹ thuật viên |
-| **Giai đoạn 5** | Build và cập nhật ứng dụng Web Admin & Flutter POS | Thấp | Kỹ thuật viên |
-| **Giai đoạn 6** | Nghiệm thu sau phát hành & Thử nghiệm app Chấm công | Không có | Quản lý & Nhân viên |
-| **Quay lui (Rollback)**| Phương án phục hồi khẩn cấp nếu gặp sự cố | Khẩn cấp | Toàn bộ đội ngũ |
+> **Mục tiêu:** Triển khai các bước phát hành thực tế theo đúng thứ tự kỹ thuật an toàn để đưa hệ thống POS lên hoạt động độc lập, bảo vệ dữ liệu và không gây gián đoạn hoạt động của quán.
 
 ---
 
-## GIAI ĐOẠN 0: CHUẨN BỊ TRƯỚC PHÁT HÀNH
+## 📋 THỨ TỰ CÁC BƯỚC TRIỂN KHAI THỰC TẾ (DO CHỦ DỰ ÁN THỰC HIỆN)
 
-- [ ] **0.1. Sao lưu dữ liệu Realtime Database từ Firebase Console (BẮT BUỘC):**
-  1. Mở [Firebase Console](https://console.firebase.google.com/) $\rightarrow$ Chọn dự án `tramapp-36f53`.
-  2. Vào mục **Build** $\rightarrow$ **Realtime Database** $\rightarrow$ Chọn thẻ **Data**.
-  3. Bấm vào biểu tượng ba chấm $\vdots$ ở góc phải $\rightarrow$ Chọn **Export JSON**.
-  4. Lưu tệp JSON tải về vào máy tính với tên dạng: `backup_rtdb_truoc_khi_update_YYYYMMDD.json`.
-- [ ] **0.2. Lưu trữ rules hiện tại:**
-  - Copy rules đang chạy trên Firebase Console tab Rules vào `docs/rules_hien_tai_tramapp.json`.
-- [ ] **0.3. Kiểm tra gói dịch vụ Firebase (Blaze Plan):**
-  - Cloud Functions v2 yêu cầu project phải ở gói **Blaze (Pay-as-you-go)**.
-  - Gói Blaze áp dụng cho cả project `tramapp-36f53`. Hạn mức miễn phí hàng tháng vẫn áp dụng bình thường.
-- [ ] **0.4. Tải khóa Service Account Key (khi cần chạy script):**
-  1. Vào ⚙️ **Project settings** $\rightarrow$ Thẻ **Service accounts**.
-  2. Nhấp **Generate new private key** (Tạo khóa riêng tư mới).
-  3. Đặt file tải về vào thư mục gốc với tên: `service-account.json`. *(File này đã nằm trong `.gitignore`, không lo bị đẩy lên Git).*
+### Bước 1: Xuất bản sao lưu toàn bộ Realtime Database từ Console
+- [ ] Vào [Firebase Console](https://console.firebase.google.com/) $\rightarrow$ Chọn dự án `tramapp-36f53`.
+- [ ] Vào mục **Realtime Database** $\rightarrow$ Tab **Data**.
+- [ ] Nhấp vào biểu tượng ba chấm $\vdots$ ở góc trên bên phải $\rightarrow$ Chọn **Export JSON**.
+- [ ] Lưu trữ file JSON an toàn vào máy tính cá nhân để làm bản hoàn nguyên khi cần.
 
 ---
 
-## GIAI ĐOẠN 1: THỬ NGHIỆM TRÊN PROJECT THỬ (STAGING)
-
-- [ ] **1.1.** Tạo 1 project Firebase phụ (ví dụ: `tramapp-staging`).
-- [ ] **1.2.** Import file dữ liệu thử nghiệm vào Realtime Database của project phụ.
-- [ ] **1.3.** Triển khai rules và functions lên project phụ:
+### Bước 2: Chạy kiểm tra dữ liệu với `scripts/verify_dual_sync` (Chỉ đọc)
+- [ ] Chạy script kiểm tra (script này chỉ đọc, không ghi bất kỳ dữ liệu nào):
   ```bash
-  firebase deploy --only functions:pos,database --project tramapp-staging
+  cd scripts/verify_dual_sync
+  node verify.js
   ```
-- [ ] **1.4.** Chạy thử script migrate tài khoản và script verify dual-sync trên project phụ.
+- [ ] Đọc kỹ kết quả đối soát. Nếu nhánh `stores/TRAM01` còn thiếu dữ liệu danh mục, bàn, hoặc sản phẩm so với các nút gốc cũ, bổ sung hoặc sao chép trước khi tiếp tục.
 
 ---
 
-## GIAI ĐOẠN 2: CHẠY MIGRATE TÀI KHOẢN TRÊN PROJECT THẬT
+### Bước 3: Di chuyển dữ liệu khách hàng CRM (`scripts/migrate_customers`)
+- [ ] **Chạy thử nghiệm (Dry-run):**
+  ```bash
+  cd scripts/migrate_customers
+  node migrate.js --store=TRAM01
+  ```
+  *Đọc kỹ tổng kết: số khách hàng tìm thấy, số bản ghi dự kiến copy, đường dẫn file backup.*
+- [ ] **Áp dụng ghi thực tế (--apply):**
+  ```bash
+  node migrate.js --apply --store=TRAM01
+  ```
+  *Toàn bộ dữ liệu `/kmt_customers` sẽ được sao chép sang `stores/TRAM01/customers`. Node cũ được giữ nguyên vẹn.*
 
-> **Lưu ý:** Nên thực hiện vào khung giờ quán vắng khách hoặc sau giờ đóng cửa (sau 22:30).
+---
 
-- [ ] **2.1. Chạy thử kiểm tra (Dry-Run - Tuyệt đối không ghi dữ liệu):**
+### Bước 4: Di chuyển tài khoản nhân viên cũ (`scripts/migrate_legacy_users`)
+- [ ] **Chạy thử nghiệm (Dry-run):**
   ```bash
   cd scripts/migrate_legacy_users
-  npm run dry-run
+  node migrate.js
   ```
-- [ ] **2.2. Áp dụng chuyển đổi thật (--apply):**
+- [ ] **Áp dụng ghi thực tế (--apply):**
   ```bash
-  npm run apply
+  node migrate.js --apply
   ```
-  - Script sẽ tự động:
-    1. Xuất file backup JSON vào thư mục `migration_output/backup_pre_migration_*.json`.
-    2. Tạo/cập nhật user trên Firebase Auth.
-    3. Ghi `userIndex/{uid}/{storeCode} = true`.
-    4. Xóa vĩnh viễn trường `password` thô khỏi RTDB.
-    5. Xuất file `migrated_users_*.csv` chứa mật khẩu tạm của các tài khoản được sinh mới.
-- [ ] **2.3. Bàn giao mật khẩu tạm:**
-  - Gửi các tài khoản có mật khẩu mới trong file CSV cho Chủ quán / Quản lý để bàn giao cho nhân viên.
+  *Tạo tài khoản Firebase Auth, cập nhật `userIndex/{uid}`, xóa trường `password` thô trong database.*
 
 ---
 
-## GIAI ĐOẠN 3: TRIỂN KHAI CLOUD FUNCTIONS
-
-> [!CAUTION]
-> **CẢNH BÁO BẢO MẬT HẠ TẦNG CHÙNG DÙNG:**
-> Tuyệt đối KHÔNG chạy `firebase deploy --only functions` vì sẽ xóa 13 Cloud Functions của app Chấm công!
-> Luôn chỉ định codebase `functions:pos`!
-
-- [ ] **3.1. Kiểm tra biên dịch code Functions:**
-  ```bash
-  cd functions
-  npm test
-  npm run build
-  ```
-  - Đảm bảo 5/5 unit tests PASS và `tsc` chạy không có lỗi.
-- [ ] **3.2. Triển khai Functions an toàn:**
+### Bước 5: Triển khai Cloud Functions cho POS
+- [ ] Triển khai các hàm Cloud Functions với codebase `pos` độc lập:
   ```bash
   firebase deploy --only functions:pos --project tramapp-36f53
   ```
-  - Kiểm tra xem 3 hàm callable sau đã online trên vùng `asia-southeast1`:
-    - `createStaffAccount`
-    - `resetStaffPassword`
-    - `setStaffDisabled`
+  *(Lưu ý: Chỉ deploy codebase `pos`, không xóa hay ảnh hưởng đến bất kỳ hàm nào khác).*
 
 ---
 
-## GIAI ĐOẠN 4: TRIỂN KHAI FIREBASE SECURITY RULES
-
-- [ ] **4.1. Kiểm tra nội dung database.rules.json:**
-  - Đảm bảo các nút của app Chấm công Trạm (`/cham_cong`, `/timekeeping`, `/employees`, `/shifts`) và `/kmt_customers` vẫn mở đầy đủ:
-    ```json
-    "cham_cong": { ".read": "auth != null", ".write": "auth != null" },
-    "timekeeping": { ".read": "auth != null", ".write": "auth != null" },
-    "employees": { ".read": "auth != null", ".write": "auth != null" },
-    "shifts": { ".read": "auth != null", ".write": "auth != null" },
-    "kmt_customers": { ".read": "auth != null", ".write": "auth != null" }
-    ```
-- [ ] **4.2. Chạy test bộ rules:**
+### Bước 6: Phát hành bản ứng dụng mới cho nhân viên
+- [ ] **Quan trọng:** Bản app cũ vẫn còn cơ chế đọc các nút gốc. Do đó, cần cập nhật đồng loạt phiên bản mới cho toàn bộ nhân viên (cả ứng dụng Flutter trên điện thoại và bản Web Admin) trước khi triển khai rules mới.
+- [ ] Build và triển khai Web Admin:
   ```bash
-  cd tests/rules
-  npm test
+  cd web && npm run build
   ```
-  - Đảm bảo 12/12 tests PASS.
-- [ ] **4.3. Triển khai Rules lên Firebase:**
+- [ ] Build bản cài đặt Flutter POS mới cho nhân viên (Android APK / iOS).
+
+---
+
+### Bước 7: Triển khai Security Rules mới (`database.rules.json`)
+- [ ] Deploy bộ rules mới đã chốt:
   ```bash
   firebase deploy --only database --project tramapp-36f53
   ```
-  - Thông báo hiển thị: `✔  Deploy complete!`
+- [ ] **Kiểm tra đăng nhập thử nghiệm:**
+  - Mở app Flutter và Web Admin, đăng nhập thử từng vai trò:
+    - **Chủ quán (`owner`):** Xem và sửa được toàn bộ cấu hình quán, menu, báo cáo.
+    - **Quản lý (`manager`):** Xem và sửa menu, ca két, hóa đơn; không sửa được chủ quán gốc.
+    - **Thu ngân (`cashier`):** Tạo hóa đơn, quản lý két tiền, tra cứu khách hàng; không sửa giá menu.
+    - **Phục vụ (`waiter`):** Xem bàn, tạo order bàn; không sửa menu hay khách hàng.
+    - **Bếp (`kitchen`):** Xem và cập nhật danh sách chế biến món.
 
 ---
 
-## GIAI ĐOẠN 5: BUILD VÀ CẬP NHẬT ỨNG DỤNG CLIENT
-
-### 5.1. Cập nhật Web Admin (Next.js)
-- [ ] Chạy kiểm thử lần cuối:
-  ```bash
-  cd web
-  npm test
-  npm run build
-  ```
-  - Đảm bảo 30/30 tests PASS và biên dịch thành công 21/21 trang static.
-- [ ] Deploy bản web mới lên Vercel / Firebase Hosting / Server sản xuất.
-
-### 5.2. Cập nhật ứng dụng Flutter POS
-- [ ] Chạy kiểm thử:
-  ```bash
-  cd app_flutter
-  flutter test
-  ```
-  - Đảm bảo 110/110 tests PASS.
-- [ ] Sinh lại cấu hình nếu cần đồng nhất:
-  ```bash
-  cd app_flutter
-  flutterfire configure --project=tramapp-36f53
-  ```
-- [ ] Build bản phát hành cho máy POS:
-  ```bash
-  flutter build apk --release
-  ```
-- [ ] Cài đặt file APK mới lên thiết bị POS tại cửa hàng.
+### Bước 8: Tắt tính năng đăng ký tài khoản tự do (Sign-up Lock)
+- [ ] Vào Firebase Console $\rightarrow$ **Authentication** $\rightarrow$ Tab **Settings** $\rightarrow$ Mục **User actions**.
+- [ ] Bỏ chọn **"Enable create (sign-up)"** (Tắt đăng ký tự do).
+- [ ] *Lưu ý:* Chỉ thực hiện khi chắc chắn Authentication của project `tramapp-36f53` không có app nào khác cần đăng ký tự do. Nhân viên mới vẫn được tạo bình thường vì việc tạo tài khoản đi qua Cloud Functions (`createStaffAccount`).
 
 ---
 
-## GIAI ĐOẠN 6: NGHIỆM THU SAU PHÁT HÀNH (POST-RELEASE VERIFICATION)
-
-Thực hiện kiểm thử thực tế trên thiết bị:
-- [ ] **6.1. Đăng nhập Chủ Quán:**
-  - Đăng nhập bằng tài khoản Chủ quán gốc (`admin`).
-  - Kiểm tra xem toàn bộ danh mục, bàn, doanh thu có nạp bình thường không.
-- [ ] **6.2. Đăng nhập Nhân Viên Thu Ngân / Phục Vụ:**
-  - Đăng nhập bằng tài khoản thu ngân (`thungan1`).
-  - Thử mở bàn, gọi món gửi bếp, in hóa đơn tạm tính $\rightarrow$ Thành công.
-  - Thử mở cài đặt sửa giá sản phẩm $\rightarrow$ Bị chặn hoặc ẩn nút.
-- [ ] **6.3. Thử tạo nhân viên mới qua Cloud Function:**
-  - Dùng tài khoản Chủ quán trên Web hoặc POS $\rightarrow$ Bấm "Thêm nhân viên".
-  - Nhập thông tin và tạo $\rightarrow$ Kiểm tra nhân viên mới đăng nhập được ngay.
-- [ ] **6.4. Thử tính năng Đặt lại mật khẩu:**
-  - Bấm nút icon chìa khóa 🔑 "Đặt lại mật khẩu" trên một nhân viên.
-  - Nhập mật khẩu mới $\rightarrow$ Dùng tài khoản đó đăng nhập $\rightarrow$ Hệ thống bắt buộc đổi mật khẩu mới.
-- [ ] **6.5. KIỂM TRA ỨNG DỤNG CHẤM CÔNG TRẠM (QUAN TRỌNG):**
-  - Mở ứng dụng Chấm công Trạm trên điện thoại nhân viên.
-  - Thực hiện chấm công vào ca / ra ca thử nghiệm.
-  - **Xác nhận:** Chấm công ghi nhận bình thường, không bị báo lỗi quyền truy cập Realtime Database (`Permission Denied`).
-- [ ] **6.6. DỌN DẸP BẢO MẬT:**
-  - Xóa file `service-account.json` khỏi thư mục dự án.
-  - Xóa hoặc cất giữ bảo mật file CSV mật khẩu tạm trong `migration_output/`.
-
----
-
-## 🚨 KẾ HOẠCH QUAY LUI KHẨN CẤP (ROLLBACK PLAN)
-
-### Tình huống 1: Security Rules gây lỗi Permission Denied cho các nghiệp vụ đang chạy
-1. Khôi phục nhanh bằng cách deploy lại rules:
+### Bước 9: Phương án khẩn cấp khi cần quay lại (Rollback Plan)
+Nếu phát sinh bất kỳ sự cố ngoài ý muốn:
+1. **Khôi phục Security Rules:**
    ```bash
-   firebase deploy --only database --project tramapp-36f53
+   firebase database:rules:set docs/rules_ban_truoc_khi_chot.json --project tramapp-36f53
    ```
-2. Kiểm tra log trên Firebase Realtime Database để xác định node nào bị chặn sai rule.
-
-### Tình huống 2: Script Migrate ghi sai dữ liệu người dùng
-1. Mở thư mục `migration_output/`.
-2. Tìm file sao lưu trước khi migrate: `backup_pre_migration_[timestamp].json`.
-3. Dùng Firebase Console $\rightarrow$ Realtime Database $\rightarrow$ Nhấp ba chấm $\vdots$ $\rightarrow$ **Import JSON** $\rightarrow$ Chọn file backup để phục hồi nguyên trạng 100% dữ liệu cũ.
+2. **Khôi phục dữ liệu Database:**
+   - Vào Firebase Console $\rightarrow$ **Realtime Database** $\rightarrow$ Tab **Data** $\rightarrow$ Biểu tượng $\vdots$ $\rightarrow$ **Import JSON** $\rightarrow$ Chọn bản sao lưu đã tải về ở Bước 1.

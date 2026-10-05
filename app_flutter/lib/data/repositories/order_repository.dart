@@ -75,7 +75,7 @@ class OrderRepository {
 
   // ==================== TABLES ====================
   Stream<List<TableModel>> tablesStream() {
-    return tablesRef.onValue.asyncMap<List<TableModel>>((event) async {
+    return tablesRef.onValue.map<List<TableModel>>((event) {
       if (event.snapshot.exists && event.snapshot.value != null) {
         final list = _parseList<TableModel>(
           event.snapshot.value,
@@ -85,19 +85,6 @@ class OrderRepository {
           return list..sort(compareTables);
         }
       }
-      // Check root /tables fallback
-      try {
-        final rootSnap = await _root.child('tables').get().timeout(const Duration(seconds: 2));
-        if (rootSnap.exists && rootSnap.value != null) {
-          final rootList = _parseList<TableModel>(
-            rootSnap.value,
-            (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
-          );
-          if (rootList.isNotEmpty) {
-            return rootList..sort(compareTables);
-          }
-        }
-      } catch (_) {}
       return SeedData.defaultTables;
     }).handleError((_) => SeedData.defaultTables);
   }
@@ -683,18 +670,11 @@ class OrderRepository {
   }
 
   Stream<List<ZoneModel>> zonesStream() {
-    return zonesRef.onValue.asyncMap<List<ZoneModel>>((event) async {
+    return zonesRef.onValue.map<List<ZoneModel>>((event) {
       if (event.snapshot.exists && event.snapshot.value != null) {
         final list = _parseList<ZoneModel>(event.snapshot.value, (k, v) => ZoneModel.fromMap(v is Map ? v : {'name': k}));
         if (list.isNotEmpty) return list;
       }
-      try {
-        final rootSnap = await _root.child('zones').get().timeout(const Duration(seconds: 2));
-        if (rootSnap.exists && rootSnap.value != null) {
-          final rootList = _parseList<ZoneModel>(rootSnap.value, (k, v) => ZoneModel.fromMap(v is Map ? v : {'name': k}));
-          if (rootList.isNotEmpty) return rootList;
-        }
-      } catch (_) {}
       return SeedData.defaultZones;
     }).handleError((_) => SeedData.defaultZones);
   }

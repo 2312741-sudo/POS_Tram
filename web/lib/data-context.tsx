@@ -452,11 +452,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   // Pre-load from sessionStorage for instant (0ms) render if available
   const [rawTables, setRawTables] = useState<Record<string, TableItem[]>>({});
   const [allHistory, setAllHistory] = useState<HistoryOrder[]>([]);
-  const [rawProducts, setRawProducts] = useState<ProductItem[]>([]);
-  const [rawCategories, setRawCategories] = useState<CategoryItem[]>([]);
   const [rawProductsMap, setRawProductsMap] = useState<Record<string, ProductItem[]>>({});
   const [rawCategoriesMap, setRawCategoriesMap] = useState<Record<string, CategoryItem[]>>({});
-  const [rawUsers, setRawUsers] = useState<UserItem[]>([]);
   const [rawUsersMap, setRawUsersMap] = useState<Record<string, UserItem[]>>({});
   const [rawAuditLogs, setRawAuditLogs] = useState<AuditLogItem[]>([]);
   const [onlineOrders, setOnlineOrders] = useState<any[]>([]);
@@ -465,7 +462,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState<boolean>(true);
   const [historyLoaded, setHistoryLoaded] = useState<boolean>(false);
 
-  // 1. Listen to Stores (including their scoped products, categories, tables, shifts)
+  // 1. Lắng nghe stores (bao gồm mọi dữ liệu multi-tenant: products, categories, tables, shifts, bills, audit_logs, online_orders)
   useEffect(() => {
     const storesRef = ref(db, "stores");
     const unsubStores = onValue(storesRef, (snap) => {
@@ -476,6 +473,10 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const prodsMap: Record<string, ProductItem[]> = {};
         const catsMap: Record<string, CategoryItem[]> = {};
         const usersMap: Record<string, UserItem[]> = {};
+        const branchTablesMap: Record<string, TableItem[]> = {};
+        const historyList: HistoryOrder[] = [];
+        const logsList: AuditLogItem[] = [];
+        const onlineList: any[] = [];
 
         Object.entries(data).forEach(([code, val]: [string, any]) => {
           const info = val.storeInfo || val;
@@ -556,13 +557,78 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             });
             usersMap[code] = uList;
           }
+
+          if (val.tables) {
+            const tArr: TableItem[] = [];
+            Object.entries(val.tables).forEach(([id, v]: any) => {
+              tArr.push({
+                ...v,
+                id,
+                storeCode: code,
+                storeName: info.storeName || code,
+                inUse: Boolean(v.inUse),
+              });
+            });
+            branchTablesMap[code] = tArr;
+          }
+
+          const historySource = val.history || val.bills;
+          if (historySource) {
+            Object.entries(historySource).forEach(([id, v]: any) => {
+              const sanitized = sanitizeHistoryOrder(v, id);
+              sanitized.storeCode = sanitized.storeCode || code;
+              sanitized.storeName = sanitized.storeName || info.storeName || code;
+              historyList.push(sanitized);
+            });
+          }
+
+          if (val.audit_logs) {
+            Object.entries(val.audit_logs).forEach(([id, v]: any) => {
+              logsList.push({
+                ...v,
+                id,
+                storeCode: v.storeCode || code,
+                storeName: v.storeName || info.storeName || code,
+              });
+            });
+          }
+
+          if (val.online_orders) {
+            Object.entries(val.online_orders).forEach(([id, v]: any) => {
+              onlineList.push({
+                ...v,
+                id,
+                storeCode: v.storeCode || code,
+                storeName: v.storeName || info.storeName || code,
+              });
+            });
+          }
         });
+
         list.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
         setStores(list);
         setRawCashShifts(shiftsMap);
         setRawProductsMap(prodsMap);
         setRawCategoriesMap(catsMap);
         setRawUsersMap(usersMap);
+        setRawTables(branchTablesMap);
+
+        const dedupedHistory = deduplicateBills(historyList);
+        dedupedHistory.sort((a, b) => {
+          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
+          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
+          return tb - ta;
+        });
+        setAllHistory(dedupedHistory);
+        setHistoryLoaded(true);
+
+        logsList.sort((a, b) => {
+          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
+          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
+          return tb - ta;
+        });
+        setRawAuditLogs(logsList);
+        setOnlineOrders(onlineList);
         setLoading(false);
       } else {
         // Fallback default store
@@ -578,9 +644,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             accountName: "CHU CUA HANG TRAM FNB",
             defaultVatRate: 8,
             allowStackPromotions: true,
+            allowStaffViewShiftDifference: true,
             active: true,
           }
         ]);
+        setAllHistory([]);
+        setHistoryLoaded(true);
+        setRawAuditLogs([]);
+        setOnlineOrders([]);
+        setRawTables({});
         setLoading(false);
       }
     });
@@ -588,163 +660,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     return () => unsubStores();
   }, []);
 
-  // 2. Listen to Tables across stores and root
-  useEffect(() => {
-    // Listen to root tables (TRAM01)
-    const rootTablesRef = ref(db, "tables");
-    const unsubRootTables = onValue(rootTablesRef, (snap) => {
-      const arr: TableItem[] = [];
-      if (snap.exists()) {
-        Object.entries(snap.val()).forEach(([id, v]: any) => {
-          arr.push({
-            ...v,
-            id,
-            storeCode: "TRAM01",
-            storeName: "POS Trạm - Trụ sở 01",
-            inUse: Boolean(v.inUse),
-          });
-        });
-      }
-      setRawTables((prev) => ({ ...prev, TRAM01_ROOT: arr }));
-      setLoading(false);
-    });
-
-    // Listen to stores node tables
-    const storesRef = ref(db, "stores");
-    const unsubStoresTables = onValue(storesRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.val();
-        const branchTablesMap: Record<string, TableItem[]> = {};
-        Object.entries(data).forEach(([sCode, sVal]: [string, any]) => {
-          const sName = sVal.storeInfo?.storeName || sCode;
-          if (sVal.tables) {
-            const tArr: TableItem[] = [];
-            Object.entries(sVal.tables).forEach(([id, v]: any) => {
-              tArr.push({
-                ...v,
-                id,
-                storeCode: sCode,
-                storeName: sName,
-                inUse: Boolean(v.inUse),
-              });
-            });
-            branchTablesMap[sCode] = tArr;
-          }
-        });
-        setRawTables((prev) => ({ ...prev, ...branchTablesMap }));
-      }
-    });
-
-    return () => {
-      unsubRootTables();
-      unsubStoresTables();
-    };
-  }, []);
-
-  // 3. Listen to History Orders
-  useEffect(() => {
-    const historyQuery = query(ref(db, "history"), limitToLast(200));
-    const unsubHistory = onValue(historyQuery, (snap) => {
-      if (snap.exists()) {
-        const data = snap.val();
-        const arr = Object.entries(data).map(([id, v]: any) => sanitizeHistoryOrder(v, id));
-        const deduped = deduplicateBills(arr);
-        deduped.sort((a, b) => {
-          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
-          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
-          return tb - ta;
-        });
-        setAllHistory(deduped);
-        setHistoryLoaded(true);
-      } else {
-        setAllHistory([]);
-        setHistoryLoaded(true);
-      }
-    });
-
-    return () => unsubHistory();
-  }, []);
-
-  // 4. Listen to Products, Categories, Users, Audit Logs
-  useEffect(() => {
-    const prodRef = ref(db, "products");
-    const unsubProd = onValue(prodRef, (snap) => {
-      if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({
-          ...v,
-          id,
-          price: Number(v.price || 0),
-          costPrice: v.costPrice != null ? Number(v.costPrice) : 0,
-        }));
-        setRawProducts(arr);
-      } else {
-        setRawProducts([]);
-      }
-    });
-
-    const catRef = ref(db, "categories");
-    const unsubCat = onValue(catRef, (snap) => {
-      if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => (typeof v === "string" ? { id, name: v } : { ...v, id }));
-        setRawCategories(arr);
-      } else {
-        setRawCategories([]);
-      }
-    });
-
-    const usersRef = ref(db, "users");
-    const unsubUsers = onValue(usersRef, (snap) => {
-      if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({ ...v, id }));
-        setRawUsers(arr);
-      } else {
-        setRawUsers([]);
-      }
-    });
-
-    const logsQuery = query(ref(db, "audit_logs"), limitToLast(300));
-    const unsubLogs = onValue(logsQuery, (snap) => {
-      if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({ ...v, id }));
-        arr.sort((a, b) => {
-          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
-          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
-          return tb - ta;
-        });
-        setRawAuditLogs(arr);
-      } else {
-        setRawAuditLogs([]);
-      }
-    });
-
-    const onlineRef = ref(db, "online_orders");
-    const unsubOnline = onValue(onlineRef, (snap) => {
-      if (snap.exists()) {
-        const arr = Object.entries(snap.val()).map(([id, v]: any) => ({ ...v, id }));
-        setOnlineOrders(arr);
-      } else {
-        setOnlineOrders([]);
-      }
-    });
-
-    return () => {
-      unsubProd();
-      unsubCat();
-      unsubUsers();
-      unsubLogs();
-      unsubOnline();
-    };
-  }, []);
-
   // Compute allTables (Flattened from all branches)
   const allTables = useMemo(() => {
     const map = new Map<string, TableItem>();
-    // Priority: TRAM01 tables from stores/TRAM01, otherwise fallback to root
-    const tram01Tables = rawTables["TRAM01"] || rawTables["TRAM01_ROOT"] || [];
+    const tram01Tables = rawTables["TRAM01"] || [];
     tram01Tables.forEach((t) => map.set(`TRAM01_${t.name}`, { ...t, storeCode: "TRAM01" }));
 
     Object.entries(rawTables).forEach(([sCode, tList]) => {
-      if (sCode !== "TRAM01" && sCode !== "TRAM01_ROOT") {
+      if (sCode !== "TRAM01") {
         tList.forEach((t) => map.set(`${sCode}_${t.name}`, { ...t, storeCode: sCode }));
       }
     });
@@ -806,15 +729,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         list.push(p);
       });
     });
-    // Fallback: If no store products found but root rawProducts exists
-    if (list.length === 0 && rawProducts.length > 0) {
-      rawProducts.forEach((p) => {
-        list.push({ ...p, storeCode: "TRAM01", storeName: "Trụ sở 01" });
-      });
-    }
     list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [rawProductsMap, rawProducts]);
+  }, [rawProductsMap]);
 
   const scopedProducts = useMemo(() => {
     if (currentStoreCode === "ALL") return allProducts;
@@ -829,14 +746,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         list.push(c);
       });
     });
-    // Fallback root categories if no store categories
-    if (list.length === 0 && rawCategories.length > 0) {
-      rawCategories.forEach((c) => {
-        list.push({ ...c, storeCode: "TRAM01" });
-      });
-    }
     return list;
-  }, [rawCategoriesMap, rawCategories]);
+  }, [rawCategoriesMap]);
 
   const scopedCategories = useMemo(() => {
     if (currentStoreCode === "ALL") {
@@ -856,7 +767,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     const list: UserItem[] = [];
     const seen = new Set<string>();
 
-    // 1. Add store-scoped users
+    // Add store-scoped users
     Object.entries(rawUsersMap).forEach(([code, uList]) => {
       uList.forEach((u) => {
         const uName = (u.username || u.id || "").toLowerCase().trim();
@@ -874,26 +785,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       });
     });
 
-    // 2. Fallback / include root rawUsers
-    rawUsers.forEach((u) => {
-      const uName = (u.username || u.id || "").toLowerCase().trim();
-      const uStore = u.storeCode || "TRAM01";
-      const key = `${uStore}_${uName}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        list.push({
-          ...u,
-          id: u.id || uName,
-          username: u.username || uName,
-          storeCode: uStore,
-          isActive: u.isActive !== false,
-        });
-      }
-    });
-
     list.sort((a, b) => (a.fullName || a.username || "").localeCompare(b.fullName || b.username || ""));
     return list;
-  }, [rawUsersMap, rawUsers]);
+  }, [rawUsersMap]);
 
   const scopedUsers = useMemo(() => {
     if (currentStoreCode === "ALL") return allUsers;
@@ -977,18 +871,10 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         if (catSnap.exists()) {
           await set(ref(db, `stores/${cleanCode}/categories`), catSnap.val());
-        } else {
-          // Fallback root categories
-          const rootCat = await get(ref(db, "categories"));
-          if (rootCat.exists()) await set(ref(db, `stores/${cleanCode}/categories`), rootCat.val());
         }
 
         if (prodSnap.exists()) {
           await set(ref(db, `stores/${cleanCode}/products`), prodSnap.val());
-        } else {
-          // Fallback root products
-          const rootProd = await get(ref(db, "products"));
-          if (rootProd.exists()) await set(ref(db, `stores/${cleanCode}/products`), rootProd.val());
         }
       }
 
@@ -1615,21 +1501,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           return { ...prev, [finalStoreCode]: storeUsers };
         });
 
-        setRawUsers((prev) => {
-          const idx = prev.findIndex((u) => (u.username || u.id || "").toLowerCase() === cleanUsername);
-          const updatedUser: UserItem = {
-            id: cleanUsername,
-            ...payload,
-            storeCode: finalStoreCode,
-          };
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = { ...next[idx], ...updatedUser };
-            return next;
-          }
-          return [...prev, updatedUser];
-        });
-
         return { success: true };
       } catch (e: any) {
         return { success: false, error: e.message || "Lỗi lưu thông tin nhân viên" };
@@ -1679,8 +1550,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           }
           return next;
         });
-
-        setRawUsers((prev) => prev.filter((u) => (u.username || u.id || "").toLowerCase() !== cleanUsername));
 
         return { success: true };
       } catch (e: any) {

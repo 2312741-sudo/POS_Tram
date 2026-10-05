@@ -12,6 +12,7 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
   let testEnv: RulesTestEnvironment | null = null;
   const rulesPath = path.resolve(__dirname, "../../database.rules.json");
   const rulesContent = fs.existsSync(rulesPath) ? fs.readFileSync(rulesPath, "utf8") : "";
+  const parsedRules = JSON.parse(rulesContent);
 
   beforeAll(async () => {
     try {
@@ -97,10 +98,12 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
   it("1. Tài khoản tự đăng ký không có userIndex không được đọc dữ liệu quán", async () => {
     if (!testEnv) {
       expect(rulesContent).toContain("userIndex");
+      expect(parsedRules.rules[".read"]).toBe(false);
       return;
     }
     const unindexed = testEnv.authenticatedContext("unindexed_uid").database();
     await assertFails(unindexed.ref("stores/TRAM01/products").get());
+    await assertFails(unindexed.ref("stores/TRAM01/products/p1").set({ name: "Hacked" }));
   });
 
   it("2. Người của Quán A không đọc được Quán B", async () => {
@@ -112,22 +115,30 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
     await assertFails(storeAUser.ref("stores/TRAM02/products").get());
   });
 
-  it("3. Phục vụ và Bếp không được ghi products hoặc promotions", async () => {
+  it("3. Phục vụ và Bếp không được ghi products, promotions, users, customers", async () => {
     if (!testEnv) {
       expect(rulesContent).toContain("products");
+      expect(rulesContent).toContain("promotions");
+      expect(rulesContent).toContain("customers");
       return;
     }
     const waiter = testEnv.authenticatedContext("waiter_uid").database();
     await assertFails(waiter.ref("stores/TRAM01/products/p1").set({ name: "Cà phê", price: 20000 }));
+    await assertFails(waiter.ref("stores/TRAM01/promotions/pr1").set({ discount: 10 }));
+    await assertFails(waiter.ref("stores/TRAM01/users/waiter_uid/fullName").set("Fake Name"));
+    await assertFails(waiter.ref("stores/TRAM01/customers/c1").set({ name: "Khách", phone: "0900000000" }));
   });
 
-  it("4. Thu ngân tạo được bills nhưng không sửa được products", async () => {
+  it("4. Thu ngân đọc ghi được customers và bills nhưng không sửa được products", async () => {
     if (!testEnv) {
       expect(rulesContent).toContain("bills");
+      expect(rulesContent).toContain("customers");
       return;
     }
     const cashier = testEnv.authenticatedContext("cashier_uid").database();
     await assertSucceeds(cashier.ref("stores/TRAM01/bills/b1").set({ total: 50000 }));
+    await assertSucceeds(cashier.ref("stores/TRAM01/customers/c1").set({ name: "Khách 1", phone: "0912345678" }));
+    await assertSucceeds(cashier.ref("stores/TRAM01/customers/c1").get());
     await assertFails(cashier.ref("stores/TRAM01/products/p1").set({ price: 1000 }));
   });
 
@@ -163,7 +174,7 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
     await assertFails(manager.ref("stores/TRAM01/users/owner_uid/isActive").set(false));
   });
 
-  it("8. audit_logs thêm được nhưng cấm sửa hoặc xóa", async () => {
+  it("8. audit_logs thêm được 2 bản ghi liên tiếp nhưng cấm sửa hoặc xóa", async () => {
     if (!testEnv) {
       expect(rulesContent).toContain("audit_logs");
       return;
@@ -173,6 +184,13 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
       cashier.ref("stores/TRAM01/audit_logs/log_1").set({
         timestamp: Date.now(),
         action: "PAY_BILL",
+        username: "cashier1",
+      })
+    );
+    await assertSucceeds(
+      cashier.ref("stores/TRAM01/audit_logs/log_2").set({
+        timestamp: Date.now(),
+        action: "OPEN_SHIFT",
         username: "cashier1",
       })
     );
@@ -216,7 +234,53 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
       return;
     }
     const cashier = testEnv.authenticatedContext("cashier_uid").database();
-    // Thiếu username và timestamp
     await assertFails(cashier.ref("stores/TRAM01/audit_logs/log_invalid").set({ action: "TEST" }));
+  });
+
+  it("13. Mọi nút gốc cũ bị từ chối với mọi vai trò và với người chưa đăng nhập", async () => {
+    const legacyNodes = [
+      "users",
+      "tables",
+      "products",
+      "categories",
+      "zones",
+      "history",
+      "audit_logs",
+      "kmt_customers",
+      "online_orders",
+      "kitchen_orders",
+      "cham_cong",
+      "timekeeping",
+      "employees",
+      "shifts",
+    ];
+
+    // Kiểm tra cấu trúc rules: không còn node nào trong số legacyNodes tồn tại ở cấp root
+    legacyNodes.forEach((node) => {
+      expect(parsedRules.rules[node]).toBeUndefined();
+    });
+
+    // Cấp root phải được chặn mặc định
+    expect(parsedRules.rules[".read"]).toBe(false);
+    expect(parsedRules.rules[".write"]).toBe(false);
+
+    if (testEnv) {
+      const unauth = testEnv.unauthenticatedContext().database();
+      const owner = testEnv.authenticatedContext("owner_uid").database();
+
+      for (const node of legacyNodes) {
+        await assertFails(unauth.ref(node).get());
+        await assertFails(unauth.ref(node).set({ hacked: true }));
+        await assertFails(owner.ref(node).get());
+        await assertFails(owner.ref(node).set({ hacked: true }));
+      }
+    }
+  });
+
+  it("14. Chỉ có đúng 2 nhánh được mở ở cấp root: userIndex và stores", () => {
+    const topLevelKeys = Object.keys(parsedRules.rules).filter(
+      (k) => !k.startsWith(".")
+    );
+    expect(topLevelKeys.sort()).toEqual(["stores", "userIndex"].sort());
   });
 });
