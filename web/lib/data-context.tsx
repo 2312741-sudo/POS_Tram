@@ -1,7 +1,8 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 import { ref, onValue, query, limitToLast, set, update, remove, get, push } from "firebase/database";
+import { onAuthStateChanged } from "firebase/auth";
 import { deduplicateBills } from "./reports";
 
 export interface OrderActionLog {
@@ -462,203 +463,300 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState<boolean>(true);
   const [historyLoaded, setHistoryLoaded] = useState<boolean>(false);
 
-  // 1. Lắng nghe stores (bao gồm mọi dữ liệu multi-tenant: products, categories, tables, shifts, bills, audit_logs, online_orders)
-  useEffect(() => {
-    const storesRef = ref(db, "stores");
-    const unsubStores = onValue(storesRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.val();
-        const list: StoreItem[] = [];
-        const shiftsMap: Record<string, CashShiftItem[]> = {};
-        const prodsMap: Record<string, ProductItem[]> = {};
-        const catsMap: Record<string, CategoryItem[]> = {};
-        const usersMap: Record<string, UserItem[]> = {};
-        const branchTablesMap: Record<string, TableItem[]> = {};
-        const historyList: HistoryOrder[] = [];
-        const logsList: AuditLogItem[] = [];
-        const onlineList: any[] = [];
+  // Xử lý dữ liệu gom từ các chi nhánh được cấp quyền
+  const processStoreDataMap = useCallback((dataMap: Record<string, any>) => {
+    const entries = Object.entries(dataMap);
+    if (entries.length === 0) {
+      // Fallback default store nếu chưa có dữ liệu chi nhánh
+      setStores([
+        {
+          id: "TRAM01",
+          storeCode: "TRAM01",
+          storeName: "POS Trạm - Trụ sở 01 (Đà Lạt)",
+          address: "Số 123 Đường Ba Tháng Tư, Phường 3, TP. Đà Lạt",
+          phone: "0987654321",
+          bankId: "MB",
+          bankAccount: "0987654321",
+          accountName: "CHU CUA HANG TRAM FNB",
+          defaultVatRate: 8,
+          allowStackPromotions: true,
+          allowStaffViewShiftDifference: true,
+          active: true,
+        }
+      ]);
+      setAllHistory([]);
+      setHistoryLoaded(true);
+      setRawAuditLogs([]);
+      setOnlineOrders([]);
+      setRawTables({});
+      setRawCashShifts({});
+      setRawProductsMap({});
+      setRawCategoriesMap({});
+      setRawUsersMap({});
+      setLoading(false);
+      return;
+    }
 
-        Object.entries(data).forEach(([code, val]: [string, any]) => {
-          const info = val.storeInfo || val;
-          list.push({
-            id: code,
-            storeCode: code,
-            storeName: info.storeName || `POS Trạm (${code})`,
-            address: info.address || "",
-            phone: info.phone || "",
-            wifiName: info.wifiName || "",
-            bankId: info.bankId || "MB",
-            bankAccount: info.bankAccount || "",
-            accountName: info.accountName || "CHU QUAN FNB",
-            defaultVatRate: info.defaultVatRate ?? 8,
-            allowStackPromotions: info.allowStackPromotions ?? true,
-            allowStaffViewShiftDifference: info.allowStaffViewShiftDifference ?? true,
-            active: info.active ?? true,
-            createdAt: info.createdAt || Date.now(),
+    const list: StoreItem[] = [];
+    const shiftsMap: Record<string, CashShiftItem[]> = {};
+    const prodsMap: Record<string, ProductItem[]> = {};
+    const catsMap: Record<string, CategoryItem[]> = {};
+    const usersMap: Record<string, UserItem[]> = {};
+    const branchTablesMap: Record<string, TableItem[]> = {};
+    const historyList: HistoryOrder[] = [];
+    const logsList: AuditLogItem[] = [];
+    const onlineList: any[] = [];
+
+    entries.forEach(([code, val]: [string, any]) => {
+      if (!val) return;
+      const info = val.storeInfo || val;
+      list.push({
+        id: code,
+        storeCode: code,
+        storeName: info.storeName || `POS Trạm (${code})`,
+        address: info.address || "",
+        phone: info.phone || "",
+        wifiName: info.wifiName || "",
+        bankId: info.bankId || "MB",
+        bankAccount: info.bankAccount || "",
+        accountName: info.accountName || "CHU QUAN FNB",
+        defaultVatRate: info.defaultVatRate ?? 8,
+        allowStackPromotions: info.allowStackPromotions ?? true,
+        allowStaffViewShiftDifference: info.allowStaffViewShiftDifference ?? true,
+        active: info.active ?? true,
+        createdAt: info.createdAt || Date.now(),
+      });
+
+      if (val.cash_shifts) {
+        const sList: CashShiftItem[] = [];
+        Object.entries(val.cash_shifts).forEach(([id, s]: [string, any]) => {
+          sList.push({
+            ...s,
+            id,
+            storeCode: s.storeCode || code,
           });
-
-          if (val.cash_shifts) {
-            const sList: CashShiftItem[] = [];
-            Object.entries(val.cash_shifts).forEach(([id, s]: [string, any]) => {
-              sList.push({
-                ...s,
-                id,
-                storeCode: s.storeCode || code,
-              });
-            });
-            shiftsMap[code] = sList;
-          }
-
-          if (val.products) {
-            const pList: ProductItem[] = [];
-            Object.entries(val.products).forEach(([id, p]: [string, any]) => {
-              pList.push({
-                ...p,
-                id,
-                price: Number(p.price || 0),
-                costPrice: p.costPrice != null ? Number(p.costPrice) : 0,
-                storeCode: code,
-                storeName: info.storeName || code,
-              });
-            });
-            prodsMap[code] = pList;
-          }
-
-          if (val.categories) {
-            const cList: CategoryItem[] = [];
-            Object.entries(val.categories).forEach(([id, c]: [string, any]) => {
-              cList.push({
-                id,
-                name: typeof c === "string" ? c : (c.name || id),
-                storeCode: code,
-              });
-            });
-            catsMap[code] = cList;
-          }
-
-          if (val.users) {
-            const uList: UserItem[] = [];
-            Object.entries(val.users).forEach(([id, u]: [string, any]) => {
-              const uName = u.username || id;
-              uList.push({
-                ...u,
-                id: uName,
-                username: uName,
-                fullName: u.fullName || u.name || uName,
-                role: u.roleId || u.role || "ROLE_WAITER",
-                roleId: u.roleId || u.role || "ROLE_WAITER",
-                phone: u.phone || "",
-                password: u.password || "",
-                isActive: u.isActive !== false,
-                isRootOwner: u.isRootOwner === true || (u.roleId || u.role || "").toUpperCase().includes("OWNER"),
-                storeCode: u.storeCode || code,
-                storeName: info.storeName || code,
-              });
-            });
-            usersMap[code] = uList;
-          }
-
-          if (val.tables) {
-            const tArr: TableItem[] = [];
-            Object.entries(val.tables).forEach(([id, v]: any) => {
-              tArr.push({
-                ...v,
-                id,
-                storeCode: code,
-                storeName: info.storeName || code,
-                inUse: Boolean(v.inUse),
-              });
-            });
-            branchTablesMap[code] = tArr;
-          }
-
-          const historySource = val.history || val.bills;
-          if (historySource) {
-            Object.entries(historySource).forEach(([id, v]: any) => {
-              const sanitized = sanitizeHistoryOrder(v, id);
-              sanitized.storeCode = sanitized.storeCode || code;
-              sanitized.storeName = sanitized.storeName || info.storeName || code;
-              historyList.push(sanitized);
-            });
-          }
-
-          if (val.audit_logs) {
-            Object.entries(val.audit_logs).forEach(([id, v]: any) => {
-              logsList.push({
-                ...v,
-                id,
-                storeCode: v.storeCode || code,
-                storeName: v.storeName || info.storeName || code,
-              });
-            });
-          }
-
-          if (val.online_orders) {
-            Object.entries(val.online_orders).forEach(([id, v]: any) => {
-              onlineList.push({
-                ...v,
-                id,
-                storeCode: v.storeCode || code,
-                storeName: v.storeName || info.storeName || code,
-              });
-            });
-          }
         });
+        shiftsMap[code] = sList;
+      }
 
-        list.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
-        setStores(list);
-        setRawCashShifts(shiftsMap);
-        setRawProductsMap(prodsMap);
-        setRawCategoriesMap(catsMap);
-        setRawUsersMap(usersMap);
-        setRawTables(branchTablesMap);
-
-        const dedupedHistory = deduplicateBills(historyList);
-        dedupedHistory.sort((a, b) => {
-          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
-          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
-          return tb - ta;
+      if (val.products) {
+        const pList: ProductItem[] = [];
+        Object.entries(val.products).forEach(([id, p]: [string, any]) => {
+          pList.push({
+            ...p,
+            id,
+            price: Number(p.price || 0),
+            costPrice: p.costPrice != null ? Number(p.costPrice) : 0,
+            storeCode: code,
+            storeName: info.storeName || code,
+          });
         });
-        setAllHistory(dedupedHistory);
-        setHistoryLoaded(true);
+        prodsMap[code] = pList;
+      }
 
-        logsList.sort((a, b) => {
-          const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
-          const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
-          return tb - ta;
+      if (val.categories) {
+        const cList: CategoryItem[] = [];
+        Object.entries(val.categories).forEach(([id, c]: [string, any]) => {
+          cList.push({
+            id,
+            name: typeof c === "string" ? c : (c.name || id),
+            storeCode: code,
+          });
         });
-        setRawAuditLogs(logsList);
-        setOnlineOrders(onlineList);
-        setLoading(false);
-      } else {
-        // Fallback default store
-        setStores([
-          {
-            id: "TRAM01",
-            storeCode: "TRAM01",
-            storeName: "POS Trạm - Trụ sở 01 (Đà Lạt)",
-            address: "Số 123 Đường Ba Tháng Tư, Phường 3, TP. Đà Lạt",
-            phone: "0987654321",
-            bankId: "MB",
-            bankAccount: "0987654321",
-            accountName: "CHU CUA HANG TRAM FNB",
-            defaultVatRate: 8,
-            allowStackPromotions: true,
-            allowStaffViewShiftDifference: true,
-            active: true,
-          }
-        ]);
-        setAllHistory([]);
-        setHistoryLoaded(true);
-        setRawAuditLogs([]);
-        setOnlineOrders([]);
-        setRawTables({});
-        setLoading(false);
+        catsMap[code] = cList;
+      }
+
+      if (val.users) {
+        const uList: UserItem[] = [];
+        Object.entries(val.users).forEach(([id, u]: [string, any]) => {
+          const uName = u.username || id;
+          uList.push({
+            ...u,
+            id: uName,
+            username: uName,
+            fullName: u.fullName || u.name || uName,
+            role: u.roleId || u.role || "ROLE_WAITER",
+            roleId: u.roleId || u.role || "ROLE_WAITER",
+            phone: u.phone || "",
+            password: u.password || "",
+            isActive: u.isActive !== false,
+            isRootOwner: u.isRootOwner === true || (u.roleId || u.role || "").toUpperCase().includes("OWNER"),
+            storeCode: u.storeCode || code,
+            storeName: info.storeName || code,
+          });
+        });
+        usersMap[code] = uList;
+      }
+
+      if (val.tables) {
+        const tArr: TableItem[] = [];
+        Object.entries(val.tables).forEach(([id, v]: any) => {
+          tArr.push({
+            ...v,
+            id,
+            storeCode: code,
+            storeName: info.storeName || code,
+            inUse: Boolean(v.inUse),
+          });
+        });
+        branchTablesMap[code] = tArr;
+      }
+
+      const historySource = val.history || val.bills;
+      if (historySource) {
+        Object.entries(historySource).forEach(([id, v]: any) => {
+          const sanitized = sanitizeHistoryOrder(v, id);
+          sanitized.storeCode = sanitized.storeCode || code;
+          sanitized.storeName = sanitized.storeName || info.storeName || code;
+          historyList.push(sanitized);
+        });
+      }
+
+      if (val.audit_logs) {
+        Object.entries(val.audit_logs).forEach(([id, v]: any) => {
+          logsList.push({
+            ...v,
+            id,
+            storeCode: v.storeCode || code,
+            storeName: v.storeName || info.storeName || code,
+          });
+        });
+      }
+
+      if (val.online_orders) {
+        Object.entries(val.online_orders).forEach(([id, v]: any) => {
+          onlineList.push({
+            ...v,
+            id,
+            storeCode: v.storeCode || code,
+            storeName: v.storeName || info.storeName || code,
+          });
+        });
       }
     });
 
-    return () => unsubStores();
+    list.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
+    setStores(list);
+    setRawCashShifts(shiftsMap);
+    setRawProductsMap(prodsMap);
+    setRawCategoriesMap(catsMap);
+    setRawUsersMap(usersMap);
+    setRawTables(branchTablesMap);
+
+    const dedupedHistory = deduplicateBills(historyList);
+    dedupedHistory.sort((a, b) => {
+      const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
+      const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
+      return tb - ta;
+    });
+    setAllHistory(dedupedHistory);
+    setHistoryLoaded(true);
+
+    logsList.sort((a, b) => {
+      const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
+      const tb = typeof b.timestamp === "number" ? b.timestamp : new Date(b.timestamp || 0).getTime();
+      return tb - ta;
+    });
+    setRawAuditLogs(logsList);
+    setOnlineOrders(onlineList);
+    setLoading(false);
   }, []);
+
+  // 1. Lắng nghe đa chi nhánh theo đúng phân quyền RBAC (stores/$storeCode)
+  useEffect(() => {
+    let isMounted = true;
+    const storeListeners = new Map<string, () => void>();
+    const storeDataMap: Record<string, any> = {};
+
+    function updateStoreSubscriptions(storeCodes: string[]) {
+      const uniqueCodes = Array.from(new Set(storeCodes.filter(Boolean)));
+      if (uniqueCodes.length === 0) {
+        uniqueCodes.push("TRAM01");
+      }
+
+      // 1. Hủy lắng nghe các store không còn trong danh sách
+      for (const [code, unsub] of storeListeners.entries()) {
+        if (!uniqueCodes.includes(code)) {
+          unsub();
+          storeListeners.delete(code);
+          delete storeDataMap[code];
+        }
+      }
+
+      // 2. Thêm listener cho các store mới
+      uniqueCodes.forEach((code) => {
+        if (!storeListeners.has(code)) {
+          const storeRef = ref(db, `stores/${code}`);
+          const unsub = onValue(
+            storeRef,
+            (snap) => {
+              if (!isMounted) return;
+              if (snap.exists()) {
+                storeDataMap[code] = snap.val();
+              } else {
+                delete storeDataMap[code];
+              }
+              processStoreDataMap(storeDataMap);
+            },
+            (error) => {
+              if (!isMounted) return;
+              console.warn(`[data-context] Không thể đọc stores/${code}:`, error.message);
+              delete storeDataMap[code];
+              processStoreDataMap(storeDataMap);
+            }
+          );
+          storeListeners.set(code, unsub);
+        }
+      });
+    }
+
+    let unsubUserIndex: (() => void) | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (!isMounted) return;
+
+      if (unsubUserIndex) {
+        unsubUserIndex();
+        unsubUserIndex = null;
+      }
+
+      if (!fbUser) {
+        for (const unsub of storeListeners.values()) {
+          unsub();
+        }
+        storeListeners.clear();
+        processStoreDataMap({});
+        return;
+      }
+
+      // Đăng nhập: Đọc userIndex/{uid} để lấy danh sách cửa hàng được cấp quyền
+      const userIndexRef = ref(db, `userIndex/${fbUser.uid}`);
+      unsubUserIndex = onValue(
+        userIndexRef,
+        (indexSnap) => {
+          if (!isMounted) return;
+          const userIndexStores = indexSnap.exists() ? Object.keys(indexSnap.val() || {}) : [];
+          const candidateStores = Array.from(new Set([...userIndexStores, "TRAM01"]));
+          updateStoreSubscriptions(candidateStores);
+        },
+        (error) => {
+          if (!isMounted) return;
+          console.warn("[data-context] Không thể đọc userIndex:", error.message);
+          updateStoreSubscriptions(["TRAM01"]);
+        }
+      );
+    });
+
+    return () => {
+      isMounted = false;
+      unsubAuth();
+      if (unsubUserIndex) unsubUserIndex();
+      for (const unsub of storeListeners.values()) {
+        unsub();
+      }
+      storeListeners.clear();
+    };
+  }, [processStoreDataMap]);
 
   // Compute allTables (Flattened from all branches)
   const allTables = useMemo(() => {
