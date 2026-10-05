@@ -1,13 +1,14 @@
 {
   "project_info": {
-    "project_number": "727118636553",
-    "project_id": "ungdungdidong-94edd",
-    "storage_bucket": "ungdungdidong-94edd.firebasestorage.app"
+    "project_number": "866082811261",
+    "firebase_url": "https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "tramapp-36f53",
+    "storage_bucket": "tramapp-36f53.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:727118636553:android:e764015b52caffffee7ad8",
+        "mobilesdk_app_id": "1:866082811261:android:75d1b3154331c8ba0ef014",
         "android_client_info": {
           "package_name": "com.example.tramapp"
         }
@@ -15,7 +16,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDjsags-PVvGmO8YXC1UMYfnqOa7jAieCg"
+          "current_key": "AIzaSyClGB5QKIA1ux-Q0D8FD1woFT4iE524xo0"
         }
       ],
       "services": {

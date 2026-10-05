@@ -18,35 +18,35 @@ class DefaultFirebaseOptions {
   }
 
   // Cấu hình Web (Next.js Dashboard hoặc Flutter Web)
+
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA2fvOwEKwkeS9AlDNDCELvtyCx07dE6xM',
-    appId: '1:476583007511:web:e374fbbef8fcd541ce1352',
-    messagingSenderId: '476583007511',
-    projectId: 'chamcongtram',
-    authDomain: 'chamcongtram.firebaseapp.com',
+    apiKey: 'AIzaSyBWSS2o1ERO1HBnAyVZwAbzOSWNkkWa7GY',
+    appId: '1:866082811261:web:5021e5e77a7a6cf50ef014',
+    messagingSenderId: '866082811261',
+    projectId: 'tramapp-36f53',
+    authDomain: 'tramapp-36f53.firebaseapp.com',
     databaseURL: 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'chamcongtram.firebasestorage.app',
-    measurementId: 'G-QHWJJWMZR3',
+    storageBucket: 'tramapp-36f53.firebasestorage.app',
+    measurementId: 'G-SSEBJMPH77',
   );
-
   // Cấu hình Android
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyA_1a4BIdre7YzzWYFv-njolhltMDyeitE',
-    appId: '1:476583007511:android:1e6061907be9bb65ce1352',
-    messagingSenderId: '476583007511',
-    projectId: 'chamcongtram',
-    databaseURL: 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'chamcongtram.firebasestorage.app',
-  );
 
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyClGB5QKIA1ux-Q0D8FD1woFT4iE524xo0',
+    appId: '1:866082811261:android:75d1b3154331c8ba0ef014',
+    messagingSenderId: '866082811261',
+    projectId: 'tramapp-36f53',
+    databaseURL: 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'tramapp-36f53.firebasestorage.app',
+  );
   // Cấu hình iOS / macOS
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDYayXy1_hUz04C3iJo9-lX2ruAsDMqm50',
-    appId: '1:476583007511:ios:53970f3be146a349ce1352',
-    messagingSenderId: '476583007511',
-    projectId: 'chamcongtram',
+    apiKey: 'AIzaSyAwrAw9XiRdTLqd31aEzy-wvc9OVyngY3w',
+    appId: '1:866082811261:ios:8fd6c7615b32ed6e0ef014',
+    messagingSenderId: '866082811261',
+    projectId: 'tramapp-36f53',
     databaseURL: 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'chamcongtram.firebasestorage.app',
-    iosBundleId: 'com.tram.fnb',
+    storageBucket: 'tramapp-36f53.firebasestorage.app',
+    iosBundleId: 'com.tramapp.tramFlutter',
   );
 }

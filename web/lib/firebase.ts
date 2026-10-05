@@ -6,13 +6,13 @@ import { getAuth } from "firebase/auth";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDjsags-PVvGmO8YXC1UMYfnqOa7jAieCg",
+  apiKey: "AIzaSyBWSS2o1ERO1HBnAyVZwAbzOSWNkkWa7GY",
   authDomain: "tramapp-36f53.firebaseapp.com",
   databaseURL: "https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "tramapp-36f53",
-  storageBucket: "tramapp-36f53.appspot.com",
-  messagingSenderId: "727118636553",
-  appId: "1:727118636553:web:tramapp",
+  storageBucket: "tramapp-36f53.firebasestorage.app",
+  messagingSenderId: "866082811261",
+  appId: "1:866082811261:web:bf56985c8e7cedc90ef014",
 };
 
 // Kiểm tra tính đồng nhất của cấu hình Firebase khi khởi động
