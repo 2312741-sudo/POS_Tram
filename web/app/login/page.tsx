@@ -1,12 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { Eye, EyeOff, LogIn, AlertCircle, Info } from "lucide-react";
+import { Eye, EyeOff, LogIn, AlertCircle, Store, User as UserIcon, Lock } from "lucide-react";
 
 export default function LoginPage() {
-  const { login, user, loading } = useAuth();
+  const { login, user, loading, storeCode: defaultStoreCode } = useAuth();
   const router = useRouter();
+
+  const [storeCode, setStoreCode] = useState(defaultStoreCode || "TRAM01");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -15,23 +18,45 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/dashboard");
+      if (user.mustChangePassword) {
+        router.replace("/login/change-password");
+      } else {
+        router.replace("/dashboard");
+      }
     }
   }, [user, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!username.trim() || !password.trim()) {
-      setError("Vui lòng nhập đầy đủ tài khoản và mật khẩu");
+
+    const cleanStore = storeCode.trim().toUpperCase();
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (!cleanStore) {
+      setError("Vui lòng nhập mã chi nhánh cửa hàng (ví dụ: TRAM01)");
       return;
     }
+    if (!cleanUser) {
+      setError("Vui lòng nhập tên tài khoản");
+      return;
+    }
+    if (!cleanPass) {
+      setError("Vui lòng nhập mật khẩu");
+      return;
+    }
+
     setSubmitting(true);
-    const result = await login(username.trim(), password);
+    const result = await login(cleanStore, cleanUser, cleanPass);
     if (result.success) {
-      router.replace("/dashboard");
+      if (result.mustChangePassword) {
+        router.replace("/login/change-password");
+      } else {
+        router.replace("/dashboard");
+      }
     } else {
-      setError(result.error || "Đăng nhập thất bại");
+      setError(result.error || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     }
     setSubmitting(false);
   };
@@ -78,7 +103,7 @@ export default function LoginPage() {
       <div
         style={{
           width: "100%",
-          maxWidth: "430px",
+          maxWidth: "440px",
           borderRadius: "22px",
           padding: "40px",
           background: "#FFFFFF",
@@ -88,8 +113,8 @@ export default function LoginPage() {
           zIndex: 1,
         }}
       >
-        {/* Logo/Title */}
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+        {/* Logo / Header */}
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
           <div
             style={{
               width: "68px",
@@ -104,9 +129,17 @@ export default function LoginPage() {
               margin: "0 auto 16px",
               boxShadow: "0 6px 16px rgba(126, 41, 48, 0.15)",
               overflow: "hidden",
+              position: "relative",
             }}
           >
-            <img src="/logo.jpg" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "14px" }} />
+            <Image
+              src="/logo.jpg"
+              alt="Logo POS Trạm"
+              width={60}
+              height={60}
+              style={{ objectFit: "cover", borderRadius: "14px" }}
+              priority
+            />
           </div>
           <h1
             style={{
@@ -125,16 +158,54 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Store Code Field */}
           <div>
             <label
-              style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#1C1A2D", marginBottom: "6px" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: "700",
+                color: "#1C1A2D",
+                marginBottom: "6px",
+              }}
             >
-              Tài khoản
+              <Store size={15} color="#7E2930" />
+              Mã cửa hàng / Chi nhánh
             </label>
             <input
               type="text"
               className="input-field"
-              placeholder="Nhập tên tài khoản (vd: admin, quanly)"
+              placeholder="Ví dụ: TRAM01"
+              value={storeCode}
+              onChange={(e) => setStoreCode(e.target.value.toUpperCase())}
+              disabled={submitting}
+              autoComplete="organization"
+              style={{ textTransform: "uppercase", fontWeight: "600", letterSpacing: "0.05em" }}
+            />
+          </div>
+
+          {/* Username Field */}
+          <div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: "700",
+                color: "#1C1A2D",
+                marginBottom: "6px",
+              }}
+            >
+              <UserIcon size={15} color="#7E2930" />
+              Tên tài khoản
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Nhập tên đăng nhập (ví dụ: thungan1, quanly)"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={submitting}
@@ -142,17 +213,27 @@ export default function LoginPage() {
             />
           </div>
 
+          {/* Password Field */}
           <div>
             <label
-              style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#1C1A2D", marginBottom: "6px" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: "700",
+                color: "#1C1A2D",
+                marginBottom: "6px",
+              }}
             >
+              <Lock size={15} color="#7E2930" />
               Mật khẩu
             </label>
             <div style={{ position: "relative" }}>
               <input
                 type={showPassword ? "text" : "password"}
                 className="input-field"
-                placeholder="Nhập mật khẩu (vd: 123456)"
+                placeholder="Nhập mật khẩu"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={submitting}
@@ -181,25 +262,28 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Error Banner */}
           {error && (
             <div
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: "8px",
+                gap: "10px",
                 background: "rgba(180, 35, 44, 0.08)",
                 border: "1px solid rgba(180, 35, 44, 0.25)",
                 borderRadius: "10px",
                 padding: "12px",
                 color: "#B4232C",
                 fontSize: "13px",
+                lineHeight: "1.4",
               }}
             >
-              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
-              {error}
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: "1px" }} />
+              <div>{error}</div>
             </div>
           )}
 
+          {/* Submit Button */}
           <button
             type="submit"
             className="btn-primary"
@@ -216,7 +300,7 @@ export default function LoginPage() {
             {submitting ? (
               <>
                 <div className="spinner" style={{ width: "16px", height: "16px" }} />
-                Đang đăng nhập...
+                Đang xác thực...
               </>
             ) : (
               <>
@@ -227,27 +311,15 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Quick hint box */}
         <div
           style={{
             marginTop: "24px",
-            padding: "12px 14px",
-            background: "#FAF7F2",
-            border: "1px solid #E6DEC8",
-            borderRadius: "10px",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "8px",
+            textAlign: "center",
             fontSize: "12px",
-            color: "#5D5B63",
+            color: "#8B8FA8",
           }}
         >
-          <Info size={16} color="#7E2930" style={{ flexShrink: 0, marginTop: "1px" }} />
-          <div>
-            Tài khoản mẫu: <strong>admin</strong> | Mật khẩu: <strong>123456</strong>
-            <br />
-            Phân quyền: <span style={{ color: "#7E2930", fontWeight: "700" }}>CHỦ QUÁN / QUẢN LÝ CA</span>
-          </div>
+          Hệ thống bảo vệ đa tầng &bull; Khóa tạm sau 5 lần nhập sai liên tiếp
         </div>
       </div>
     </div>
