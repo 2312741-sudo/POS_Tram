@@ -25,8 +25,9 @@ import {
 } from "lucide-react";
 import { exportUsers } from "@/lib/export";
 import { useAuth, hasPermission, validateUsername, normalizeUsername } from "@/lib/auth";
+import { useDashboardData } from "@/lib/data-context";
 import { db, functions } from "@/lib/firebase";
-import { ref, onValue, set, update, remove } from "firebase/database";
+import { ref, set, update, remove } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 
 function formatDateTime(timestamp?: number | null) {
@@ -135,10 +136,48 @@ export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, loading: authLoading, storeCode: activeStoreCode } = useAuth();
 
-  const [usersMap, setUsersMap] = useState<Record<string, DashboardUser[]>>({});
-  const [storesList, setStoresList] = useState<{ storeCode: string; storeName: string }[]>([]);
-  const [currentStoreCode, setCurrentStoreCode] = useState<string>("ALL");
-  const [loadingUsers, setLoadingUsers] = useState(true);
+  const {
+    stores,
+    allUsers,
+    loading: dataLoading,
+    currentStoreCode,
+    setCurrentStoreCode,
+  } = useDashboardData();
+
+  const loadingUsers = dataLoading;
+
+  const storesList = useMemo(() => {
+    return stores.map((s) => ({ storeCode: s.storeCode, storeName: s.storeName }));
+  }, [stores]);
+
+  const usersMap = useMemo(() => {
+    const map: Record<string, DashboardUser[]> = {};
+    stores.forEach((s) => {
+      map[s.storeCode] = [];
+    });
+    allUsers.forEach((u) => {
+      const sCode = u.storeCode || "TRAM01";
+      if (!map[sCode]) map[sCode] = [];
+      map[sCode].push({
+        id: u.id || u.username || "",
+        uid: u.id || u.username || "",
+        username: u.username || "",
+        fullName: u.fullName || u.username || "",
+        roleId: u.roleId || u.role || "ROLE_WAITER",
+        role: u.roleId || u.role || "ROLE_WAITER",
+        isRootOwner: u.isRootOwner,
+        customPermissions: u.customPermissions || [],
+        isActive: u.isActive !== false,
+        phone: u.phone || "",
+        storeCode: sCode,
+        storeName: u.storeName,
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
+        mustChangePassword: u.mustChangePassword,
+      });
+    });
+    return map;
+  }, [stores, allUsers]);
 
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("ALL");
@@ -167,73 +206,6 @@ export default function UsersPage() {
       router.replace("/dashboard");
     }
   }, [authLoading, currentUser, canManageUsers, router]);
-
-  // 2. Lắng nghe dữ liệu người dùng từ Firebase Realtime Database
-  useEffect(() => {
-    const storesRef = ref(db, "stores");
-    const unsubscribe = onValue(storesRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.val() as Record<string, Record<string, unknown>>;
-        const map: Record<string, DashboardUser[]> = {};
-        const sList: { storeCode: string; storeName: string }[] = [];
-
-        Object.entries(data).forEach(([sCode, sVal]) => {
-          const info = (sVal.storeInfo || {}) as Record<string, unknown>;
-          const sName = String(info.storeName || sCode);
-          sList.push({ storeCode: sCode, storeName: sName });
-
-          if (sVal.users && typeof sVal.users === "object") {
-            const rawUsers = sVal.users as Record<string, Record<string, unknown>>;
-            const deduplicated: Record<string, DashboardUser> = {};
-
-            Object.entries(rawUsers).forEach(([key, uData]) => {
-              const uName = String(uData.username || key).toLowerCase();
-              const uid = typeof uData.uid === "string" ? uData.uid : key;
-              const roleVal = String(uData.roleId || uData.role || "ROLE_WAITER");
-              const isOwner =
-                uData.isRootOwner === true || roleVal.toUpperCase().includes("OWNER");
-
-              const uItem: DashboardUser = {
-                id: uid,
-                uid: uid,
-                username: uName,
-                fullName: String(uData.fullName || uData.name || uName),
-                roleId: roleVal,
-                role: roleVal,
-                phone: typeof uData.phone === "string" ? uData.phone : "",
-                isActive: uData.isActive !== false,
-                isRootOwner: isOwner,
-                customPermissions: Array.isArray(uData.customPermissions)
-                  ? (uData.customPermissions as string[])
-                  : [],
-                storeCode: sCode,
-                storeName: sName,
-                createdAt: typeof uData.createdAt === "number" ? uData.createdAt : undefined,
-                lastLoginAt: typeof uData.lastLoginAt === "number" ? uData.lastLoginAt : null,
-                mustChangePassword: Boolean(uData.mustChangePassword),
-              };
-
-              // Ưu tiên bản ghi có uid chuẩn
-              if (!deduplicated[uName] || key.length > 20) {
-                deduplicated[uName] = uItem;
-              }
-            });
-
-            map[sCode] = Object.values(deduplicated);
-          } else {
-            map[sCode] = [];
-          }
-        });
-
-        sList.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
-        setStoresList(sList);
-        setUsersMap(map);
-      }
-      setLoadingUsers(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   // Danh sách người dùng theo chi nhánh được chọn
   const currentUsers = useMemo(() => {
