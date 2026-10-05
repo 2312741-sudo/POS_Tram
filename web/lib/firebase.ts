@@ -3,6 +3,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDjsags-PVvGmO8YXC1UMYfnqOa7jAieCg",
@@ -17,5 +18,7 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+export const functions = getFunctions(app, "asia-southeast1");
 export { firebaseConfig };
 export default app;
+

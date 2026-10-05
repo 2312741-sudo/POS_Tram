@@ -1,0 +1,13 @@
+{
+  "name": "migrate-legacy-users",
+  "version": "1.0.0",
+  "description": "Script di chuyển tài khoản người dùng cũ sang Firebase Auth và xóa trường password",
+  "main": "migrate.js",
+  "scripts": {
+    "dry-run": "node migrate.js",
+    "apply": "node migrate.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

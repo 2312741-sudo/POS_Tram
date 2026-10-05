@@ -70,3 +70,13 @@ app.*.map.json
 # Scratch / Temp
 scratch/
 tmp/
+
+# Cloud Functions & Legacy Migration
+functions/lib/
+functions/node_modules/
+migration_output/
+**/service-account*.json
+*.csv
+.env*
+firebase-debug.log
+*-debug.log

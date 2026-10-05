@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/permissions/app_permissions.dart';
@@ -386,51 +387,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         final storeCode = _auth.currentStoreCode;
 
                         if (!isEditing) {
-                          // TẠO MỚI QUA SECONDARY FIREBASE APP (Theo Section 7 của AUTH_CONTRACT)
-                          // Bảo đảm phiên làm việc của Quản lý/Chủ quán không bị tự động đăng xuất!
-                          final appName = 'SecondaryStaffApp_${DateTime.now().millisecondsSinceEpoch}';
-                          FirebaseApp? secondaryApp;
+                          // TẠO MỚI QUA CLOUD FUNCTIONS (An toàn tuyệt đối, không dùng secondary app)
                           try {
-                            secondaryApp = await Firebase.initializeApp(
-                              name: appName,
-                              options: Firebase.app().options,
-                            );
-                            final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-                            final email = AuthUtils.buildAuthEmail(username, storeCode);
-
-                            final cred = await secondaryAuth.createUserWithEmailAndPassword(
-                              email: email,
-                              password: rawPass,
-                            );
-
-                            final newUid = cred.user!.uid;
-
-                            final newUser = UserModel(
-                              uid: newUid,
-                              username: username,
-                              fullName: fullName,
-                              roleId: selectedRole,
-                              isRootOwner: false,
-                              customPermissions: customPerms,
-                              isActive: true,
-                              phone: phone,
-                              createdAt: DateTime.now().millisecondsSinceEpoch,
-                              mustChangePassword: true, // Bắt buộc đổi ở lần đăng nhập đầu
-                            );
-
-                            await _fb.saveUser(newUser);
-
-                            // Ghi audit log
-                            await _fb.logAction(AuditLogModel(
-                              timestamp: DateTime.now().millisecondsSinceEpoch,
-                              username: _auth.currentUser?.username ?? 'admin',
-                              userFullName: _auth.currentUser?.fullName ?? 'Chủ Quán',
-                              userRole: _auth.currentUser?.roleId ?? 'ROLE_OWNER',
-                              action: 'USER_CREATE',
-                              targetType: 'USER',
-                              targetId: username,
-                              details: 'Tạo tài khoản nhân viên @$username ($fullName) vai trò $selectedRole',
-                            ));
+                            final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+                            final callable = functions.httpsCallable('createStaffAccount');
+                            await callable.call({
+                              'storeCode': storeCode,
+                              'username': username,
+                              'fullName': fullName,
+                              'roleId': selectedRole,
+                              'tempPassword': rawPass,
+                              'phone': phone,
+                              'customPermissions': customPerms,
+                            });
 
                             if (mounted) {
                               Navigator.pop(ctx);
@@ -442,10 +411,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 ),
                               );
                             }
-                          } on FirebaseAuthException catch (e) {
-                            String msg = 'Lỗi tạo tài khoản: ${e.message}';
-                            if (e.code == 'email-already-in-use') {
-                              msg = 'Tên đăng nhập này đã được sử dụng.';
+                          } on FirebaseFunctionsException catch (e) {
+                            String msg = e.message ?? 'Lỗi tạo tài khoản nhân viên.';
+                            if (e.code == 'already-exists') {
+                              msg = 'Tên đăng nhập này đã được sử dụng trong chi nhánh.';
                             }
                             setDlgState(() {
                               dlgError = msg;
@@ -456,10 +425,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               dlgError = 'Lỗi hệ thống: $e';
                               isSaving = false;
                             });
-                          } finally {
-                            if (secondaryApp != null) {
-                              await secondaryApp.delete();
-                            }
                           }
                         } else {
                           // CẬP NHẬT HỒ SƠ NGƯỜI DÙNG HIỆN CÓ
@@ -547,22 +512,193 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
 
     if (confirm == true) {
-      final updated = user.copyWith(isActive: !user.isActive);
-      await _fb.saveUser(updated);
+      try {
+        final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+        final callable = functions.httpsCallable('setStaffDisabled');
+        await callable.call({
+          'storeCode': _auth.currentStoreCode,
+          'targetUid': user.uid.isNotEmpty ? user.uid : user.username,
+          'disabled': willDeactivate,
+        });
 
-      await _fb.logAction(AuditLogModel(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        username: _auth.currentUser?.username ?? 'admin',
-        userFullName: _auth.currentUser?.fullName ?? 'Chủ Quán',
-        userRole: _auth.currentUser?.roleId ?? 'ROLE_OWNER',
-        action: willDeactivate ? 'USER_LOCK' : 'USER_UNLOCK',
-        targetType: 'USER',
-        targetId: user.username,
-        details: '${willDeactivate ? "Khóa" : "Mở khóa"} tài khoản @${user.username} (${user.fullName})',
-      ));
-
-      _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(willDeactivate ? 'Đã tạm khóa tài khoản @${user.username}' : 'Đã mở khóa tài khoản @${user.username}'),
+              backgroundColor: willDeactivate ? AppColors.warningInk : AppColors.success,
+            ),
+          );
+        }
+        _loadData();
+      } on FirebaseFunctionsException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message ?? 'Lỗi khi cập nhật trạng thái tài khoản.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi hệ thống: $e'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+      }
     }
+  }
+
+  /// Đặt lại mật khẩu nhân viên qua Cloud Functions (Bật mustChangePassword)
+  Future<void> _showResetPasswordDialog(UserModel user) async {
+    final passwordCtrl = TextEditingController();
+    bool isSaving = false;
+    String? dlgError;
+    bool obscure = true;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.key_outlined, color: Colors.purple),
+                ),
+                const SizedBox(width: 10),
+                const Text('Đặt lại mật khẩu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tài khoản nhân viên:', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        const SizedBox(height: 2),
+                        Text('${user.fullName} (@${user.username})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passwordCtrl,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Mật khẩu mới *',
+                      hintText: 'Tối thiểu 6 ký tự',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setDlgState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '* Nhân viên sẽ bắt buộc đổi mật khẩu ở lần đăng nhập tiếp theo.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                  if (dlgError != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.dangerLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(dlgError!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                child: const Text('Hủy'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        final newPass = passwordCtrl.text.trim();
+                        if (newPass.length < 6) {
+                          setDlgState(() => dlgError = 'Mật khẩu mới phải có tối thiểu 6 ký tự.');
+                          return;
+                        }
+
+                        setDlgState(() {
+                          isSaving = true;
+                          dlgError = null;
+                        });
+
+                        try {
+                          final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+                          final callable = functions.httpsCallable('resetStaffPassword');
+                          await callable.call({
+                            'storeCode': _auth.currentStoreCode,
+                            'targetUid': user.uid.isNotEmpty ? user.uid : user.username,
+                            'newPassword': newPass,
+                          });
+
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            _loadData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Đã đặt lại mật khẩu cho @${user.username} thành công!'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } on FirebaseFunctionsException catch (e) {
+                          setDlgState(() {
+                            dlgError = e.message ?? 'Lỗi khi đặt lại mật khẩu.';
+                            isSaving = false;
+                          });
+                        } catch (e) {
+                          setDlgState(() {
+                            dlgError = 'Lỗi hệ thống: $e';
+                            isSaving = false;
+                          });
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Xác nhận đặt lại'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   /// Xóa tài khoản nhân viên (Sovereign Owner Rule bảo vệ Chủ quán)
@@ -821,6 +957,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   tooltip: 'Sửa thông tin',
                                   onPressed: () => _showAddEditUserDialog(user),
                                 ),
+
+                                // Reset Password Action (Qua Cloud Function)
+                                if (!user.isRootOwner || (_auth.currentUser?.isRootOwner ?? false))
+                                  IconButton(
+                                    icon: const Icon(Icons.key_outlined, size: 20, color: Colors.purple),
+                                    tooltip: 'Đặt lại mật khẩu',
+                                    onPressed: () => _showResetPasswordDialog(user),
+                                  ),
 
                                 // Delete Action (Hidden for Root Owner)
                                 if (!user.isRootOwner)

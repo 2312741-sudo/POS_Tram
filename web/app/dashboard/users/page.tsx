@@ -21,13 +21,13 @@ import {
   UserX,
   Clock,
   ShieldAlert,
+  KeyRound,
 } from "lucide-react";
 import { exportUsers } from "@/lib/export";
-import { useAuth, hasPermission, validateUsername, normalizeUsername, generateEmail } from "@/lib/auth";
-import { db, firebaseConfig } from "@/lib/firebase";
+import { useAuth, hasPermission, validateUsername, normalizeUsername } from "@/lib/auth";
+import { db, functions } from "@/lib/firebase";
 import { ref, onValue, set, update, remove } from "firebase/database";
-import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 
 function formatDateTime(timestamp?: number | null) {
   if (!timestamp) return "Chưa đăng nhập";
@@ -149,6 +149,13 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DashboardUser | null>(null);
   const [error, setError] = useState("");
+
+  // Quản lý Đặt lại mật khẩu qua Cloud Function
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<DashboardUser | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState("");
 
   // 1. Phân quyền truy cập trang (Chỉ Chủ quán hoặc người có MANAGE_USERS)
   const canManageUsers = useMemo(() => {
@@ -386,61 +393,35 @@ export default function UsersPage() {
 
         closeModal();
       } else {
-        // TẠO NHÂN VIÊN MỚI QUA SECONDARY FIREBASE APP
-        const email = generateEmail(cleanUser, cleanStore);
+        // TẠO NHÂN VIÊN MỚI QUA CLOUD FUNCTIONS (An toàn tuyệt đối)
+        const createStaffFn = httpsCallable<
+          {
+            storeCode: string;
+            username: string;
+            fullName: string;
+            roleId: string;
+            tempPassword: string;
+            phone?: string;
+            customPermissions?: string[];
+          },
+          { success: boolean; uid: string; message: string }
+        >(functions, "createStaffAccount");
 
-        // Khởi tạo thực thể Firebase App phụ
-        const secondaryAppName = `SecondaryStaff_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-        const secondaryAuth = getAuth(secondaryApp);
-
-        let newUid = "";
-        try {
-          const cred = await createUserWithEmailAndPassword(secondaryAuth, email, form.password.trim());
-          newUid = cred.user.uid;
-        } finally {
-          await deleteApp(secondaryApp);
-        }
-
-        const now = Date.now();
-        const profilePayload = {
-          uid: newUid,
+        await createStaffFn({
+          storeCode: cleanStore,
           username: cleanUser,
           fullName: form.fullName.trim(),
           roleId: form.role,
-          role: form.role,
-          isRootOwner: false,
-          customPermissions: form.customPermissions,
-          isActive: form.isActive,
+          tempPassword: form.password.trim(),
           phone: form.phone.trim(),
-          storeCode: cleanStore,
-          createdAt: now,
-          lastLoginAt: null,
-          mustChangePassword: true, // Bắt buộc đổi ở lần đăng nhập đầu
-        };
-
-        // Ghi vào RTDB theo chuẩn stores/{storeCode}/users/{uid} (KHÔNG lưu mật khẩu)
-        await set(ref(db, `stores/${cleanStore}/users/${newUid}`), profilePayload);
-        await set(ref(db, `stores/${cleanStore}/users/${cleanUser}`), profilePayload).catch(() => {});
-
-        // Ghi Audit log
-        const logId = `LOG_${now}_${Math.floor(Math.random() * 1000)}`;
-        await set(ref(db, `stores/${cleanStore}/audit_logs/${logId}`), {
-          action: "CREATE_USER",
-          targetType: "USER",
-          targetId: newUid,
-          username: currentUser?.username || "admin",
-          userFullName: currentUser?.fullName || "Quản trị viên",
-          userRole: currentUser?.roleId || "ROLE_OWNER",
-          details: `Tạo tài khoản nhân viên mới: ${form.fullName.trim()} (@${cleanUser}) - Vai trò: ${form.role}`,
-          timestamp: now,
-        }).catch(() => {});
+          customPermissions: form.customPermissions,
+        });
 
         closeModal();
       }
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
-      if (err.code === "auth/email-already-in-use") {
+      if (err.code === "already-exists" || err.message?.includes("đã tồn tại")) {
         setError(`Tên tài khoản @${cleanUser} đã tồn tại trong chi nhánh này`);
       } else {
         setError(err.message || "Lỗi khi lưu thông tin nhân viên");
@@ -450,7 +431,7 @@ export default function UsersPage() {
     }
   };
 
-  // Khóa / Mở tài khoản
+  // Khóa / Mở tài khoản qua Cloud Functions (Đồng bộ Auth + RTDB)
   const handleToggleActive = useCallback(
     async (u: DashboardUser) => {
       // Sovereign Owner Rule: Không cho phép khóa tài khoản Chủ quán
@@ -464,30 +445,70 @@ export default function UsersPage() {
       const targetUid = u.uid || u.id;
 
       try {
-        await update(ref(db, `stores/${targetStore}/users/${targetUid}`), {
-          isActive: newActive,
-        });
-        await update(ref(db, `stores/${targetStore}/users/${u.username}`), {
-          isActive: newActive,
-        }).catch(() => {});
+        const setStaffDisabledFn = httpsCallable<
+          { storeCode: string; targetUid: string; disabled: boolean },
+          { success: boolean; message: string }
+        >(functions, "setStaffDisabled");
 
-        const logId = `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        await set(ref(db, `stores/${targetStore}/audit_logs/${logId}`), {
-          action: newActive ? "UNLOCK_USER" : "LOCK_USER",
-          targetType: "USER",
-          targetId: targetUid,
-          username: currentUser?.username || "admin",
-          userFullName: currentUser?.fullName || "Quản trị viên",
-          userRole: currentUser?.roleId || "ROLE_OWNER",
-          details: `${newActive ? "Mở khóa" : "Khóa"} tài khoản nhân viên @${u.username}`,
-          timestamp: Date.now(),
-        }).catch(() => {});
+        await setStaffDisabledFn({
+          storeCode: targetStore,
+          targetUid: targetUid,
+          disabled: !newActive,
+        });
       } catch (err: unknown) {
-        alert((err as Error)?.message || "Lỗi cập nhật trạng thái");
+        alert((err as Error)?.message || "Lỗi cập nhật trạng thái tài khoản");
       }
     },
-    [currentUser, activeStoreCode]
+    [activeStoreCode]
   );
+
+  // Đặt lại mật khẩu nhân viên qua Cloud Functions
+  const openResetPassword = (u: DashboardUser) => {
+    setResetPasswordTarget(u);
+    setNewPasswordInput("");
+    setShowNewPassword(false);
+    setResetPasswordError("");
+  };
+
+  const closeResetPassword = () => {
+    setResetPasswordTarget(null);
+    setNewPasswordInput("");
+    setResetPasswordError("");
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!resetPasswordTarget) return;
+    if (!newPasswordInput || newPasswordInput.length < 6) {
+      setResetPasswordError("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+      return;
+    }
+
+    setResettingPassword(true);
+    setResetPasswordError("");
+
+    try {
+      const targetStore = resetPasswordTarget.storeCode || activeStoreCode || "TRAM01";
+      const targetUid = resetPasswordTarget.uid || resetPasswordTarget.id;
+
+      const resetFn = httpsCallable<
+        { storeCode: string; targetUid: string; newPassword: string },
+        { success: boolean; message: string }
+      >(functions, "resetStaffPassword");
+
+      await resetFn({
+        storeCode: targetStore,
+        targetUid: targetUid,
+        newPassword: newPasswordInput,
+      });
+
+      alert(`Đã đặt lại mật khẩu cho tài khoản @${resetPasswordTarget.username}. Nhân viên sẽ bắt buộc đổi mật khẩu khi đăng nhập.`);
+      closeResetPassword();
+    } catch (err: unknown) {
+      setResetPasswordError((err as Error)?.message || "Lỗi khi đặt lại mật khẩu nhân viên.");
+    } finally {
+      setResettingPassword(false);
+    }
+  };
 
   // Xóa tài khoản nhân viên
   const handleDelete = useCallback(async () => {
@@ -992,6 +1013,24 @@ export default function UsersPage() {
                         <Edit2 size={15} />
                       </button>
 
+                      {/* Nút Đặt lại mật khẩu */}
+                      {(!u.isRootOwner || currentUser?.isRootOwner) && (
+                        <button
+                          title="Đặt lại mật khẩu nhân viên"
+                          onClick={() => openResetPassword(u)}
+                          style={{
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            background: "rgba(139, 92, 246, 0.1)",
+                            border: "1px solid rgba(139, 92, 246, 0.3)",
+                            color: "#8B5CF6",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <KeyRound size={15} />
+                        </button>
+                      )}
+
                       {/* Nút Xóa (Bảo vệ Chủ quán tối cao) */}
                       {!u.isRootOwner && (
                         <button
@@ -1389,6 +1428,107 @@ export default function UsersPage() {
                 <button className="btn-danger" onClick={handleDelete} style={{ flex: 1, justifyContent: "center" }}>
                   <Trash2 size={16} />
                   Xóa nhân viên
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Đặt lại Mật khẩu Nhân viên */}
+      {resetPasswordTarget && (
+        <div className="modal-overlay" onClick={closeResetPassword}>
+          <div className="modal-content" style={{ maxWidth: "440px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: "24px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(139, 92, 246, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <KeyRound size={20} color="#8B5CF6" />
+                  </div>
+                  <h2 style={{ fontSize: "17px", fontWeight: "700", color: "#1C1A2D" }}>
+                    Đặt lại mật khẩu
+                  </h2>
+                </div>
+                <button
+                  onClick={closeResetPassword}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#8B8FA8" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ background: "#F8FAFC", padding: "12px 14px", borderRadius: "8px", marginBottom: "16px", border: "1px solid #E2E8F0" }}>
+                <div style={{ fontSize: "13px", color: "#64748B" }}>Tài khoản nhân viên:</div>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1E293B", marginTop: "2px" }}>
+                  {resetPasswordTarget.fullName} <span style={{ color: "#64748B", fontWeight: "500" }}>@{resetPasswordTarget.username}</span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
+                  Chi nhánh: <strong style={{ color: "#0F172A" }}>{resetPasswordTarget.storeCode || activeStoreCode}</strong>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
+                  Mật khẩu mới <span style={{ color: "#EF4444" }}>*</span>
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                    style={{
+                      width: "100%",
+                      padding: "10px 40px 10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "14px",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{
+                      position: "absolute",
+                      right: "10px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#94A3B8",
+                    }}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: "12px", color: "#64748B", marginTop: "6px" }}>
+                  * Nhân viên sẽ bắt buộc phải đổi mật khẩu ở lần đăng nhập tiếp theo.
+                </p>
+              </div>
+
+              {resetPasswordError && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "8px", padding: "10px 12px", color: "#B91C1C", fontSize: "13px", marginBottom: "16px" }}>
+                  {resetPasswordError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  className="btn-secondary"
+                  onClick={closeResetPassword}
+                  style={{ flex: 1, justifyContent: "center" }}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={handleConfirmResetPassword}
+                  disabled={resettingPassword}
+                  style={{ flex: 1, justifyContent: "center", background: "#8B5CF6", borderColor: "#8B5CF6" }}
+                >
+                  {resettingPassword ? "Đang xử lý..." : "Xác nhận đặt lại"}
                 </button>
               </div>
             </div>

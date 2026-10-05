@@ -43,12 +43,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
     final roles = await _fb.getRoles();
     if (mounted) {
       setState(() {
-        _users = users.isNotEmpty ? users : [
-          UserModel(username: 'admin', fullName: 'Chủ Quán (Admin)', password: 'admin', roleId: 'ROLE_OWNER', isRootOwner: true),
-          UserModel(username: 'thungan', fullName: 'Nguyễn Thu Ngân', password: '123', roleId: 'ROLE_CASHIER'),
-          UserModel(username: 'phucvu', fullName: 'Trần Phục Vụ', password: '123', roleId: 'ROLE_WAITER'),
-          UserModel(username: 'daubep', fullName: 'Lê Đầu Bếp', password: '123', roleId: 'ROLE_KITCHEN'),
-        ];
+        _users = users;
         _roles = roles.isNotEmpty ? roles : [
           RoleModel(id: 'ROLE_OWNER', name: 'Chủ Quán (Toàn quyền)', permissions: AppPermissions.allPermissions.map((p) => p.key).toList(), isSystemRole: true),
           RoleModel(id: 'ROLE_MANAGER', name: 'Quản Lý Ca', permissions: [AppPermissions.viewMenu, AppPermissions.editMenu, AppPermissions.openTable, AppPermissions.createBill, AppPermissions.printBill, AppPermissions.viewReports], isSystemRole: true),
@@ -323,13 +318,32 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                     ),
                     const Divider(height: 1),
 
-                    // Interactive Matrix Table
+                    // Interactive Matrix Table or Empty State
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
+                      child: _filteredUsers.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    _searchQuery.isEmpty ? 'Chưa có tài khoản nhân viên nào' : 'Không tìm thấy tài khoản phù hợp',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Vui lòng vào Quản lý tài khoản để thêm nhân viên vào quán.',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey.shade500),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
                             headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
                             dataRowMinHeight: 48,
                             dataRowMaxHeight: 56,

@@ -1,0 +1,75 @@
+name: POS Trạm CI Pipeline
+
+on:
+  push:
+    branches: [main, integration/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  flutter-pos:
+    name: Flutter POS (Mobile)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: app_flutter
+        run: flutter pub get
+
+      - name: Analyze code
+        working-directory: app_flutter
+        # Tránh fail do cảnh báo deprecation / info linter không nghiêm trọng
+        run: dart analyze --no-fatal-warnings
+
+      - name: Run Flutter tests
+        working-directory: app_flutter
+        run: flutter test
+
+  web-admin:
+    name: Web Admin (Next.js)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Run Vitest unit & golden tests
+        working-directory: web
+        run: npx vitest run
+
+      - name: Run ESLint
+        working-directory: web
+        run: npm run lint
+
+      - name: Build Next.js application
+        working-directory: web
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: "mock_api_key_for_ci_build"
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "mock.firebaseapp.com"
+          NEXT_PUBLIC_FIREBASE_DATABASE_URL: "https://mock-default-rtdb.asia-southeast1.firebasedatabase.app"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "mock-tram-ci"
+        run: npm run build
