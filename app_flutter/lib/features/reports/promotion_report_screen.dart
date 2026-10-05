@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
-import '../../widgets/common_widgets.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/campaign_service.dart';
 
 class PromotionReportScreen extends StatefulWidget {
-  const PromotionReportScreen({Key? key}) : super(key: key);
+  const PromotionReportScreen({super.key});
 
   @override
   State<PromotionReportScreen> createState() => _PromotionReportScreenState();

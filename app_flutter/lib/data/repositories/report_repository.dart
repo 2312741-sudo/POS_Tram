@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../../core/reports/report_calculator.dart';
+import '../../core/reports/report_date_utils.dart';
+import '../../core/reports/report_models.dart';
 import '../models/app_models.dart';
 import 'seed_data.dart';
 
@@ -470,5 +473,66 @@ class ReportRepository {
         await saveCustomer(c);
       }
     } catch (_) {}
+  }
+
+  // ==================== REPORT DATA QUERIES ====================
+  DatabaseReference _getStoreBillsRef(String? storeCode) {
+    final code = (storeCode != null && storeCode.isNotEmpty) ? storeCode : _currentStoreCode;
+    return _root.child('stores').child(code).child('bills');
+  }
+
+  DatabaseReference _getStoreProductsRef(String? storeCode) {
+    final code = (storeCode != null && storeCode.isNotEmpty) ? storeCode : _currentStoreCode;
+    return _root.child('stores').child(code).child('products');
+  }
+
+  Stream<List<BillModel>> storeBillsStream({String? storeCode}) {
+    return _getStoreBillsRef(storeCode).onValue.map<List<BillModel>>((event) {
+      if (!event.snapshot.exists || event.snapshot.value == null) return <BillModel>[];
+      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+      final list = map.entries
+          .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
+          .toList();
+      return ReportCalculator.deduplicateBills(list);
+    }).handleError((_) => <BillModel>[]);
+  }
+
+  Future<List<BillModel>> getStoreBills({String? storeCode, DateTime? startDate, DateTime? endDate}) async {
+    try {
+      final snap = await _getStoreBillsRef(storeCode).get().timeout(const Duration(seconds: 4));
+      if (!snap.exists || snap.value == null) return <BillModel>[];
+      final map = Map<dynamic, dynamic>.from(snap.value as Map);
+      final list = map.entries
+          .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
+          .toList();
+      final deduped = ReportCalculator.deduplicateBills(list);
+      if (startDate != null && endDate != null) {
+        return deduped.where((b) {
+          final dt = ReportDateUtils.getBillDateTime(b.closedAt, b.createdAt, b.status);
+          return ReportDateUtils.isInRange(dt, startDate, endDate);
+        }).toList();
+      }
+      return deduped;
+    } catch (_) {
+      return <BillModel>[];
+    }
+  }
+
+  Future<Map<int, ProductModel>> getProductsMap({String? storeCode}) async {
+    try {
+      final snap = await _getStoreProductsRef(storeCode).get().timeout(const Duration(seconds: 3));
+      if (!snap.exists || snap.value == null) return <int, ProductModel>{};
+      final map = Map<dynamic, dynamic>.from(snap.value as Map);
+      final result = <int, ProductModel>{};
+      map.forEach((k, v) {
+        if (v is Map) {
+          final p = ProductModel.fromMap(v, k.toString());
+          if (p.id > 0) result[p.id] = p;
+        }
+      });
+      return result;
+    } catch (_) {
+      return <int, ProductModel>{};
+    }
   }
 }

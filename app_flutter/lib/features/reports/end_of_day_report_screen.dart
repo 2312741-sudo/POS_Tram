@@ -7,11 +7,14 @@ import 'package:intl/intl.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../core/reports/report_calculator.dart';
+import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'reports_hub_screen.dart';
 
 class EndOfDayReportScreen extends StatefulWidget {
   const EndOfDayReportScreen({super.key});
@@ -812,6 +815,57 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.assessment_outlined, color: TramColors.brandPrimary),
+            tooltip: 'Trung tâm Báo cáo Quản trị',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportsHubScreen(initialReport: ReportKind.endOfDay)),
+              );
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.file_download_outlined, color: Colors.black87),
+            tooltip: 'Xuất báo cáo',
+            onSelected: (val) {
+              if (val == 'EXCEL_Z') _exportZReportExcel();
+              if (val == 'PDF_Z') _exportZReportPdf();
+              if (val == 'EXCEL_PROD') _exportHangHoaExcel();
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                value: 'EXCEL_Z',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_view_outlined, color: Colors.green, size: 18),
+                    SizedBox(width: 8),
+                    Text('Xuất Excel (Z-Report)'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'PDF_Z',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf_outlined, color: Colors.red, size: 18),
+                    SizedBox(width: 8),
+                    Text('Xuất PDF (Z-Report)'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'EXCEL_PROD',
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, color: Colors.blue, size: 18),
+                    SizedBox(width: 8),
+                    Text('Xuất Excel (Hàng hóa)'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          IconButton(
             icon: const Icon(Icons.help_outline, color: Colors.black87),
             tooltip: 'Giải thích chỉ số',
             onPressed: () {
@@ -948,6 +1002,136 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               ],
             ),
     );
+  }
+
+  Future<void> _exportZReportExcel() async {
+    try {
+      final store = _stores.firstWhere(
+        (s) => s.storeCode == _selectedStoreCode,
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+      );
+      final z = ReportCalculator.generateEndOfDayZReport(
+        bills: _rangeBills,
+        shifts: _shifts,
+        tables: _tables,
+        storeCode: store.storeCode,
+        storeName: store.storeName,
+      );
+      final t1 = z.tab1TongHop;
+      final t2 = z.tab2ThuChi;
+      final rows = [
+        ['Doanh thu gộp (Gross Revenue)', ReportExportService.formatCurrency(t1.grossRevenue), 'VND'],
+        ['Tổng giảm giá món', ReportExportService.formatCurrency(t1.itemDiscounts), 'VND'],
+        ['Tổng giảm giá hóa đơn', ReportExportService.formatCurrency(t1.billDiscounts), 'VND'],
+        ['Tổng chiết khấu / Giảm giá', ReportExportService.formatCurrency(t1.totalDiscount), 'VND'],
+        ['Doanh thu sau chiết khấu', ReportExportService.formatCurrency(t1.afterDiscount), 'VND'],
+        ['Tiền thuế GTGT (VAT)', ReportExportService.formatCurrency(t1.vatTotal), 'VND'],
+        ['Doanh thu thuần (Net Revenue)', ReportExportService.formatCurrency(t1.netRevenue), 'VND'],
+        ['Tiền hoàn trả hàng', ReportExportService.formatCurrency(t1.refundAmount), 'VND'],
+        ['Doanh thu thực thu cuối ngày', ReportExportService.formatCurrency(t1.netRevenueWithoutRefund), 'VND'],
+        ['Số hóa đơn đã thanh toán', t1.paidBillsCount, 'Đơn'],
+        ['Doanh thu trung bình / đơn', ReportExportService.formatCurrency(t1.avgRevenuePerBill), 'VND/đơn'],
+        ['Tổng số lượng khách', t1.totalGuests, 'Khách'],
+        ['Bán hàng thu tiền mặt', ReportExportService.formatCurrency(t2.cashSales), 'VND'],
+        ['Bán hàng chuyển khoản QR', ReportExportService.formatCurrency(t2.transferSales), 'VND'],
+        ['Bán hàng qua thẻ / POS', ReportExportService.formatCurrency(t2.cardSales), 'VND'],
+        ['Tổng tiền thu bán hàng', ReportExportService.formatCurrency(t2.totalRevenue), 'VND'],
+        ['Tổng thu nộp tiền vào quỹ', ReportExportService.formatCurrency(t2.cashInTotal), 'VND'],
+        ['Tổng chi rút tiền quỹ', ReportExportService.formatCurrency(t2.cashOutTotal), 'VND'],
+        ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
+      ];
+      final now = DateTime.now();
+      final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
+      final end = _customEndDate ?? start;
+      final path = await ReportExportService.exportToExcel(
+        reportCode: 'BC_CUOINGAY_Z',
+        reportTitle: 'BÁO CÁO CUỐI NGÀY (Z-REPORT)',
+        storeCode: store.storeCode,
+        storeName: store.storeName,
+        storeAddress: store.address,
+        storePhone: store.phone,
+        startDate: start,
+        endDate: end,
+        headers: ['Chỉ tiêu đối soát cuối ngày', 'Giá trị', 'Đơn vị tính'],
+        rows: rows,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xuất Excel: ${path.split("/").last}'), backgroundColor: TramColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: TramColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportZReportPdf() async {
+    try {
+      final store = _stores.firstWhere(
+        (s) => s.storeCode == _selectedStoreCode,
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+      );
+      final z = ReportCalculator.generateEndOfDayZReport(
+        bills: _rangeBills,
+        shifts: _shifts,
+        tables: _tables,
+        storeCode: store.storeCode,
+        storeName: store.storeName,
+      );
+      final t1 = z.tab1TongHop;
+      final t2 = z.tab2ThuChi;
+      final rows = [
+        ['Doanh thu gộp (Gross Revenue)', ReportExportService.formatCurrency(t1.grossRevenue), 'VND'],
+        ['Tổng giảm giá món', ReportExportService.formatCurrency(t1.itemDiscounts), 'VND'],
+        ['Tổng giảm giá hóa đơn', ReportExportService.formatCurrency(t1.billDiscounts), 'VND'],
+        ['Tổng chiết khấu / Giảm giá', ReportExportService.formatCurrency(t1.totalDiscount), 'VND'],
+        ['Doanh thu sau chiết khấu', ReportExportService.formatCurrency(t1.afterDiscount), 'VND'],
+        ['Tiền thuế GTGT (VAT)', ReportExportService.formatCurrency(t1.vatTotal), 'VND'],
+        ['Doanh thu thuần (Net Revenue)', ReportExportService.formatCurrency(t1.netRevenue), 'VND'],
+        ['Tiền hoàn trả hàng', ReportExportService.formatCurrency(t1.refundAmount), 'VND'],
+        ['Doanh thu thực thu cuối ngày', ReportExportService.formatCurrency(t1.netRevenueWithoutRefund), 'VND'],
+        ['Số hóa đơn đã thanh toán', t1.paidBillsCount, 'Đơn'],
+        ['Doanh thu trung bình / đơn', ReportExportService.formatCurrency(t1.avgRevenuePerBill), 'VND/đơn'],
+        ['Tổng số lượng khách', t1.totalGuests, 'Khách'],
+        ['Bán hàng thu tiền mặt', ReportExportService.formatCurrency(t2.cashSales), 'VND'],
+        ['Bán hàng chuyển khoản QR', ReportExportService.formatCurrency(t2.transferSales), 'VND'],
+        ['Bán hàng qua thẻ / POS', ReportExportService.formatCurrency(t2.cardSales), 'VND'],
+        ['Tổng tiền thu bán hàng', ReportExportService.formatCurrency(t2.totalRevenue), 'VND'],
+        ['Tổng thu nộp tiền vào quỹ', ReportExportService.formatCurrency(t2.cashInTotal), 'VND'],
+        ['Tổng chi rút tiền quỹ', ReportExportService.formatCurrency(t2.cashOutTotal), 'VND'],
+        ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
+      ];
+      final now = DateTime.now();
+      final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
+      final end = _customEndDate ?? start;
+      final path = await ReportExportService.exportToPdf(
+        reportCode: 'BC_CUOINGAY_Z',
+        reportTitle: 'BÁO CÁO CUỐI NGÀY (Z-REPORT)',
+        storeCode: store.storeCode,
+        storeName: store.storeName,
+        storeAddress: store.address,
+        storePhone: store.phone,
+        startDate: start,
+        endDate: end,
+        headers: ['Chỉ tiêu đối soát cuối ngày', 'Giá trị', 'Đơn vị tính'],
+        rows: rows,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xuất PDF: ${path.split("/").last}'), backgroundColor: TramColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi xuất PDF: $e'), backgroundColor: TramColors.danger),
+        );
+      }
+    }
   }
 
   // ==================== TAB 1: TỔNG HỢP ====================

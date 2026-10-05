@@ -4,6 +4,7 @@ class ProductModel {
   final String name;
   final String code; // Mã món KiotViet SKU
   final int price;
+  final int? costPrice;
   final String unit;
   final String category;
   final String? imageBase64;
@@ -18,6 +19,7 @@ class ProductModel {
     required this.name,
     this.code = '',
     required this.price,
+    this.costPrice,
     required this.unit,
     required this.category,
     this.imageBase64,
@@ -75,6 +77,7 @@ class ProductModel {
         name: map['name']?.toString() ?? key ?? '',
         code: map['code']?.toString() ?? '',
         price: (map['price'] as num?)?.toInt() ?? 0,
+        costPrice: (map['costPrice'] as num?)?.toInt(),
         unit: map['unit']?.toString() ?? 'Phần',
         category: cat,
         imageBase64: map['imageBase64']?.toString(),
@@ -93,6 +96,7 @@ class ProductModel {
     'name': name,
     'code': code,
     'price': price,
+    if (costPrice != null) 'costPrice': costPrice,
     'unit': unit,
     'category': category,
     'imageBase64': imageBase64,
@@ -102,4 +106,34 @@ class ProductModel {
     if (allowedToppings.isNotEmpty) 'allowedToppings': allowedToppings,
     'hasIceSugarOptions': hasIceSugarOptions,
   };
+
+  ProductModel copyWith({
+    int? id,
+    String? name,
+    String? code,
+    int? price,
+    int? costPrice,
+    String? unit,
+    String? category,
+    String? imageBase64,
+    String? imageResourceName,
+    bool? isAvailable,
+    Map<String, int>? sizes,
+    List<String>? allowedToppings,
+    bool? hasIceSugarOptions,
+  }) => ProductModel(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    price: price ?? this.price,
+    costPrice: costPrice ?? this.costPrice,
+    unit: unit ?? this.unit,
+    category: category ?? this.category,
+    imageBase64: imageBase64 ?? this.imageBase64,
+    imageResourceName: imageResourceName ?? this.imageResourceName,
+    isAvailable: isAvailable ?? this.isAvailable,
+    sizes: sizes ?? this.sizes,
+    allowedToppings: allowedToppings ?? this.allowedToppings,
+    hasIceSugarOptions: hasIceSugarOptions ?? this.hasIceSugarOptions,
+  );
 }

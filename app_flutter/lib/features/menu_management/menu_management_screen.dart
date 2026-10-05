@@ -108,6 +108,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   void _showProductDialog({ProductModel? existing}) {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(text: existing?.price.toString() ?? '');
+    final costPriceCtrl = TextEditingController(text: existing?.costPrice != null ? existing!.costPrice.toString() : '');
     final unitCtrl = TextEditingController(text: existing?.unit ?? '');
     String selectedCat = existing?.category ?? (_categories.isNotEmpty ? _categories.first.name : '');
     String? base64Image = existing?.imageBase64;
@@ -175,7 +176,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 const SizedBox(height: 12),
                 TextField(controller: priceCtrl, keyboardType: TextInputType.number,
                   style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: const InputDecoration(labelText: 'Giá (đ) *')),
+                  decoration: const InputDecoration(labelText: 'Giá bán (đ) *')),
+                const SizedBox(height: 12),
+                TextField(controller: costPriceCtrl, keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(labelText: 'Giá vốn (đ, để tính lãi gộp)')),
                 const SizedBox(height: 12),
                 TextField(controller: unitCtrl, style: const TextStyle(color: AppColors.textPrimary),
                   decoration: const InputDecoration(labelText: 'Đơn vị (ly, phần, ...)')),
@@ -198,9 +203,17 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty || priceCtrl.text.trim().isEmpty) return;
-                final product = ProductModel(
+                final costParsed = int.tryParse(costPriceCtrl.text.trim());
+                final baseProd = existing ?? ProductModel(
                   name: nameCtrl.text.trim(),
                   price: int.tryParse(priceCtrl.text.trim()) ?? 0,
+                  unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
+                  category: selectedCat.isEmpty ? 'Món khác' : selectedCat,
+                );
+                final product = baseProd.copyWith(
+                  name: nameCtrl.text.trim(),
+                  price: int.tryParse(priceCtrl.text.trim()) ?? 0,
+                  costPrice: costParsed,
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
                   category: selectedCat.isEmpty ? 'Món khác' : selectedCat,
                   imageBase64: base64Image,
@@ -215,7 +228,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   userRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
                   targetType: 'PRODUCT',
                   timestamp: DateTime.now().millisecondsSinceEpoch,
-                  details: '${existing == null ? "Thêm" : "Sửa"} sản phẩm [$_selectedStoreCode]: ${product.name}',
+                  details: '${existing == null ? "Thêm" : "Sửa"} sản phẩm [$_selectedStoreCode]: ${product.name} (giá vốn: ${product.costPrice ?? 0}đ)',
                   targetId: product.name,
                 ));
                 if (mounted) Navigator.pop(ctx);
@@ -653,6 +666,12 @@ class _ProductItem extends StatelessWidget {
                       Text('• ${product.unit}', style: GoogleFonts.beVietnamPro(
                         color: AppColors.textSecondary, fontSize: 12,
                       )),
+                      if (product.costPrice != null && product.costPrice! > 0) ...[
+                        const SizedBox(width: 8),
+                        Text('• Vốn: ${FormatUtils.currency(product.costPrice!)}', style: GoogleFonts.beVietnamPro(
+                          color: AppColors.textSecondary, fontSize: 11,
+                        )),
+                      ],
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
