@@ -32,6 +32,8 @@ import '../../features/promotions/campaign_form_screen.dart';
 import '../../features/promotions/voucher_management_screen.dart';
 import '../../features/reports/inventory_report_screen.dart';
 import '../../features/reports/promotion_report_screen.dart';
+import '../../features/reports/reports_hub_screen.dart';
+import '../../features/printer/printer_settings_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -150,6 +152,14 @@ class AppRouter {
       GoRoute(
         path: '/promotion-report',
         builder: (context, state) => const PromotionReportScreen(),
+      ),
+      GoRoute(
+        path: '/printer-settings',
+        builder: (context, state) => const PrinterSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/reports-hub',
+        builder: (context, state) => const ReportsHubScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

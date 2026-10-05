@@ -9,6 +9,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../cash_shift/cash_shift_dialog.dart';
+import '../auth/change_password_dialog.dart';
 
 class TableListScreen extends StatefulWidget {
   const TableListScreen({super.key});
@@ -1686,6 +1687,34 @@ class _TableListScreenState extends State<TableListScreen> {
                 }
               },
             ),
+          if (_auth.isRootOwner || _auth.can(AppPermissions.viewReports))
+            ListTile(
+              leading: const Icon(Icons.bar_chart, color: TramColors.brandPrimary),
+              title: const Text('Trung Tâm Báo Cáo (12 Báo Cáo)'),
+              subtitle: const Text('Doanh thu, Món ăn, Ca két, Lãi gộp, Xuất file'),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/reports-hub');
+              },
+            ),
+
+          ListTile(
+            leading: const Icon(Icons.print, color: TramColors.brandPrimary),
+            title: const Text('Cài Đặt Máy In (Bluetooth / LAN)'),
+            subtitle: const Text('Kết nối máy in nhiệt, khổ giấy, in thử'),
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/printer-settings');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_reset, color: TramColors.warning),
+            title: const Text('Đổi Mật Khẩu'),
+            onTap: () {
+              Navigator.pop(context);
+              ChangePasswordDialog.show(context);
+            },
+          ),
 
           const Divider(),
           ListTile(
