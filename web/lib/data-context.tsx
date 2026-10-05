@@ -1002,7 +1002,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         userRole: "MANAGER",
         username: "admin",
       };
-      await set(ref(db, `audit_logs/LOG_${Date.now()}`), logEntry);
+      await set(ref(db, `stores/${cleanCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
     } catch (e: any) {
@@ -1024,7 +1024,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         userRole: "MANAGER",
         username: "admin",
       };
-      await set(ref(db, `audit_logs/LOG_${Date.now()}`), logEntry);
+      await set(ref(db, `stores/${storeCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
     } catch (e: any) {
@@ -1047,7 +1047,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         userRole: "MANAGER",
         username: "admin",
       };
-      await set(ref(db, `audit_logs/LOG_${Date.now()}`), logEntry);
+      await set(ref(db, `stores/${storeCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
     } catch (e: any) {
@@ -1071,7 +1071,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           userRole: "MANAGER",
           username: "admin",
         };
-        await set(ref(db, `audit_logs/LOG_${Date.now()}`), logEntry);
+        await set(ref(db, `stores/${targetCode}/audit_logs/LOG_${Date.now()}`), logEntry);
         return { success: true };
       } catch (e: any) {
         return { success: false, error: e.message || "Lỗi khi cập nhật cấu hình két tiền." };
@@ -1182,25 +1182,20 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           actionLogsJson: null,
         };
 
-        // 1. Dual-write history and bills
+        // 1. Write history and bills to store
         const rawHistoryMap = {
           ...historyBill,
           itemsJson: JSON.stringify(items),
           actionLogsJson: JSON.stringify(actionLogs),
         };
         await set(ref(db, `stores/${targetStoreCode}/history/${billId}`), rawHistoryMap);
-        await set(ref(db, `history/${billId}`), rawHistoryMap).catch(() => {});
         await set(ref(db, `stores/${targetStoreCode}/bills/${billId}`), rawHistoryMap).catch(() => {});
 
-        // 2. Clear table in both scoped store and root tables
+        // 2. Clear table in scoped store
         const stdKey = `${table.zone}_${table.name}`;
         await update(ref(db, `stores/${targetStoreCode}/tables/${table.id}`), clearPayload);
         if (stdKey !== table.id) {
           await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), clearPayload).catch(() => {});
-        }
-        await update(ref(db, `tables/${table.id}`), clearPayload).catch(() => {});
-        if (stdKey !== table.id) {
-          await update(ref(db, `tables/${stdKey}`), clearPayload).catch(() => {});
         }
 
         // 3. Write Audit Log
@@ -1224,7 +1219,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           },
         };
         await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // 4. Optimistic UI update
         setRawTables((prev) => {
@@ -1352,20 +1346,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           actionLogsJson: JSON.stringify(actionLogs),
         };
 
-        // Dual-write to history and bills
+        // Write to history and bills in store
         await set(ref(db, `stores/${targetStoreCode}/history/${cancelBillId}`), rawCancelMap);
-        await set(ref(db, `history/${cancelBillId}`), rawCancelMap).catch(() => {});
         await set(ref(db, `stores/${targetStoreCode}/bills/${cancelBillId}`), rawCancelMap).catch(() => {});
 
-        // Clear table in both scoped store and root tables
+        // Clear table in scoped store
         const stdKey = `${table.zone}_${table.name}`;
         await update(ref(db, `stores/${targetStoreCode}/tables/${table.id}`), clearPayload);
         if (stdKey !== table.id) {
           await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), clearPayload).catch(() => {});
-        }
-        await update(ref(db, `tables/${table.id}`), clearPayload).catch(() => {});
-        if (stdKey !== table.id) {
-          await update(ref(db, `tables/${stdKey}`), clearPayload).catch(() => {});
         }
 
         // Write Audit Log
@@ -1390,7 +1379,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           },
         };
         await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // Optimistic UI update
         setRawTables((prev) => {
@@ -1428,9 +1416,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           currentOrderJson: "",
         };
         await set(ref(db, `stores/${targetCode}/tables/${key}`), payload);
-        if (targetCode === "TRAM01") {
-          await set(ref(db, `tables/${key}`), payload).catch(() => {});
-        }
         return { success: true };
       } catch (e: any) {
         return { success: false, error: e.message || "Lỗi lưu bàn" };
@@ -1444,9 +1429,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       try {
         const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
         await remove(ref(db, `stores/${targetCode}/tables/${tableId}`));
-        if (targetCode === "TRAM01") {
-          await remove(ref(db, `tables/${tableId}`)).catch(() => {});
-        }
         return { success: true };
       } catch (e: any) {
         return { success: false, error: e.message || "Lỗi xóa bàn" };
@@ -1475,9 +1457,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         if (productData.id) {
           await update(ref(db, `stores/${targetCode}/products/${productData.id}`), payload);
-          if (targetCode === "TRAM01") {
-            await update(ref(db, `products/${productData.id}`), payload).catch(() => {});
-          }
         } else {
           await push(ref(db, `stores/${targetCode}/products`), payload);
         }
@@ -1502,9 +1481,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       try {
         const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
         await remove(ref(db, `stores/${targetCode}/products/${productId}`));
-        if (targetCode === "TRAM01") {
-          await remove(ref(db, `products/${productId}`)).catch(() => {});
-        }
         return { success: true };
       } catch (e: any) {
         return { success: false, error: e.message || "Lỗi xóa sản phẩm" };
@@ -1527,25 +1503,16 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           // If renaming: remove old key, update products
           if (oldCategoryName && oldCategoryName !== cleanName) {
             await remove(ref(db, `stores/${code}/categories/${oldCategoryName}`)).catch(() => {});
-            if (code === "TRAM01") {
-              await remove(ref(db, `categories/${oldCategoryName}`)).catch(() => {});
-            }
 
             // Update any products under this store using the old category name
             const storeProds = allProducts.filter((p) => p.storeCode === code && p.category === oldCategoryName);
             for (const p of storeProds) {
               await update(ref(db, `stores/${code}/products/${p.id}`), { category: cleanName }).catch(() => {});
-              if (code === "TRAM01") {
-                await update(ref(db, `products/${p.id}`), { category: cleanName }).catch(() => {});
-              }
             }
           }
 
           // Save new category
           await set(ref(db, `stores/${code}/categories/${cleanName}`), { name: cleanName });
-          if (code === "TRAM01") {
-            await set(ref(db, `categories/${cleanName}`), { name: cleanName }).catch(() => {});
-          }
         }
 
         return { success: true };
@@ -1566,9 +1533,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         for (const code of targetStores) {
           await remove(ref(db, `stores/${code}/categories/${cleanName}`)).catch(() => {});
-          if (code === "TRAM01") {
-            await remove(ref(db, `categories/${cleanName}`)).catch(() => {});
-          }
         }
 
         return { success: true };
@@ -1613,17 +1577,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           storeCode: finalStoreCode,
         };
 
-        if (userData.password && userData.password.trim()) {
-          payload.password = userData.password.trim();
-        }
+        // Do NOT store raw passwords in Realtime Database. Passwords belong to Firebase Auth.
 
         // 1. Write to store-scoped path: stores/{storeCode}/users/{username}
         await set(ref(db, `stores/${finalStoreCode}/users/${cleanUsername}`), payload);
 
-        // 2. Also write/mirror to root /users/{username} for backwards compatibility and easy lookup
-        await set(ref(db, `users/${cleanUsername}`), payload).catch(() => {});
-
-        // 3. Write Audit Log
+        // 2. Write Audit Log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
@@ -1637,9 +1596,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           details: `Lưu thông tin nhân viên: ${userData.fullName.trim()} (@${cleanUsername}) - Vai trò: ${role} - Chi nhánh: ${finalStoreCode}`,
         };
         await set(ref(db, `stores/${finalStoreCode}/audit_logs/${logId}`), auditPayload).catch(() => {});
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
-        // 4. Optimistic state updates
+        // 3. Optimistic state updates
         setRawUsersMap((prev) => {
           const storeUsers = prev[finalStoreCode] ? [...prev[finalStoreCode]] : [];
           const idx = storeUsers.findIndex((u) => u.username.toLowerCase() === cleanUsername);
@@ -1695,7 +1653,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         for (const code of targetStores) {
           await remove(ref(db, `stores/${code}/users/${cleanUsername}`)).catch(() => {});
         }
-        await remove(ref(db, `users/${cleanUsername}`)).catch(() => {});
 
         // Audit log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
@@ -1711,7 +1668,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           details: `Xóa nhân viên @${cleanUsername} khỏi hệ thống`,
         };
         await set(ref(db, `stores/${targetStores[0] || "TRAM01"}/audit_logs/${logId}`), auditPayload).catch(() => {});
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // Optimistic state updates
         setRawUsersMap((prev) => {
@@ -1765,9 +1721,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           actionLogsJson: JSON.stringify(updatedLogs),
         };
 
-        // Update in stores/{targetStoreCode}/history/{orderId} and root history
+        // Update in stores/{targetStoreCode}/history/{orderId} and bills
         await update(ref(db, `stores/${targetStoreCode}/history/${orderId}`), patch);
-        await update(ref(db, `history/${orderId}`), patch).catch(() => {});
         await update(ref(db, `stores/${targetStoreCode}/bills/${orderId}`), patch).catch(() => {});
 
         // Audit log
@@ -1784,7 +1739,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           details: `Hủy hóa đơn ${order.billCode || order.orderCode || orderId} bàn ${order.tableName} (${new Intl.NumberFormat("vi-VN").format(order.totalAmount || 0)}đ). Lý do: ${reason}`,
         };
         await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // Optimistic update
         setAllHistory((prev) =>
@@ -1811,7 +1765,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         // Remove from history and bills
         await remove(ref(db, `stores/${targetStoreCode}/history/${orderId}`));
-        await remove(ref(db, `history/${orderId}`)).catch(() => {});
         await remove(ref(db, `stores/${targetStoreCode}/bills/${orderId}`)).catch(() => {});
 
         // Audit log
@@ -1828,7 +1781,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           details: `Xóa vĩnh viễn hóa đơn ${order?.billCode || order?.orderCode || orderId} khỏi hệ thống`,
         };
         await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
-        await set(ref(db, `audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // Optimistic update
         setAllHistory((prev) => prev.filter((h) => h.id !== orderId));

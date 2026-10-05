@@ -15,6 +15,17 @@ const firebaseConfig = {
   appId: "1:727118636553:web:tramapp",
 };
 
+// Kiểm tra tính đồng nhất của cấu hình Firebase khi khởi động
+if (firebaseConfig.databaseURL && firebaseConfig.projectId) {
+  if (!firebaseConfig.databaseURL.includes(firebaseConfig.projectId)) {
+    const errorMsg = `[LỖI CẤU HÌNH FIREBASE] projectId ("${firebaseConfig.projectId}") không khớp với project trong databaseURL ("${firebaseConfig.databaseURL}"). Vui lòng kiểm tra lại cấu hình Firebase!`;
+    console.error(errorMsg);
+    if (process.env.NODE_ENV !== "production") {
+      throw new Error(errorMsg);
+    }
+  }
+}
+
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getDatabase(app);
 export const auth = getAuth(app);

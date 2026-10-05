@@ -3,15 +3,15 @@
 ## 1. Kết quả rà soát các nút gốc cũ trong codebase
 | Nút gốc | Tình trạng trong Code | Quyết định trong Rules | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `users` | Còn dùng phụ trong `data-context.tsx` (dòng 1624, 1698) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Khóa với người dùng vãng lai |
-| `tables` | Còn dùng phụ trong `order_repository.dart` (90, 109) & `data-context.tsx` (1201, 1432) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Đồng bộ kép TRAM01 |
-| `products` | Còn dùng trong `data-context.tsx` (1479, 1506) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Đồng bộ kép TRAM01 |
-| `categories` | Còn dùng trong `data-context.tsx` (1531, 1547) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Đồng bộ kép TRAM01 |
-| `zones` | Còn dùng trong `order_repository.dart` (697, 709) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Đồng bộ kép TRAM01 |
-| `history` | Còn dùng trong `order_repository.dart` (293, 416) & `data-context.tsx` (1192, 1357) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Hóa đơn lịch sử |
-| `audit_logs` | Còn dùng trong `data-context.tsx` (1005, 1227, 1393) | Thêm mới nếu thuộc quán, cấm sửa/xóa | Không thể xóa vết audit |
-| `online_orders` | Không còn dùng ở nút gốc (đã chuyển hẳn sang `stores/{code}/online_orders`) | **`.read: false, .write: false`** | Khóa hoàn toàn |
-| `kitchen_orders` | Không còn dùng ở nút gốc (đã chuyển hẳn sang `stores/{code}/kitchen_orders`) | **`.read: false, .write: false`** | Khóa hoàn toàn |
+| `users` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Khóa với người dùng vãng lai |
+| `tables` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
+| `products` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
+| `categories` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
+| `zones` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
+| `history` | Đã cắt triệt để dual-sync (Agent G) | Cho phép đọc/ghi nếu `userIndex/{auth.uid}` tồn tại | Không còn ghi nút gốc |
+| `audit_logs` | Đã cắt triệt để dual-sync (Agent G) | Thêm mới nếu thuộc quán, cấm sửa/xóa | Không thể xóa vết audit |
+| `online_orders` | Đã cắt triệt để dual-sync (Agent G) | **`.read: false, .write: false`** | Khóa hoàn toàn |
+| `kitchen_orders` | Đã cắt triệt để dual-sync (Agent G) | **`.read: false, .write: false`** | Khóa hoàn toàn |
 | `kmt_customers` | Thuộc app khác (Chăm sóc khách hàng / KMT) | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
 | `cham_cong` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
 | `timekeeping` | Thuộc app Chấm công Trạm | **`.read: auth != null, .write: auth != null`** | Giữ nguyên vẹn |
@@ -33,10 +33,15 @@
 - **`bills` / `history`:** Nhân viên thuộc quán được tạo và sửa. Chỉ Chủ quán và Quản lý được xóa hóa đơn.
 - **`kitchen_orders`:** Mọi nhân viên thuộc quán (kể cả bếp) được tạo và cập nhật trạng thái chế biến.
 - **`online_orders`, `cash_shifts`:** Chủ quán, quản lý và thu ngân được ghi.
-- **`audit_logs`:** Mọi nhân viên được tạo mới bản ghi (`!data.exists() && newData.exists()`), không ai được phép sửa hoặc xóa lịch sử.
-- **`login_attempts`:** Giữ `.read: true, .write: true` để luồng đăng nhập phía client đếm số lần sai và kích hoạt khóa tạm thời 15 phút trước khi đăng nhập thành công.
+- **`audit_logs`:**
+  - Chỉ cho ghi thêm (`!data.exists() && newData.exists()`), tuyệt đối không cho sửa hoặc xóa.
+  - Kiểm tra tính hợp lệ dữ liệu (validate): Bản ghi phải chứa các trường bắt buộc `timestamp` (số, `<= now`), `action` (chuỗi không rỗng), và `username` (chuỗi không rỗng).
+- **`login_attempts`:**
+  - **Khóa triệt để** `.read: false, .write: false` đối với toàn bộ client để ngăn chặn việc người dùng đọc được lịch sử thử sai mật khẩu của nhau hoặc tự ý chỉnh sửa bộ đếm khóa brute-force. Quản lý trạng thái khóa được thực hiện qua backend/Cloud Functions.
 
 ---
 
 ## 3. Cần chủ dự án quyết định
-Các nút của app bên ngoài (`kmt_customers`, `cham_cong`, `timekeeping`, `employees`, `shifts`) vẫn mở cho mọi tài khoản Firebase Auth đã đăng nhập nhằm bảo đảm 100% không làm gián đoạn ứng dụng Chấm Công Trạm. Trong tương lai, khi app Chấm công nâng cấp xác thực, có thể siết chặt các nút này.
+1. **Bảo tồn Rules của 2 app dùng chung Firebase:**
+   - Các nút của app bên ngoài (`kmt_customers`, `cham_cong`, `timekeeping`, `employees`, `shifts`) vẫn mở cho mọi tài khoản Firebase Auth đã đăng nhập nhằm bảo đảm 100% không làm gián đoạn ứng dụng Chấm Công Trạm.
+   - Để đảm bảo an toàn tuyệt đối trước khi deploy rules lên production: Cần đối chiếu với file `docs/rules_hien_tai_tramapp.json` (lấy từ Firebase Console của `tramapp-36f53`) để đảm bảo không bỏ sót bất kỳ node dữ liệu tùy biến nào của app Chấm công và Tích điểm.

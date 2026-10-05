@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "tramapp-36f53",
+    "staging": "tramapp-staging"
+  }
+}

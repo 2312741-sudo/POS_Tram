@@ -63,13 +63,14 @@
         },
         "audit_logs": {
           "$logId": {
-            ".write": "auth != null && (root.child('userIndex').child(auth.uid).child($storeCode).val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).exists()) && root.child('stores').child($storeCode).child('users').child(auth.uid).child('isActive').val() !== false && !data.exists() && newData.exists()"
+            ".write": "auth != null && (root.child('userIndex').child(auth.uid).child($storeCode).val() === true || root.child('stores').child($storeCode).child('users').child(auth.uid).exists()) && root.child('stores').child($storeCode).child('users').child(auth.uid).child('isActive').val() !== false && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['timestamp', 'action', 'username']) && newData.child('timestamp').isNumber() && newData.child('timestamp').val() <= now && newData.child('action').isString() && newData.child('action').val().length > 0 && newData.child('username').isString() && newData.child('username').val().length > 0"
           }
         },
         "login_attempts": {
           "$username": {
-            ".read": true,
-            ".write": true
+            ".read": false,
+            ".write": false
           }
         }
       }

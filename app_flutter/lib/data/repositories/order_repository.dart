@@ -106,12 +106,10 @@ class OrderRepository {
     try {
       await tablesRef.child(table.firebaseKey).set(table.toMap()).timeout(const Duration(seconds: 2));
     } catch (_) {}
-    _root.child('tables').child(table.firebaseKey).set(table.toMap()).catchError((_) {});
   }
 
   Future<void> deleteTable(TableModel table) async {
     await tablesRef.child(table.firebaseKey).remove();
-    _root.child('tables').child(table.firebaseKey).remove().catchError((_) {});
   }
 
   Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
@@ -290,7 +288,7 @@ class OrderRepository {
       'actionLogs': bill.actionLogs.map((a) => a.toMap()).toList(),
       'actionLogsJson': jsonEncode(bill.actionLogs.map((a) => a.toMap()).toList()),
     };
-    _root.child('history').child(bill.id).set(historyMap).catchError((_) {});
+    billsRef.child(bill.id).set(historyMap).catchError((_) {});
     _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
 
     table.clearTable();
@@ -412,8 +410,6 @@ class OrderRepository {
         ).toMap(),
       ]),
     };
-
-    _root.child('history').child(cancelBillId).set(billRecord).catchError((_) {});
     _root.child('stores/$_currentStoreCode/history').child(cancelBillId).set(billRecord).catchError((_) {});
     billsRef.child(cancelBillId).set(billRecord).catchError((_) {});
 
@@ -481,7 +477,7 @@ class OrderRepository {
       'actionLogs': bill.actionLogs.map((a) => a.toMap()).toList(),
       'actionLogsJson': jsonEncode(bill.actionLogs.map((a) => a.toMap()).toList()),
     };
-    _root.child('history').child(bill.id).set(historyMap).catchError((_) {});
+    billsRef.child(bill.id).set(historyMap).catchError((_) {});
     _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
 
     if (_onDeductCashShift != null) {
@@ -511,7 +507,6 @@ class OrderRepository {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     await billsRef.child(bill.id).remove();
-    await _root.child('history').child(bill.id).remove().catchError((_) {});
     await _root.child('stores/$_currentStoreCode/history').child(bill.id).remove().catchError((_) {});
 
     if (bill.status == 'PAID' && _onDeductCashShift != null) {
@@ -706,12 +701,10 @@ class OrderRepository {
 
   Future<void> saveZone(ZoneModel zone) async {
     await zonesRef.child(zone.name).set(zone.toMap());
-    _root.child('zones').child(zone.name).set(zone.toMap()).catchError((_) {});
   }
 
   Future<void> deleteZone(ZoneModel zone) async {
     await zonesRef.child(zone.name).remove();
-    _root.child('zones').child(zone.name).remove().catchError((_) {});
   }
 
   // ==================== KITCHEN ORDERS & ONLINE ORDERS ====================
@@ -774,7 +767,6 @@ class OrderRepository {
 
   Future<void> updateOnlineOrderStatus(String key, String status) async {
     await onlineOrdersRef.child(key).update({'status': status});
-    _root.child('online_orders').child(key).update({'status': status}).catchError((_) {});
   }
 
   int compareTables(TableModel a, TableModel b) {

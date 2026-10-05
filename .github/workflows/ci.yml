@@ -73,3 +73,59 @@ jobs:
           NEXT_PUBLIC_FIREBASE_DATABASE_URL: "https://mock-default-rtdb.asia-southeast1.firebasedatabase.app"
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: "mock-tram-ci"
         run: npm run build
+
+  cloud-functions:
+    name: Cloud Functions (Backend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: functions
+        run: npm run build
+
+      - name: Run Functions tests
+        working-directory: functions
+        run: npm test
+
+  security-rules:
+    name: Firebase Security Rules Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 21 (for Firebase Emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: tests/rules/package-lock.json
+
+      - name: Install tests dependencies
+        working-directory: tests/rules
+        run: npm ci
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Run RTDB Rules tests via Emulator
+        run: firebase emulators:exec --only database "npm test --prefix tests/rules" --project demo-tram-pos

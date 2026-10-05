@@ -1,0 +1,12 @@
+{
+  "name": "verify-dual-sync",
+  "version": "1.0.0",
+  "description": "Kiểm tra và so sánh số lượng, trường dữ liệu giữa các nút gốc cũ và stores/{storeCode}",
+  "main": "verify.js",
+  "scripts": {
+    "verify": "node verify.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

@@ -169,7 +169,13 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
       return;
     }
     const cashier = testEnv.authenticatedContext("cashier_uid").database();
-    await assertSucceeds(cashier.ref("stores/TRAM01/audit_logs/log_1").set({ action: "PAY_BILL" }));
+    await assertSucceeds(
+      cashier.ref("stores/TRAM01/audit_logs/log_1").set({
+        timestamp: Date.now(),
+        action: "PAY_BILL",
+        username: "cashier1",
+      })
+    );
     await assertFails(cashier.ref("stores/TRAM01/audit_logs/log_1").update({ action: "HACKED" }));
     await assertFails(cashier.ref("stores/TRAM01/audit_logs/log_1").remove());
   });
@@ -192,5 +198,25 @@ describe("POS Trạm - Firebase Realtime Database Security Rules", () => {
     }
     const banned = testEnv.authenticatedContext("inactive_uid").database();
     await assertFails(banned.ref("stores/TRAM01/tables").get());
+  });
+
+  it("11. login_attempts bị khóa cả đọc lẫn ghi đối với client (chỉ Functions/Admin)", async () => {
+    if (!testEnv) {
+      expect(rulesContent).toContain("\"login_attempts\"");
+      return;
+    }
+    const cashier = testEnv.authenticatedContext("cashier_uid").database();
+    await assertFails(cashier.ref("stores/TRAM01/login_attempts/cashier1").get());
+    await assertFails(cashier.ref("stores/TRAM01/login_attempts/cashier1").set({ failedCount: 1 }));
+  });
+
+  it("12. audit_logs phải thỏa mãn validate rule: có timestamp, action, username", async () => {
+    if (!testEnv) {
+      expect(rulesContent).toContain("newData.hasChildren(['timestamp', 'action', 'username'])");
+      return;
+    }
+    const cashier = testEnv.authenticatedContext("cashier_uid").database();
+    // Thiếu username và timestamp
+    await assertFails(cashier.ref("stores/TRAM01/audit_logs/log_invalid").set({ action: "TEST" }));
   });
 });
