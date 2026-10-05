@@ -364,11 +364,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // 1. Kiểm tra khóa tạm sau 5 lần nhập sai liên tiếp (Brute-Force Protection)
         const attemptRef = ref(db, `stores/${cleanStore}/login_attempts/${cleanUser}`);
-        const attemptSnap = await get(attemptRef);
         let failedCount = 0;
         let lockedUntil = 0;
+        let attemptSnap: any = null;
+        try {
+          attemptSnap = await get(attemptRef);
+        } catch {
+          // Bỏ qua lỗi Permission Denied nếu chưa đăng nhập
+        }
 
-        if (attemptSnap.exists()) {
+        if (attemptSnap && attemptSnap.exists()) {
           const attemptData = attemptSnap.val() as { failedCount?: number; lockedUntil?: number };
           failedCount = attemptData.failedCount || 0;
           lockedUntil = attemptData.lockedUntil || 0;
@@ -399,7 +404,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               failedCount: newFailed,
               lockedUntil: lockTime,
               lastAttemptAt: now,
-            });
+            }).catch(() => {});
 
             // Ghi audit log cảnh báo brute-force
             const logId = `LOG_${now}_${Math.floor(Math.random() * 1000)}`;
@@ -422,14 +427,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               failedCount: newFailed,
               lockedUntil: null,
               lastAttemptAt: now,
-            });
+            }).catch(() => {});
 
             const remaining = 5 - newFailed;
             const errCode = (authError as { code?: string })?.code;
-            if (errCode === "auth/invalid-credential" || errCode === "auth/wrong-password" || errCode === "auth/user-not-found") {
+            if (
+              errCode === "auth/invalid-credential" ||
+              errCode === "auth/wrong-password" ||
+              errCode === "auth/user-not-found" ||
+              errCode === "auth/invalid-login-credentials"
+            ) {
               return {
                 success: false,
                 error: `Sai tài khoản hoặc mật khẩu (còn ${remaining} lần thử trước khi bị khóa tạm thời)`,
+              };
+            }
+
+            if (errCode === "auth/too-many-requests") {
+              return {
+                success: false,
+                error: "Tài khoản bị tạm hạn chế do thử sai quá nhiều lần. Vui lòng thử lại sau ít phút.",
               };
             }
 
@@ -441,7 +458,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 4. Đăng nhập thành công -> Reset bộ đếm lần sai
-        await set(attemptRef, { failedCount: 0, lockedUntil: null, lastAttemptAt: Date.now() });
+        await set(attemptRef, { failedCount: 0, lockedUntil: null, lastAttemptAt: Date.now() }).catch(() => {});
 
         // 5. Nạp hồ sơ người dùng từ RTDB
         const userProfile = await loadUserProfile(cred.user, cleanStore);

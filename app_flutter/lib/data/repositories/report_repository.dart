@@ -112,49 +112,25 @@ class ReportRepository {
 
   // ==================== ALL STORES ====================
   Stream<List<StoreInfoModel>> storesStream() {
-    return _root.child('stores').onValue.map<List<StoreInfoModel>>((event) {
+    return storeInfoRef.onValue.map<List<StoreInfoModel>>((event) {
       if (!event.snapshot.exists || event.snapshot.value == null) {
-        return [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')];
+        return [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
       }
-      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
-      final list = <StoreInfoModel>[];
-      map.forEach((code, val) {
-        if (val is Map) {
-          final sVal = Map<dynamic, dynamic>.from(val);
-          final sInfo = sVal['storeInfo'] != null && sVal['storeInfo'] is Map
-              ? Map<dynamic, dynamic>.from(sVal['storeInfo'])
-              : sVal;
-          list.add(StoreInfoModel.fromMap(sInfo, code.toString()));
-        }
-      });
-      list.sort((a, b) => a.storeCode.compareTo(b.storeCode));
-      return list.isNotEmpty
-          ? list
-          : [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')];
-    }).handleError((_) => [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')]);
+      final sInfo = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+      return [StoreInfoModel.fromMap(sInfo, _currentStoreCode)];
+    }).handleError((_) => [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')]);
   }
 
   Future<List<StoreInfoModel>> getAllStores() async {
     try {
-      final snap = await _root.child('stores').get().timeout(const Duration(seconds: 3));
+      final snap = await storeInfoRef.get().timeout(const Duration(seconds: 2));
       if (!snap.exists || snap.value == null) {
-        return [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')];
+        return [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
       }
-      final map = Map<dynamic, dynamic>.from(snap.value as Map);
-      final list = <StoreInfoModel>[];
-      map.forEach((code, val) {
-        if (val is Map) {
-          final sVal = Map<dynamic, dynamic>.from(val);
-          final sInfo = sVal['storeInfo'] != null && sVal['storeInfo'] is Map
-              ? Map<dynamic, dynamic>.from(sVal['storeInfo'])
-              : sVal;
-          list.add(StoreInfoModel.fromMap(sInfo, code.toString()));
-        }
-      });
-      list.sort((a, b) => a.storeCode.compareTo(b.storeCode));
-      return list.isNotEmpty ? list : [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')];
+      final sInfo = Map<dynamic, dynamic>.from(snap.value as Map);
+      return [StoreInfoModel.fromMap(sInfo, _currentStoreCode)];
     } catch (_) {
-      return [StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Trụ sở 01')];
+      return [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
     }
   }
 

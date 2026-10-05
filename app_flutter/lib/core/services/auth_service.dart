@@ -265,7 +265,7 @@ class AuthService extends ChangeNotifier {
       ).timeout(const Duration(seconds: 10));
     } on FirebaseAuthException catch (e) {
       await _recordFailedAttempt(cleanStore, cleanUser);
-      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'invalid-login-credentials') {
         throw const AuthException('Sai tài khoản hoặc mật khẩu.');
       } else if (e.code == 'network-request-failed') {
         throw const AuthException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng Internet và thử lại.');
