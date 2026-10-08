@@ -24,6 +24,7 @@ import { ref, onValue, set, remove, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem } from "@/lib/data-context";
+import { useAuth } from "@/lib/auth";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -91,7 +92,10 @@ export default function ProductsPage() {
   // Active top-level subtab: "products" | "categories" | "notes"
   const [activeTab, setActiveTab] = useState<"products" | "categories" | "notes">("products");
 
-  const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "TRAM01") : currentStoreCode;
+  const { user } = useAuth();
+  const targetStoreCode = currentStoreCode !== "ALL"
+    ? currentStoreCode
+    : (user?.storeCode || stores[0]?.storeCode || "TRAM01");
 
   // Product Notes State
   const [notes, setNotes] = useState<ProductNoteItem[]>([]);
