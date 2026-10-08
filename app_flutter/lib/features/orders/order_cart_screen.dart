@@ -41,6 +41,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   bool _isShiftOpen = false;
   bool _autoPrintBill = true;
 
+  // Products, Categories and Backend Note Presets for Toppings & Notes editing
+  List<ProductModel> _products = [];
+  List<CategoryModel> _categories = [];
+  List<String> _backendNotePresets = [];
+
   // KiotViet CRM Customer Loyalty
   KmtCustomerModel? _selectedCustomer;
   int _pointsUsed = 0;
@@ -56,6 +61,23 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     _storeInfo = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _fb.currentStoreCode, storeName: 'POS Trạm');
     _loadStoreAndPromotions();
     _loadAutoPrintSetting();
+
+    final storeCode = _fb.currentStoreCode;
+    _fb.productsStream(storeCode: storeCode).listen((products) {
+      if (mounted) setState(() => _products = products);
+    });
+    _fb.categoriesStream(storeCode: storeCode).listen((cats) {
+      if (mounted) setState(() => _categories = cats);
+    });
+    _fb.productNotesStream(storeCode: storeCode).listen((notes) {
+      if (mounted) {
+        final list = notes
+            .map((n) => n['text']?.toString() ?? n['name']?.toString() ?? '')
+            .where((s) => s.trim().isNotEmpty)
+            .toList();
+        if (mounted) setState(() => _backendNotePresets = list);
+      }
+    });
 
     _fb.cashShiftsStream().listen((shifts) {
       final openOne = shifts.where((s) => s.isOpen).firstOrNull;
@@ -1311,6 +1333,417 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 child: const Text('Áp Dụng'),
               ),
             ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ==================== EDIT ITEM NOTE & TOPPING DIALOG ====================
+  Future<void> _showEditItemNoteAndToppingDialog(int index) async {
+    if (!await _ensureShiftOpen()) return;
+    final item = _cart[index];
+
+    // Find original product if possible
+    ProductModel? originalProduct;
+    for (final p in _products) {
+      if (p.id == item.productId ||
+          (p.code.isNotEmpty && p.code.toLowerCase() == item.name.toLowerCase()) ||
+          p.name.toLowerCase() == item.name.toLowerCase()) {
+        originalProduct = p;
+        break;
+      }
+    }
+
+    final hasSizes = (originalProduct != null && originalProduct.sizes.isNotEmpty);
+    String selectedSize = item.selectedSize.isNotEmpty
+        ? item.selectedSize
+        : (hasSizes ? (originalProduct!.sizes.containsKey('M') ? 'M' : originalProduct.sizes.keys.first) : '');
+    int sizeExtra = hasSizes ? (originalProduct!.sizes[selectedSize] ?? item.sizeExtraPrice) : item.sizeExtraPrice;
+
+    String selectedSugar = item.selectedSugar.isNotEmpty ? item.selectedSugar : '100% đường';
+    String selectedIce = item.selectedIce.isNotEmpty ? item.selectedIce : '100% đá';
+    final List<String> selectedToppings = List.from(item.selectedToppings);
+    final noteCtrl = TextEditingController(text: item.note);
+
+    // Resolve category and toppings
+    CategoryModel? matchedCategory;
+    if (originalProduct != null) {
+      for (final c in _categories) {
+        if (c.name.trim().toLowerCase() == originalProduct.category.trim().toLowerCase()) {
+          matchedCategory = c;
+          break;
+        }
+      }
+    }
+
+    final defaultFnbToppings = [
+      ProductModel(id: 9001, name: 'Trân châu đen', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9002, name: 'Trân châu trắng', price: 6000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9003, name: 'Thạch phô mai', price: 8000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9004, name: 'Thạch củ năng', price: 7000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9005, name: 'Kem Cheese', price: 10000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9006, name: 'Pudding trứng', price: 7000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9007, name: 'Đào miếng', price: 8000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9008, name: 'Thạch chanh', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+    ];
+
+    final Map<String, ProductModel?> toppingItemMap = {};
+    final List<String> availableToppingNames = [];
+
+    if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
+      for (final tId in matchedCategory.allowedToppingIds) {
+        final match = _products.firstWhere(
+          (p) => p.id.toString() == tId ||
+              (p.code.isNotEmpty && p.code.toLowerCase() == tId.toLowerCase()) ||
+              p.name.toLowerCase() == tId.toLowerCase(),
+          orElse: () => defaultFnbToppings.firstWhere(
+            (p) => p.id.toString() == tId || p.name.toLowerCase() == tId.toLowerCase(),
+            orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+          ),
+        );
+        toppingItemMap[match.name] = match;
+        if (!availableToppingNames.contains(match.name)) availableToppingNames.add(match.name);
+      }
+    } else if (originalProduct != null && originalProduct.allowedToppings.isNotEmpty) {
+      for (final topName in originalProduct.allowedToppings) {
+        final match = _products.firstWhere(
+          (p) => p.name.toLowerCase() == topName.toLowerCase(),
+          orElse: () => defaultFnbToppings.firstWhere(
+            (p) => p.name.toLowerCase() == topName.toLowerCase(),
+            orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+          ),
+        );
+        toppingItemMap[match.name] = match;
+        if (!availableToppingNames.contains(match.name)) availableToppingNames.add(match.name);
+      }
+    } else {
+      for (final p in _products) {
+        if (p.isTopping || p.category.toLowerCase().contains('topping')) {
+          toppingItemMap[p.name] = p;
+          if (!availableToppingNames.contains(p.name)) availableToppingNames.add(p.name);
+        }
+      }
+      for (final top in defaultFnbToppings) {
+        if (!availableToppingNames.contains(top.name)) {
+          toppingItemMap[top.name] = top;
+          availableToppingNames.add(top.name);
+        }
+      }
+    }
+
+    // Ensure previously selected toppings in item are preserved in mapping
+    for (final top in item.selectedToppings) {
+      if (!availableToppingNames.contains(top)) {
+        availableToppingNames.insert(0, top);
+        toppingItemMap[top] = ProductModel(name: top, price: 5000, unit: 'phần', category: 'Topping');
+      }
+    }
+
+    final isDrinkOrTea = (originalProduct != null && (
+        originalProduct.category.toLowerCase().contains('trà') ||
+        originalProduct.category.toLowerCase().contains('tea') ||
+        originalProduct.category.toLowerCase().contains('cà phê') ||
+        originalProduct.category.toLowerCase().contains('cafe') ||
+        originalProduct.category.toLowerCase().contains('coffee') ||
+        originalProduct.category.toLowerCase().contains('nước') ||
+        originalProduct.category.toLowerCase().contains('uống') ||
+        originalProduct.category.toLowerCase().contains('sinh tố') ||
+        originalProduct.category.toLowerCase().contains('đá xay') ||
+        originalProduct.category.toLowerCase().contains('sữa') ||
+        originalProduct.category.toLowerCase().contains('matcha') ||
+        originalProduct.hasIceSugarOptions ||
+        originalProduct.sizes.isNotEmpty)) ||
+        item.selectedSugar.isNotEmpty ||
+        item.selectedIce.isNotEmpty ||
+        item.selectedToppings.isNotEmpty;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          int calcToppingPrice = 0;
+          for (final topName in selectedToppings) {
+            calcToppingPrice += toppingItemMap[topName]?.price ?? 5000;
+          }
+          final int unitPrice = item.price + sizeExtra + calcToppingPrice;
+          final int totalPrice = unitPrice * item.quantity;
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Chỉnh sửa: ${item.name}',
+                              style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Đơn giá gốc: ${FormatUtils.vnd(item.price)} • Số lượng: x${item.quantity}',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        FormatUtils.vnd(unitPrice),
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+
+                  // 1. SIZE SELECTION (if original product has sizes)
+                  if (hasSizes) ...[
+                    Text('Chọn kích cỡ (Size):', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: originalProduct!.sizes.entries.map((entry) {
+                        final isSel = selectedSize == entry.key;
+                        final extraText = entry.value > 0 ? ' (+${FormatUtils.vnd(entry.value)})' : '';
+                        return ChoiceChip(
+                          label: Text('Size ${entry.key}$extraText'),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(
+                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            if (val) {
+                              setModalState(() {
+                                selectedSize = entry.key;
+                                sizeExtra = entry.value;
+                              });
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 2. SUGAR & ICE (Đường & Đá)
+                  if (isDrinkOrTea) ...[
+                    Text('Mức độ đường:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: ['100% đường', '70% đường', '50% đường', '30% đường', 'Không đường'].map((s) {
+                        final isSel = selectedSugar == s;
+                        return ChoiceChip(
+                          label: Text(s),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          onSelected: (val) {
+                            if (val) setModalState(() => selectedSugar = s);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Text('Mức độ đá:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: ['100% đá', '70% đá', '50% đá', 'Không đá', 'Uống nóng'].map((ice) {
+                        final isSel = selectedIce == ice;
+                        return ChoiceChip(
+                          label: Text(ice),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          onSelected: (val) {
+                            if (val) setModalState(() => selectedIce = ice);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 3. TOPPINGS
+                  if (availableToppingNames.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Topping thêm:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                        if (selectedToppings.isNotEmpty)
+                          TextButton(
+                            onPressed: () => setModalState(() => selectedToppings.clear()),
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+                            child: const Text('Bỏ chọn hết', style: TextStyle(fontSize: 11, color: AppColors.danger)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: availableToppingNames.map((topName) {
+                        final isSel = selectedToppings.contains(topName);
+                        final topProd = toppingItemMap[topName];
+                        final priceStr = topProd != null ? FormatUtils.vnd(topProd.price) : '5.000 đ';
+                        return FilterChip(
+                          label: Text('$topName (+$priceStr)'),
+                          selected: isSel,
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(
+                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            setModalState(() {
+                              if (val) {
+                                selectedToppings.add(topName);
+                              } else {
+                                selectedToppings.remove(topName);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 4. NOTE & NOTE PRESETS
+                  Text('Ghi chú món:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Ghi chú cho bếp / pha chế',
+                      hintText: 'VD: ít ngọt, pha đậm vị, mang về...',
+                      prefixIcon: const Icon(Icons.edit_note, color: AppColors.primary),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      suffixIcon: noteCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () => setModalState(() => noteCtrl.clear()),
+                            )
+                          : null,
+                    ),
+                    onChanged: (_) => setModalState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Builder(builder: (_) {
+                    final presets = _backendNotePresets.isNotEmpty
+                        ? _backendNotePresets
+                        : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về', 'Ít đường', 'Uống nóng'];
+                    return Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: presets.map((preset) {
+                        final isPresetInNote = noteCtrl.text.contains(preset);
+                        return ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            preset,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isPresetInNote ? AppColors.primaryDark : AppColors.textPrimary,
+                              fontWeight: isPresetInNote ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                          backgroundColor: isPresetInNote ? AppColors.primaryLight : AppColors.cardElevated,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: isPresetInNote ? AppColors.primary : AppColors.border),
+                          ),
+                          onPressed: () {
+                            setModalState(() {
+                              final current = noteCtrl.text.trim();
+                              if (current.isEmpty) {
+                                noteCtrl.text = preset;
+                              } else if (!current.contains(preset)) {
+                                noteCtrl.text = '$current, $preset';
+                              } else {
+                                noteCtrl.text = current
+                                    .replaceAll(', $preset', '')
+                                    .replaceAll('$preset, ', '')
+                                    .replaceAll(preset, '')
+                                    .trim();
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    );
+                  }),
+                  const SizedBox(height: 20),
+
+                  // 5. SAVE BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        setState(() {
+                          _cart[index] = _cart[index].copyWith(
+                            note: noteCtrl.text.trim(),
+                            selectedToppings: selectedToppings,
+                            toppingPrice: calcToppingPrice,
+                            selectedSize: selectedSize,
+                            sizeExtraPrice: sizeExtra,
+                            selectedSugar: isDrinkOrTea ? selectedSugar : '',
+                            selectedIce: isDrinkOrTea ? selectedIce : '',
+                          );
+                        });
+
+                        widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+                        await _fb.saveTable(widget.table).catchError((_) {});
+                        _recalculateDiscounts();
+
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
+                              backgroundColor: AppColors.success,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
+                        style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),
@@ -2703,19 +3136,23 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                                           // KiotViet Size, Sugar, Ice, Toppings detail badges
                                           if (hasSize || hasSugar || hasIce || hasToppings) ...[
-                                            Wrap(
-                                              spacing: 4,
-                                              runSpacing: 2,
-                                              children: [
-                                                if (hasSize)
-                                                  _buildAttrChip('Size ${item.selectedSize!.trim()}', Colors.blue.shade800, Colors.blue.shade50),
-                                                if (hasSugar)
-                                                  _buildAttrChip(item.selectedSugar!.trim(), Colors.green.shade800, Colors.green.shade50),
-                                                if (hasIce)
-                                                  _buildAttrChip(item.selectedIce!.trim(), Colors.teal.shade800, Colors.teal.shade50),
-                                                if (hasToppings)
-                                                  _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
-                                              ],
+                                            InkWell(
+                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Wrap(
+                                                spacing: 4,
+                                                runSpacing: 2,
+                                                children: [
+                                                  if (hasSize)
+                                                    _buildAttrChip('Size ${item.selectedSize.trim()}', Colors.blue.shade800, Colors.blue.shade50),
+                                                  if (hasSugar)
+                                                    _buildAttrChip(item.selectedSugar.trim(), Colors.green.shade800, Colors.green.shade50),
+                                                  if (hasIce)
+                                                    _buildAttrChip(item.selectedIce.trim(), Colors.teal.shade800, Colors.teal.shade50),
+                                                  if (hasToppings)
+                                                    _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
+                                                ],
+                                              ),
                                             ),
                                             const SizedBox(height: 4),
                                           ],
@@ -2750,19 +3187,72 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                             ),
                                           ],
 
-                                          // Note
+                                          // Note & Quick Edit Note / Topping Action Chip
                                           if (item.note.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text('Ghi chú: ${item.note}', style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.orange.shade800)),
+                                            const SizedBox(height: 4),
+                                            InkWell(
+                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.shade50,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.amber.shade300),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.edit_note, size: 15, color: Colors.amber.shade900),
+                                                    const SizedBox(width: 4),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'Ghi chú: ${item.note}',
+                                                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Icon(Icons.edit, size: 11, color: Colors.amber.shade800),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ] else ...[
+                                            const SizedBox(height: 4),
+                                            InkWell(
+                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.add_circle_outline, size: 13, color: AppColors.primary),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '+ Ghi chú / Topping',
+                                                      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
                                           ],
                                         ],
                                       ),
                                     ),
                                     const SizedBox(width: 8),
 
-                                    // Stepper & Item Discount Action
+                                    // Stepper & Item Actions
                                     Row(
                                       children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_note, size: 22, color: AppColors.primary),
+                                          tooltip: 'Sửa ghi chú & Topping',
+                                          onPressed: () => _showEditItemNoteAndToppingDialog(index),
+                                        ),
                                         IconButton(
                                           icon: Icon(
                                             item.discountAmount > 0 ? Icons.discount : Icons.discount_outlined,

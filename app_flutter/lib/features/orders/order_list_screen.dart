@@ -187,7 +187,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (!await _ensureShiftOpen()) return;
 
     final hasSizes = product.sizes.isNotEmpty;
-    final hasIceSugar = product.hasIceSugarOptions;
+
+    final isDrinkOrTea = product.category.toLowerCase().contains('trà') ||
+        product.category.toLowerCase().contains('tea') ||
+        product.category.toLowerCase().contains('cà phê') ||
+        product.category.toLowerCase().contains('cafe') ||
+        product.category.toLowerCase().contains('coffee') ||
+        product.category.toLowerCase().contains('nước') ||
+        product.category.toLowerCase().contains('uống') ||
+        product.category.toLowerCase().contains('sinh tố') ||
+        product.category.toLowerCase().contains('đá xay') ||
+        product.category.toLowerCase().contains('sữa') ||
+        product.category.toLowerCase().contains('matcha') ||
+        product.hasIceSugarOptions ||
+        product.sizes.isNotEmpty;
+
+    final hasIceSugar = product.hasIceSugarOptions || isDrinkOrTea;
 
     // Resolve category and allowed toppings
     CategoryModel? matchedCategory;
@@ -198,13 +213,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
       }
     }
 
+    final defaultFnbToppings = [
+      ProductModel(id: 9001, name: 'Trân châu đen', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9002, name: 'Trân châu trắng', price: 6000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9003, name: 'Thạch phô mai', price: 8000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9004, name: 'Thạch củ năng', price: 7000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9005, name: 'Kem Cheese', price: 10000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9006, name: 'Pudding trứng', price: 7000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9007, name: 'Đào miếng', price: 8000, unit: 'phần', category: 'Topping', isTopping: true),
+      ProductModel(id: 9008, name: 'Thạch chanh', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+    ];
+
     final Map<String, ProductModel?> toppingItemMap = {};
     final List<String> availableToppingNames = [];
-
-    final isDrinkOrTea = product.category.toLowerCase().contains('trà') ||
-        product.category.toLowerCase().contains('tea') ||
-        product.hasIceSugarOptions ||
-        product.sizes.isNotEmpty;
 
     if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
       for (final tId in matchedCategory.allowedToppingIds) {
@@ -212,7 +233,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
           (p) => p.id.toString() == tId ||
               (p.code.isNotEmpty && p.code.toLowerCase() == tId.toLowerCase()) ||
               p.name.toLowerCase() == tId.toLowerCase(),
-          orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping'),
+          orElse: () => defaultFnbToppings.firstWhere(
+            (p) => p.id.toString() == tId || p.name.toLowerCase() == tId.toLowerCase(),
+            orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+          ),
         );
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) {
@@ -224,19 +248,32 @@ class _OrderListScreenState extends State<OrderListScreen> {
         final match = _products.firstWhere(
           (p) => p.name.toLowerCase() == topName.toLowerCase() ||
               (p.code.isNotEmpty && p.code.toLowerCase() == topName.toLowerCase()),
-          orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping'),
+          orElse: () => defaultFnbToppings.firstWhere(
+            (p) => p.name.toLowerCase() == topName.toLowerCase(),
+            orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
+          ),
         );
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) {
           availableToppingNames.add(match.name);
         }
       }
-    } else if (isDrinkOrTea) {
+    } else {
+      // 1. Tìm tất cả topping có trong menu hệ thống
       for (final p in _products) {
         if (p.isTopping || p.category.toLowerCase().contains('topping')) {
           toppingItemMap[p.name] = p;
           if (!availableToppingNames.contains(p.name)) {
             availableToppingNames.add(p.name);
+          }
+        }
+      }
+      // 2. Bổ sung topping chuẩn nếu chưa có topping hoặc là đồ uống/trà
+      if (availableToppingNames.isEmpty || isDrinkOrTea) {
+        for (final top in defaultFnbToppings) {
+          if (!availableToppingNames.contains(top.name)) {
+            toppingItemMap[top.name] = top;
+            availableToppingNames.add(top.name);
           }
         }
       }
@@ -864,19 +901,30 @@ class _OrderListScreenState extends State<OrderListScreen> {
         final product = products[i];
         final qty = _productCartCount(product);
 
-        final bool hasOptions = product.sizes.isNotEmpty || product.hasIceSugarOptions || product.allowedToppings.isNotEmpty;
+        final isDrinkOrTea = product.category.toLowerCase().contains('trà') ||
+            product.category.toLowerCase().contains('tea') ||
+            product.category.toLowerCase().contains('cà phê') ||
+            product.category.toLowerCase().contains('cafe') ||
+            product.category.toLowerCase().contains('coffee') ||
+            product.category.toLowerCase().contains('nước') ||
+            product.category.toLowerCase().contains('uống') ||
+            product.category.toLowerCase().contains('sinh tố') ||
+            product.category.toLowerCase().contains('đá xay') ||
+            product.category.toLowerCase().contains('sữa') ||
+            product.category.toLowerCase().contains('matcha') ||
+            product.hasIceSugarOptions ||
+            product.sizes.isNotEmpty;
+
+        final bool hasOptions = product.sizes.isNotEmpty ||
+            product.hasIceSugarOptions ||
+            product.allowedToppings.isNotEmpty ||
+            isDrinkOrTea;
 
         return _ProductListRow(
           product: product,
           quantity: qty,
           hasOptions: hasOptions,
-          onTap: () {
-            if (hasOptions) {
-              _showProductCustomizer(product);
-            } else {
-              _quickAddToCart(product);
-            }
-          },
+          onTap: () => _showProductCustomizer(product),
           onAdd: () {
             if (hasOptions) {
               _showProductCustomizer(product);
@@ -1031,11 +1079,11 @@ class _ProductListRow extends StatelessWidget {
                         children: [
                           if (product.sizes.isNotEmpty)
                             _buildPillTag('Size S/M/L', Colors.blue.shade700, Colors.blue.shade50),
-                          if (product.allowedToppings.isNotEmpty) ...[
+                          if (product.allowedToppings.isNotEmpty || hasOptions) ...[
                             const SizedBox(width: 4),
                             _buildPillTag('Topping', Colors.orange.shade800, Colors.orange.shade50),
                           ],
-                          if (product.hasIceSugarOptions) ...[
+                          if (product.hasIceSugarOptions || hasOptions) ...[
                             const SizedBox(width: 4),
                             _buildPillTag('Đường/Đá', Colors.green.shade800, Colors.green.shade50),
                           ],
