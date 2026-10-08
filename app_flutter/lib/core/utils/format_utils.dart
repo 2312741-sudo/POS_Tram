@@ -16,6 +16,10 @@ class FormatUtils {
     return _currencyFormat.format(amount);
   }
 
+  static String number(num amount) {
+    return _currencyFormat.format(amount);
+  }
+
   static String dateTime(int timestamp) {
     if (timestamp <= 0) return '';
     final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);

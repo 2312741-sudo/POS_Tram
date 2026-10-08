@@ -134,6 +134,7 @@ enum UserRole {
         AppPermissions.viewSuppliers,
         AppPermissions.editSuppliers,
         AppPermissions.createReceipt,
+        AppPermissions.inventoryStockIn,
         AppPermissions.completeReceipt,
         AppPermissions.createPurchaseReturn,
         // Kiểm kho & Vận hành
@@ -142,8 +143,14 @@ enum UserRole {
         AppPermissions.createTransfer,
         AppPermissions.receiveTransfer,
         AppPermissions.createWaste,
+        AppPermissions.inventoryWaste,
         AppPermissions.createInternalUse,
+        AppPermissions.inventoryStockOut,
         AppPermissions.createProduction,
+        // Thực đơn & Topping
+        AppPermissions.manageMenu,
+        // Chiết khấu & Giảm giá món
+        AppPermissions.discountItem,
         // Khuyến mãi nâng cao
         AppPermissions.createCampaign,
         AppPermissions.editCampaign,
@@ -162,6 +169,7 @@ enum UserRole {
         AppPermissions.sendKitchen,
         AppPermissions.createBill,
         AppPermissions.applyPromotion,
+        AppPermissions.discountItem,
         AppPermissions.printBill,
         AppPermissions.manageCashShift,
         AppPermissions.viewReports,
@@ -213,6 +221,7 @@ class AppPermissions {
   static const String editMenu = 'EDIT_MENU';
   static const String deleteMenu = 'DELETE_MENU';
   static const String changePrice = 'CHANGE_PRICE';
+  static const String manageMenu = 'MENU_MANAGEMENT'; // Quản lý thực đơn & Topping
 
   // 2. Bàn & Gọi món
   static const String openTable = 'OPEN_TABLE';
@@ -226,6 +235,7 @@ class AppPermissions {
   static const String editBill = 'EDIT_BILL';
   static const String applyPromotion = 'APPLY_PROMOTION';
   static const String manualDiscount = 'MANUAL_DISCOUNT'; // Nhạy cảm
+  static const String discountItem = 'DISCOUNT_ITEM'; // Giảm giá món
   static const String cancelBill = 'CANCEL_BILL'; // Nhạy cảm
   static const String printBill = 'PRINT_BILL';
   static const String reprintBill = 'REPRINT_BILL'; // Nhạy cảm
@@ -255,6 +265,7 @@ class AppPermissions {
   static const String viewSuppliers = 'VIEW_SUPPLIERS';
   static const String editSuppliers = 'EDIT_SUPPLIERS';
   static const String createReceipt = 'CREATE_RECEIPT'; // Tạo phiếu nhập
+  static const String inventoryStockIn = 'INVENTORY_STOCK_IN'; // Nhập kho
   static const String completeReceipt = 'COMPLETE_RECEIPT'; // Duyệt phiếu nhập
   static const String cancelReceipt = 'CANCEL_RECEIPT'; // Hủy phiếu nhập
   static const String createPurchaseReturn = 'CREATE_PURCHASE_RETURN';
@@ -266,7 +277,9 @@ class AppPermissions {
   static const String createTransfer = 'CREATE_TRANSFER';
   static const String receiveTransfer = 'RECEIVE_TRANSFER';
   static const String createWaste = 'CREATE_WASTE';
+  static const String inventoryWaste = 'INVENTORY_WASTE'; // Hủy kho
   static const String createInternalUse = 'CREATE_INTERNAL_USE';
+  static const String inventoryStockOut = 'INVENTORY_STOCK_OUT'; // Xuất kho
   static const String createProduction = 'CREATE_PRODUCTION';
 
   // 10. Khuyến mãi nâng cao
@@ -327,6 +340,12 @@ class AppPermissions {
       category: catMenu,
       description: 'Quyền thay đổi giá niêm yết của các món ăn.',
     ),
+    AppPermission(
+      key: manageMenu,
+      label: 'Quản lý thực đơn & Topping',
+      category: catMenu,
+      description: 'Quản lý toàn diện danh sách món, mã SKU, danh mục và topping.',
+    ),
 
     // Table & Order
     AppPermission(
@@ -384,6 +403,12 @@ class AppPermissions {
       label: 'Chiết khấu thủ công',
       category: catBilling,
       description: 'Tự nhập % hoặc số tiền bớt cho khách (Cần giám sát).',
+    ),
+    AppPermission(
+      key: discountItem,
+      label: 'Giảm giá món',
+      category: catBilling,
+      description: 'Chiết khấu / giảm giá trực tiếp từng món ăn trên hóa đơn.',
     ),
     AppPermission(
       key: cancelBill,
@@ -510,6 +535,12 @@ class AppPermissions {
       description: 'Tạo phiếu nhập hàng từ nhà cung cấp.',
     ),
     AppPermission(
+      key: inventoryStockIn,
+      label: 'Nhập kho (Stock In)',
+      category: catSupplier,
+      description: 'Tạo và hoàn thành phiếu nhập hàng, tăng tồn kho và tính giá vốn bình quân.',
+    ),
+    AppPermission(
       key: completeReceipt,
       label: 'Duyệt phiếu nhập',
       category: catSupplier,
@@ -566,10 +597,22 @@ class AppPermissions {
       description: 'Ghi nhận hàng hỏng, hết hạn cần xuất hủy.',
     ),
     AppPermission(
+      key: inventoryWaste,
+      label: 'Hủy kho (Stock Waste)',
+      category: catInventory,
+      description: 'Tạo và hoàn thành phiếu xuất hủy hàng hỏng, hết hạn, giảm tồn kho.',
+    ),
+    AppPermission(
       key: createInternalUse,
       label: 'Xuất dùng nội bộ',
       category: catInventory,
       description: 'Ghi nhận hàng dùng nội bộ (nhân viên, vệ sinh, thử món).',
+    ),
+    AppPermission(
+      key: inventoryStockOut,
+      label: 'Xuất kho (Stock Out)',
+      category: catInventory,
+      description: 'Tạo và hoàn thành phiếu xuất kho (nội bộ, pha chế), giảm tồn kho.',
     ),
     AppPermission(
       key: createProduction,

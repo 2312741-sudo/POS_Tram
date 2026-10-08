@@ -1,9 +1,10 @@
-// lib/features/cash_shift/cash_shifts_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/permissions/app_permissions.dart';
+import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -22,6 +23,9 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
   final _auth = AuthService();
 
   List<CashShiftModel> _shifts = [];
+  List<BillModel> _allBills = [];
+  StreamSubscription<List<CashShiftModel>>? _shiftsSub;
+  StreamSubscription<List<BillModel>>? _billsSub;
   bool _loading = true;
   String _searchQuery = '';
   String _statusFilter = 'ALL'; // ALL, OPEN, CLOSED
@@ -48,6 +52,13 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     _loadShifts();
   }
 
+  @override
+  void dispose() {
+    _shiftsSub?.cancel();
+    _billsSub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadStoreSetting() async {
     try {
       final store = await _fb.getStoreInfo();
@@ -60,7 +71,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
   }
 
   void _loadShifts() {
-    _fb.cashShiftsStream().listen((list) {
+    _shiftsSub = _fb.cashShiftsStream().listen((list) {
       if (mounted) {
         setState(() {
           _shifts = list;
@@ -68,6 +79,172 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
         });
       }
     });
+
+    _billsSub = _fb.billsStream().listen((bills) {
+      if (mounted) {
+        setState(() {
+          _allBills = bills;
+        });
+      }
+    });
+  }
+
+  List<BillModel> _getShiftBills(CashShiftModel shift) {
+    return _allBills.where((b) {
+      if (b.shiftId != null && b.shiftId!.isNotEmpty) {
+        return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
+      }
+      final closeT = shift.closedAt ?? 9999999999999;
+      return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
+    }).toList();
+  }
+
+  Map<String, dynamic> _computeShiftPromoStats(CashShiftModel shift) {
+    final bills = _getShiftBills(shift).where((b) => b.status == 'PAID').toList();
+    int discountedItemsCount = 0;
+    int discountedItemsTotal = 0;
+    int voucherCount = 0;
+    int voucherTotal = 0;
+    int pointsUsedTotal = 0;
+    int pointsDiscountTotal = 0;
+
+    for (final b in bills) {
+      for (final it in b.items) {
+        if (it.discountAmount > 0) {
+          discountedItemsCount += it.quantity;
+          discountedItemsTotal += it.discountAmount;
+        }
+      }
+      for (final d in b.discounts) {
+        voucherCount += 1;
+        voucherTotal += d.amount;
+      }
+      if (b.pointsDiscount > 0 || b.pointsUsed > 0) {
+        pointsUsedTotal += b.pointsUsed;
+        pointsDiscountTotal += b.pointsDiscount;
+      }
+    }
+
+    final totalPromoDiscount = discountedItemsTotal + voucherTotal + pointsDiscountTotal;
+
+    return {
+      'discountedItemsCount': discountedItemsCount,
+      'discountedItemsTotal': discountedItemsTotal,
+      'voucherCount': voucherCount,
+      'voucherTotal': voucherTotal,
+      'pointsUsedTotal': pointsUsedTotal,
+      'pointsDiscountTotal': pointsDiscountTotal,
+      'totalPromoDiscount': totalPromoDiscount,
+      'paidBills': bills,
+    };
+  }
+
+  Future<void> _exportShiftPromotionsExcel(CashShiftModel shift) async {
+    final promo = _computeShiftPromoStats(shift);
+    final List<BillModel> paidBills = List<BillModel>.from(promo['paidBills']);
+    final storeInfo = _auth.currentStoreInfo;
+    final storeName = storeInfo?.storeName ?? 'POS Trạm F&B';
+    final storeCode = storeInfo?.storeCode ?? 'TRAM01';
+    final storeAddress = storeInfo?.address ?? 'Đà Lạt, Lâm Đồng';
+    final storePhone = storeInfo?.phone ?? '0987654321';
+
+    final headers = [
+      'STT',
+      'Mã Hóa Đơn',
+      'Bàn / Khu Vực',
+      'Thời Gian',
+      'Thu Ngân',
+      'Tổng Tiền Hàng',
+      'Giảm Giá Món',
+      'Voucher / KM',
+      'Điểm Dùng',
+      'Giảm Giá Điểm',
+      'Tổng Giảm Giá',
+      'Thanh Toán',
+      'Phương Thức',
+    ];
+
+    int sumGross = 0;
+    int sumItemDisc = 0;
+    int sumVoucher = 0;
+    int sumPoints = 0;
+    int sumPointsDisc = 0;
+    int sumTotalDisc = 0;
+    int sumFinal = 0;
+
+    final rows = <List<dynamic>>[];
+    for (int i = 0; i < paidBills.length; i++) {
+      final b = paidBills[i];
+      final itemD = b.items.fold(0, (s, it) => s + it.discountAmount);
+      final voucherD = b.discounts.fold(0, (s, d) => s + d.amount);
+      final pUsed = b.pointsUsed;
+      final pDisc = b.pointsDiscount;
+      final totD = b.totalDiscount;
+      final finalAmt = b.finalAmount;
+
+      sumGross += b.subTotal;
+      sumItemDisc += itemD;
+      sumVoucher += voucherD;
+      sumPoints += pUsed;
+      sumPointsDisc += pDisc;
+      sumTotalDisc += totD;
+      sumFinal += finalAmt;
+
+      final dtStr = DateFormat('dd/MM/yyyy HH:mm').format(
+        DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt),
+      );
+
+      rows.add([
+        i + 1,
+        b.billCode,
+        b.tableName,
+        dtStr,
+        b.staffFullName.isNotEmpty ? b.staffFullName : shift.staffFullName,
+        b.subTotal,
+        itemD,
+        voucherD,
+        pUsed,
+        pDisc,
+        totD,
+        finalAmt,
+        b.paymentMethod,
+      ]);
+    }
+
+    final totalRow = [
+      'TỔNG CỘNG',
+      '—',
+      '—',
+      '—',
+      '—',
+      sumGross,
+      sumItemDisc,
+      sumVoucher,
+      sumPoints,
+      sumPointsDisc,
+      sumTotalDisc,
+      sumFinal,
+      '—',
+    ];
+
+    final openedDt = DateTime.fromMillisecondsSinceEpoch(shift.openedAt);
+    final closedDt = shift.closedAt != null
+        ? DateTime.fromMillisecondsSinceEpoch(shift.closedAt!)
+        : DateTime.now();
+
+    await ReportExportService.exportToExcel(
+      reportCode: 'KM_CA_${shift.shiftCode}',
+      reportTitle: 'KHUYẾN MÃI & GIẢM GIÁ CA ${shift.shiftCode}',
+      storeCode: storeCode,
+      storeName: storeName,
+      storeAddress: storeAddress,
+      storePhone: storePhone,
+      startDate: openedDt,
+      endDate: closedDt,
+      headers: headers,
+      rows: rows,
+      totalRow: totalRow,
+    );
   }
 
   Future<void> _toggleAllowDifference(bool val) async {
@@ -279,6 +456,50 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
               ],
             ),
           ),
+          // Promotional Breakdown for Shift (Module 4)
+          Builder(
+            builder: (ctx) {
+              final promo = _computeShiftPromoStats(shift);
+              final discItemsCount = promo['discountedItemsCount'] as int;
+              final discItemsTotal = promo['discountedItemsTotal'] as int;
+              final vCount = promo['voucherCount'] as int;
+              final vTotal = promo['voucherTotal'] as int;
+              final pUsed = promo['pointsUsedTotal'] as int;
+              final pDisc = promo['pointsDiscountTotal'] as int;
+              final totDisc = promo['totalPromoDiscount'] as int;
+
+              return Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDF5F6),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF5D5D8)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.discount_outlined, size: 16, color: Color(0xFF7E2930)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'KHUYẾN MÃI & GIẢM GIÁ TRONG CA',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF7E2930)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildNumberRow('• Món giảm giá ($discItemsCount món):', '-${FormatUtils.vnd(discItemsTotal)}', color: TramColors.danger),
+                    _buildNumberRow('• Voucher / KM ($vCount lượt):', '-${FormatUtils.vnd(vTotal)}', color: TramColors.danger),
+                    _buildNumberRow('• Điểm KMT đổi ($pUsed điểm):', '-${FormatUtils.vnd(pDisc)}', color: TramColors.danger),
+                    const Divider(height: 12),
+                    _buildNumberRow('TỔNG GIẢM GIÁ TRONG CA:', '-${FormatUtils.vnd(totDisc)}', isBold: true, color: const Color(0xFF7E2930)),
+                  ],
+                ),
+              );
+            },
+          ),
           if (shift.notes.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
@@ -294,7 +515,30 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.table_view_outlined, size: 18, color: Color(0xFF137333)),
+              label: const Text('Xuất Excel Khuyến Mãi Ca', style: TextStyle(color: Color(0xFF137333), fontWeight: FontWeight.bold)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF137333)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              onPressed: () async {
+                try {
+                  await _exportShiftPromotionsExcel(shift);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: TramColors.danger),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(

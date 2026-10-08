@@ -16,6 +16,7 @@ import {
   EndOfDayReportData,
   HistoryOrder,
   OrderItem,
+  extractBillItems,
   formatVND,
   formatNumber,
 } from "./reports";
@@ -877,6 +878,113 @@ export function exportCashShiftReport(items: CashShiftAuditItem[], storeInfo?: R
   };
 }
 
+// BÁO CÁO KHUYẾN MÃI & GIẢM GIÁ TRONG CA (MODULE 4)
+export function exportShiftPromotionsExcel(
+  shift: CashShiftAuditItem,
+  shiftBills: HistoryOrder[],
+  storeInfo?: ReportStoreInfo
+) {
+  const headers = [
+    "STT",
+    "Mã hóa đơn",
+    "Bàn / Phòng",
+    "Thời gian",
+    "Thu ngân",
+    "Tiền hàng (gộp)",
+    "Giảm giá món",
+    "Voucher / KM",
+    "Điểm dùng",
+    "Giảm giá điểm",
+    "Tổng giảm giá",
+    "Thanh toán",
+    "Phương thức",
+  ];
+
+  const paidBills = shiftBills.filter((b) => (b.status || "PAID").toUpperCase() === "PAID");
+
+  let totalGross = 0;
+  let totalItemDisc = 0;
+  let totalVoucher = 0;
+  let totalPointsUsed = 0;
+  let totalPointsDisc = 0;
+  let totalDisc = 0;
+  let totalFinal = 0;
+
+  const rows = paidBills.map((b, idx) => {
+    const items = extractBillItems(b);
+    const itemDisc = items.reduce((s, it) => s + (Number(it.discountAmount || 0) * Number(it.quantity || 1)), 0);
+    const voucherDisc = Array.isArray(b.discounts)
+      ? b.discounts.reduce((s, d) => s + Number(d.amount || 0), 0)
+      : Number(b.billDiscounts || 0);
+    const pUsed = Number(b.pointsUsed || 0);
+    const pDisc = Number(b.pointsDiscount || 0);
+    const gross = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0));
+    const billTotDisc = Number(b.totalDiscount != null ? b.totalDiscount : (itemDisc + voucherDisc + pDisc));
+    const finalA = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0));
+
+    totalGross += gross;
+    totalItemDisc += itemDisc;
+    totalVoucher += voucherDisc;
+    totalPointsUsed += pUsed;
+    totalPointsDisc += pDisc;
+    totalDisc += billTotDisc;
+    totalFinal += finalA;
+
+    const bTime = Number(b.closedAt || b.createdAt || b.timestamp || Date.now());
+    const timeStr = format(new Date(bTime), "dd/MM/yyyy HH:mm");
+
+    return [
+      idx + 1,
+      b.billCode || b.orderCode || b.id,
+      b.tableName || "Mang về",
+      timeStr,
+      b.staffFullName || shift.staffFullName || "Thu ngân",
+      gross,
+      itemDisc,
+      voucherDisc,
+      pUsed,
+      pDisc,
+      billTotDisc,
+      finalA,
+      b.paymentMethod || "CASH",
+    ];
+  });
+
+  const totalRow = [
+    "TỔNG CỘNG",
+    "—",
+    "—",
+    "—",
+    "—",
+    totalGross,
+    totalItemDisc,
+    totalVoucher,
+    totalPointsUsed,
+    totalPointsDisc,
+    totalDisc,
+    totalFinal,
+    "—",
+  ];
+
+  const opts: ExportReportOptions = {
+    reportCode: `KM_CA_${shift.shiftCode}`,
+    reportTitle: `Báo cáo Khuyến Mãi & Giảm Giá Ca ${shift.shiftCode}`,
+    storeName: storeInfo?.storeName,
+    storeAddress: storeInfo?.address,
+    storePhone: storeInfo?.phone,
+    storeCode: storeInfo?.storeCode || shift.storeCode,
+    dateRangeText: `Mã ca: ${shift.shiftCode} - Thu ngân: ${shift.staffFullName}`,
+    headers,
+    rows,
+    totalRow,
+  };
+
+  return {
+    toExcel: () => exportStandardReportExcel(opts),
+    toPDF: () => printStandardReportPDF(opts),
+  };
+}
+
 // 11. BÁO CÁO LỢI NHUẬN GỘP & GIÁ VỐN
 export function exportGrossProfitReport(data: GrossProfitReportResult, storeInfo?: ReportStoreInfo, dateText?: string) {
   const headers = [
@@ -1254,4 +1362,48 @@ export function exportAuditLogs(data: Array<Record<string, unknown>>) {
   ];
   XLSX.utils.book_append_sheet(wb, ws, "Nhật ký Hệ thống");
   downloadWorkbook(wb, `NhatKyHeThong_${format(new Date(), "yyyy-MM-dd_HHmm")}.xlsx`);
+}
+
+export interface CustomerExportItem {
+  maKhachHang: string;
+  hoTen: string;
+  soDienThoai: string;
+  diemHienTai: number;
+  giaTriQuyDoi: number;
+  hangThanhVien: string;
+  ngayTao?: string;
+  tongChiTieu?: number;
+  soDonDaMua?: number;
+}
+
+export function exportCustomersList(data: CustomerExportItem[], storeInfo?: ReportStoreInfo) {
+  const rows = data.map((item, idx) => ({
+    "STT": idx + 1,
+    "Mã khách hàng": item.maKhachHang || "",
+    "Họ và tên": item.hoTen || "Khách lẻ",
+    "Số điện thoại": item.soDienThoai || "",
+    "Điểm tích lũy (KMT)": item.diemHienTai || 0,
+    "Giá trị quy đổi (VNĐ)": item.giaTriQuyDoi || 0,
+    "Hạng thành viên": item.hangThanhVien || "Thành viên",
+    "Ngày tham gia": item.ngayTao || "—",
+    "Tổng chi tiêu (VNĐ)": item.tongChiTieu || 0,
+    "Số lượt mua": item.soDonDaMua || 0,
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 6 },
+    { wch: 18 },
+    { wch: 25 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 14 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, "Khách hàng CRM");
+  downloadWorkbook(wb, `DS_KhachHang_CRM_${format(new Date(), "yyyyMMdd_HHmm")}.xlsx`);
 }

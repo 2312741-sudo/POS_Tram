@@ -340,7 +340,143 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
     );
   }
 
+  void _showCreateDocSheet(BuildContext context) {
+    final canStockIn = _auth.currentUser?.role == UserRole.owner ||
+        _auth.can(AppPermissions.inventoryStockIn) ||
+        _auth.can(AppPermissions.createReceipt);
+    final canStockOut = _auth.currentUser?.role == UserRole.owner ||
+        _auth.can(AppPermissions.inventoryStockOut) ||
+        _auth.can(AppPermissions.createInternalUse);
+    final canWaste = _auth.currentUser?.role == UserRole.owner ||
+        _auth.can(AppPermissions.inventoryWaste) ||
+        _auth.can(AppPermissions.createWaste);
+
+    final options = <Widget>[];
+
+    if (canStockIn) {
+      options.add(
+        ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.login_rounded, color: AppColors.primary),
+          ),
+          title: const Text('Phiếu nhập hàng (Stock In)', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('Nhập nguyên vật liệu từ nhà cung cấp, cập nhật giá vốn'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'PURCHASE_RECEIPT')),
+            );
+          },
+        ),
+      );
+    }
+
+    if (canStockOut) {
+      options.add(
+        ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.warningLight.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.logout_rounded, color: AppColors.warningLight),
+          ),
+          title: const Text('Phiếu xuất kho (Stock Out)', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('Xuất nguyên vật liệu cho quầy bar, bếp, pha chế nội bộ'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'INTERNAL_USE')),
+            );
+          },
+        ),
+      );
+    }
+
+    if (canWaste) {
+      options.add(
+        ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.dangerLight.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.delete_sweep_outlined, color: AppColors.dangerLight),
+          ),
+          title: const Text('Phiếu xuất hủy (Waste)', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('Ghi nhận hàng hết hạn, đổ vỡ, hư hỏng không sử dụng được'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'WASTE')),
+            );
+          },
+        ),
+      );
+    }
+
+    if (options.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền tạo phiếu kho')),
+      );
+      return;
+    }
+
+    if (options.length == 1) {
+      if (canStockIn) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'PURCHASE_RECEIPT')));
+      } else if (canStockOut) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'INTERNAL_USE')));
+      } else if (canWaste) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen(docType: 'WASTE')));
+      }
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Chọn loại nghiệp vụ kho', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              const Divider(),
+              ...options,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDocumentsTab() {
+    final canAnyCreate = _auth.currentUser?.role == UserRole.owner ||
+        _auth.can(AppPermissions.inventoryStockIn) ||
+        _auth.can(AppPermissions.createReceipt) ||
+        _auth.can(AppPermissions.inventoryStockOut) ||
+        _auth.can(AppPermissions.createInternalUse) ||
+        _auth.can(AppPermissions.inventoryWaste) ||
+        _auth.can(AppPermissions.createWaste);
+
     return StreamBuilder<List<InventoryDocumentModel>>(
       stream: _inventoryService.inventoryDocumentsStream(),
       builder: (context, snapshot) {
@@ -348,7 +484,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Lỗi: \${snapshot.error}'));
+          return Center(child: Text('Lỗi: ${snapshot.error}'));
         }
 
         final docs = snapshot.data ?? [];
@@ -356,12 +492,11 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           return EmptyState(
             icon: Icons.receipt_long_outlined,
             title: 'Chưa có phiếu kho nào',
-            action: _auth.can(AppPermissions.createReceipt)
-                ? ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen()));
-                    },
-                    child: const Text('Nhập hàng'),
+            action: canAnyCreate
+                ? ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _showCreateDocSheet(context),
+                    label: const Text('Tạo phiếu kho'),
                   )
                 : null,
           );
@@ -373,35 +508,96 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final doc = docs[index];
+              String typeLabel;
+              Color typeColor;
+              switch (doc.docType) {
+                case 'INTERNAL_USE':
+                  typeLabel = 'Xuất kho';
+                  typeColor = AppColors.warningLight;
+                  break;
+                case 'WASTE':
+                  typeLabel = 'Xuất hủy';
+                  typeColor = AppColors.dangerLight;
+                  break;
+                case 'PURCHASE_RECEIPT':
+                default:
+                  typeLabel = 'Nhập hàng';
+                  typeColor = AppColors.primary;
+              }
+
+              final subInfo = doc.docType == 'PURCHASE_RECEIPT'
+                  ? (doc.supplierName?.isNotEmpty == true ? doc.supplierName! : 'Nhập hàng NCC')
+                  : (doc.reason?.isNotEmpty == true ? doc.reason! : (doc.note?.isNotEmpty == true ? doc.note! : 'Nội bộ'));
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  title: Text(doc.documentCode, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('\${doc.docType} | \${doc.supplierName ?? ''}'),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      doc.docType == 'PURCHASE_RECEIPT'
+                          ? Icons.login_rounded
+                          : (doc.docType == 'INTERNAL_USE' ? Icons.logout_rounded : Icons.delete_outline_rounded),
+                      color: typeColor,
+                    ),
+                  ),
+                  title: Row(
+                    children: [
+                      Text(doc.documentCode, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          typeLabel,
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: typeColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(subInfo, maxLines: 1, overflow: TextOverflow.ellipsis),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(FormatUtils.currency(doc.totalMoney)),
-                      Text(doc.status, style: TextStyle(color: doc.status == 'COMPLETED' ? AppColors.successLight : AppColors.textSecondary)),
+                      Text(FormatUtils.currency(doc.totalMoney), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        doc.status == 'COMPLETED' ? 'Đã duyệt' : 'Bản nháp',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: doc.status == 'COMPLETED' ? AppColors.successLight : AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                   onTap: () {
-                    if (doc.docType == 'PURCHASE_RECEIPT') {
-                       Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseReceiptScreen(documentId: doc.documentId)));
-                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PurchaseReceiptScreen(
+                          documentId: doc.documentId,
+                          docType: doc.docType,
+                        ),
+                      ),
+                    );
                   },
                 ),
               );
             },
           ),
-          floatingActionButton: _auth.can(AppPermissions.createReceipt)
-              ? FloatingActionButton(
-                  onPressed: () {
-                     Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseReceiptScreen()));
-                  },
+          floatingActionButton: canAnyCreate
+              ? FloatingActionButton.extended(
+                  onPressed: () => _showCreateDocSheet(context),
                   backgroundColor: AppColors.primary,
-                  child: const Icon(Icons.add, color: Colors.white),
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text('Tạo phiếu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 )
               : null,
         );

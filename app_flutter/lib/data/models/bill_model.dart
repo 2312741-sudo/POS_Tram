@@ -3,6 +3,33 @@ import 'order_item_model.dart';
 import 'order_action_log_model.dart';
 import 'promotion_model.dart';
 
+// ==================== PAYMENT SPLIT MODEL (MULTI-METHOD) ====================
+class PaymentSplitModel {
+  final String method; // 'CASH', 'TRANSFER_QR', 'CARD'
+  final int amount;
+  final String? note;
+
+  PaymentSplitModel({
+    required this.method,
+    required this.amount,
+    this.note,
+  });
+
+  factory PaymentSplitModel.fromMap(Map<dynamic, dynamic> map) {
+    return PaymentSplitModel(
+      method: map['method']?.toString() ?? 'CASH',
+      amount: (map['amount'] as num?)?.toInt() ?? 0,
+      note: map['note']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'method': method,
+    'amount': amount,
+    if (note != null && note!.isNotEmpty) 'note': note,
+  };
+}
+
 // ==================== BILL MODEL ====================
 class BillModel {
   final String id;
@@ -22,7 +49,8 @@ class BillModel {
   double vatRate;
   int vatAmount;
   int finalAmount;
-  String paymentMethod; // 'CASH', 'TRANSFER_QR', 'CARD'
+  String paymentMethod; // 'CASH', 'TRANSFER_QR', 'CARD', 'SPLIT'
+  List<PaymentSplitModel>? paymentSplits; // Thanh toán hỗn hợp (VD: Tiền mặt + Chuyển khoản QR)
   String notes;
   final String? parentBillId; // If split
   final List<String>? mergedTableNames;
@@ -53,6 +81,7 @@ class BillModel {
     this.vatAmount = 0,
     required this.finalAmount,
     this.paymentMethod = 'CASH',
+    this.paymentSplits,
     this.notes = '',
     this.parentBillId,
     this.mergedTableNames,
@@ -120,6 +149,13 @@ class BillModel {
       orderCode = rawBillCode;
     }
 
+    List<PaymentSplitModel>? splits;
+    if (map['paymentSplits'] != null && map['paymentSplits'] is List) {
+      splits = (map['paymentSplits'] as List)
+          .map((e) => PaymentSplitModel.fromMap(Map<dynamic, dynamic>.from(e as Map)))
+          .toList();
+    }
+
     return BillModel(
       id: id,
       billCode: billCode,
@@ -139,6 +175,7 @@ class BillModel {
       vatAmount: (map['vatAmount'] as num?)?.toInt() ?? 0,
       finalAmount: (map['finalAmount'] as num?)?.toInt() ?? (map['totalAmount'] as num?)?.toInt() ?? 0,
       paymentMethod: map['paymentMethod']?.toString() ?? 'CASH',
+      paymentSplits: splits,
       notes: map['notes']?.toString() ?? map['note']?.toString() ?? '',
       parentBillId: map['parentBillId']?.toString(),
       mergedTableNames: merged,
@@ -187,6 +224,8 @@ class BillModel {
     'vatAmount': vatAmount,
     'finalAmount': finalAmount,
     'paymentMethod': paymentMethod,
+    if (paymentSplits != null && paymentSplits!.isNotEmpty)
+      'paymentSplits': paymentSplits!.map((e) => e.toMap()).toList(),
     'notes': notes,
     'note': notes,
     if (parentBillId != null) 'parentBillId': parentBillId,
@@ -202,8 +241,11 @@ class BillModel {
   };
 
   void recalculateTotals() {
-    subTotal = items.fold(0, (s, i) => s + i.itemTotal);
-    totalDiscount = discounts.fold(0, (s, d) => s + d.amount) + pointsDiscount;
+    final rawSubTotal = items.fold(0, (s, i) => s + (i.unitPrice * i.quantity));
+    final itemDiscountTotal = items.fold(0, (s, i) => s + i.discountAmount);
+    subTotal = rawSubTotal;
+    final voucherDiscount = discounts.fold(0, (s, d) => s + d.amount);
+    totalDiscount = itemDiscountTotal + voucherDiscount + pointsDiscount;
     if (totalDiscount > subTotal) totalDiscount = subTotal;
     final afterDiscount = subTotal - totalDiscount;
     vatAmount = (afterDiscount * (vatRate / 100)).round();

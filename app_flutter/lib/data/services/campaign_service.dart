@@ -284,7 +284,7 @@ class CampaignService {
   }
 
   /// Đổi voucher
-  Future<VoucherModel?> redeemVoucher(String code, String billId, String username) async {
+  Future<VoucherModel?> redeemVoucher(String code, String billId, String username, {String? staffNote}) async {
     final normalized = code.trim().toUpperCase();
     final voucher = await lookupVoucherByCode(normalized);
     
@@ -322,6 +322,9 @@ class CampaignService {
     map['holdId'] = null;
     map['holdExpiresAt'] = null;
     map['version'] = voucher.version + 1;
+    if (staffNote != null && staffNote.isNotEmpty) {
+      map['staffNote'] = staffNote;
+    }
     
     await _storeRef.child('vouchers/${voucher.campaignId}/${voucher.voucherId}').set(map);
     
@@ -388,12 +391,11 @@ class CampaignService {
     final activeCampaigns = campaigns.where((c) {
       if (!c.active) return false;
       
-      // Kiểm tra thời gian
-      if (c.schedule.absoluteStart != null && now < c.schedule.absoluteStart!) return false;
-      if (c.schedule.absoluteEnd != null && now > c.schedule.absoluteEnd!) return false;
+      // Kiểm tra thời gian, ngày trong tuần, và happy hours
+      if (!c.isEligibleAt(now)) return false;
       
       // Kiểm tra chi nhánh
-      if (c.branchIds.isNotEmpty && !c.branchIds.contains(branchId)) return false;
+      if (!c.isEligibleForBranch(branchId)) return false;
       
       return true;
     }).toList();
@@ -410,6 +412,7 @@ class CampaignService {
     required int discountMoney,
     String? customerId,
     String? voucherCode,
+    String? staffNote,
     required String billId,
     required String username,
   }) async {
@@ -423,7 +426,7 @@ class CampaignService {
     
     // 3. Redeem voucher nếu có
     if (voucherCode != null && voucherCode.isNotEmpty) {
-      await redeemVoucher(voucherCode, billId, username);
+      await redeemVoucher(voucherCode, billId, username, staffNote: staffNote);
     }
   }
 

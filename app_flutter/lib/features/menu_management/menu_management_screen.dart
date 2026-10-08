@@ -106,12 +106,18 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   }
 
   void _showProductDialog({ProductModel? existing}) {
+    final codeCtrl = TextEditingController(
+      text: existing?.code.isNotEmpty == true
+          ? existing!.code
+          : (existing == null ? 'SP${(_products.length + 1).toString().padLeft(3, '0')}' : ''),
+    );
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(text: existing?.price.toString() ?? '');
     final costPriceCtrl = TextEditingController(text: existing?.costPrice != null ? existing!.costPrice.toString() : '');
     final unitCtrl = TextEditingController(text: existing?.unit ?? '');
     String selectedCat = existing?.category ?? (_categories.isNotEmpty ? _categories.first.name : '');
     String? base64Image = existing?.imageBase64;
+    bool isTopping = existing?.isTopping ?? false;
     
     showDialog(
       context: context,
@@ -171,6 +177,16 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                TextField(
+                  controller: codeCtrl,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Mã món / SKU',
+                    hintText: 'VD: SP001, TRA01...',
+                    prefixIcon: Icon(Icons.qr_code),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(controller: nameCtrl, style: const TextStyle(color: AppColors.textPrimary),
                   decoration: const InputDecoration(labelText: 'Tên sản phẩm *')),
                 const SizedBox(height: 12),
@@ -194,6 +210,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                     items: _categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
                     onChanged: (v) => setSt(() => selectedCat = v ?? ''),
                   ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Món này là Topping', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Có thể thêm vào các món nước/trà khác', style: TextStyle(fontSize: 12)),
+                  value: isTopping,
+                  activeColor: AppColors.primary,
+                  onChanged: (val) => setSt(() => isTopping = val ?? false),
+                ),
               ],
             ),
           ),
@@ -206,12 +231,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 final costParsed = int.tryParse(costPriceCtrl.text.trim());
                 final baseProd = existing ?? ProductModel(
                   name: nameCtrl.text.trim(),
+                  code: codeCtrl.text.trim(),
                   price: int.tryParse(priceCtrl.text.trim()) ?? 0,
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
                   category: selectedCat.isEmpty ? 'Món khác' : selectedCat,
+                  isTopping: isTopping,
                 );
                 final product = baseProd.copyWith(
                   name: nameCtrl.text.trim(),
+                  code: codeCtrl.text.trim(),
                   price: int.tryParse(priceCtrl.text.trim()) ?? 0,
                   costPrice: costParsed,
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
@@ -219,6 +247,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   imageBase64: base64Image,
                   imageResourceName: base64Image == null ? existing?.imageResourceName : null,
                   isAvailable: existing?.isAvailable ?? true,
+                  isTopping: isTopping,
                 );
                 await _fb.saveProduct(product, storeCode: _selectedStoreCode);
                 await _fb.logAction(AuditLogModel(
@@ -228,7 +257,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   userRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
                   targetType: 'PRODUCT',
                   timestamp: DateTime.now().millisecondsSinceEpoch,
-                  details: '${existing == null ? "Thêm" : "Sửa"} sản phẩm [$_selectedStoreCode]: ${product.name} (giá vốn: ${product.costPrice ?? 0}đ)',
+                  details: '${existing == null ? "Thêm" : "Sửa"} sản phẩm [$_selectedStoreCode]: ${product.name} (SKU: ${product.code}, giá vốn: ${product.costPrice ?? 0}đ)',
                   targetId: product.name,
                 ));
                 if (mounted) Navigator.pop(ctx);
@@ -637,6 +666,20 @@ class _ProductItem extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      if (product.code.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            product.code,
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
+                          ),
+                        ),
+                      ],
                       Expanded(
                         child: Text(
                           product.name,
@@ -648,12 +691,28 @@ class _ProductItem extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (!product.isAvailable)
+                      if (product.isTopping) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          margin: const EdgeInsets.only(left: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.managerAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Topping',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.managerAccent),
+                          ),
+                        ),
+                      ],
+                      if (!product.isAvailable) ...[
+                        const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
                           child: Text('Tạm ngưng', style: GoogleFonts.beVietnamPro(color: Colors.red.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),

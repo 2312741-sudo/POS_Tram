@@ -160,14 +160,40 @@ class UserModel {
     return isRootOwner || role.isOwner;
   }
 
-  /// Check permission considering Root Owner + Role permissions + Individual custom overrides
+  /// Check permission considering Root Owner + Role permissions + Individual custom overrides + Aliases
   bool can(String permKey, [List<RoleModel>? roles, String? storeOwnerId]) {
     if (isStoreOwner(storeOwnerId)) return true; // Nguyên tắc tối thượng bảo vệ Chủ quán
-    if (customPermissions.contains(permKey)) return true;
-    if (roles != null && roles.isNotEmpty) {
-      final matchedRole = roles.where((r) => r.id == roleId).firstOrNull;
-      if (matchedRole != null) return matchedRole.hasPermission(permKey);
+
+    bool checkSingle(String key) {
+      if (customPermissions.contains(key)) return true;
+      if (roles != null && roles.isNotEmpty) {
+        final matchedRole = roles.where((r) => r.id == roleId).firstOrNull;
+        if (matchedRole != null && matchedRole.hasPermission(key)) return true;
+      }
+      return role.hasDefaultPermission(key);
     }
-    return role.hasDefaultPermission(permKey);
+
+    if (checkSingle(permKey)) return true;
+
+    // Ánh xạ tương đương giữa các mã quyền theo hợp đồng phân quyền
+    const aliases = {
+      'INVENTORY_STOCK_IN': ['CREATE_RECEIPT'],
+      'CREATE_RECEIPT': ['INVENTORY_STOCK_IN'],
+      'INVENTORY_STOCK_OUT': ['CREATE_INTERNAL_USE'],
+      'CREATE_INTERNAL_USE': ['INVENTORY_STOCK_OUT'],
+      'INVENTORY_WASTE': ['CREATE_WASTE'],
+      'CREATE_WASTE': ['INVENTORY_WASTE'],
+      'DISCOUNT_ITEM': ['MANUAL_DISCOUNT'],
+      'MENU_MANAGEMENT': ['EDIT_MENU', 'VIEW_MENU'],
+    };
+
+    final alts = aliases[permKey];
+    if (alts != null) {
+      for (final alt in alts) {
+        if (checkSingle(alt)) return true;
+      }
+    }
+
+    return false;
   }
 }

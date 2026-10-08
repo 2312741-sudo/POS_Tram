@@ -28,6 +28,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   List<ProductModel> _products = [];
   List<OrderItemModel> _cart = [];
   List<CategoryModel> _categories = [];
+  List<String> _backendNotePresets = [];
   bool _loading = false;
   bool _isSendingKitchen = false;
   bool _isShiftOpen = false;
@@ -106,6 +107,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _fb.categoriesStream(storeCode: storeCode).listen((cats) {
       if (mounted) setState(() => _categories = cats);
     });
+    _fb.productNotesStream(storeCode: storeCode).listen((notes) {
+      if (mounted) {
+        final list = notes
+            .map((n) => n['text']?.toString() ?? n['name']?.toString() ?? '')
+            .where((s) => s.trim().isNotEmpty)
+            .toList();
+        setState(() => _backendNotePresets = list);
+      }
+    });
   }
 
   List<ProductModel> get _filteredProducts {
@@ -178,7 +188,61 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
     final hasSizes = product.sizes.isNotEmpty;
     final hasIceSugar = product.hasIceSugarOptions;
-    final hasToppings = product.allowedToppings.isNotEmpty;
+
+    // Resolve category and allowed toppings
+    CategoryModel? matchedCategory;
+    for (final c in _categories) {
+      if (c.name.trim().toLowerCase() == product.category.trim().toLowerCase()) {
+        matchedCategory = c;
+        break;
+      }
+    }
+
+    final Map<String, ProductModel?> toppingItemMap = {};
+    final List<String> availableToppingNames = [];
+
+    final isDrinkOrTea = product.category.toLowerCase().contains('trà') ||
+        product.category.toLowerCase().contains('tea') ||
+        product.hasIceSugarOptions ||
+        product.sizes.isNotEmpty;
+
+    if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
+      for (final tId in matchedCategory.allowedToppingIds) {
+        final match = _products.firstWhere(
+          (p) => p.id.toString() == tId ||
+              (p.code.isNotEmpty && p.code.toLowerCase() == tId.toLowerCase()) ||
+              p.name.toLowerCase() == tId.toLowerCase(),
+          orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping'),
+        );
+        toppingItemMap[match.name] = match;
+        if (!availableToppingNames.contains(match.name)) {
+          availableToppingNames.add(match.name);
+        }
+      }
+    } else if (product.allowedToppings.isNotEmpty) {
+      for (final topName in product.allowedToppings) {
+        final match = _products.firstWhere(
+          (p) => p.name.toLowerCase() == topName.toLowerCase() ||
+              (p.code.isNotEmpty && p.code.toLowerCase() == topName.toLowerCase()),
+          orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping'),
+        );
+        toppingItemMap[match.name] = match;
+        if (!availableToppingNames.contains(match.name)) {
+          availableToppingNames.add(match.name);
+        }
+      }
+    } else if (isDrinkOrTea) {
+      for (final p in _products) {
+        if (p.isTopping || p.category.toLowerCase().contains('topping')) {
+          toppingItemMap[p.name] = p;
+          if (!availableToppingNames.contains(p.name)) {
+            availableToppingNames.add(p.name);
+          }
+        }
+      }
+    }
+
+    final hasToppings = availableToppingNames.isNotEmpty;
 
     String selectedSize = hasSizes ? (product.sizes.containsKey('M') ? 'M' : product.sizes.keys.first) : 'Chuẩn';
     int sizeExtra = hasSizes ? (product.sizes[selectedSize] ?? 0) : 0;
@@ -196,7 +260,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final int toppingPrice = selectedToppings.length * 5000;
+          int toppingPrice = 0;
+          for (final topName in selectedToppings) {
+            toppingPrice += toppingItemMap[topName]?.price ?? 5000;
+          }
           final int unitPrice = product.price + sizeExtra + toppingPrice;
           final int totalPrice = unitPrice * quantity;
 
@@ -306,15 +373,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
                   // 3. TOPPINGS (Topping đi kèm)
                   if (hasToppings) ...[
-                    Text('Topping thêm (+5.000đ/phần):', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                    Text('Topping thêm:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
-                      children: product.allowedToppings.map((top) {
-                        final isSel = selectedToppings.contains(top);
+                      children: availableToppingNames.map((topName) {
+                        final isSel = selectedToppings.contains(topName);
+                        final topProd = toppingItemMap[topName];
+                        final priceStr = topProd != null ? FormatUtils.vnd(topProd.price) : '5.000 đ';
                         return FilterChip(
-                          label: Text(top),
+                          label: Text('$topName (+$priceStr)'),
                           selected: isSel,
                           selectedColor: AppColors.primaryLight,
                           labelStyle: TextStyle(
@@ -325,9 +394,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           onSelected: (val) {
                             setModalState(() {
                               if (val) {
-                                selectedToppings.add(top);
+                                selectedToppings.add(topName);
                               } else {
-                                selectedToppings.remove(top);
+                                selectedToppings.remove(topName);
                               }
                             });
                           },
@@ -337,7 +406,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // 4. NOTE (Ghi chú món)
+                  // 4. NOTE (Ghi chú món & Ghi chú mẫu từ Backend)
                   TextField(
                     controller: noteCtrl,
                     decoration: const InputDecoration(
@@ -345,7 +414,53 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       hintText: 'VD: ít ngọt, pha đậm vị...',
                       prefixIcon: Icon(Icons.edit_note),
                     ),
+                    onChanged: (_) => setModalState(() {}),
                   ),
+                  const SizedBox(height: 8),
+                  Builder(builder: (_) {
+                    final presets = _backendNotePresets.isNotEmpty
+                        ? _backendNotePresets
+                        : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về'];
+                    return Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: presets.map((preset) {
+                        final isPresetInNote = noteCtrl.text.contains(preset);
+                        return ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            preset,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isPresetInNote ? AppColors.primaryDark : AppColors.textPrimary,
+                              fontWeight: isPresetInNote ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                          backgroundColor: isPresetInNote ? AppColors.primaryLight : AppColors.cardElevated,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: isPresetInNote ? AppColors.primary : AppColors.border),
+                          ),
+                          onPressed: () {
+                            setModalState(() {
+                              final current = noteCtrl.text.trim();
+                              if (current.isEmpty) {
+                                noteCtrl.text = preset;
+                              } else if (!current.contains(preset)) {
+                                noteCtrl.text = '$current, $preset';
+                              } else {
+                                noteCtrl.text = current
+                                    .replaceAll(', $preset', '')
+                                    .replaceAll('$preset, ', '')
+                                    .replaceAll(preset, '')
+                                    .trim();
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    );
+                  }),
                   const SizedBox(height: 20),
 
                   // 5. QUANTITY & ADD BUTTON

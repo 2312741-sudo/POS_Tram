@@ -306,6 +306,7 @@ class OrderRepository {
               billId: bill.id,
               username: bill.staffUsername,
               voucherCode: d.promoCode,
+              staffNote: d.staffNote,
               customerId: null,
             );
             continue;
@@ -320,6 +321,7 @@ class OrderRepository {
               billId: bill.id,
               username: bill.staffUsername,
               voucherCode: d.promoCode,
+              staffNote: d.staffNote,
               customerId: null,
             );
           }
@@ -638,6 +640,45 @@ class OrderRepository {
   Future<void> deleteCategory(CategoryModel category, {String? storeCode}) async {
     final ref = getCategoriesRef(storeCode);
     await ref.child(category.name).remove();
+  }
+
+  // ==================== PRODUCT NOTES (GHI CHÚ MẪU) ====================
+  DatabaseReference getProductNotesRef([String? storeCode]) {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty)
+        ? storeCode.trim().toUpperCase()
+        : _currentStoreCode;
+    return _root.child('stores').child(sc).child('product_notes');
+  }
+
+  Stream<List<Map<String, dynamic>>> productNotesStream({String? storeCode}) {
+    final ref = getProductNotesRef(storeCode);
+    return ref.onValue.map<List<Map<String, dynamic>>>((event) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final val = event.snapshot.value;
+        if (val is Map) {
+          final list = <Map<String, dynamic>>[];
+          val.forEach((k, v) {
+            if (v is Map) {
+              list.add({'id': k.toString(), ...Map<String, dynamic>.from(v)});
+            } else if (v is String) {
+              list.add({'id': k.toString(), 'text': v});
+            }
+          });
+          return list;
+        }
+      }
+      return <Map<String, dynamic>>[];
+    }).handleError((_) => <Map<String, dynamic>>[]);
+  }
+
+  Future<void> saveProductNote(String noteId, Map<String, dynamic> data, {String? storeCode}) async {
+    final ref = getProductNotesRef(storeCode);
+    await ref.child(noteId).set(data);
+  }
+
+  Future<void> deleteProductNote(String noteId, {String? storeCode}) async {
+    final ref = getProductNotesRef(storeCode);
+    await ref.child(noteId).remove();
   }
 
   Future<int> copyMenuBetweenStores({

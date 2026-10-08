@@ -26,6 +26,7 @@ const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { href: "/dashboard/end-of-day", label: "Báo cáo Cuối ngày", icon: ClipboardCheck },
   { href: "/dashboard/shifts", label: "Phiếu Bàn Giao Ca", icon: Receipt },
+  { href: "/dashboard/customers", label: "Khách hàng CRM (KMT)", icon: Users },
   { href: "/dashboard/product-sales", label: "Hàng hoá Bán ra", icon: ShoppingCart },
   { href: "/dashboard/stores", label: "Hệ thống Chi nhánh", icon: Store },
   { href: "/dashboard/tables", label: "Sơ đồ Phòng/Bàn", icon: LayoutGrid },
@@ -35,7 +36,7 @@ const navItems = [
   { href: "/dashboard/inventory", label: "Kho hàng & NVL", icon: Warehouse },
   { href: "/dashboard/promotions", label: "Khuyến mãi & Voucher", icon: Tag },
   { href: "/dashboard/reports/inventory", label: "Báo cáo Kho hàng", icon: ClipboardCheck },
-  { href: "/dashboard/users", label: "Nhân viên & Ca trực", icon: Users },
+  { href: "/dashboard/users", label: "Nhân viên và phân quyền", icon: Users },
   { href: "/dashboard/audit", label: "Nhật ký Kiểm soát", icon: Shield },
   { href: "/dashboard/analytics", label: "Phân tích Kinh doanh", icon: BarChart3 },
 ];

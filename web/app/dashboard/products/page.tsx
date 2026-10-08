@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Download,
@@ -17,7 +17,11 @@ import {
   Tag,
   AlertCircle,
   UtensilsCrossed,
+  FileText,
+  Sparkles,
 } from "lucide-react";
+import { ref, onValue, set, remove, push } from "firebase/database";
+import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem } from "@/lib/data-context";
 
@@ -26,6 +30,7 @@ function formatVND(amount: number) {
 }
 
 interface ProductFormData {
+  code: string;
   name: string;
   price: string;
   costPrice: string;
@@ -33,9 +38,11 @@ interface ProductFormData {
   category: string;
   imageBase64: string;
   storeCode: string;
+  isTopping: boolean;
 }
 
 const emptyProductForm: ProductFormData = {
+  code: "",
   name: "",
   price: "",
   costPrice: "",
@@ -43,17 +50,25 @@ const emptyProductForm: ProductFormData = {
   category: "",
   imageBase64: "",
   storeCode: "TRAM01",
+  isTopping: false,
 };
 
 interface CategoryFormData {
   name: string;
   storeCode: string;
+  allowedToppingIds: string[];
 }
 
 const emptyCategoryForm: CategoryFormData = {
   name: "",
   storeCode: "TRAM01",
+  allowedToppingIds: [],
 };
+
+interface ProductNoteItem {
+  id: string;
+  text: string;
+}
 
 export default function ProductsPage() {
   const {
@@ -73,8 +88,42 @@ export default function ProductsPage() {
 
   const loading = ctxLoading && products.length === 0;
 
-  // Active top-level subtab: "products" or "categories"
-  const [activeTab, setActiveTab] = useState<"products" | "categories">("products");
+  // Active top-level subtab: "products" | "categories" | "notes"
+  const [activeTab, setActiveTab] = useState<"products" | "categories" | "notes">("products");
+
+  const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "TRAM01") : currentStoreCode;
+
+  // Product Notes State
+  const [notes, setNotes] = useState<ProductNoteItem[]>([]);
+  const [newNoteText, setNewNoteText] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  useEffect(() => {
+    const notesRef = ref(db, `stores/${targetStoreCode}/product_notes`);
+    const unsub = onValue(notesRef, (snap) => {
+      if (snap.exists()) {
+        const val = snap.val();
+        const list: ProductNoteItem[] = [];
+        Object.entries(val).forEach(([k, v]: [string, any]) => {
+          if (typeof v === "string") {
+            list.push({ id: k, text: v });
+          } else if (v && typeof v === "object") {
+            list.push({ id: k, text: v.text || v.name || "" });
+          }
+        });
+        setNotes(list);
+      } else {
+        setNotes([]);
+      }
+    });
+    return () => unsub();
+  }, [targetStoreCode]);
+
+  const generateProductCode = () => {
+    return `SP${String(products.length + 1).padStart(3, "0")}`;
+  };
 
   // Product tab state
   const [search, setSearch] = useState("");
@@ -135,7 +184,11 @@ export default function ProductsPage() {
   // Filtered products for Tab 1
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+      const matchSearch =
+        !search ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.code && p.code.toLowerCase().includes(search.toLowerCase())) ||
+        (p.productCode && p.productCode.toLowerCase().includes(search.toLowerCase()));
       const matchCat = !filterCategory || p.category === filterCategory;
       return matchSearch && matchCat;
     });
@@ -146,6 +199,7 @@ export default function ProductsPage() {
     setEditProductId(null);
     setProductForm({
       ...emptyProductForm,
+      code: generateProductCode(),
       storeCode: currentStoreCode !== "ALL" ? currentStoreCode : stores[0]?.storeCode || "TRAM01",
       category: filterCategory || (categories[0]?.name ?? ""),
     });
@@ -157,6 +211,7 @@ export default function ProductsPage() {
   const openEditProduct = (p: ProductItem) => {
     setEditProductId(String(p.id));
     setProductForm({
+      code: p.code || p.productCode || "",
       name: p.name,
       price: String(p.price),
       costPrice: p.costPrice != null ? String(p.costPrice) : "",
@@ -164,6 +219,7 @@ export default function ProductsPage() {
       category: p.category || "",
       imageBase64: p.imageBase64 || "",
       storeCode: p.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01"),
+      isTopping: Boolean(p.isTopping || p.category?.toLowerCase() === "topping"),
     });
     setProductError("");
     setQuickAddCatOpen(false);
@@ -215,12 +271,14 @@ export default function ProductsPage() {
       const res = await saveProduct(
         {
           id: editProductId || undefined,
+          code: productForm.code.trim(),
           name: productForm.name.trim(),
           price: Number(productForm.price),
           costPrice: costPriceNum,
           unit: productForm.unit.trim(),
           category: productForm.category.trim(),
           imageBase64: productForm.imageBase64,
+          isTopping: productForm.isTopping,
         },
         targetStore
       );
@@ -250,6 +308,7 @@ export default function ProductsPage() {
     setCategoryForm({
       name: "",
       storeCode: currentStoreCode !== "ALL" ? currentStoreCode : "ALL",
+      allowedToppingIds: [],
     });
     setCategoryError("");
     setShowCategoryModal(true);
@@ -260,6 +319,7 @@ export default function ProductsPage() {
     setCategoryForm({
       name: c.name,
       storeCode: c.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "ALL"),
+      allowedToppingIds: c.allowedToppingIds || [],
     });
     setCategoryError("");
     setShowCategoryModal(true);
@@ -284,7 +344,8 @@ export default function ProductsPage() {
       const res = await saveCategory(
         cleanName,
         categoryForm.storeCode,
-        editCategoryOriginalName || undefined
+        editCategoryOriginalName || undefined,
+        categoryForm.allowedToppingIds
       );
       if (!res.success) {
         setCategoryError(res.error || "Lỗi lưu danh mục");
@@ -296,6 +357,42 @@ export default function ProductsPage() {
       setCategoryError(e.message || "Lỗi lưu danh mục");
     }
     setCategorySaving(false);
+  };
+
+  // Product Notes Actions
+  const handleAddNote = async () => {
+    const text = newNoteText.trim();
+    if (!text) return;
+    setNoteSaving(true);
+    try {
+      const now = Date.now();
+      const noteId = `note_${now}_${Math.random().toString(36).slice(2, 6)}`;
+      await set(ref(db, `stores/${targetStoreCode}/product_notes/${noteId}`), { text });
+      setNewNoteText("");
+    } catch (e: any) {
+      alert("Lỗi lưu ghi chú: " + e.message);
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  const handleUpdateNote = async (id: string, text: string) => {
+    if (!text.trim()) return;
+    try {
+      await set(ref(db, `stores/${targetStoreCode}/product_notes/${id}`), { text: text.trim() });
+      setEditingNoteId(null);
+    } catch (e: any) {
+      alert("Lỗi sửa ghi chú: " + e.message);
+    }
+  };
+
+  const handleDeleteNote = async (id: string) => {
+    if (!confirm("Xóa ghi chú mẫu này?")) return;
+    try {
+      await remove(ref(db, `stores/${targetStoreCode}/product_notes/${id}`));
+    } catch (e: any) {
+      alert("Lỗi xóa ghi chú: " + e.message);
+    }
   };
 
   const handleDeleteCategory = async () => {
@@ -439,6 +536,39 @@ export default function ProductsPage() {
             }}
           >
             {categories.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("notes")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "12px 20px",
+            fontSize: "14px",
+            fontWeight: "700",
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            borderBottom: activeTab === "notes" ? "3px solid #7E2930" : "3px solid transparent",
+            color: activeTab === "notes" ? "#7E2930" : "#5D5B63",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <FileText size={18} />
+          Ghi chú mẫu món
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: "12px",
+              fontSize: "12px",
+              background: activeTab === "notes" ? "rgba(126,41,48,0.12)" : "#F4EFE6",
+              color: activeTab === "notes" ? "#7E2930" : "#8B8FA8",
+              fontWeight: "700",
+            }}
+          >
+            {notes.length}
           </span>
         </button>
       </div>
@@ -639,6 +769,7 @@ export default function ProductsPage() {
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Mã món (SKU)</th>
                   <th>Tên sản phẩm</th>
                   {currentStoreCode === "ALL" && <th>Chi nhánh</th>}
                   <th>Danh mục</th>
@@ -652,7 +783,7 @@ export default function ProductsPage() {
                 {filteredProducts.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={currentStoreCode === "ALL" ? 8 : 7}
+                      colSpan={currentStoreCode === "ALL" ? 9 : 8}
                       style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}
                     >
                       <div style={{ fontSize: "36px", marginBottom: "8px" }}>🍽️</div>
@@ -663,6 +794,21 @@ export default function ProductsPage() {
                   filteredProducts.map((p, i) => (
                     <tr key={`prod_row_${p.storeCode || "TRAM01"}_${p.id || p.name}_${i}`}>
                       <td style={{ color: "#8B8FA8" }}>{i + 1}</td>
+                      <td>
+                        <span
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            color: "#7E2930",
+                            background: "rgba(126,41,48,0.06)",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                          }}
+                        >
+                          {p.code || p.productCode || "—"}
+                        </span>
+                      </td>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           {p.imageBase64 ? (
@@ -688,9 +834,26 @@ export default function ProductsPage() {
                             </div>
                           )}
                           <div>
-                            <div style={{ fontWeight: "700", color: "#1C1A2D" }}>{p.name}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontWeight: "700", color: "#1C1A2D" }}>{p.name}</span>
+                              {(p.isTopping || p.category?.toLowerCase() === "topping") && (
+                                <span
+                                  style={{
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "10px",
+                                    fontWeight: "700",
+                                    background: "#FEF3C7",
+                                    color: "#D97706",
+                                    border: "1px solid #FCD34D",
+                                  }}
+                                >
+                                  Topping
+                                </span>
+                              )}
+                            </div>
                             {p.id && (
-                              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>Mã: {p.id.slice(0, 10)}</div>
+                              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>ID: {p.id.slice(0, 10)}</div>
                             )}
                           </div>
                         </div>
@@ -1053,6 +1216,130 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* ==================== TAB 3: GHI CHÚ MẪU (PRODUCT NOTES) ==================== */}
+      {activeTab === "notes" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Card Thêm ghi chú mới */}
+          <div className="card" style={{ padding: "20px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+              📝 Thêm ghi chú mẫu cho món ăn & thức uống
+            </h3>
+            <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "14px", lineHeight: "1.5" }}>
+              Các ghi chú mẫu sẽ xuất hiện dưới dạng chip chọn nhanh trên giao diện POS khi nhân viên order món (ví dụ: <em>Ít ngọt, Không đá, Uống nóng, Mang về, Để riêng đá...</em>).
+            </p>
+            <div style={{ display: "flex", gap: "10px", maxWidth: "600px" }}>
+              <input
+                className="input-field"
+                placeholder="Nhập nội dung ghi chú (ví dụ: Ít đá, Không đường, Nóng...)"
+                value={newNoteText}
+                onChange={(e) => setNewNoteText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddNote();
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn-primary"
+                onClick={handleAddNote}
+                disabled={noteSaving || !newNoteText.trim()}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                <Plus size={16} /> Thêm ghi chú
+              </button>
+            </div>
+          </div>
+
+          {/* Danh sách ghi chú hiện có */}
+          <div className="card" style={{ padding: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+                Danh sách ghi chú mẫu ({notes.length})
+              </h3>
+              <span style={{ fontSize: "12px", color: "#8B8FA8" }}>
+                Áp dụng cho chi nhánh: <strong>{targetStoreCode}</strong>
+              </span>
+            </div>
+
+            {notes.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "48px 20px", color: "#8B8FA8" }}>
+                <div style={{ fontSize: "36px", marginBottom: "8px" }}>💬</div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "#5D5B63" }}>Chưa có ghi chú mẫu nào</div>
+                <div style={{ fontSize: "12px", color: "#8B8FA8", marginTop: "4px" }}>
+                  Hãy nhập ghi chú vào ô trên và bấm &quot;Thêm ghi chú&quot; để nhân viên sử dụng nhanh trên POS.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                {notes.map((n) => (
+                  <div
+                    key={n.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "8px 14px",
+                      background: "#FAF7F2",
+                      border: "1px solid #E6DEC8",
+                      borderRadius: "12px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      color: "#1C1A2D",
+                    }}
+                  >
+                    {editingNoteId === n.id ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <input
+                          value={editingNoteText}
+                          onChange={(e) => setEditingNoteText(e.target.value)}
+                          style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #7E2930", fontSize: "13px" }}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleUpdateNote(n.id, editingNoteText);
+                          }}
+                        />
+                        <button
+                          onClick={() => handleUpdateNote(n.id, editingNoteText)}
+                          style={{ background: "#7E2930", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}
+                        >
+                          Lưu
+                        </button>
+                        <button
+                          onClick={() => setEditingNoteId(null)}
+                          style={{ background: "#E5E7EB", color: "#374151", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span>💬 {n.text}</span>
+                        <button
+                          onClick={() => {
+                            setEditingNoteId(n.id);
+                            setEditingNoteText(n.text);
+                          }}
+                          style={{ background: "none", border: "none", color: "#3B82F6", cursor: "pointer", padding: "2px" }}
+                          title="Sửa ghi chú"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteNote(n.id)}
+                          style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", padding: "2px" }}
+                          title="Xóa ghi chú"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ==================== MODAL: ADD/EDIT PRODUCT ==================== */}
       {showProductModal && (
         <div className="modal-overlay" onClick={closeProductModal}>
@@ -1149,6 +1436,38 @@ export default function ProductsPage() {
                 </label>
               </div>
 
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#8B8FA8" }}>
+                    Mã món (SKU) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setProductForm((f) => ({ ...f, code: generateProductCode() }))}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#0066FF",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <Sparkles size={13} /> Tự sinh mã
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Ví dụ: SP001, CF01, TP01..."
+                  value={productForm.code}
+                  onChange={(e) => setProductForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                />
+              </div>
+
               {[
                 { label: "Tên sản phẩm *", key: "name" as const, placeholder: "Ví dụ: Cà phê sữa đá, Bạc xỉu..." },
                 { label: "Giá bán (VNĐ) *", key: "price" as const, placeholder: "Ví dụ: 35000", type: "number" },
@@ -1168,6 +1487,19 @@ export default function ProductsPage() {
                   />
                 </div>
               ))}
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#FEF3C7", borderRadius: "10px", border: "1px solid #FCD34D" }}>
+                <input
+                  type="checkbox"
+                  id="isToppingCheckbox"
+                  checked={productForm.isTopping}
+                  onChange={(e) => setProductForm((f) => ({ ...f, isTopping: e.target.checked }))}
+                  style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#D97706" }}
+                />
+                <label htmlFor="isToppingCheckbox" style={{ fontSize: "13px", fontWeight: "600", color: "#92400E", cursor: "pointer", margin: 0 }}>
+                  ✨ Đây là món Topping (có thể đính kèm khi gọi các món chính trên POS)
+                </label>
+              </div>
 
               {/* Category Dropdown + Quick Add */}
               <div>
@@ -1320,6 +1652,55 @@ export default function ProductsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "4px" }}>
+                  Topping được phép áp dụng cho nhóm này
+                </label>
+                <p style={{ fontSize: "12px", color: "#6B7280", margin: "0 0 8px" }}>
+                  Khi gọi món thuộc nhóm này trên POS, chỉ những topping được tích chọn dưới đây mới hiển thị cho nhân viên.
+                </p>
+                <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #E6DEC8", borderRadius: "8px", padding: "8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {products
+                    .filter((p) => p.isTopping || p.category?.toLowerCase() === "topping")
+                    .map((top) => {
+                      const isChecked = (categoryForm.allowedToppingIds || []).includes(String(top.id));
+                      return (
+                        <button
+                          key={top.id}
+                          type="button"
+                          onClick={() => {
+                            const cur = categoryForm.allowedToppingIds || [];
+                            const next = isChecked ? cur.filter((id) => id !== String(top.id)) : [...cur, String(top.id)];
+                            setCategoryForm((f) => ({ ...f, allowedToppingIds: next }));
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "16px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            border: isChecked ? "2px solid #7E2930" : "1px solid #D1D5DB",
+                            background: isChecked ? "rgba(126,41,48,0.12)" : "#FFFFFF",
+                            color: isChecked ? "#7E2930" : "#374151",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>{isChecked ? "✓" : "+"}</span>
+                          <span>{top.name}</span>
+                          <span style={{ opacity: 0.7, fontSize: "11px" }}>({formatVND(top.price)})</span>
+                        </button>
+                      );
+                    })}
+                  {products.filter((p) => p.isTopping || p.category?.toLowerCase() === "topping").length === 0 && (
+                    <div style={{ fontSize: "12px", color: "#9CA3AF", padding: "6px" }}>
+                      Chưa có món nào được đánh dấu là Topping. Vui lòng tạo sản phẩm Topping trước.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {editCategoryOriginalName && (

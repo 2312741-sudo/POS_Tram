@@ -29,6 +29,7 @@ class PromotionMigration {
       warnRepeatedCustomer: false,
       hasCodes: isVoucher,
       autoApply: !isVoucher,
+      requireStaffNote: old.requireStaffNote,
       stackingMode: StackingMode.disabled.toMap(),
       priority: 999, // default low priority
       active: old.isActive,
@@ -87,13 +88,16 @@ class PromotionMigration {
       value: value,
       maxDiscountAmount: maxDiscount,
       minBillAmount: minBill,
-      targetCategory: null,
+      targetCategory: campaign.includedGroupIds.isNotEmpty ? campaign.includedGroupIds.first : null,
       targetProductId: campaign.includedItemIds.isNotEmpty ? int.tryParse(campaign.includedItemIds.first) : null,
+      includedItemIds: campaign.includedItemIds,
+      includedGroupIds: campaign.includedGroupIds,
       startDate: campaign.schedule.absoluteStart ?? 0,
       endDate: campaign.schedule.absoluteEnd ?? 0,
       isActive: campaign.active,
       usageCount: 0,
       maxUsage: campaign.maxUses ?? 0,
+      requireStaffNote: campaign.requireStaffNote,
     );
   }
 

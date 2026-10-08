@@ -139,13 +139,17 @@ PriceQuoteModel calculatePrice({
       }
     } else if (campaign.campaignType == 'ITEMPRICERULE' || campaign.campaignType == 'ITEM_PRICE_RULE') {
       var itemIds = campaign.includedItemIds;
+      var groupIds = campaign.includedGroupIds;
       if (campaign.tiers.isNotEmpty) {
         var tier = campaign.tiers.first;
         var fixedPrice = (tier.benefitMode == 'FIXEDPRICE') ? tier.value : null;
 
         bool applied = false;
         for (var line in input.lines) {
-          if (!line.isGift && itemIds.contains(line.itemId)) {
+          bool isMatch = (itemIds.isEmpty && groupIds.isEmpty) ||
+              itemIds.contains(line.itemId) ||
+              (line.groupId != null && groupIds.contains(line.groupId));
+          if (!line.isGift && isMatch) {
             if (fixedPrice != null && line.unitPrice > fixedPrice) {
               int discount = (line.unitPrice - fixedPrice) * line.quantity;
               lineDiscounts[line.lineId] = (lineDiscounts[line.lineId] ?? 0) + discount;
@@ -177,9 +181,23 @@ PriceQuoteModel calculatePrice({
       var percent = (tier.benefitMode == 'PERCENT') ? tier.value : null; 
       var fixed = (tier.benefitMode == 'FIXED') ? tier.value : null;
 
+      int baseMoney = grossMoney;
+      if (campaign.includedItemIds.isNotEmpty || campaign.includedGroupIds.isNotEmpty) {
+        baseMoney = input.lines
+            .where((l) =>
+                !l.isGift &&
+                (campaign.includedItemIds.contains(l.itemId) ||
+                    (l.groupId != null && campaign.includedGroupIds.contains(l.groupId))))
+            .fold(0, (sum, l) => sum + l.unitPrice * l.quantity);
+      }
+
+      if (tier.threshold > 0 && baseMoney < tier.threshold) {
+        continue;
+      }
+
       int d = 0;
       if (percent != null) {
-        d = (grossMoney * percent) ~/ 10000;
+        d = (baseMoney * percent) ~/ 10000;
         if (maxDiscount > 0 && d > maxDiscount) {
           d = maxDiscount;
         }
@@ -187,7 +205,7 @@ PriceQuoteModel calculatePrice({
         d = fixed;
       }
       
-      d = min(d, grossMoney); 
+      d = min(d, baseMoney); 
 
       calculatedBillDiscounts.add({
         'campaign': campaign,

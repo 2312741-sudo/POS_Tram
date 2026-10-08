@@ -24,8 +24,18 @@ interface CampaignItem {
   description: string;
   campaignType: string;
   active: boolean;
-  schedule: { absoluteStart?: number; absoluteEnd?: number };
+  schedule: {
+    absoluteStart?: number;
+    absoluteEnd?: number;
+    timeSlots?: { startTime: string; endTime: string }[];
+    daysOfWeek?: number[];
+  };
   branchIds: string[];
+  includedCustomerIds?: string[];
+  excludedCustomerIds?: string[];
+  includedItemIds?: string[];
+  includedGroupIds?: string[];
+  excludedItemIds?: string[];
   tiers: any[];
   buyConditions: any[];
   budgetMoney?: number;
@@ -33,6 +43,7 @@ interface CampaignItem {
   maxUsesPerCustomer?: number;
   hasCodes: boolean;
   autoApply: boolean;
+  requireStaffNote?: boolean;
   stackingMode: string;
   priority: number;
   createdAt: number;
@@ -63,7 +74,7 @@ const typeLabels: Record<string, string> = {
 
 // ==================== MAIN COMPONENT ====================
 export default function PromotionsPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, products = [], categories = [] } = useDashboardData();
   const [activeTab, setActiveTab] = useState<"campaigns" | "vouchers">("campaigns");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
@@ -91,9 +102,13 @@ export default function PromotionsPage() {
   const [campaignForm, setCampaignForm] = useState({
     name: "", programCode: "", description: "", campaignType: "BILLDISCOUNT",
     active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
-    hasCodes: false, autoApply: true, stackingMode: "STACKABLE", priority: "0",
-    discountThreshold: "", discountType: "PERCENT", discountValue: "", maxDiscount: "",
-    fixedPriceValue: ""
+    hasCodes: false, autoApply: true, requireStaffNote: false, stackingMode: "STACKABLE", priority: "0",
+    discountThreshold: "", discountType: "PERCENT" as "PERCENT" | "AMOUNT", discountValue: "", maxDiscount: "",
+    fixedPriceValue: "",
+    includedItemIds: [] as string[],
+    includedGroupIds: [] as string[],
+    daysOfWeek: [] as number[],
+    timeSlots: [] as { startTime: string; endTime: string }[]
   });
 
   // Voucher form state
@@ -116,6 +131,8 @@ export default function PromotionsPage() {
           campaignId: child.key!, programCode: v.programCode || "", name: v.name || "",
           description: v.description || "", campaignType: v.campaignType || "BILLDISCOUNT",
           active: v.active ?? false, schedule: v.schedule || {}, branchIds: v.branchIds || [],
+          includedItemIds: v.includedItemIds || [], includedGroupIds: v.includedGroupIds || [],
+          requireStaffNote: v.requireStaffNote ?? false,
           tiers: v.tiers || [], buyConditions: v.buyConditions || [], budgetMoney: v.budgetMoney || 0,
           maxUses: v.maxUses || 0, maxUsesPerCustomer: v.maxUsesPerCustomer || 0, hasCodes: v.hasCodes ?? false,
           autoApply: v.autoApply ?? false, stackingMode: v.stackingMode || "STACKABLE", priority: v.priority || 0,
@@ -166,10 +183,49 @@ export default function PromotionsPage() {
   const getCampaignStatus = (cam: CampaignItem) => {
     if (!cam.active) return "Tạm dừng";
     const now = Date.now();
-    const start = cam.schedule.absoluteStart || 0;
-    const end = cam.schedule.absoluteEnd || 0;
+    const start = cam.schedule?.absoluteStart || 0;
+    const end = cam.schedule?.absoluteEnd || 0;
     if (end > 0 && now > end) return "Đã kết thúc";
     if (start > 0 && now < start) return "Sắp tới";
+
+    // Kiểm tra ngày trong tuần (1..7: 1 = T2, 7 = CN)
+    if (cam.schedule?.daysOfWeek && cam.schedule.daysOfWeek.length > 0) {
+      const d = new Date(now);
+      const day = d.getDay() === 0 ? 7 : d.getDay();
+      if (!cam.schedule.daysOfWeek.includes(day)) {
+        return "Ngoài khung giờ";
+      }
+    }
+
+    // Kiểm tra khung giờ Happy Hours
+    if (cam.schedule?.timeSlots && cam.schedule.timeSlots.length > 0) {
+      const d = new Date(now);
+      const curMinutes = d.getHours() * 60 + d.getMinutes();
+      let inSlot = false;
+      for (const slot of cam.schedule.timeSlots) {
+        if (!slot.startTime || !slot.endTime) continue;
+        const [sh, sm] = slot.startTime.split(":").map(Number);
+        const [eh, em] = slot.endTime.split(":").map(Number);
+        const startMin = (sh || 0) * 60 + (sm || 0);
+        const endMin = (eh || 0) * 60 + (em || 0);
+        if (startMin <= endMin) {
+          if (curMinutes >= startMin && curMinutes <= endMin) {
+            inSlot = true;
+            break;
+          }
+        } else {
+          // Ca qua đêm e.g. 22:00 -> 02:00
+          if (curMinutes >= startMin || curMinutes <= endMin) {
+            inSlot = true;
+            break;
+          }
+        }
+      }
+      if (!inSlot) {
+        return "Ngoài khung giờ";
+      }
+    }
+
     return "Đang chạy";
   };
 
@@ -179,6 +235,7 @@ export default function PromotionsPage() {
       case "Sắp tới": return "#3b82f6";
       case "Đã kết thúc": return "#9ca3af";
       case "Tạm dừng": return "#f59e0b";
+      case "Ngoài khung giờ": return "#8b5cf6";
       default: return "#999";
     }
   };
@@ -207,47 +264,105 @@ export default function PromotionsPage() {
   // Handle Save Campaign
   const handleSaveCampaign = async () => {
     if (!campaignForm.name.trim()) { setFormError("Tên chương trình là bắt buộc"); return; }
+    
+    if (campaignForm.campaignType === "BILLDISCOUNT") {
+      const val = Number(campaignForm.discountValue) || 0;
+      if (campaignForm.discountType === "PERCENT") {
+        if (val <= 0 || val > 100) {
+          setFormError("Tỷ lệ giảm giá (%) phải từ 1 đến 100");
+          return;
+        }
+      } else {
+        if (val <= 0) {
+          setFormError("Số tiền giảm (VND) phải lớn hơn 0");
+          return;
+        }
+      }
+    }
+
     setSaving(true); setFormError("");
     try {
       const now = Date.now();
       const campaignId = editingCampaign?.campaignId || `CAM_${now}_${Math.random().toString(36).slice(2, 6)}`;
-      const programCode = editingCampaign?.programCode || `KM${String(campaigns.length + 1).padStart(4, "0")}`;
+      const programCode = editingCampaign?.programCode || campaignForm.programCode.trim() || `KM${String(campaigns.length + 1).padStart(4, "0")}`;
       
-      let tiers = editingCampaign?.tiers || [];
-      if (!editingCampaign) {
-        if (campaignForm.campaignType === "BILLDISCOUNT") {
-          tiers = [{
-            tierIndex: 0,
-            thresholdType: "ORDER_VALUE",
-            thresholdValue: Number(campaignForm.discountThreshold) || 0,
-            benefitType: campaignForm.discountType === "PERCENT" ? "DISCOUNT_PERCENT" : "DISCOUNT_AMOUNT",
-            benefitValue: Number(campaignForm.discountValue) || 0,
-            maxBenefitValue: Number(campaignForm.maxDiscount) || 0
-          }];
-        } else if (campaignForm.campaignType === "ITEMPRICERULE") {
-          tiers = [{
-            tierIndex: 0,
-            benefitType: "FIXED_PRICE",
-            benefitValue: Number(campaignForm.fixedPriceValue) || 0,
-          }];
-        }
+      let tiers: any[] = editingCampaign?.tiers ? [...editingCampaign.tiers] : [];
+      if (campaignForm.campaignType === "BILLDISCOUNT") {
+        const isPercent = campaignForm.discountType === "PERCENT";
+        const val = Number(campaignForm.discountValue) || 0;
+        const threshold = Number(campaignForm.discountThreshold) || 0;
+        const maxDisc = Number(campaignForm.maxDiscount) || 0;
+        tiers = [{
+          tierId: editingCampaign?.tiers?.[0]?.tierId || "TIER_1",
+          tierIndex: 0,
+          threshold,
+          thresholdValue: threshold,
+          thresholdType: "ORDER_VALUE",
+          conditionBasis: "TOTALAMOUNT",
+          benefitType: isPercent ? "DISCOUNT_PERCENT" : "DISCOUNT_AMOUNT",
+          benefitMode: isPercent ? "PERCENT" : "FIXED",
+          benefitValue: val,
+          value: isPercent ? Math.round(val * 100) : val,
+          maxBenefitValue: isPercent ? maxDisc : 0,
+          maxDiscountMoney: isPercent ? maxDisc : 0,
+          sortOrder: 1
+        }];
+      } else if (campaignForm.campaignType === "ITEMPRICERULE") {
+        const fixedVal = Number(campaignForm.fixedPriceValue) || 0;
+        tiers = [{
+          tierId: editingCampaign?.tiers?.[0]?.tierId || "TIER_1",
+          tierIndex: 0,
+          threshold: 0,
+          thresholdValue: 0,
+          thresholdType: "ORDER_VALUE",
+          conditionBasis: "TOTALAMOUNT",
+          benefitType: "FIXED_PRICE",
+          benefitMode: "FIXEDPRICE",
+          benefitValue: fixedVal,
+          value: fixedVal,
+          maxBenefitValue: 0,
+          maxDiscountMoney: 0,
+          sortOrder: 1
+        }];
       }
 
       const schedule: any = {};
       if (campaignForm.startDate) schedule.absoluteStart = new Date(campaignForm.startDate).getTime();
       if (campaignForm.endDate) schedule.absoluteEnd = new Date(campaignForm.endDate).getTime();
+      if (campaignForm.daysOfWeek.length > 0) schedule.daysOfWeek = campaignForm.daysOfWeek;
+      if (campaignForm.timeSlots.length > 0) schedule.timeSlots = campaignForm.timeSlots;
 
       const data = {
-        campaignId, programCode, name: campaignForm.name.trim(), description: campaignForm.description.trim(),
-        campaignType: campaignForm.campaignType, active: campaignForm.active, schedule, branchIds: [targetStoreCode],
-        tiers, buyConditions: [], budgetMoney: Number(campaignForm.budgetMoney) || 0, maxUses: Number(campaignForm.maxUses) || 0,
-        hasCodes: campaignForm.hasCodes, autoApply: campaignForm.autoApply, stackingMode: campaignForm.stackingMode,
-        priority: Number(campaignForm.priority) || 0, createdAt: editingCampaign?.createdAt || now, updatedAt: now,
-        createdBy: "Admin"
+        campaignId,
+        programCode,
+        name: campaignForm.name.trim(),
+        description: campaignForm.description.trim(),
+        campaignType: campaignForm.campaignType,
+        active: campaignForm.active,
+        schedule,
+        branchIds: editingCampaign?.branchIds?.length ? editingCampaign.branchIds : [targetStoreCode],
+        includedItemIds: campaignForm.includedItemIds,
+        includedGroupIds: campaignForm.includedGroupIds,
+        tiers,
+        buyConditions: editingCampaign?.buyConditions || [],
+        budgetMoney: Number(campaignForm.budgetMoney) || 0,
+        maxUses: Number(campaignForm.maxUses) || 0,
+        hasCodes: campaignForm.hasCodes,
+        autoApply: campaignForm.autoApply,
+        requireStaffNote: campaignForm.requireStaffNote,
+        stackingMode: campaignForm.stackingMode,
+        priority: Number(campaignForm.priority) || 0,
+        createdAt: editingCampaign?.createdAt || now,
+        updatedAt: now,
+        createdBy: editingCampaign?.createdBy || "Admin"
       };
+
       await set(ref(db, `stores/${targetStoreCode}/campaigns/${campaignId}`), data);
-      setShowCampaignModal(false); setEditingCampaign(null);
-    } catch (e: any) { setFormError(e.message || "Lỗi lưu KM"); }
+      setShowCampaignModal(false);
+      setEditingCampaign(null);
+    } catch (e: any) {
+      setFormError(e.message || "Lỗi lưu KM");
+    }
     setSaving(false);
   };
 
@@ -321,28 +436,85 @@ export default function PromotionsPage() {
 
   const openEditCampaign = (cam: CampaignItem) => {
     setEditingCampaign(cam);
-    const startStr = cam.schedule.absoluteStart ? new Date(cam.schedule.absoluteStart).toISOString().slice(0, 16) : "";
-    const endStr = cam.schedule.absoluteEnd ? new Date(cam.schedule.absoluteEnd).toISOString().slice(0, 16) : "";
+    const startStr = cam.schedule?.absoluteStart ? new Date(cam.schedule.absoluteStart).toISOString().slice(0, 16) : "";
+    const endStr = cam.schedule?.absoluteEnd ? new Date(cam.schedule.absoluteEnd).toISOString().slice(0, 16) : "";
+    
+    let discountThreshold = "";
+    let discountType: "PERCENT" | "AMOUNT" = "PERCENT";
+    let discountValue = "";
+    let maxDiscount = "";
+    let fixedPriceValue = "";
+
+    if (cam.tiers && cam.tiers.length > 0) {
+      const tier = cam.tiers[0];
+      const isPercent = tier.benefitMode === "PERCENT" || tier.benefitType === "DISCOUNT_PERCENT" || tier.benefitType === "PERCENT";
+      discountType = isPercent ? "PERCENT" : "AMOUNT";
+      const rawVal = tier.value ?? tier.benefitValue ?? 0;
+      const val = isPercent ? (rawVal > 100 ? rawVal / 100 : rawVal) : rawVal;
+      discountValue = val > 0 ? String(val) : "";
+      discountThreshold = String(tier.threshold ?? tier.thresholdValue ?? "");
+      maxDiscount = String(tier.maxDiscountMoney ?? tier.maxBenefitValue ?? "");
+      fixedPriceValue = String(rawVal > 0 ? rawVal : "");
+    }
+
     setCampaignForm({
-      name: cam.name, programCode: cam.programCode, description: cam.description, campaignType: cam.campaignType,
-      active: cam.active, startDate: startStr, endDate: endStr, budgetMoney: String(cam.budgetMoney || ""),
-      maxUses: String(cam.maxUses || ""), hasCodes: cam.hasCodes, autoApply: cam.autoApply,
-      stackingMode: cam.stackingMode, priority: String(cam.priority), discountThreshold: "", discountType: "PERCENT",
-      discountValue: "", maxDiscount: "", fixedPriceValue: ""
+      name: cam.name,
+      programCode: cam.programCode,
+      description: cam.description || "",
+      campaignType: cam.campaignType || "BILLDISCOUNT",
+      active: cam.active,
+      startDate: startStr,
+      endDate: endStr,
+      budgetMoney: String(cam.budgetMoney || ""),
+      maxUses: String(cam.maxUses || ""),
+      hasCodes: cam.hasCodes ?? false,
+      autoApply: cam.autoApply ?? true,
+      requireStaffNote: cam.requireStaffNote ?? false,
+      stackingMode: cam.stackingMode || "STACKABLE",
+      priority: String(cam.priority || 0),
+      discountThreshold,
+      discountType,
+      discountValue,
+      maxDiscount,
+      fixedPriceValue,
+      includedItemIds: Array.isArray(cam.includedItemIds) ? [...cam.includedItemIds] : [],
+      includedGroupIds: Array.isArray(cam.includedGroupIds) ? [...cam.includedGroupIds] : [],
+      daysOfWeek: Array.isArray(cam.schedule?.daysOfWeek) ? [...cam.schedule.daysOfWeek] : [],
+      timeSlots: Array.isArray(cam.schedule?.timeSlots) ? [...cam.schedule.timeSlots] : []
     });
-    setFormError(""); setShowCampaignModal(true);
+    setFormError("");
+    setShowCampaignModal(true);
   };
 
   const openAddCampaign = () => {
     setEditingCampaign(null);
     setCampaignForm({
-      name: "", programCode: "", description: "", campaignType: "BILLDISCOUNT",
-      active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
-      hasCodes: false, autoApply: true, stackingMode: "STACKABLE", priority: "0",
-      discountThreshold: "", discountType: "PERCENT", discountValue: "", maxDiscount: "",
-      fixedPriceValue: ""
+      name: "",
+      programCode: "",
+      description: "",
+      campaignType: "BILLDISCOUNT",
+      active: true,
+      startDate: "",
+      endDate: "",
+      budgetMoney: "",
+      maxUses: "",
+      hasCodes: false,
+      autoApply: true,
+      requireStaffNote: false,
+      stackingMode: "STACKABLE",
+      priority: "0",
+      discountThreshold: "",
+      discountType: "PERCENT",
+      discountValue: "",
+      maxDiscount: "",
+      fixedPriceValue: "",
+      includedItemIds: [],
+      includedGroupIds: [],
+      daysOfWeek: [],
+      timeSlots: []
     });
-    setFormError(""); setShowCampaignModal(true);
+    setFormError("");
+    setShowCampaignModal(true);
   };
 
   const toggleCampaignActive = async (cam: CampaignItem) => {
@@ -430,7 +602,7 @@ export default function PromotionsPage() {
               {/* Search & Filters */}
               <div style={{ display: "flex", gap: "12px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
-                  {["ALL", "Đang chạy", "Sắp tới", "Đã kết thúc", "Tạm dừng"].map(st => (
+                  {["ALL", "Đang chạy", "Sắp tới", "Đã kết thúc", "Tạm dừng", "Ngoài khung giờ"].map(st => (
                     <button key={st} onClick={() => setFilterStatus(st)} style={{
                       padding: "6px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "none",
                       background: filterStatus === st ? "#7E2930" : "#f1f1f1", color: filterStatus === st ? "#fff" : "#333", whiteSpace: "nowrap"
@@ -459,7 +631,7 @@ export default function PromotionsPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ background: "#f9fafb" }}>
-                        {["Mã KM", "Tên chương trình", "Loại", "Thời gian", "Ngân sách", "Lượt dùng", "Trạng thái", "Thao tác"].map((h) => (
+                        {["Mã KM", "Tên chương trình", "Loại & Giảm giá", "Thời gian & Khung giờ", "Ngân sách", "Lượt dùng", "Trạng thái", "Thao tác"].map((h) => (
                           <th key={h} style={thStyle}>{h}</th>
                         ))}
                       </tr>
@@ -470,18 +642,60 @@ export default function PromotionsPage() {
                         const cColor = getStatusColor(status);
                         const counters = countersMap[cam.campaignId] || { spentMoney: 0, committedUseCount: 0 };
                         const budgetProgress = cam.budgetMoney ? (counters.spentMoney / cam.budgetMoney) * 100 : 0;
+                        const tier = cam.tiers?.[0];
+                        const isPercent = tier?.benefitMode === "PERCENT" || tier?.benefitType === "DISCOUNT_PERCENT" || tier?.benefitType === "PERCENT";
+                        const tierVal = tier?.value ?? tier?.benefitValue ?? 0;
+                        const displayVal = isPercent ? (tierVal > 100 ? tierVal / 100 : tierVal) : tierVal;
+
                         return (
                           <tr key={cam.campaignId} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                            <td style={tdStyle} onClick={() => openEditCampaign(cam)}><span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930", fontWeight: "600", cursor: "pointer" }}>{cam.programCode}</span></td>
-                            <td style={{ ...tdStyle, fontWeight: "600", cursor: "pointer" }} onClick={() => openEditCampaign(cam)}>{cam.name}</td>
-                            <td style={tdStyle}><span style={badgeStyle("#8b5cf6")}>{typeLabels[cam.campaignType] || cam.campaignType}</span></td>
+                            <td style={tdStyle} onClick={() => openEditCampaign(cam)}>
+                              <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930", fontWeight: "600", cursor: "pointer" }}>{cam.programCode}</span>
+                            </td>
+                            <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => openEditCampaign(cam)}>
+                              <div style={{ fontWeight: "600", fontSize: "14px", color: "#111827", marginBottom: "4px" }}>{cam.name}</div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                {cam.requireStaffNote && (
+                                  <span style={badgeStyle("#d97706")}>📝 Ghi chú NV</span>
+                                )}
+                                {cam.includedItemIds && cam.includedItemIds.length > 0 && (
+                                  <span style={badgeStyle("#2563eb")}>📦 {cam.includedItemIds.length} món</span>
+                                )}
+                                {cam.includedGroupIds && cam.includedGroupIds.length > 0 && (
+                                  <span style={badgeStyle("#0891b2")}>📁 {cam.includedGroupIds.length} nhóm</span>
+                                )}
+                              </div>
+                            </td>
                             <td style={tdStyle}>
-                              {cam.schedule.absoluteStart || cam.schedule.absoluteEnd ? (
-                                <div style={{ fontSize: "12px" }}>
-                                  <div>{formatDate(cam.schedule.absoluteStart)}</div>
-                                  <div>{formatDate(cam.schedule.absoluteEnd)}</div>
-                                </div>
-                              ) : "Không giới hạn"}
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                <span style={badgeStyle("#8b5cf6")}>{typeLabels[cam.campaignType] || cam.campaignType}</span>
+                                {displayVal > 0 && (
+                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#b91c1c" }}>
+                                    {isPercent ? `Giảm ${displayVal}%` : `Giảm ${formatVND(displayVal)}`}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={tdStyle}>
+                              <div style={{ fontSize: "12px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                                {cam.schedule.absoluteStart || cam.schedule.absoluteEnd ? (
+                                  <div>
+                                    {formatDate(cam.schedule.absoluteStart)} - {formatDate(cam.schedule.absoluteEnd)}
+                                  </div>
+                                ) : <div style={{ color: "#6b7280" }}>Không giới hạn ngày</div>}
+
+                                {cam.schedule.daysOfWeek && cam.schedule.daysOfWeek.length > 0 && (
+                                  <div style={{ color: "#15803d", fontWeight: "600" }}>
+                                    📅 {cam.schedule.daysOfWeek.length === 7 ? "Mỗi ngày" : cam.schedule.daysOfWeek.map(d => d === 7 ? "CN" : `T${d + 1}`).join(", ")}
+                                  </div>
+                                )}
+
+                                {cam.schedule.timeSlots && cam.schedule.timeSlots.length > 0 && (
+                                  <div style={{ color: "#7c3aed", fontWeight: "600" }}>
+                                    ⏰ {cam.schedule.timeSlots.map(s => `${s.startTime}-${s.endTime}`).join(", ")}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td style={tdStyle}>
                               {cam.budgetMoney ? (
@@ -624,9 +838,11 @@ export default function PromotionsPage() {
       {/* Add/Edit Campaign Modal */}
       {showCampaignModal && (
         <Modal title={editingCampaign ? "Sửa chương trình khuyến mãi" : "Thêm chương trình KM"} onClose={() => setShowCampaignModal(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxHeight: "60vh", overflowY: "auto", paddingRight: "8px" }}>
-            <div style={{ gridColumn: "1 / -1" }}><FormField label="Tên chương trình *" value={campaignForm.name} onChange={(v) => setCampaignForm({ ...campaignForm, name: v })} /></div>
-            <FormField label="Mã KM (tự động)" value={campaignForm.programCode} onChange={(v) => setCampaignForm({ ...campaignForm, programCode: v })} disabled={!!editingCampaign} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxHeight: "72vh", overflowY: "auto", paddingRight: "8px" }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <FormField label="Tên chương trình *" value={campaignForm.name} onChange={(v) => setCampaignForm({ ...campaignForm, name: v })} placeholder="VD: Khuyến mãi Trà Sữa Giờ Vàng" />
+            </div>
+            <FormField label="Mã KM (tự động nếu để trống)" value={campaignForm.programCode} onChange={(v) => setCampaignForm({ ...campaignForm, programCode: v })} disabled={!!editingCampaign} placeholder="VD: KM0001" />
             <div>
               <label style={labelStyle}>Loại KM</label>
               <select value={campaignForm.campaignType} onChange={(e) => setCampaignForm({ ...campaignForm, campaignType: e.target.value })} style={inputStyle} disabled={!!editingCampaign}>
@@ -634,44 +850,363 @@ export default function PromotionsPage() {
               </select>
             </div>
             
+            {/* 1. Cấu hình Ưu đãi & Giảm giá */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#7E2930" }}>Điều kiện & Ưu đãi</div>
-              {campaignForm.campaignType === "BILLDISCOUNT" && !editingCampaign && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <FormField label="Ngưỡng đơn hàng (VND)" value={campaignForm.discountThreshold} onChange={(v) => setCampaignForm({ ...campaignForm, discountThreshold: v })} type="number" />
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#7E2930" }}>🎁 Cấu hình Ưu đãi & Giảm giá</div>
+              {campaignForm.campaignType === "BILLDISCOUNT" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "#fcf8f8", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
                   <div>
-                    <label style={labelStyle}>Cách giảm</label>
-                    <select value={campaignForm.discountType} onChange={(e) => setCampaignForm({ ...campaignForm, discountType: e.target.value })} style={inputStyle}>
-                      <option value="PERCENT">%</option>
-                      <option value="AMOUNT">Số tiền</option>
+                    <label style={labelStyle}>Hình thức giảm *</label>
+                    <select value={campaignForm.discountType} onChange={(e) => setCampaignForm({ ...campaignForm, discountType: e.target.value as "PERCENT" | "AMOUNT" })} style={inputStyle}>
+                      <option value="PERCENT">Giảm theo % (Phần trăm)</option>
+                      <option value="AMOUNT">Giảm theo Số tiền (VND)</option>
                     </select>
                   </div>
-                  <FormField label="Giá trị giảm" value={campaignForm.discountValue} onChange={(v) => setCampaignForm({ ...campaignForm, discountValue: v })} type="number" />
-                  {campaignForm.discountType === "PERCENT" && (
-                    <FormField label="Trần giảm (VND)" value={campaignForm.maxDiscount} onChange={(v) => setCampaignForm({ ...campaignForm, maxDiscount: v })} type="number" />
-                  )}
+                  <FormField
+                    label={campaignForm.discountType === "PERCENT" ? "Tỷ lệ giảm (%) *" : "Số tiền giảm (VND) *"}
+                    value={campaignForm.discountValue}
+                    onChange={(v) => setCampaignForm({ ...campaignForm, discountValue: v })}
+                    type="number"
+                    placeholder={campaignForm.discountType === "PERCENT" ? "1 - 100" : "VD: 20000"}
+                  />
+                  {campaignForm.discountType === "PERCENT" ? (
+                    <FormField
+                      label="Trần giảm tối đa (VND - để trống nếu không giới hạn)"
+                      value={campaignForm.maxDiscount}
+                      onChange={(v) => setCampaignForm({ ...campaignForm, maxDiscount: v })}
+                      type="number"
+                      placeholder="VD: 50000"
+                    />
+                  ) : <div />}
+                  <FormField
+                    label="Ngưỡng đơn hàng tối thiểu (VND - để trống nếu 0đ)"
+                    value={campaignForm.discountThreshold}
+                    onChange={(v) => setCampaignForm({ ...campaignForm, discountThreshold: v })}
+                    type="number"
+                    placeholder="VD: 100000"
+                  />
                 </div>
               )}
-              {campaignForm.campaignType === "ITEMPRICERULE" && !editingCampaign && (
-                <FormField label="Đồng giá (VND)" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" />
+              {campaignForm.campaignType === "ITEMPRICERULE" && (
+                <div style={{ background: "#fcf8f8", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
+                  <FormField label="Giá đồng giá (VND) *" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" placeholder="VD: 25000" />
+                </div>
               )}
-              {editingCampaign && <div style={{ fontSize: "13px", color: "#666" }}>Sửa cấu hình ưu đãi trong Firebase hiện tại không được hỗ trợ qua giao diện.</div>}
             </div>
 
+            {/* 2. Phạm vi áp dụng món & nhóm hàng */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Lịch trình</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1e3a8a" }}>📦 Phạm vi áp dụng món / nhóm hàng</div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "8px" }}>
+                Nếu để trống cả 2 mục, ưu đãi sẽ được áp dụng cho toàn bộ menu.
+              </div>
+
+              {/* Nhóm hàng */}
+              <div style={{ marginBottom: "12px", background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <label style={{ ...labelStyle, color: "#1e40af" }}>📁 Nhóm hàng áp dụng ({campaignForm.includedGroupIds.length})</label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+                  <select
+                    style={{ ...inputStyle, flex: 1 }}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value && !campaignForm.includedGroupIds.includes(e.target.value)) {
+                        setCampaignForm(prev => ({ ...prev, includedGroupIds: [...prev.includedGroupIds, e.target.value] }));
+                      }
+                    }}
+                  >
+                    <option value="">-- Bấm để thêm nhóm hàng --</option>
+                    {categories.filter(c => !campaignForm.includedGroupIds.includes(c.name)).map(c => (
+                      <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                  {campaignForm.includedGroupIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCampaignForm(prev => ({ ...prev, includedGroupIds: [] }))}
+                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+                {campaignForm.includedGroupIds.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {campaignForm.includedGroupIds.map(g => (
+                      <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "#dbeafe", color: "#1e40af", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+                        📁 {g}
+                        <button
+                          type="button"
+                          onClick={() => setCampaignForm(prev => ({ ...prev, includedGroupIds: prev.includedGroupIds.filter(x => x !== g) }))}
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "#1e40af", fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>Tất cả nhóm hàng (mặc định)</div>
+                )}
+              </div>
+
+              {/* Món hàng */}
+              <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <label style={{ ...labelStyle, color: "#b45309" }}>📦 Món hàng áp dụng ({campaignForm.includedItemIds.length})</label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+                  <select
+                    style={{ ...inputStyle, flex: 1 }}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value && !campaignForm.includedItemIds.includes(String(e.target.value))) {
+                        setCampaignForm(prev => ({ ...prev, includedItemIds: [...prev.includedItemIds, String(e.target.value)] }));
+                      }
+                    }}
+                  >
+                    <option value="">-- Bấm để thêm món áp dụng --</option>
+                    {products.filter(p => !campaignForm.includedItemIds.includes(String(p.id))).map(p => (
+                      <option key={p.id} value={String(p.id)}>{p.name} {p.price ? `(${formatVND(p.price)})` : ""} {p.category ? `• ${p.category}` : ""}</option>
+                    ))}
+                  </select>
+                  {campaignForm.includedItemIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCampaignForm(prev => ({ ...prev, includedItemIds: [] }))}
+                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+                {campaignForm.includedItemIds.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", maxHeight: "120px", overflowY: "auto" }}>
+                    {campaignForm.includedItemIds.map(id => {
+                      const prod = products.find(p => String(p.id) === String(id));
+                      const name = prod ? prod.name : id;
+                      return (
+                        <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "#fef3c7", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+                          📦 {name}
+                          <button
+                            type="button"
+                            onClick={() => setCampaignForm(prev => ({ ...prev, includedItemIds: prev.includedItemIds.filter(x => x !== id) }))}
+                            style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}
+                          >×</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>Tất cả món hàng (mặc định)</div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Lịch trình, Ngày trong tuần & Happy Hours */}
+            <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#065f46" }}>⏰ Lịch trình & Khung giờ áp dụng (Happy hours)</div>
             </div>
             <FormField label="Ngày bắt đầu" value={campaignForm.startDate} onChange={(v) => setCampaignForm({ ...campaignForm, startDate: v })} type="datetime-local" />
             <FormField label="Ngày kết thúc" value={campaignForm.endDate} onChange={(v) => setCampaignForm({ ...campaignForm, endDate: v })} type="datetime-local" />
 
+            {/* Ngày trong tuần */}
+            <div style={{ gridColumn: "1 / -1", background: "#f0fdf4", padding: "12px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
+                <label style={{ ...labelStyle, color: "#166534", margin: 0 }}>
+                  📅 Ngày áp dụng trong tuần: {campaignForm.daysOfWeek.length === 0 || campaignForm.daysOfWeek.length === 7 ? "Tất cả các ngày (T2 - CN)" : `${campaignForm.daysOfWeek.length} ngày đã chọn`}
+                </label>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [1, 2, 3, 4, 5, 6, 7] }))}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                  >
+                    Tất cả (T2-CN)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [1, 2, 3, 4, 5] }))}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                  >
+                    T2 - T6
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [6, 7] }))}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                  >
+                    Cuối tuần (T7, CN)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [] }))}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {[
+                  { d: 1, label: "Thứ 2" },
+                  { d: 2, label: "Thứ 3" },
+                  { d: 3, label: "Thứ 4" },
+                  { d: 4, label: "Thứ 5" },
+                  { d: 5, label: "Thứ 6" },
+                  { d: 6, label: "Thứ 7" },
+                  { d: 7, label: "Chủ nhật" },
+                ].map(({ d, label }) => {
+                  const isSelected = campaignForm.daysOfWeek.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        setCampaignForm(prev => {
+                          const exists = prev.daysOfWeek.includes(d);
+                          return {
+                            ...prev,
+                            daysOfWeek: exists ? prev.daysOfWeek.filter(x => x !== d) : [...prev.daysOfWeek, d].sort()
+                          };
+                        });
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        border: isSelected ? "2px solid #16a34a" : "1px solid #cbd5e1",
+                        background: isSelected ? "#16a34a" : "#fff",
+                        color: isSelected ? "#fff" : "#334155",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Happy Hours slots */}
+            <div style={{ gridColumn: "1 / -1", background: "#f5f3ff", padding: "12px", borderRadius: "8px", border: "1px solid #ddd6fe" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <div>
+                  <label style={{ ...labelStyle, color: "#6b21a8", margin: 0 }}>
+                    ⏰ Khung giờ Happy Hours ({campaignForm.timeSlots.length})
+                  </label>
+                  <div style={{ fontSize: "12px", color: "#7c3aed" }}>
+                    Chương trình chỉ áp dụng trong các khung giờ này (để trống nếu áp dụng cả ngày).
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCampaignForm(prev => ({
+                      ...prev,
+                      timeSlots: [...prev.timeSlots, { startTime: "14:00", endTime: "17:00" }]
+                    }));
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    background: "#7c3aed",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  + Thêm khung giờ
+                </button>
+              </div>
+
+              {campaignForm.timeSlots.length === 0 ? (
+                <div style={{ fontSize: "12px", color: "#8b5cf6", fontStyle: "italic" }}>
+                  Áp dụng mọi khung giờ trong ngày (mặc định)
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {campaignForm.timeSlots.map((slot, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px", background: "#fff", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e9d5ff" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#6b21a8", minWidth: "60px" }}>Ca #{idx + 1}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "12px", color: "#555" }}>Từ:</span>
+                        <input
+                          type="time"
+                          value={slot.startTime}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCampaignForm(prev => {
+                              const slots = [...prev.timeSlots];
+                              slots[idx] = { ...slots[idx], startTime: val };
+                              return { ...prev, timeSlots: slots };
+                            });
+                          }}
+                          style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px", fontSize: "13px" }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "12px", color: "#555" }}>Đến:</span>
+                        <input
+                          type="time"
+                          value={slot.endTime}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCampaignForm(prev => {
+                              const slots = [...prev.timeSlots];
+                              slots[idx] = { ...slots[idx], endTime: val };
+                              return { ...prev, timeSlots: slots };
+                            });
+                          }}
+                          style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px", fontSize: "13px" }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCampaignForm(prev => ({
+                            ...prev,
+                            timeSlots: prev.timeSlots.filter((_, i) => i !== idx)
+                          }));
+                        }}
+                        style={{ marginLeft: "auto", padding: "4px 8px", background: "#fee2e2", color: "#ef4444", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 4. Hạn mức */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Hạn mức</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>💰 Hạn mức</div>
             </div>
             <FormField label="Ngân sách (VND)" value={campaignForm.budgetMoney} onChange={(v) => setCampaignForm({ ...campaignForm, budgetMoney: v })} type="number" />
             <FormField label="Giới hạn lượt dùng" value={campaignForm.maxUses} onChange={(v) => setCampaignForm({ ...campaignForm, maxUses: v })} type="number" />
 
+            {/* 5. Bắt buộc nhân viên nhập ghi chú (Mục 2 của Module 1) */}
+            <div style={{ gridColumn: "1 / -1", background: "#fffbeb", border: "1px solid #fef08a", borderRadius: "8px", padding: "12px 14px", marginTop: "4px" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={campaignForm.requireStaffNote}
+                  onChange={(e) => setCampaignForm({ ...campaignForm, requireStaffNote: e.target.checked })}
+                  style={{ marginTop: "3px", width: "16px", height: "16px" }}
+                />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#854d0e" }}>
+                    📝 Bắt buộc nhân viên nhập ghi chú/lý do khi áp dụng mã tại POS
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#a16207", marginTop: "2px" }}>
+                    Khi bật tính năng này, màn hình thu ngân/POS sẽ hiển thị hộp thoại bắt buộc nhập lý do sử dụng ưu đãi trước khi thêm vào hóa đơn. Ghi chú sẽ được lưu vào lịch sử hóa đơn.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* 6. Cài đặt khác */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Cài đặt khác</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>⚙️ Cài đặt khác</div>
             </div>
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: "24px", flexWrap: "wrap" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }}>
@@ -688,7 +1223,9 @@ export default function PromotionsPage() {
               </label>
             </div>
             
-            <div style={{ gridColumn: "1 / -1" }}><FormField label="Mô tả" value={campaignForm.description} onChange={(v) => setCampaignForm({ ...campaignForm, description: v })} /></div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <FormField label="Mô tả" value={campaignForm.description} onChange={(v) => setCampaignForm({ ...campaignForm, description: v })} placeholder="Ghi chú nội bộ về chương trình..." />
+            </div>
           </div>
           {formError && <div style={{ color: "#ef4444", fontSize: "13px", marginTop: "8px" }}>{formError}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #eee" }}>
@@ -784,7 +1321,7 @@ function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: stri
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", minWidth: "500px", maxWidth: "650px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", width: "90%", maxWidth: "780px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "16px", color: "#1a1a2e" }}>{title}</h3>
         {children}
       </div>

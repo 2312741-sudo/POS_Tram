@@ -13,6 +13,7 @@ class ProductModel {
   final Map<String, int> sizes; // Ví dụ: {'M': 0, 'L': 5000}
   final List<String> allowedToppings; // Danh sách topping được phép thêm
   final bool hasIceSugarOptions; // Hỗ trợ chọn % đá, đường
+  final bool isTopping; // Cờ đánh dấu món là Topping
 
   ProductModel({
     this.id = 0,
@@ -28,6 +29,7 @@ class ProductModel {
     this.sizes = const {},
     this.allowedToppings = const [],
     this.hasIceSugarOptions = false,
+    this.isTopping = false,
   });
 
   String? get assetPath {
@@ -71,6 +73,7 @@ class ProductModel {
         toppings = ['Trân châu đen', 'Trân châu trắng', 'Thạch phô mai', 'Kem Cheese'];
       }
       final bool hasIceSugar = map['hasIceSugarOptions'] == true || (map['hasIceSugarOptions'] == null && isDrink);
+      final bool isTop = map['isTopping'] == true || cat.toLowerCase().contains('topping') || cat.toLowerCase() == 'topping';
 
       return ProductModel(
         id: (map['id'] as num?)?.toInt() ?? 0,
@@ -86,6 +89,7 @@ class ProductModel {
         sizes: sizesMap,
         allowedToppings: toppings,
         hasIceSugarOptions: hasIceSugar,
+        isTopping: isTop,
       );
     }
     return ProductModel(name: key ?? '', price: 0, unit: 'Phần', category: 'Khác');
@@ -105,6 +109,7 @@ class ProductModel {
     if (sizes.isNotEmpty) 'sizes': sizes,
     if (allowedToppings.isNotEmpty) 'allowedToppings': allowedToppings,
     'hasIceSugarOptions': hasIceSugarOptions,
+    'isTopping': isTopping,
   };
 
   ProductModel copyWith({
@@ -121,6 +126,7 @@ class ProductModel {
     Map<String, int>? sizes,
     List<String>? allowedToppings,
     bool? hasIceSugarOptions,
+    bool? isTopping,
   }) => ProductModel(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -135,5 +141,6 @@ class ProductModel {
     sizes: sizes ?? this.sizes,
     allowedToppings: allowedToppings ?? this.allowedToppings,
     hasIceSugarOptions: hasIceSugarOptions ?? this.hasIceSugarOptions,
+    isTopping: isTopping ?? this.isTopping,
   );
 }

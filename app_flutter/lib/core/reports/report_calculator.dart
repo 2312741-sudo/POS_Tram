@@ -647,13 +647,26 @@ class ReportCalculator {
       int cardSales = 0;
 
       for (final b in paidShiftBills) {
-        final m = b.paymentMethod.toUpperCase();
-        if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
-          cashSales += b.finalAmount;
-        } else if (m.contains('TRANSFER') || m.contains('QR') || m.contains('CHUYỂN KHOẢN')) {
-          qrSales += b.finalAmount;
+        if (b.paymentSplits != null && b.paymentSplits!.isNotEmpty) {
+          for (final sp in b.paymentSplits!) {
+            final sm = sp.method.toUpperCase();
+            if (sm.contains('CASH') || sm.contains('TIỀN MẶT')) {
+              cashSales += sp.amount;
+            } else if (sm.contains('TRANSFER') || sm.contains('QR') || sm.contains('CHUYỂN KHOẢN')) {
+              qrSales += sp.amount;
+            } else {
+              cardSales += sp.amount;
+            }
+          }
         } else {
-          cardSales += b.finalAmount;
+          final m = b.paymentMethod.toUpperCase();
+          if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
+            cashSales += b.finalAmount;
+          } else if (m.contains('TRANSFER') || m.contains('QR') || m.contains('CHUYỂN KHOẢN')) {
+            qrSales += b.finalAmount;
+          } else {
+            cardSales += b.finalAmount;
+          }
         }
       }
 

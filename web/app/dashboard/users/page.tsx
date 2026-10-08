@@ -79,6 +79,11 @@ const UNIFIED_ROLES = [
 ];
 
 const AVAILABLE_CUSTOM_PERMISSIONS = [
+  { id: "INVENTORY_STOCK_IN", label: "Nhập kho (Stock In)", desc: "Tạo và hoàn thành phiếu nhập hàng, tăng tồn kho" },
+  { id: "INVENTORY_STOCK_OUT", label: "Xuất kho (Stock Out)", desc: "Tạo và hoàn thành phiếu xuất kho nội bộ, pha chế" },
+  { id: "INVENTORY_WASTE", label: "Huỷ kho (Stock Waste)", desc: "Tạo và hoàn thành phiếu xuất hủy hàng hỏng, hết hạn" },
+  { id: "DISCOUNT_ITEM", label: "Giảm giá món", desc: "Giảm giá trực tiếp từng món ăn trên đơn" },
+  { id: "MENU_MANAGEMENT", label: "Quản lý thực đơn & Topping", desc: "Quản lý toàn diện món, mã SKU, nhóm món và topping" },
   { id: "MANUAL_DISCOUNT", label: "Chiết khấu thủ công", desc: "Giảm giá trực tiếp trên đơn" },
   { id: "CANCEL_BILL", label: "Hủy hóa đơn", desc: "Hủy đơn hàng sau khi tạo" },
   { id: "REPRINT_BILL", label: "In lại hóa đơn", desc: "In lại hóa đơn đã thanh toán" },

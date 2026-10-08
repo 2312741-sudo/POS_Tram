@@ -5,9 +5,10 @@ import {
   calculateCashShiftReport,
   formatVND,
   formatNumber,
+  extractBillItems,
   CashShiftAuditItem,
 } from "@/lib/reports";
-import { exportCashShiftReport } from "@/lib/export";
+import { exportCashShiftReport, exportShiftPromotionsExcel } from "@/lib/export";
 import {
   Store,
   Search,
@@ -113,6 +114,73 @@ export default function ShiftsPage() {
             storeCode: currentStoreCode,
           };
     exportCashShiftReport(filteredShifts, storeInfo).toPDF();
+  };
+
+  // Shift bills & promotion stats for selected shift (Module 4)
+  const selectedShiftBills = useMemo(() => {
+    if (!selectedShift) return [];
+    const sId = selectedShift.shiftId || (selectedShift as any).id || "";
+    return historyData.filter((b) => {
+      if (b.shiftId && sId) return b.shiftId === sId;
+      const bTime = Number(b.closedAt || b.createdAt || b.timestamp || 0);
+      const closeT = selectedShift.closedAt ? Number(selectedShift.closedAt) : Infinity;
+      return selectedShift.openedAt <= bTime && bTime <= closeT;
+    });
+  }, [selectedShift, historyData]);
+
+  const shiftPromoStats = useMemo(() => {
+    const paidBills = selectedShiftBills.filter((b) => (b.status || "PAID").toUpperCase() === "PAID");
+    let discountedItemsCount = 0;
+    let discountedItemsTotal = 0;
+    let voucherCount = 0;
+    let voucherTotal = 0;
+    let pointsUsedTotal = 0;
+    let pointsDiscountTotal = 0;
+
+    for (const b of paidBills) {
+      const items = extractBillItems(b);
+      for (const it of items) {
+        const d = Number(it.discountAmount || 0);
+        if (d > 0) {
+          const q = Number(it.quantity || 1);
+          discountedItemsCount += q;
+          discountedItemsTotal += d * q;
+        }
+      }
+      if (Array.isArray(b.discounts)) {
+        for (const d of b.discounts) {
+          voucherCount++;
+          voucherTotal += Number(d.amount || 0);
+        }
+      }
+      const pu = Number(b.pointsUsed || 0);
+      const pd = Number(b.pointsDiscount || 0);
+      if (pu > 0 || pd > 0) {
+        pointsUsedTotal += pu;
+        pointsDiscountTotal += pd;
+      }
+    }
+
+    const totalPromoDiscount = discountedItemsTotal + voucherTotal + pointsDiscountTotal;
+    return {
+      discountedItemsCount,
+      discountedItemsTotal,
+      voucherCount,
+      voucherTotal,
+      pointsUsedTotal,
+      pointsDiscountTotal,
+      totalPromoDiscount,
+    };
+  }, [selectedShiftBills]);
+
+  const handleExportShiftPromoExcel = () => {
+    if (!selectedShift) return;
+    const storeInfo =
+      targetStore || {
+        storeName: "POS Trạm",
+        storeCode: selectedShift.storeCode || "TRAM01",
+      };
+    exportShiftPromotionsExcel(selectedShift, selectedShiftBills, storeInfo).toExcel();
   };
 
   return (
@@ -612,6 +680,37 @@ export default function ShiftsPage() {
               />
             </div>
 
+            {/* Promotional Breakdown for Shift (Module 4) */}
+            <div style={{ marginTop: "14px", padding: "12px", background: "#FDF5F6", borderRadius: "10px", border: "1px solid #F5D5D8" }}>
+              <div style={{ fontSize: "12px", fontWeight: "800", color: "#7E2930", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>🏷️ KHUYẾN MÃI & GIẢM GIÁ TRONG CA</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
+                <SlipLine
+                  label={`• Món giảm giá (${shiftPromoStats.discountedItemsCount} món):`}
+                  value={`-${formatVND(shiftPromoStats.discountedItemsTotal)}`}
+                  color="#C93B2B"
+                />
+                <SlipLine
+                  label={`• Voucher / KM đơn (${shiftPromoStats.voucherCount} lượt):`}
+                  value={`-${formatVND(shiftPromoStats.voucherTotal)}`}
+                  color="#C93B2B"
+                />
+                <SlipLine
+                  label={`• Điểm KMT đổi (${shiftPromoStats.pointsUsedTotal} điểm):`}
+                  value={`-${formatVND(shiftPromoStats.pointsDiscountTotal)}`}
+                  color="#C93B2B"
+                />
+                <div style={{ borderBottom: "1px dashed #F5D5D8", margin: "4px 0" }} />
+                <SlipLine
+                  label="TỔNG CHI PHÍ GIẢM GIÁ CA:"
+                  value={`-${formatVND(shiftPromoStats.totalPromoDiscount)}`}
+                  isBold
+                  color="#7E2930"
+                />
+              </div>
+            </div>
+
             {selectedShift.notes && (
               <div style={{ marginTop: "14px", padding: "10px", background: "#FFF8ED", borderRadius: "8px", fontSize: "12px", color: "#8A5B00" }}>
                 <strong>Ghi chú:</strong> {selectedShift.notes}
@@ -633,7 +732,7 @@ export default function ShiftsPage() {
             </div>
 
             {/* Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px", borderTop: "1px solid #EEE", paddingTop: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "10px", marginTop: "24px", borderTop: "1px solid #EEE", paddingTop: "16px" }}>
               <button
                 onClick={() => setSelectedShift(null)}
                 style={{
@@ -647,6 +746,24 @@ export default function ShiftsPage() {
                 }}
               >
                 Đóng
+              </button>
+              <button
+                onClick={handleExportShiftPromoExcel}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  background: "#137333",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                <FileSpreadsheet size={15} /> Xuất Excel KM ca
               </button>
               <button
                 onClick={() => window.print()}

@@ -20,11 +20,14 @@ class PromotionModel {
   final int minBillAmount;     // Hóa đơn tối thiểu để áp dụng
   final String? targetCategory; // Áp dụng cho danh mục nào
   final int? targetProductId;   // Áp dụng cho món nào
+  final List<String> includedItemIds; // Món áp dụng
+  final List<String> includedGroupIds; // Nhóm món áp dụng
   final int startDate;
   final int endDate;
   final bool isActive;
   final int usageCount;
   final int maxUsage; // Giới hạn số lần dùng toàn hệ thống
+  final bool requireStaffNote; // Bắt buộc nhân viên nhập ghi chú khi dùng mã
 
   PromotionModel({
     required this.id,
@@ -37,11 +40,14 @@ class PromotionModel {
     this.minBillAmount = 0,
     this.targetCategory,
     this.targetProductId,
+    this.includedItemIds = const [],
+    this.includedGroupIds = const [],
     required this.startDate,
     required this.endDate,
     this.isActive = true,
     this.usageCount = 0,
     this.maxUsage = 0,
+    this.requireStaffNote = false,
   });
 
   factory PromotionModel.fromMap(Map<dynamic, dynamic> map, String id) {
@@ -56,11 +62,14 @@ class PromotionModel {
       minBillAmount: (map['minBillAmount'] as num?)?.toInt() ?? 0,
       targetCategory: map['targetCategory']?.toString(),
       targetProductId: (map['targetProductId'] as num?)?.toInt(),
+      includedItemIds: List<String>.from(map['includedItemIds'] ?? []),
+      includedGroupIds: List<String>.from(map['includedGroupIds'] ?? []),
       startDate: (map['startDate'] as num?)?.toInt() ?? 0,
       endDate: (map['endDate'] as num?)?.toInt() ?? 0,
       isActive: map['isActive'] ?? true,
       usageCount: (map['usageCount'] as num?)?.toInt() ?? 0,
       maxUsage: (map['maxUsage'] as num?)?.toInt() ?? 0,
+      requireStaffNote: map['requireStaffNote'] ?? false,
     );
   }
 
@@ -75,11 +84,14 @@ class PromotionModel {
     'minBillAmount': minBillAmount,
     if (targetCategory != null) 'targetCategory': targetCategory,
     if (targetProductId != null) 'targetProductId': targetProductId,
+    if (includedItemIds.isNotEmpty) 'includedItemIds': includedItemIds,
+    if (includedGroupIds.isNotEmpty) 'includedGroupIds': includedGroupIds,
     'startDate': startDate,
     'endDate': endDate,
     'isActive': isActive,
     'usageCount': usageCount,
     'maxUsage': maxUsage,
+    'requireStaffNote': requireStaffNote,
   };
 
   PromotionModel copyWith({
@@ -93,11 +105,14 @@ class PromotionModel {
     int? minBillAmount,
     String? targetCategory,
     int? targetProductId,
+    List<String>? includedItemIds,
+    List<String>? includedGroupIds,
     int? startDate,
     int? endDate,
     bool? isActive,
     int? usageCount,
     int? maxUsage,
+    bool? requireStaffNote,
   }) {
     return PromotionModel(
       id: id ?? this.id,
@@ -110,11 +125,14 @@ class PromotionModel {
       minBillAmount: minBillAmount ?? this.minBillAmount,
       targetCategory: targetCategory ?? this.targetCategory,
       targetProductId: targetProductId ?? this.targetProductId,
+      includedItemIds: includedItemIds ?? this.includedItemIds,
+      includedGroupIds: includedGroupIds ?? this.includedGroupIds,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       isActive: isActive ?? this.isActive,
       usageCount: usageCount ?? this.usageCount,
       maxUsage: maxUsage ?? this.maxUsage,
+      requireStaffNote: requireStaffNote ?? this.requireStaffNote,
     );
   }
 
@@ -189,12 +207,14 @@ class BillDiscountModel {
   final String? promoCode;
   final String description;
   final int amount;
+  final String? staffNote;
 
   BillDiscountModel({
     this.promoId,
     this.promoCode,
     required this.description,
     required this.amount,
+    this.staffNote,
   });
 
   factory BillDiscountModel.fromMap(Map<dynamic, dynamic> map) {
@@ -203,6 +223,7 @@ class BillDiscountModel {
       promoCode: map['promoCode']?.toString(),
       description: map['description']?.toString() ?? '',
       amount: (map['amount'] as num?)?.toInt() ?? 0,
+      staffNote: map['staffNote']?.toString(),
     );
   }
 
@@ -211,5 +232,6 @@ class BillDiscountModel {
     if (promoCode != null) 'promoCode': promoCode,
     'description': description,
     'amount': amount,
+    if (staffNote != null) 'staffNote': staffNote,
   };
 }

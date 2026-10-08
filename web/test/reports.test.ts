@@ -319,3 +319,91 @@ describe("POS Trạm - Core Reports Pure Functions vs docs/report_golden.json", 
     expect(b1?.totalAmount).toBe(15000);
   });
 });
+
+describe("Modules 4, 5, 6 Specific Edge Cases & Calculations", () => {
+  it("Module 4 & 5: pointsDiscount and itemDiscounts are counted as DISCOUNT, NEVER as net revenue", () => {
+    const bill: HistoryOrder = {
+      id: "BILL_CUSTOM_01",
+      billCode: "HD-CUST-01",
+      orderCode: "OD-01",
+      tableName: "Bàn 1",
+      status: "PAID",
+      closedAt: 1000,
+      subTotal: 100000,
+      items: [
+        {
+          id: 1,
+          productId: 1,
+          productName: "Cà phê",
+          quantity: 2,
+          price: 50000,
+          discountAmount: 5000,
+          discountPercent: 10,
+        },
+      ],
+      discounts: [
+        { promoId: "KM15K", promoCode: "KM15K", amount: 15000, description: "KM 15k" },
+      ],
+      pointsUsed: 20,
+      pointsDiscount: 20000,
+      totalDiscount: 45000, // 10k item + 15k voucher + 20k points
+      vatRate: 10,
+      vatAmount: 5500,
+      finalAmount: 60500, // (100k - 45k) * 1.10 = 55k + 5.5k = 60.5k
+      paymentMethod: "CASH",
+    };
+
+    const overview = calculateOverviewReport([bill]);
+    expect(overview.grossRevenue).toBe(100000);
+    expect(overview.itemDiscounts).toBe(10000);
+    expect(overview.billDiscounts).toBe(15000);
+    expect(overview.pointsDiscounts).toBe(20000);
+    expect(overview.totalDiscount).toBe(45000);
+    expect(overview.afterDiscount).toBe(55000);
+    expect(overview.vatTotal).toBe(5500);
+    expect(overview.netRevenue).toBe(60500);
+
+    const promo = calculatePromotionsReport([bill]);
+    expect(promo.totalDiscountAmount).toBe(45000);
+    expect(promo.itemDiscounts.discountAmount).toBe(10000);
+    expect(promo.campaigns[0].discountAmount).toBe(15000);
+    expect(promo.pointsRedemption.discountAmount).toBe(20000);
+  });
+
+  it("Module 6: calculateCashShiftReport properly handles SPLIT payments (Cash + QR)", () => {
+    const shift = {
+      id: "SHIFT_SPLIT_01",
+      shiftCode: "CA-SPLIT-01",
+      initialCash: 1000000,
+      openedAt: 100,
+      closedAt: 500,
+      status: "CLOSED" as const,
+      actualCash: 1040000,
+    };
+
+    const bill: HistoryOrder = {
+      id: "BILL_SPLIT_01",
+      billCode: "HD-SPLIT-01",
+      status: "PAID",
+      shiftId: "SHIFT_SPLIT_01",
+      closedAt: 200,
+      finalAmount: 100000,
+      paymentMethod: "SPLIT",
+      paymentSplits: [
+        { method: "CASH", amount: 40000 },
+        { method: "TRANSFER_QR", amount: 60000 },
+      ],
+    };
+
+    const reports = calculateCashShiftReport([shift], [bill]);
+    expect(reports.length).toBe(1);
+    const r = reports[0];
+
+    // ONLY the 40k cash split should go to cashSales and expectedCash
+    expect(r.cashSales).toBe(40000);
+    expect(r.qrSales).toBe(60000);
+    expect(r.totalSales).toBe(100000);
+    expect(r.expectedCash).toBe(1040000); // 1,000,000 + 40,000
+    expect(r.difference).toBe(0); // 1,040,000 - 1,040,000 = 0
+  });
+});

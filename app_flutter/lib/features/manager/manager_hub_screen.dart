@@ -12,6 +12,7 @@ import 'tabs/analytics_tab.dart';
 import 'tabs/bills_tab.dart';
 import 'tabs/audit_tab.dart';
 import '../reports/reports_hub_screen.dart';
+import '../crm/customer_management_screen.dart';
 
 class ManagerHubScreen extends StatefulWidget {
   final int initialTab;
@@ -263,6 +264,11 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       context,
                       MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
                     );
+                  } else if (val == 'CUSTOMERS') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CustomerManagementScreen()),
+                    );
                   } else if (val == 'STORE') {
                     _showStoreSwitcherDialog();
                   } else if (val == 'LOGOUT') {
@@ -278,6 +284,16 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                         Icon(Icons.assessment_outlined, size: 18, color: TramColors.brandPrimary),
                         SizedBox(width: 8),
                         Text('Trung tâm Báo cáo (12 BC)'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'CUSTOMERS',
+                    child: Row(
+                      children: [
+                        Icon(Icons.people_outline, size: 18, color: TramColors.brandPrimary),
+                        SizedBox(width: 8),
+                        Text('Khách hàng & Tích điểm KMT'),
                       ],
                     ),
                   ),

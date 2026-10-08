@@ -34,6 +34,7 @@ import '../../features/reports/inventory_report_screen.dart';
 import '../../features/reports/promotion_report_screen.dart';
 import '../../features/reports/reports_hub_screen.dart';
 import '../../features/printer/printer_settings_screen.dart';
+import '../../features/crm/customer_management_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -107,6 +108,7 @@ class AppRouter {
       ),
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
       GoRoute(path: '/cash-shifts', builder: (_, __) => const CashShiftsScreen()),
+      GoRoute(path: '/customers', builder: (_, __) => const CustomerManagementScreen()),
       GoRoute(path: '/end-of-day-report', builder: (_, __) => const EndOfDayReportScreen()),
       GoRoute(
         path: '/inventory',

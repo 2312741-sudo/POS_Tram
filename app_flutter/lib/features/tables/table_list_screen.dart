@@ -1665,7 +1665,7 @@ class _TableListScreenState extends State<TableListScreen> {
           if (_auth.isRootOwner || _auth.can(AppPermissions.manageUsers))
             ListTile(
               leading: const Icon(Icons.people_outline),
-              title: const Text('Tài Khoản Nhân Viên'),
+              title: const Text('Nhân viên và phân quyền'),
               onTap: () => _navigateTo('/user-management'),
             ),
           if (_auth.isRootOwner || _auth.can(AppPermissions.viewMenu))

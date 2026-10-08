@@ -19,9 +19,10 @@ import {
   X,
   ArrowLeft,
 } from "lucide-react";
-import { ref, onValue, set, push, remove, update } from "firebase/database";
+import { ref, onValue, set, push, remove, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
+import { useAuth, hasPermission } from "@/lib/auth";
 import * as XLSX from "xlsx";
 
 function formatVND(amount: number) {
@@ -84,22 +85,39 @@ interface StockBalanceItem {
   updatedAt: number;
 }
 
+interface InventoryDocLine {
+  lineId?: string;
+  itemId: string;
+  itemSku?: string;
+  itemName: string;
+  unitName?: string;
+  quantity: number;
+  unitPrice: number;
+  lineNetMoney: number;
+}
+
 interface InventoryDocItem {
   documentId: string;
   documentCode: string;
   docType: string;
   status: string;
   branchId: string;
-  supplierId: string;
-  supplierName: string;
+  supplierId?: string;
+  supplierName?: string;
   totalQuantity: number;
   totalMoney: number;
   totalNetMoney: number;
   note: string;
+  reason?: string;
+  lines?: InventoryDocLine[];
   createdBy: string;
   createdByName: string;
   createdAt: number;
-  completedAt: number;
+  completedAt?: number;
+  completedBy?: string;
+  completedByName?: string;
+  committedEventIds?: string[];
+  cancelReason?: string;
 }
 
 interface ParsedItemRow {
@@ -173,6 +191,13 @@ const statusColors: Record<string, string> = {
 
 export default function InventoryPage() {
   const { stores, currentStoreCode, setCurrentStoreCode } = useDashboardData();
+  const { user } = useAuth();
+
+  const canStockIn = user?.isRootOwner || hasPermission(user, "INVENTORY_STOCK_IN") || hasPermission(user, "CREATE_RECEIPT");
+  const canStockOut = user?.isRootOwner || hasPermission(user, "INVENTORY_STOCK_OUT") || hasPermission(user, "CREATE_INTERNAL_USE");
+  const canWaste = user?.isRootOwner || hasPermission(user, "INVENTORY_WASTE") || hasPermission(user, "CREATE_WASTE");
+  const canCompleteDoc = user?.isRootOwner || hasPermission(user, "COMPLETE_RECEIPT") || hasPermission(user, "INVENTORY_STOCK_IN");
+
   const [activeTab, setActiveTab] = useState<"catalog" | "stock" | "documents" | "suppliers">("catalog");
   const [search, setSearch] = useState("");
   const [filterKind, setFilterKind] = useState("");
@@ -193,6 +218,19 @@ export default function InventoryPage() {
   const [editingSupplier, setEditingSupplier] = useState<SupplierItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Document creation & view modal states
+  const [showDocModal, setShowDocModal] = useState(false);
+  const [docModalType, setDocModalType] = useState<"PURCHASE_RECEIPT" | "INTERNAL_USE" | "WASTE">("PURCHASE_RECEIPT");
+  const [docSupplierId, setDocSupplierId] = useState("");
+  const [docReason, setDocReason] = useState("");
+  const [docNote, setDocNote] = useState("");
+  const [docLines, setDocLines] = useState<InventoryDocLine[]>([]);
+  const [docSaving, setDocSaving] = useState(false);
+  const [docError, setDocError] = useState("");
+
+  const [viewingDoc, setViewingDoc] = useState<InventoryDocItem | null>(null);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   // Item form state
   const [itemForm, setItemForm] = useState({
@@ -333,6 +371,14 @@ export default function InventoryPage() {
         const docs: InventoryDocItem[] = [];
         snap.forEach((child) => {
           const v = child.val();
+          let parsedLines: InventoryDocLine[] = [];
+          if (v.lines) {
+            if (Array.isArray(v.lines)) {
+              parsedLines = v.lines;
+            } else if (typeof v.lines === "object") {
+              parsedLines = Object.values(v.lines);
+            }
+          }
           docs.push({
             documentId: child.key!,
             documentCode: v.documentCode || "",
@@ -345,10 +391,16 @@ export default function InventoryPage() {
             totalMoney: v.totalMoney || 0,
             totalNetMoney: v.totalNetMoney || 0,
             note: v.note || "",
+            reason: v.reason || "",
+            lines: parsedLines,
             createdBy: v.createdBy || "",
             createdByName: v.createdByName || "",
             createdAt: v.createdAt || 0,
             completedAt: v.completedAt || 0,
+            completedBy: v.completedBy || "",
+            completedByName: v.completedByName || "",
+            committedEventIds: v.committedEventIds || [],
+            cancelReason: v.cancelReason || "",
           });
         });
         setDocuments(docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
@@ -542,6 +594,225 @@ export default function InventoryPage() {
     });
     setFormError("");
     setShowSupplierModal(true);
+  };
+
+  // ==================== PHIẾU KHO ACTIONS ====================
+  const openCreateDoc = (type: "PURCHASE_RECEIPT" | "INTERNAL_USE" | "WASTE") => {
+    setDocModalType(type);
+    setDocSupplierId(suppliers[0]?.supplierId || "");
+    setDocReason(type === "INTERNAL_USE" ? "Pha chế quầy bar" : (type === "WASTE" ? "Hết hạn sử dụng" : ""));
+    setDocNote("");
+    setDocLines([]);
+    setDocError("");
+    setShowDocModal(true);
+  };
+
+  const applyDocCompletion = async (doc: InventoryDocItem) => {
+    const now = Date.now();
+    const eventIds: string[] = [];
+
+    for (const line of (doc.lines || [])) {
+      const balanceKey = `${targetStoreCode}_${line.itemId}`;
+      const balSnap = await get(ref(db, `stores/${targetStoreCode}/stock_balances/${balanceKey}`));
+      const balVal = balSnap.exists() ? balSnap.val() : null;
+
+      const oldOnHandQty = balVal?.onHandQty || 0;
+      const oldAvgCostScaled = balVal?.averageCostScaled || 0;
+      const oldInventoryValue = balVal?.inventoryValue || 0;
+
+      let qtyDelta = 0;
+      let valueDelta = 0;
+      let newOnHandQty = oldOnHandQty;
+      let newInventoryValue = oldInventoryValue;
+      let newAvgCostScaled = oldAvgCostScaled;
+
+      if (doc.docType === "PURCHASE_RECEIPT" || doc.docType === "PRODUCTION_OUTPUT" || doc.docType === "OPENING" || doc.docType === "TRANSFER_RECEIVE") {
+        qtyDelta = line.quantity;
+        valueDelta = line.quantity * (line.unitPrice || 0);
+        newOnHandQty = oldOnHandQty + qtyDelta;
+        newInventoryValue = oldInventoryValue + valueDelta;
+        const unitCostScaled = Math.round((line.unitPrice || 0) * 100);
+        newAvgCostScaled = (oldOnHandQty + qtyDelta) > 0
+          ? Math.round((oldOnHandQty * oldAvgCostScaled + qtyDelta * unitCostScaled) / (oldOnHandQty + qtyDelta))
+          : unitCostScaled;
+      } else {
+        // INTERNAL_USE, WASTE
+        qtyDelta = -line.quantity;
+        valueDelta = -Math.round((line.quantity * oldAvgCostScaled) / 100);
+        newOnHandQty = Math.max(0, oldOnHandQty - line.quantity);
+        newInventoryValue = Math.max(0, oldInventoryValue - Math.abs(valueDelta));
+        newAvgCostScaled = oldAvgCostScaled;
+      }
+
+      await set(ref(db, `stores/${targetStoreCode}/stock_balances/${balanceKey}`), {
+        balanceId: balanceKey,
+        branchId: targetStoreCode,
+        itemId: line.itemId,
+        onHandQty: newOnHandQty,
+        reservedQty: balVal?.reservedQty || 0,
+        inventoryValue: newInventoryValue,
+        averageCostScaled: newAvgCostScaled,
+        updatedAt: now,
+      });
+
+      const eventId = `EVT_${now}_${Math.random().toString(36).slice(2, 6)}`;
+      eventIds.push(eventId);
+      await set(ref(db, `stores/${targetStoreCode}/stock_events/${eventId}`), {
+        eventId,
+        commandId: `${doc.documentId}_${now}`,
+        documentId: doc.documentId,
+        documentType: doc.docType,
+        documentLineId: line.lineId || `LINE_${line.itemId}`,
+        branchId: targetStoreCode,
+        itemId: line.itemId,
+        qtyDeltaBase: qtyDelta,
+        valueDeltaMoney: valueDelta,
+        unitCostSnapshot: oldAvgCostScaled,
+        occurredAt: now,
+        committedAt: now,
+        actorId: user?.username || "admin",
+        sequence: now,
+      });
+    }
+
+    if (doc.docType === "PURCHASE_RECEIPT" && doc.supplierId) {
+      const ledgerId = `LED_${now}_${Math.random().toString(36).slice(2, 6)}`;
+      await set(ref(db, `stores/${targetStoreCode}/supplier_ledger/${ledgerId}`), {
+        entryId: ledgerId,
+        supplierId: doc.supplierId,
+        branchId: targetStoreCode,
+        entryType: "PURCHASE",
+        amountMoney: doc.totalNetMoney || doc.totalMoney,
+        referenceDocId: doc.documentId,
+        referenceDocType: doc.docType,
+        occurredAt: now,
+        committedAt: now,
+        actorId: user?.username || "admin",
+      });
+    }
+
+    await update(ref(db, `stores/${targetStoreCode}/inventory_documents/${doc.documentId}`), {
+      status: "COMPLETED",
+      completedAt: now,
+      completedBy: user?.username || "admin",
+      completedByName: user?.fullName || "Quản trị viên",
+      committedEventIds: eventIds,
+    });
+
+    const logId = `AUDIT_${now}_${Math.random().toString(36).slice(2, 6)}`;
+    await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), {
+      timestamp: now,
+      username: user?.username || "admin",
+      userFullName: user?.fullName || "Quản trị viên",
+      userRole: user?.role || "ADMIN",
+      action: `COMPLETE_${doc.docType}`,
+      targetType: "INVENTORY_DOCUMENT",
+      targetId: doc.documentCode || doc.documentId,
+      storeCode: targetStoreCode,
+      details: `Hoàn thành phiếu ${docTypeLabels[doc.docType] || doc.docType} ${doc.documentCode} (${doc.totalQuantity} SP, ${formatVND(doc.totalMoney)})`,
+    });
+  };
+
+  const handleSaveDoc = async (isComplete: boolean) => {
+    if (docModalType === "PURCHASE_RECEIPT" && !docSupplierId) {
+      setDocError("Vui lòng chọn nhà cung cấp");
+      return;
+    }
+    if (docLines.length === 0) {
+      setDocError("Vui lòng thêm ít nhất 1 mặt hàng");
+      return;
+    }
+    for (const l of docLines) {
+      if (!l.quantity || l.quantity <= 0) {
+        setDocError(`Số lượng mặt hàng "${l.itemName}" phải lớn hơn 0`);
+        return;
+      }
+    }
+    if (isComplete && !canCompleteDoc) {
+      setDocError("Bạn không có quyền duyệt hoàn thành phiếu");
+      return;
+    }
+
+    setDocSaving(true);
+    setDocError("");
+    try {
+      const now = Date.now();
+      const docId = `DOC_${now}_${Math.random().toString(36).slice(2, 6)}`;
+      const prefix = docModalType === "PURCHASE_RECEIPT" ? "PN" : (docModalType === "INTERNAL_USE" ? "PX" : "PH");
+      const docCode = `${prefix}-${now.toString().slice(5)}`;
+      const totalQty = docLines.reduce((s, l) => s + l.quantity, 0);
+      const totalMoney = docLines.reduce((s, l) => s + l.lineNetMoney, 0);
+      const selectedSup = suppliers.find((s) => s.supplierId === docSupplierId);
+
+      const docData: InventoryDocItem = {
+        documentId: docId,
+        documentCode: docCode,
+        docType: docModalType,
+        status: isComplete ? "COMPLETED" : "DRAFT",
+        branchId: targetStoreCode,
+        supplierId: docModalType === "PURCHASE_RECEIPT" ? docSupplierId : "",
+        supplierName: docModalType === "PURCHASE_RECEIPT" ? (selectedSup?.name || "") : "",
+        reason: (docModalType === "INTERNAL_USE" || docModalType === "WASTE") ? docReason : "",
+        lines: docLines,
+        totalQuantity: totalQty,
+        totalMoney: totalMoney,
+        totalNetMoney: totalMoney,
+        note: docNote.trim(),
+        createdBy: user?.username || "admin",
+        createdByName: user?.fullName || "Quản trị viên",
+        createdAt: now,
+      };
+
+      await set(ref(db, `stores/${targetStoreCode}/inventory_documents/${docId}`), docData);
+
+      if (isComplete) {
+        await applyDocCompletion(docData);
+      }
+
+      setShowDocModal(false);
+      setDocLines([]);
+    } catch (e: any) {
+      setDocError(e.message || "Lỗi lưu phiếu kho");
+    } finally {
+      setDocSaving(false);
+    }
+  };
+
+  const handleCompleteDraftDoc = async (doc: InventoryDocItem) => {
+    if (!canCompleteDoc) {
+      alert("Bạn không có quyền duyệt phiếu");
+      return;
+    }
+    if (!confirm(`Bạn có chắc muốn hoàn thành phiếu ${doc.documentCode}? Số lượng tồn kho sẽ được cập nhật ngay lập tức.`)) {
+      return;
+    }
+    setActionInProgress(true);
+    try {
+      await applyDocCompletion(doc);
+      setViewingDoc(null);
+    } catch (e: any) {
+      alert("Lỗi khi duyệt phiếu: " + (e.message || String(e)));
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleCancelDraftDoc = async (doc: InventoryDocItem) => {
+    if (!confirm(`Bạn có chắc muốn huỷ phiếu ${doc.documentCode}?`)) {
+      return;
+    }
+    setActionInProgress(true);
+    try {
+      await update(ref(db, `stores/${targetStoreCode}/inventory_documents/${doc.documentId}`), {
+        status: "CANCELLED",
+        cancelReason: "Huỷ bởi người dùng",
+      });
+      setViewingDoc(null);
+    } catch (e: any) {
+      alert("Lỗi khi huỷ phiếu: " + (e.message || String(e)));
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
   // ==================== TẢI FILE MẪU EXCEL ====================
@@ -952,6 +1223,25 @@ export default function InventoryPage() {
               <Download size={16} /> Xuất Excel tồn kho
             </button>
           )}
+          {activeTab === "documents" && (
+            <>
+              {canStockIn && (
+                <button onClick={() => openCreateDoc("PURCHASE_RECEIPT")} style={btnPrimary}>
+                  <Plus size={16} /> Nhập kho
+                </button>
+              )}
+              {canStockOut && (
+                <button onClick={() => openCreateDoc("INTERNAL_USE")} style={{ ...btnPrimary, background: "#0284c7" }}>
+                  <Plus size={16} /> Xuất kho
+                </button>
+              )}
+              {canWaste && (
+                <button onClick={() => openCreateDoc("WASTE")} style={{ ...btnPrimary, background: "#dc2626" }}>
+                  <Plus size={16} /> Huỷ kho
+                </button>
+              )}
+            </>
+          )}
           {activeTab === "suppliers" && (
             <button onClick={openAddSupplier} style={btnPrimary}>
               <Plus size={16} /> Thêm NCC
@@ -1096,7 +1386,7 @@ export default function InventoryPage() {
         <>
           {activeTab === "catalog" && <CatalogTable items={filteredCatalog} balanceMap={balanceMap} onEdit={openEditItem} />}
           {activeTab === "stock" && <StockTable items={catalogItems.filter((i) => i.trackStock)} balanceMap={balanceMap} />}
-          {activeTab === "documents" && <DocumentsTable docs={filteredDocs} />}
+          {activeTab === "documents" && <DocumentsTable docs={filteredDocs} onSelectDoc={setViewingDoc} />}
           {activeTab === "suppliers" && <SuppliersTable suppliers={filteredSuppliers} onEdit={openEditSupplier} />}
         </>
       )}
@@ -1162,6 +1452,408 @@ export default function InventoryPage() {
             <button onClick={handleSaveSupplier} disabled={saving} style={btnPrimary}>
               {saving ? "Đang lưu..." : "Lưu"}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ==================== MODAL TẠO PHIẾU KHO (NHẬP, XUẤT, HỦY) ==================== */}
+      {showDocModal && (
+        <Modal
+          title={
+            docModalType === "PURCHASE_RECEIPT"
+              ? "📥 Tạo phiếu nhập kho"
+              : docModalType === "INTERNAL_USE"
+              ? "📤 Tạo phiếu xuất kho"
+              : "🗑️ Tạo phiếu xuất hủy"
+          }
+          onClose={() => setShowDocModal(false)}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {docError && (
+              <div style={{ padding: "10px 14px", background: "#FEE2E2", color: "#DC2626", borderRadius: "8px", fontSize: "13px" }}>
+                ⚠️ {docError}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {docModalType === "PURCHASE_RECEIPT" && (
+                <div>
+                  <label style={labelStyle}>Nhà cung cấp *</label>
+                  <select
+                    value={docSupplierId}
+                    onChange={(e) => setDocSupplierId(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">-- Chọn nhà cung cấp --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.supplierId} value={s.supplierId}>
+                        {s.name} ({s.supplierCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {(docModalType === "INTERNAL_USE" || docModalType === "WASTE") && (
+                <div>
+                  <label style={labelStyle}>Lý do {docModalType === "INTERNAL_USE" ? "xuất" : "hủy"} *</label>
+                  <input
+                    value={docReason}
+                    onChange={(e) => setDocReason(e.target.value)}
+                    placeholder={
+                      docModalType === "INTERNAL_USE"
+                        ? "Ví dụ: Pha chế quầy bar, Bếp chế biến..."
+                        : "Ví dụ: Hết hạn sử dụng, Hư hỏng, Bể vỡ..."
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={labelStyle}>Ghi chú phiếu</label>
+                <input
+                  value={docNote}
+                  onChange={(e) => setDocNote(e.target.value)}
+                  placeholder="Ghi chú nội dung..."
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            {/* Bảng danh sách hàng hóa trong phiếu */}
+            <div style={{ marginTop: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "14px", fontWeight: "700", color: "#1f2937" }}>
+                  Danh sách hàng hóa ({docLines.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const availableItems = catalogItems.filter((i) => i.trackStock);
+                    if (availableItems.length === 0) {
+                      alert("Chưa có mặt hàng nào được quản lý tồn kho.");
+                      return;
+                    }
+                    const itemToAdd = availableItems[0];
+                    const unitPrice =
+                      docModalType === "PURCHASE_RECEIPT"
+                        ? (itemToAdd.costPrice || 0)
+                        : (balanceMap[itemToAdd.itemId]?.averageCostScaled ? Math.round(balanceMap[itemToAdd.itemId].averageCostScaled / 100) : itemToAdd.costPrice || 0);
+
+                    setDocLines([
+                      ...docLines,
+                      {
+                        lineId: `line_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                        itemId: itemToAdd.itemId,
+                        itemName: itemToAdd.name,
+                        itemSku: itemToAdd.sku,
+                        unitName: itemToAdd.baseUnitId || "cái",
+                        quantity: 1,
+                        unitPrice: unitPrice,
+                        lineNetMoney: unitPrice * 1,
+                      },
+                    ]);
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    background: "#0066FF",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Plus size={14} /> Thêm hàng
+                </button>
+              </div>
+
+              {docLines.length === 0 ? (
+                <div style={{ padding: "24px", textAlign: "center", background: "#F9FAFB", borderRadius: "8px", border: "1px dashed #D1D5DB", color: "#6B7280", fontSize: "13px" }}>
+                  Chưa có mặt hàng nào. Bấm &quot;Thêm hàng&quot; để chọn hàng hóa cho phiếu.
+                </div>
+              ) : (
+                <div style={{ maxHeight: "240px", overflowY: "auto", border: "1px solid #E5E7EB", borderRadius: "8px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                        <th style={{ ...thStyle, padding: "8px" }}>Mặt hàng</th>
+                        <th style={{ ...thStyle, padding: "8px" }}>ĐVT</th>
+                        <th style={{ ...thStyle, padding: "8px", width: "90px" }}>Số lượng</th>
+                        <th style={{ ...thStyle, padding: "8px", width: "120px" }}>
+                          {docModalType === "PURCHASE_RECEIPT" ? "Giá nhập" : "Giá vốn"}
+                        </th>
+                        <th style={{ ...thStyle, padding: "8px", width: "120px", textAlign: "right" }}>Thành tiền</th>
+                        <th style={{ ...thStyle, padding: "8px", width: "40px" }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docLines.map((line, idx) => (
+                        <tr key={line.lineId || idx} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                          <td style={{ padding: "6px 8px" }}>
+                            <select
+                              value={line.itemId}
+                              onChange={(e) => {
+                                const sel = catalogItems.find((ci) => ci.itemId === e.target.value);
+                                if (!sel) return;
+                                const uPrice =
+                                  docModalType === "PURCHASE_RECEIPT"
+                                    ? (sel.costPrice || 0)
+                                    : (balanceMap[sel.itemId]?.averageCostScaled ? Math.round(balanceMap[sel.itemId].averageCostScaled / 100) : sel.costPrice || 0);
+
+                                const next = [...docLines];
+                                next[idx] = {
+                                  ...line,
+                                  itemId: sel.itemId,
+                                  itemName: sel.name,
+                                  itemSku: sel.sku,
+                                  unitName: sel.baseUnitId || "cái",
+                                  unitPrice: uPrice,
+                                  lineNetMoney: uPrice * line.quantity,
+                                };
+                                setDocLines(next);
+                              }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px" }}
+                            >
+                              {catalogItems
+                                .filter((ci) => ci.trackStock)
+                                .map((ci) => (
+                                  <option key={ci.itemId} value={ci.itemId}>
+                                    {ci.name} ({ci.sku})
+                                  </option>
+                                ))}
+                            </select>
+                          </td>
+                          <td style={{ padding: "6px 8px", color: "#6B7280" }}>{line.unitName}</td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <input
+                              type="number"
+                              min="1"
+                              value={line.quantity}
+                              onChange={(e) => {
+                                const q = Math.max(1, parseInt(e.target.value) || 1);
+                                const next = [...docLines];
+                                next[idx] = { ...line, quantity: q, lineNetMoney: q * line.unitPrice };
+                                setDocLines(next);
+                              }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px", textAlign: "right" }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={docModalType !== "PURCHASE_RECEIPT"}
+                              value={line.unitPrice}
+                              onChange={(e) => {
+                                const p = Math.max(0, parseInt(e.target.value) || 0);
+                                const next = [...docLines];
+                                next[idx] = { ...line, unitPrice: p, lineNetMoney: line.quantity * p };
+                                setDocLines(next);
+                              }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px", textAlign: "right", opacity: docModalType !== "PURCHASE_RECEIPT" ? 0.7 : 1 }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: "600", color: "#111827" }}>
+                            {formatVND(line.lineNetMoney)}
+                          </td>
+                          <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                            <button
+                              type="button"
+                              onClick={() => setDocLines(docLines.filter((_, i) => i !== idx))}
+                              style={{ background: "transparent", border: "none", color: "#EF4444", cursor: "pointer", padding: "2px" }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Tổng cộng */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#F3F4F6", borderRadius: "8px" }}>
+              <div style={{ fontSize: "13px", color: "#4B5563" }}>
+                Tổng số lượng: <strong style={{ color: "#111827" }}>{docLines.reduce((s, l) => s + l.quantity, 0)}</strong>
+              </div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#7E2930" }}>
+                Tổng giá trị: {formatVND(docLines.reduce((s, l) => s + l.lineNetMoney, 0))}
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
+              <button
+                type="button"
+                onClick={() => setShowDocModal(false)}
+                disabled={docSaving}
+                style={btnSecondary}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveDoc(false)}
+                disabled={docSaving}
+                style={{ ...btnSecondary, background: "#FEF3C7", borderColor: "#F59E0B", color: "#B45309" }}
+              >
+                {docSaving ? "Đang lưu..." : "Lưu tạm (DRAFT)"}
+              </button>
+              {canCompleteDoc && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveDoc(true)}
+                  disabled={docSaving}
+                  style={btnPrimary}
+                >
+                  {docSaving ? "Đang xử lý..." : "Hoàn thành & Cập nhật kho"}
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ==================== MODAL XEM CHI TIẾT PHIẾU KHO ==================== */}
+      {viewingDoc && (
+        <Modal
+          title={`📄 Chi tiết phiếu: ${viewingDoc.documentCode}`}
+          onClose={() => setViewingDoc(null)}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Header thông tin phiếu */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "14px", background: "#F9FAFB", borderRadius: "10px", fontSize: "13px" }}>
+              <div>
+                <span style={{ color: "#6B7280" }}>Loại phiếu: </span>
+                <span style={badgeStyle("#3B82F6")}>{docTypeLabels[viewingDoc.docType] || viewingDoc.docType}</span>
+              </div>
+              <div>
+                <span style={{ color: "#6B7280" }}>Trạng thái: </span>
+                <span style={badgeStyle(statusColors[viewingDoc.status] || "#999")}>
+                  {statusLabels[viewingDoc.status] || viewingDoc.status}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: "#6B7280" }}>Chi nhánh: </span>
+                <strong>{viewingDoc.branchId}</strong>
+              </div>
+              <div>
+                <span style={{ color: "#6B7280" }}>Ngày tạo: </span>
+                <strong>{formatDate(viewingDoc.createdAt)}</strong>
+              </div>
+              <div>
+                <span style={{ color: "#6B7280" }}>Người tạo: </span>
+                <strong>{viewingDoc.createdByName || viewingDoc.createdBy || "—"}</strong>
+              </div>
+              {viewingDoc.completedAt && (
+                <div>
+                  <span style={{ color: "#6B7280" }}>Người duyệt: </span>
+                  <strong>{viewingDoc.completedByName || viewingDoc.completedBy || "—"}</strong> ({formatDate(viewingDoc.completedAt)})
+                </div>
+              )}
+              {viewingDoc.supplierName && (
+                <div>
+                  <span style={{ color: "#6B7280" }}>Nhà cung cấp: </span>
+                  <strong>{viewingDoc.supplierName}</strong>
+                </div>
+              )}
+              {viewingDoc.reason && (
+                <div>
+                  <span style={{ color: "#6B7280" }}>Lý do: </span>
+                  <strong>{viewingDoc.reason}</strong>
+                </div>
+              )}
+              {viewingDoc.note && (
+                <div style={{ gridColumn: "span 2" }}>
+                  <span style={{ color: "#6B7280" }}>Ghi chú: </span>
+                  <span>{viewingDoc.note}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Bảng chi tiết mặt hàng */}
+            <div>
+              <h4 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1F2937" }}>
+                Danh sách mặt hàng ({viewingDoc.lines?.length || 0})
+              </h4>
+              <div style={{ border: "1px solid #E5E7EB", borderRadius: "8px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ background: "#F9FAFB" }}>
+                      <th style={thStyle}>Mã SKU</th>
+                      <th style={thStyle}>Tên hàng hóa</th>
+                      <th style={thStyle}>ĐVT</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Số lượng</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Đơn giá</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Thành tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(viewingDoc.lines || []).map((l, i) => (
+                      <tr key={l.lineId || i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                        <td style={tdStyle}>{l.itemSku || "—"}</td>
+                        <td style={{ ...tdStyle, fontWeight: "600" }}>{l.itemName}</td>
+                        <td style={tdStyle}>{l.unitName || "—"}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{l.quantity}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{formatVND(l.unitPrice)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>{formatVND(l.lineNetMoney)}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: "#F9FAFB", fontWeight: "700" }}>
+                      <td colSpan={3} style={{ ...tdStyle, textAlign: "right" }}>Tổng cộng:</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "#111827" }}>{viewingDoc.totalQuantity}</td>
+                      <td></td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "#7E2930", fontSize: "14px" }}>
+                        {formatVND(viewingDoc.totalNetMoney || viewingDoc.totalMoney)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+              <div>
+                {viewingDoc.status === "DRAFT" && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelDraftDoc(viewingDoc)}
+                    disabled={actionInProgress}
+                    style={{ ...btnSecondary, color: "#EF4444", borderColor: "#FCA5A5" }}
+                  >
+                    Hủy phiếu
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setViewingDoc(null)}
+                  style={btnSecondary}
+                >
+                  Đóng
+                </button>
+                {viewingDoc.status === "DRAFT" && canCompleteDoc && (
+                  <button
+                    type="button"
+                    onClick={() => handleCompleteDraftDoc(viewingDoc)}
+                    disabled={actionInProgress}
+                    style={{ ...btnPrimary, background: "#10B981" }}
+                  >
+                    {actionInProgress ? "Đang xử lý..." : "Duyệt & Hoàn thành phiếu"}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </Modal>
       )}
@@ -1705,15 +2397,21 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
   );
 }
 
-function DocumentsTable({ docs }: { docs: InventoryDocItem[] }) {
+function DocumentsTable({
+  docs,
+  onSelectDoc,
+}: {
+  docs: InventoryDocItem[];
+  onSelectDoc?: (doc: InventoryDocItem) => void;
+}) {
   if (docs.length === 0)
-    return <EmptyState icon="📋" text="Chưa có phiếu kho nào" sub="Tạo phiếu nhập hàng đầu tiên từ ứng dụng POS." />;
+    return <EmptyState icon="📋" text="Chưa có phiếu kho nào" sub="Bấm nút Nhập kho / Xuất kho / Huỷ kho phía trên để tạo phiếu." />;
   return (
     <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "#f9fafb" }}>
-            {["Mã phiếu", "Loại", "NCC", "Tổng SL", "Tổng tiền", "Trạng thái", "Người tạo", "Ngày tạo"].map((h) => (
+            {["Mã phiếu", "Loại", "NCC / Lý do", "Tổng SL", "Tổng tiền", "Trạng thái", "Người tạo", "Ngày tạo", ""].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
               </th>
@@ -1722,18 +2420,26 @@ function DocumentsTable({ docs }: { docs: InventoryDocItem[] }) {
         </thead>
         <tbody>
           {docs.map((doc) => (
-            <tr key={doc.documentId} style={{ borderBottom: "1px solid #f0f0f0" }}>
+            <tr
+              key={doc.documentId}
+              style={{ borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
+              onClick={() => onSelectDoc?.(doc)}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
               <td style={tdStyle}>
-                <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: "600" }}>
+                <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: "700", color: "#7E2930" }}>
                   {doc.documentCode || doc.documentId.slice(0, 12)}
                 </span>
               </td>
               <td style={tdStyle}>
-                <span style={badgeStyle("#3b82f6")}>{docTypeLabels[doc.docType] || doc.docType}</span>
+                <span style={badgeStyle(doc.docType === "PURCHASE_RECEIPT" ? "#3b82f6" : doc.docType === "INTERNAL_USE" ? "#0284c7" : "#ef4444")}>
+                  {docTypeLabels[doc.docType] || doc.docType}
+                </span>
               </td>
-              <td style={tdStyle}>{doc.supplierName || "—"}</td>
-              <td style={{ ...tdStyle, textAlign: "right" }}>{doc.totalQuantity}</td>
-              <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>
+              <td style={tdStyle}>{doc.supplierName || doc.reason || "—"}</td>
+              <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>{doc.totalQuantity}</td>
+              <td style={{ ...tdStyle, textAlign: "right", fontWeight: "700" }}>
                 {formatVND(doc.totalNetMoney || doc.totalMoney)}
               </td>
               <td style={tdStyle}>
@@ -1743,6 +2449,9 @@ function DocumentsTable({ docs }: { docs: InventoryDocItem[] }) {
               </td>
               <td style={tdStyle}>{doc.createdByName || doc.createdBy || "—"}</td>
               <td style={tdStyle}>{formatDate(doc.createdAt)}</td>
+              <td style={tdStyle}>
+                <ChevronRight size={16} color="#ccc" />
+              </td>
             </tr>
           ))}
         </tbody>

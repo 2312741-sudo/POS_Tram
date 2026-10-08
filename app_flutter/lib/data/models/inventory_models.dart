@@ -1116,6 +1116,8 @@ class InventoryDocumentModel {
   final int? completedAt;
   final int? cancelledAt;
   final String? cancelReason;
+  /// Lý do xuất/hủy
+  final String? reason;
   /// StockEvent IDs created
   final List<String> committedEventIds;
   final String idempotencyKey;
@@ -1144,6 +1146,7 @@ class InventoryDocumentModel {
     required this.paidMoney,
     required this.debtMoney,
     this.note = '',
+    this.reason,
     required this.createdBy,
     required this.createdByName,
     this.completedBy,
@@ -1184,6 +1187,7 @@ class InventoryDocumentModel {
       paidMoney: (map['paidMoney'] as num?)?.toInt() ?? 0,
       debtMoney: (map['debtMoney'] as num?)?.toInt() ?? 0,
       note: map['note'] as String? ?? '',
+      reason: map['reason'] as String?,
       createdBy: map['createdBy'] as String? ?? '',
       createdByName: map['createdByName'] as String? ?? '',
       completedBy: map['completedBy'] as String?,
@@ -1229,6 +1233,7 @@ class InventoryDocumentModel {
     if (sourceDocumentId != null) map['sourceDocumentId'] = sourceDocumentId;
     if (externalInvoiceNumber != null) map['externalInvoiceNumber'] = externalInvoiceNumber;
     if (externalInvoiceDate != null) map['externalInvoiceDate'] = externalInvoiceDate;
+    if (reason != null) map['reason'] = reason;
     if (completedBy != null) map['completedBy'] = completedBy;
     if (completedByName != null) map['completedByName'] = completedByName;
     if (completedAt != null) map['completedAt'] = completedAt;
@@ -1260,6 +1265,7 @@ class InventoryDocumentModel {
     int? paidMoney,
     int? debtMoney,
     String? note,
+    String? reason,
     String? createdBy,
     String? createdByName,
     String? completedBy,
@@ -1295,6 +1301,7 @@ class InventoryDocumentModel {
       paidMoney: paidMoney ?? this.paidMoney,
       debtMoney: debtMoney ?? this.debtMoney,
       note: note ?? this.note,
+      reason: reason ?? this.reason,
       createdBy: createdBy ?? this.createdBy,
       createdByName: createdByName ?? this.createdByName,
       completedBy: completedBy ?? this.completedBy,

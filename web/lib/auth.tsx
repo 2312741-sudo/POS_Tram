@@ -94,31 +94,39 @@ export function generateEmail(username: string, storeCode: string): string {
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Chủ quán có toàn quyền
   ROLE_OWNER: [
-    "VIEW_MENU", "EDIT_MENU", "DELETE_MENU", "CHANGE_PRICE",
+    "VIEW_MENU", "EDIT_MENU", "DELETE_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT",
     "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM",
-    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
+    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
     "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT",
     "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
     "MANAGE_USERS", "MANAGE_ROLES_PERMISSIONS", "MANAGE_PROMOTIONS", "MANAGE_STORE_SETTINGS",
-    "VIEW_INVENTORY", "VIEW_COST_PRICE", "CREATE_RECEIPT", "COMPLETE_RECEIPT", "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
+    "VIEW_INVENTORY", "VIEW_COST_PRICE",
+    "CREATE_RECEIPT", "INVENTORY_STOCK_IN", "COMPLETE_RECEIPT",
+    "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT",
+    "CREATE_WASTE", "INVENTORY_WASTE",
+    "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
     "CREATE_CAMPAIGN", "EDIT_CAMPAIGN", "MANAGE_CODES", "OVERRIDE_MANUAL_DISCOUNT",
   ],
   // Quản lý 1
   ROLE_MANAGER_1: [
-    "VIEW_MENU", "EDIT_MENU", "CHANGE_PRICE",
+    "VIEW_MENU", "EDIT_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT",
     "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM",
-    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
+    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
     "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT",
     "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
     "MANAGE_PROMOTIONS",
-    "VIEW_INVENTORY", "VIEW_COST_PRICE", "CREATE_RECEIPT", "COMPLETE_RECEIPT", "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
+    "VIEW_INVENTORY", "VIEW_COST_PRICE",
+    "CREATE_RECEIPT", "INVENTORY_STOCK_IN", "COMPLETE_RECEIPT",
+    "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT",
+    "CREATE_WASTE", "INVENTORY_WASTE",
+    "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
     "CREATE_CAMPAIGN", "EDIT_CAMPAIGN", "MANAGE_CODES",
   ],
   // Quản lý 2 / Quản lý ca
   ROLE_MANAGER_2: [
     "VIEW_MENU",
     "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN",
-    "CREATE_BILL", "APPLY_PROMOTION", "PRINT_BILL",
+    "CREATE_BILL", "APPLY_PROMOTION", "DISCOUNT_ITEM", "PRINT_BILL",
     "MANAGE_CASH_SHIFT",
     "VIEW_REPORTS",
   ],
@@ -149,15 +157,35 @@ export function hasPermission(user: User | null, permission: string): boolean {
   const roleIdUpper = (user.roleId || user.role || "").toUpperCase();
   if (roleIdUpper === "ROLE_OWNER" || roleIdUpper === "OWNER") return true;
 
-  // Quyền riêng lẻ (customPermissions)
-  if (Array.isArray(user.customPermissions) && user.customPermissions.includes(permission)) {
-    return true;
+  const userPerms = Array.isArray(user.customPermissions) ? user.customPermissions : [];
+  const checkSingle = (p: string) => {
+    if (userPerms.includes(p)) return true;
+    const roleKey = user.roleId || user.role || "";
+    const perms = ROLE_PERMISSIONS[roleKey] || ROLE_PERMISSIONS[roleIdUpper] || [];
+    return perms.includes(p);
+  };
+
+  if (checkSingle(permission)) return true;
+
+  // Đồng bộ các mã quyền tương đương
+  const aliases: Record<string, string[]> = {
+    INVENTORY_STOCK_IN: ["CREATE_RECEIPT"],
+    CREATE_RECEIPT: ["INVENTORY_STOCK_IN"],
+    INVENTORY_STOCK_OUT: ["CREATE_INTERNAL_USE"],
+    CREATE_INTERNAL_USE: ["INVENTORY_STOCK_OUT"],
+    INVENTORY_WASTE: ["CREATE_WASTE"],
+    CREATE_WASTE: ["INVENTORY_WASTE"],
+    DISCOUNT_ITEM: ["MANUAL_DISCOUNT"],
+    MENU_MANAGEMENT: ["EDIT_MENU", "VIEW_MENU"],
+  };
+
+  if (aliases[permission]) {
+    for (const alt of aliases[permission]) {
+      if (checkSingle(alt)) return true;
+    }
   }
 
-  // Quyền theo vai trò
-  const roleKey = user.roleId || user.role || "";
-  const perms = ROLE_PERMISSIONS[roleKey] || ROLE_PERMISSIONS[roleIdUpper] || [];
-  return perms.includes(permission);
+  return false;
 }
 
 export function isWebAdminRole(roleId: string, isRootOwner?: boolean): boolean {
@@ -196,6 +224,7 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     pathname.startsWith("/dashboard/analytics") ||
     pathname.startsWith("/dashboard/end-of-day") ||
     pathname.startsWith("/dashboard/shifts") ||
+    pathname.startsWith("/dashboard/customers") ||
     pathname.startsWith("/dashboard/product-sales")
   ) {
     return hasPermission(user, "VIEW_REPORTS");

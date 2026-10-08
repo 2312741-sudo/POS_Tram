@@ -38,6 +38,8 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   bool _allowStaffViewDifference = true;
   late TabController _tabController;
   StreamSubscription<List<CashShiftModel>>? _shiftSub;
+  StreamSubscription<List<BillModel>>? _billsSub;
+  List<BillModel> _shiftBills = [];
 
   final _initialCashCtrl = TextEditingController(text: '1000000');
   final _adjustAmountCtrl = TextEditingController();
@@ -56,6 +58,54 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   }
 
   bool get _canViewDifference => _isManagerOrOwner || _allowStaffViewDifference;
+
+  Map<String, dynamic> _computeShiftPromoStats() {
+    if (_currentShift == null) return {};
+    final shift = _currentShift!;
+    final bills = _shiftBills.where((b) {
+      if (b.status != 'PAID') return false;
+      if (b.shiftId != null && b.shiftId!.isNotEmpty) {
+        return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
+      }
+      final closeT = shift.closedAt ?? 9999999999999;
+      return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
+    }).toList();
+
+    int discountedItemsCount = 0;
+    int discountedItemsTotal = 0;
+    int voucherCount = 0;
+    int voucherTotal = 0;
+    int pointsUsedTotal = 0;
+    int pointsDiscountTotal = 0;
+
+    for (final b in bills) {
+      for (final it in b.items) {
+        if (it.discountAmount > 0) {
+          discountedItemsCount += it.quantity;
+          discountedItemsTotal += it.discountAmount;
+        }
+      }
+      for (final d in b.discounts) {
+        voucherCount += 1;
+        voucherTotal += d.amount;
+      }
+      if (b.pointsDiscount > 0 || b.pointsUsed > 0) {
+        pointsUsedTotal += b.pointsUsed;
+        pointsDiscountTotal += b.pointsDiscount;
+      }
+    }
+
+    final totalPromoDiscount = discountedItemsTotal + voucherTotal + pointsDiscountTotal;
+    return {
+      'discountedItemsCount': discountedItemsCount,
+      'discountedItemsTotal': discountedItemsTotal,
+      'voucherCount': voucherCount,
+      'voucherTotal': voucherTotal,
+      'pointsUsedTotal': pointsUsedTotal,
+      'pointsDiscountTotal': pointsDiscountTotal,
+      'totalPromoDiscount': totalPromoDiscount,
+    };
+  }
 
   @override
   void initState() {
@@ -91,12 +141,20 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       });
     });
 
+    _billsSub = _fb.billsStream().listen((bills) {
+      if (!mounted) return;
+      setState(() {
+        _shiftBills = bills;
+      });
+    });
+
     _loadShift();
   }
 
   @override
   void dispose() {
     _shiftSub?.cancel();
+    _billsSub?.cancel();
     _tabController.dispose();
     _initialCashCtrl.dispose();
     _adjustAmountCtrl.dispose();
@@ -565,6 +623,46 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                     else
                       _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', '•••••• (Chỉ Quản lý)', isBold: true, color: Colors.grey),
                     _buildStatRow('TỔNG DOANH SỐ CA:', FormatUtils.vnd(shift.totalRevenue), isBold: true),
+                    Builder(
+                      builder: (ctx) {
+                        final promo = _computeShiftPromoStats();
+                        final totalPromo = (promo['totalPromoDiscount'] as int?) ?? 0;
+                        if (totalPromo <= 0) return const SizedBox.shrink();
+                        final dItems = promo['discountedItemsCount'] ?? 0;
+                        final dItemsTotal = promo['discountedItemsTotal'] ?? 0;
+                        final vCount = promo['voucherCount'] ?? 0;
+                        final pUsed = promo['pointsUsedTotal'] ?? 0;
+
+                        return Container(
+                          margin: const EdgeInsets.only(top: 10),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFDF5F6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFF5D5D8)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.discount_outlined, size: 14, color: Color(0xFF7E2930)),
+                                  const SizedBox(width: 4),
+                                  Text('Khuyến mãi ca:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF7E2930))),
+                                  const Spacer(),
+                                  Text('-${FormatUtils.vnd(totalPromo)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.danger)),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$dItems món giảm (-${FormatUtils.vnd(dItemsTotal)}) • $vCount voucher • $pUsed điểm KMT',
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),

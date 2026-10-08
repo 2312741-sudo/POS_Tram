@@ -311,18 +311,75 @@ class CampaignBuyCondition {
   }
 }
 
+/// Khung giờ áp dụng (Happy hours)
+class CampaignTimeSlot {
+  final String startTime; // "HH:mm"
+  final String endTime;   // "HH:mm"
+
+  CampaignTimeSlot({
+    required this.startTime,
+    required this.endTime,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'startTime': startTime,
+      'endTime': endTime,
+    };
+  }
+
+  factory CampaignTimeSlot.fromMap(Map<dynamic, dynamic> map) {
+    return CampaignTimeSlot(
+      startTime: map['startTime']?.toString() ?? '00:00',
+      endTime: map['endTime']?.toString() ?? '23:59',
+    );
+  }
+
+  /// Kiểm tra xem thời điểm (giờ, phút) có nằm trong slot này không
+  bool containsTime(int hour, int minute) {
+    final startParts = startTime.split(':');
+    final endParts = endTime.split(':');
+    if (startParts.length < 2 || endParts.length < 2) return true;
+
+    final startMinutes = (int.tryParse(startParts[0]) ?? 0) * 60 + (int.tryParse(startParts[1]) ?? 0);
+    final endMinutes = (int.tryParse(endParts[0]) ?? 23) * 60 + (int.tryParse(endParts[1]) ?? 59);
+    final currentMinutes = hour * 60 + minute;
+
+    if (startMinutes <= endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    } else {
+      // Khung giờ qua đêm (ví dụ 22:00 -> 02:00)
+      return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+    }
+  }
+
+  CampaignTimeSlot copyWith({
+    String? startTime,
+    String? endTime,
+  }) {
+    return CampaignTimeSlot(
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+    );
+  }
+}
+
 /// Lịch áp dụng chương trình
 class CampaignSchedule {
   final int? absoluteStart; // Epoch ms, null = no start limit
   final int? absoluteEnd; // Epoch ms, null = no end limit
   final String timezone; // IANA timezone (default 'Asia/Ho_Chi_Minh')
   final List<String> excludedDates; // ISO dates to exclude (yyyy-MM-dd)
+  final List<CampaignTimeSlot> timeSlots; // Happy hours: [{startTime: "HH:mm", endTime: "HH:mm"}]
+  final List<int> daysOfWeek; // 1..7 với 1 = Thứ 2, 7 = CN
 
   CampaignSchedule({
     this.absoluteStart,
     this.absoluteEnd,
     this.timezone = 'Asia/Ho_Chi_Minh',
     this.excludedDates = const [],
+    this.timeSlots = const [],
+    this.daysOfWeek = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -331,15 +388,31 @@ class CampaignSchedule {
       'absoluteEnd': absoluteEnd,
       'timezone': timezone,
       'excludedDates': excludedDates,
+      'timeSlots': timeSlots.map((e) => e.toMap()).toList(),
+      'daysOfWeek': daysOfWeek,
     };
   }
 
   factory CampaignSchedule.fromMap(Map<String, dynamic> map) {
+    var rawSlots = map['timeSlots'];
+    List<CampaignTimeSlot> slots = [];
+    if (rawSlots is List) {
+      slots = rawSlots.map((e) => CampaignTimeSlot.fromMap(e is Map ? e : {})).toList();
+    }
+
+    var rawDays = map['daysOfWeek'];
+    List<int> days = [];
+    if (rawDays is List) {
+      days = rawDays.map((e) => (e as num).toInt()).toList();
+    }
+
     return CampaignSchedule(
-      absoluteStart: map['absoluteStart']?.toInt(),
-      absoluteEnd: map['absoluteEnd']?.toInt(),
+      absoluteStart: (map['absoluteStart'] as num?)?.toInt(),
+      absoluteEnd: (map['absoluteEnd'] as num?)?.toInt(),
       timezone: map['timezone'] ?? 'Asia/Ho_Chi_Minh',
       excludedDates: List<String>.from(map['excludedDates'] ?? []),
+      timeSlots: slots,
+      daysOfWeek: days,
     );
   }
   
@@ -348,12 +421,16 @@ class CampaignSchedule {
     int? absoluteEnd,
     String? timezone,
     List<String>? excludedDates,
+    List<CampaignTimeSlot>? timeSlots,
+    List<int>? daysOfWeek,
   }) {
     return CampaignSchedule(
       absoluteStart: absoluteStart ?? this.absoluteStart,
       absoluteEnd: absoluteEnd ?? this.absoluteEnd,
       timezone: timezone ?? this.timezone,
       excludedDates: excludedDates ?? this.excludedDates,
+      timeSlots: timeSlots ?? this.timeSlots,
+      daysOfWeek: daysOfWeek ?? this.daysOfWeek,
     );
   }
 }
@@ -388,6 +465,7 @@ class CampaignModel {
   // Voucher/Mã
   final bool hasCodes; // Có phát hành mã
   final bool autoApply; // Tự động áp dụng
+  final bool requireStaffNote; // Bắt buộc nhân viên nhập ghi chú khi áp dụng mã
 
   // Cộng dồn
   final String stackingMode; // DISABLED, ENABLED
@@ -424,6 +502,7 @@ class CampaignModel {
     required this.warnRepeatedCustomer,
     required this.hasCodes,
     required this.autoApply,
+    this.requireStaffNote = false,
     required this.stackingMode,
     required this.priority,
     required this.active,
@@ -442,13 +521,7 @@ class CampaignModel {
 
   bool get isOngoing {
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (schedule.absoluteStart != null && now < schedule.absoluteStart!) {
-      return false;
-    }
-    if (schedule.absoluteEnd != null && now > schedule.absoluteEnd!) {
-      return false;
-    }
-    return true;
+    return isEligibleAt(now);
   }
 
   bool get isEnded {
@@ -475,6 +548,7 @@ class CampaignModel {
     if (!active) return 'Không hoạt động';
     if (isEnded) return 'Đã kết thúc';
     if (isUpcoming) return 'Sắp diễn ra';
+    if (!isOngoing) return 'Ngoài khung giờ';
     return 'Đang diễn ra';
   }
 
@@ -485,6 +559,30 @@ class CampaignModel {
     if (schedule.absoluteEnd != null && timestampMs > schedule.absoluteEnd!) {
       return false;
     }
+
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
+
+    // Ngày trong tuần: 1..7 với 1 = Thứ 2, 7 = Chủ Nhật
+    if (schedule.daysOfWeek.isNotEmpty) {
+      if (!schedule.daysOfWeek.contains(dt.weekday)) {
+        return false;
+      }
+    }
+
+    // Khung giờ áp dụng (Happy hours)
+    if (schedule.timeSlots.isNotEmpty) {
+      bool inSlot = false;
+      for (final slot in schedule.timeSlots) {
+        if (slot.containsTime(dt.hour, dt.minute)) {
+          inSlot = true;
+          break;
+        }
+      }
+      if (!inSlot) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -515,6 +613,7 @@ class CampaignModel {
       'warnRepeatedCustomer': warnRepeatedCustomer,
       'hasCodes': hasCodes,
       'autoApply': autoApply,
+      'requireStaffNote': requireStaffNote,
       'stackingMode': stackingMode,
       'priority': priority,
       'active': active,
@@ -548,6 +647,7 @@ class CampaignModel {
       warnRepeatedCustomer: map['warnRepeatedCustomer'] ?? false,
       hasCodes: map['hasCodes'] ?? false,
       autoApply: map['autoApply'] ?? false,
+      requireStaffNote: map['requireStaffNote'] ?? false,
       stackingMode: map['stackingMode'] ?? StackingMode.disabled.toMap(),
       priority: map['priority']?.toInt() ?? 0,
       active: map['active'] ?? false,
@@ -580,6 +680,7 @@ class CampaignModel {
     bool? warnRepeatedCustomer,
     bool? hasCodes,
     bool? autoApply,
+    bool? requireStaffNote,
     String? stackingMode,
     int? priority,
     bool? active,
@@ -610,6 +711,7 @@ class CampaignModel {
       warnRepeatedCustomer: warnRepeatedCustomer ?? this.warnRepeatedCustomer,
       hasCodes: hasCodes ?? this.hasCodes,
       autoApply: autoApply ?? this.autoApply,
+      requireStaffNote: requireStaffNote ?? this.requireStaffNote,
       stackingMode: stackingMode ?? this.stackingMode,
       priority: priority ?? this.priority,
       active: active ?? this.active,

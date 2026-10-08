@@ -16,6 +16,9 @@ class StoreInfoModel {
   final bool allowStaffViewShiftDifference; // Bật/tắt cho phép nhân viên xem chênh lệch tiền két khi kết ca
   final bool autoPrintBill; // Bật/tắt tự động in bill khi thanh toán
   final String ownerId;
+  final int pointRedeemRate; // Tỷ lệ quy đổi điểm ra tiền chiết khấu (VD: 1.000đ/điểm)
+  final double pointEarnRate; // Tỷ lệ tích điểm % trên doanh thu thực (VD: 1.0%)
+  final String managerPin; // Mã PIN quản lý duyệt giảm giá món
 
   StoreInfoModel({
     required this.storeCode,
@@ -34,6 +37,9 @@ class StoreInfoModel {
     this.printerType = 'LAN',
     this.allowStaffViewShiftDifference = true,
     this.autoPrintBill = true,
+    this.pointRedeemRate = 1000,
+    this.pointEarnRate = 1.0,
+    this.managerPin = '1234',
   });
 
   factory StoreInfoModel.fromMap(Map<dynamic, dynamic> map, String storeCode) {
@@ -54,6 +60,9 @@ class StoreInfoModel {
       printerType: map['printerType']?.toString() ?? 'LAN',
       allowStaffViewShiftDifference: map['allowStaffViewShiftDifference'] ?? true,
       autoPrintBill: map['autoPrintBill'] ?? true,
+      pointRedeemRate: (map['pointRedeemRate'] as num?)?.toInt() ?? 1000,
+      pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
+      managerPin: map['managerPin']?.toString() ?? '1234',
     );
   }
 
@@ -73,5 +82,52 @@ class StoreInfoModel {
     'printerType': printerType,
     'allowStaffViewShiftDifference': allowStaffViewShiftDifference,
     'autoPrintBill': autoPrintBill,
+    'pointRedeemRate': pointRedeemRate,
+    'pointEarnRate': pointEarnRate,
+    'managerPin': managerPin,
   };
+
+  StoreInfoModel copyWith({
+    String? storeCode,
+    String? storeName,
+    String? ownerId,
+    String? address,
+    String? phone,
+    String? wifiName,
+    String? bankId,
+    String? bankAccount,
+    String? accountName,
+    bool? allowStackPromotions,
+    double? defaultVatRate,
+    String? kitchenPrinterIp,
+    String? billPrinterIp,
+    String? printerType,
+    bool? allowStaffViewShiftDifference,
+    bool? autoPrintBill,
+    int? pointRedeemRate,
+    double? pointEarnRate,
+    String? managerPin,
+  }) {
+    return StoreInfoModel(
+      storeCode: storeCode ?? this.storeCode,
+      storeName: storeName ?? this.storeName,
+      ownerId: ownerId ?? this.ownerId,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      wifiName: wifiName ?? this.wifiName,
+      bankId: bankId ?? this.bankId,
+      bankAccount: bankAccount ?? this.bankAccount,
+      accountName: accountName ?? this.accountName,
+      allowStackPromotions: allowStackPromotions ?? this.allowStackPromotions,
+      defaultVatRate: defaultVatRate ?? this.defaultVatRate,
+      kitchenPrinterIp: kitchenPrinterIp ?? this.kitchenPrinterIp,
+      billPrinterIp: billPrinterIp ?? this.billPrinterIp,
+      printerType: printerType ?? this.printerType,
+      allowStaffViewShiftDifference: allowStaffViewShiftDifference ?? this.allowStaffViewShiftDifference,
+      autoPrintBill: autoPrintBill ?? this.autoPrintBill,
+      pointRedeemRate: pointRedeemRate ?? this.pointRedeemRate,
+      pointEarnRate: pointEarnRate ?? this.pointEarnRate,
+      managerPin: managerPin ?? this.managerPin,
+    );
+  }
 }

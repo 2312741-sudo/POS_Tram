@@ -383,30 +383,67 @@ class ReportRepository {
   Future<KmtCustomerModel?> lookupCustomer(String query) async {
     final clean = query.trim();
     if (clean.isEmpty) return null;
+    final normalizedPhone = clean.replaceAll(RegExp(r'[^0-9]'), '');
+
     try {
-      // 1. Try Firestore (chỉ khi bật useFirestoreCustomers)
-      if (useFirestoreCustomers) {
-        try {
-          final firestoreSnap = await FirebaseFirestore.instance
+      // 1. Tra cứu Firestore kmt_customers (Hệ sinh thái Khuyến Mãi Trạm)
+      try {
+        // A. Tra cứu theo so_dien_thoai
+        if (normalizedPhone.isNotEmpty) {
+          final phoneSnap = await FirebaseFirestore.instance
+              .collection('kmt_customers')
+              .where('so_dien_thoai', isEqualTo: normalizedPhone)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 2));
+          if (phoneSnap.docs.isNotEmpty) {
+            final doc = phoneSnap.docs.first;
+            return KmtCustomerModel.fromMap(doc.data(), doc.id);
+          }
+
+          final legacyPhoneSnap = await FirebaseFirestore.instance
               .collection('kmt_customers')
               .where('phone', isEqualTo: clean)
               .limit(1)
               .get()
               .timeout(const Duration(seconds: 2));
-          if (firestoreSnap.docs.isNotEmpty) {
-            final doc = firestoreSnap.docs.first;
+          if (legacyPhoneSnap.docs.isNotEmpty) {
+            final doc = legacyPhoneSnap.docs.first;
             return KmtCustomerModel.fromMap(doc.data(), doc.id);
           }
-        } catch (_) {}
-      }
+        }
 
-      // 2. Tra cứu từ RTDB stores/{storeCode}/customers
+        // B. Tra cứu theo ma_khach_hang (Doc ID hoặc field)
+        final docSnap = await FirebaseFirestore.instance
+            .collection('kmt_customers')
+            .doc(clean.toUpperCase())
+            .get()
+            .timeout(const Duration(seconds: 2));
+        if (docSnap.exists && docSnap.data() != null) {
+          return KmtCustomerModel.fromMap(docSnap.data()!, docSnap.id);
+        }
+
+        final codeSnap = await FirebaseFirestore.instance
+            .collection('kmt_customers')
+            .where('ma_khach_hang', isEqualTo: clean.toUpperCase())
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 2));
+        if (codeSnap.docs.isNotEmpty) {
+          final doc = codeSnap.docs.first;
+          return KmtCustomerModel.fromMap(doc.data(), doc.id);
+        }
+      } catch (_) {}
+
+      // 2. Tra cứu dự phòng từ RTDB stores/{storeCode}/customers
       final snap = await customersRef.get().timeout(const Duration(seconds: 2));
       if (snap.exists && snap.value != null) {
         final map = Map<dynamic, dynamic>.from(snap.value as Map);
         for (final entry in map.entries) {
           final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), entry.key.toString());
-          if (c.phone == clean || c.code.toLowerCase() == clean.toLowerCase()) {
+          if (c.phone == clean ||
+              (normalizedPhone.isNotEmpty && c.phone.replaceAll(RegExp(r'[^0-9]'), '') == normalizedPhone) ||
+              c.code.toLowerCase() == clean.toLowerCase()) {
             return c;
           }
         }
@@ -418,37 +455,164 @@ class ReportRepository {
   }
 
   Future<void> saveCustomer(KmtCustomerModel customer) async {
-    await customersRef.child(customer.id).set(customer.toMap());
-    if (useFirestoreCustomers) {
-      try {
-        await FirebaseFirestore.instance.collection('kmt_customers').doc(customer.id).set(customer.toMap());
-      } catch (_) {}
-    }
+    // 1. Lưu RTDB stores/{storeCode}/customers
+    try {
+      await customersRef.child(customer.id).set(customer.toMap());
+    } catch (_) {}
+
+    // 2. Đồng bộ Firestore kmt_customers theo chuẩn Khuyến Mãi Trạm
+    try {
+      final docId = customer.code.isNotEmpty ? customer.code.toUpperCase() : customer.id;
+      final kmtData = customer.toMap();
+      await FirebaseFirestore.instance
+          .collection('kmt_customers')
+          .doc(docId)
+          .set(kmtData, SetOptions(merge: true));
+    } catch (_) {}
   }
 
-  Future<void> awardPoints({required String customerId, required int billAmount, double rate = 1.0}) async {
+  Future<void> awardPoints({
+    required String customerId,
+    required int billAmount,
+    double rate = 1.0,
+    int pointRedeemRate = 1000,
+    String? billCode,
+  }) async {
     try {
-      final pointsToAdd = (billAmount * (rate / 100) / 1000).round();
+      final pointsToAdd = (billAmount * (rate / 100) / pointRedeemRate).round();
       if (pointsToAdd <= 0) return;
-      final snap = await customersRef.child(customerId).get();
-      if (snap.exists && snap.value != null) {
-        final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
-        c.currentPoints += pointsToAdd;
-        c.totalPoints += pointsToAdd;
-        await saveCustomer(c);
+
+      int prevPoints = 0;
+      KmtCustomerModel? customer;
+
+      // Đọc thông tin từ Firestore trước
+      try {
+        final doc = await FirebaseFirestore.instance.collection('kmt_customers').doc(customerId).get();
+        if (doc.exists && doc.data() != null) {
+          customer = KmtCustomerModel.fromMap(doc.data()!, doc.id);
+          prevPoints = customer.currentPoints;
+        }
+      } catch (_) {}
+
+      // Nếu không có, đọc từ RTDB
+      if (customer == null) {
+        final snap = await customersRef.child(customerId).get();
+        if (snap.exists && snap.value != null) {
+          customer = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
+          prevPoints = customer.currentPoints;
+        }
+      }
+
+      if (customer != null) {
+        final newPoints = prevPoints + pointsToAdd;
+        customer.currentPoints = newPoints;
+        customer.totalPoints += pointsToAdd;
+        await saveCustomer(customer);
+
+        // Ghi nhận lịch sử tích điểm kmt_point_history (chuẩn Khuyến Mãi Trạm)
+        try {
+          await FirebaseFirestore.instance.collection('kmt_point_history').add({
+            'ma_khach_hang': customer.code.isNotEmpty ? customer.code : customer.id,
+            'ngay_tich': FieldValue.serverTimestamp(),
+            'cua_hang': _currentStoreCode,
+            'ten_cua_hang': 'POS Trạm ($_currentStoreCode)',
+            'diem_truoc': prevPoints,
+            'diem_thay_doi': pointsToAdd,
+            'diem_sau': newPoints,
+            'nguon': 'fnb_pos',
+            'bill_code': billCode ?? '',
+            'bill_amount': billAmount,
+          });
+        } catch (_) {}
       }
     } catch (_) {}
   }
 
-  Future<void> redeemCustomerPoints({required String customerId, required int points}) async {
+  Future<void> redeemCustomerPoints({
+    required String customerId,
+    required int points,
+    String? billCode,
+  }) async {
     try {
-      final snap = await customersRef.child(customerId).get();
-      if (snap.exists && snap.value != null) {
-        final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
-        c.currentPoints = (c.currentPoints - points) > 0 ? (c.currentPoints - points) : 0;
-        await saveCustomer(c);
+      if (points <= 0) return;
+      int prevPoints = 0;
+      KmtCustomerModel? customer;
+
+      // Đọc từ Firestore
+      try {
+        final doc = await FirebaseFirestore.instance.collection('kmt_customers').doc(customerId).get();
+        if (doc.exists && doc.data() != null) {
+          customer = KmtCustomerModel.fromMap(doc.data()!, doc.id);
+          prevPoints = customer.currentPoints;
+        }
+      } catch (_) {}
+
+      // Nếu không có, đọc từ RTDB
+      if (customer == null) {
+        final snap = await customersRef.child(customerId).get();
+        if (snap.exists && snap.value != null) {
+          customer = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
+          prevPoints = customer.currentPoints;
+        }
+      }
+
+      if (customer != null) {
+        final newPoints = (prevPoints - points) > 0 ? (prevPoints - points) : 0;
+        customer.currentPoints = newPoints;
+        await saveCustomer(customer);
+
+        // Ghi nhận lịch sử đổi điểm kmt_point_history (chuẩn Khuyến Mãi Trạm)
+        try {
+          await FirebaseFirestore.instance.collection('kmt_point_history').add({
+            'ma_khach_hang': customer.code.isNotEmpty ? customer.code : customer.id,
+            'ngay_tich': FieldValue.serverTimestamp(),
+            'cua_hang': _currentStoreCode,
+            'ten_cua_hang': 'POS Trạm ($_currentStoreCode)',
+            'diem_truoc': prevPoints,
+            'diem_thay_doi': -points,
+            'diem_sau': newPoints,
+            'nguon': 'fnb_pos_redeem',
+            'bill_code': billCode ?? '',
+          });
+        } catch (_) {}
       }
     } catch (_) {}
+  }
+
+  /// Lấy toàn bộ danh sách khách hàng để xem báo cáo CRM và xuất file Excel
+  Future<List<KmtCustomerModel>> getAllCustomers() async {
+    final Map<String, KmtCustomerModel> map = {};
+
+    // 1. Đọc từ Firestore kmt_customers
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('kmt_customers')
+          .get()
+          .timeout(const Duration(seconds: 4));
+      for (final doc in snap.docs) {
+        final c = KmtCustomerModel.fromMap(doc.data(), doc.id);
+        map[c.id] = c;
+      }
+    } catch (_) {}
+
+    // 2. Đọc bổ sung từ RTDB
+    try {
+      final snap = await customersRef.get().timeout(const Duration(seconds: 3));
+      if (snap.exists && snap.value != null) {
+        final rawMap = Map<dynamic, dynamic>.from(snap.value as Map);
+        for (final entry in rawMap.entries) {
+          final id = entry.key.toString();
+          if (!map.containsKey(id)) {
+            final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), id);
+            map[id] = c;
+          }
+        }
+      }
+    } catch (_) {}
+
+    final list = map.values.toList();
+    list.sort((a, b) => b.currentPoints.compareTo(a.currentPoints));
+    return list;
   }
 
   // ==================== REPORT DATA QUERIES ====================

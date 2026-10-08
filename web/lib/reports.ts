@@ -88,6 +88,7 @@ export interface HistoryOrder {
   }>;
   items?: OrderItem[];
   itemsJson?: string;
+  paymentSplits?: Array<{ method: string; amount: number; reference?: string }>;
   actionLogs?: any[];
   [key: string]: any;
 }
@@ -1261,16 +1262,32 @@ export function calculateCashShiftReport(
     let cardSales = 0;
 
     for (const b of paidBills) {
-      const pm = (b.paymentMethod || "CASH").toUpperCase();
-      const amt = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0));
-      if (pm === "CASH" || pm.includes("TIỀN MẶT")) {
-        cashSales += amt;
-      } else if (pm === "TRANSFER_QR" || pm === "TRANSFER" || pm.includes("CHUYỂN")) {
-        qrSales += amt;
-      } else if (pm === "CARD" || pm.includes("THẺ")) {
-        cardSales += amt;
+      if (Array.isArray(b.paymentSplits) && b.paymentSplits.length > 0) {
+        for (const sp of b.paymentSplits) {
+          const spMethod = (sp.method || "CASH").toUpperCase();
+          const spAmt = Number(sp.amount || 0);
+          if (spMethod === "CASH" || spMethod.includes("TIỀN MẶT")) {
+            cashSales += spAmt;
+          } else if (spMethod === "TRANSFER_QR" || spMethod === "TRANSFER" || spMethod.includes("CHUYỂN") || spMethod.includes("QR")) {
+            qrSales += spAmt;
+          } else if (spMethod === "CARD" || spMethod.includes("THẺ")) {
+            cardSales += spAmt;
+          } else {
+            cashSales += spAmt;
+          }
+        }
       } else {
-        cashSales += amt;
+        const pm = (b.paymentMethod || "CASH").toUpperCase();
+        const amt = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0));
+        if (pm === "CASH" || pm.includes("TIỀN MẶT")) {
+          cashSales += amt;
+        } else if (pm === "TRANSFER_QR" || pm === "TRANSFER" || pm.includes("CHUYỂN")) {
+          qrSales += amt;
+        } else if (pm === "CARD" || pm.includes("THẺ")) {
+          cardSales += amt;
+        } else {
+          cashSales += amt;
+        }
       }
     }
 

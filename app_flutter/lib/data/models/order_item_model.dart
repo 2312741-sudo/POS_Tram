@@ -7,6 +7,8 @@ class OrderItemModel {
   String note;
   bool isSentKitchen;
   int discountAmount;
+  int discountPercent;
+  String discountReason;
 
   // Thuộc tính KiotViet FnB (Size, Đường, Đá, Topping)
   String selectedSize;
@@ -29,6 +31,8 @@ class OrderItemModel {
     this.note = '',
     this.isSentKitchen = false,
     this.discountAmount = 0,
+    this.discountPercent = 0,
+    this.discountReason = '',
     this.selectedSize = '',
     this.sizeExtraPrice = 0,
     this.selectedSugar = '',
@@ -54,6 +58,8 @@ class OrderItemModel {
       note: map['note']?.toString() ?? '',
       isSentKitchen: map['isSentKitchen'] == true,
       discountAmount: (map['discountAmount'] as num?)?.toInt() ?? 0,
+      discountPercent: (map['discountPercent'] as num?)?.toInt() ?? 0,
+      discountReason: map['discountReason']?.toString() ?? '',
       selectedSize: map['selectedSize']?.toString() ?? '',
       sizeExtraPrice: (map['sizeExtraPrice'] as num?)?.toInt() ?? 0,
       selectedSugar: map['selectedSugar']?.toString() ?? '',
@@ -74,6 +80,8 @@ class OrderItemModel {
     'note': note,
     'isSentKitchen': isSentKitchen,
     'discountAmount': discountAmount,
+    if (discountPercent > 0) 'discountPercent': discountPercent,
+    if (discountReason.isNotEmpty) 'discountReason': discountReason,
     if (selectedSize.isNotEmpty) 'selectedSize': selectedSize,
     if (sizeExtraPrice > 0) 'sizeExtraPrice': sizeExtraPrice,
     if (selectedSugar.isNotEmpty) 'selectedSugar': selectedSugar,
@@ -106,6 +114,8 @@ class OrderItemModel {
     String? note,
     bool? isSentKitchen,
     int? discountAmount,
+    int? discountPercent,
+    String? discountReason,
     String? selectedSize,
     int? sizeExtraPrice,
     String? selectedSugar,
@@ -123,6 +133,8 @@ class OrderItemModel {
     note: note ?? this.note,
     isSentKitchen: isSentKitchen ?? this.isSentKitchen,
     discountAmount: discountAmount ?? this.discountAmount,
+    discountPercent: discountPercent ?? this.discountPercent,
+    discountReason: discountReason ?? this.discountReason,
     selectedSize: selectedSize ?? this.selectedSize,
     sizeExtraPrice: sizeExtraPrice ?? this.sizeExtraPrice,
     selectedSugar: selectedSugar ?? this.selectedSugar,

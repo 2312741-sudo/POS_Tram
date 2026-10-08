@@ -266,6 +266,15 @@ class FirebaseService {
   Future<void> deleteCategory(CategoryModel category, {String? storeCode}) =>
       _orderRepo.deleteCategory(category, storeCode: storeCode);
 
+  Stream<List<Map<String, dynamic>>> productNotesStream({String? storeCode}) =>
+      _orderRepo.productNotesStream(storeCode: storeCode);
+
+  Future<void> saveProductNote(String noteId, Map<String, dynamic> data, {String? storeCode}) =>
+      _orderRepo.saveProductNote(noteId, data, storeCode: storeCode);
+
+  Future<void> deleteProductNote(String noteId, {String? storeCode}) =>
+      _orderRepo.deleteProductNote(noteId, storeCode: storeCode);
+
   Future<int> copyMenuBetweenStores({
     required String fromStoreCode,
     required String toStoreCode,
@@ -344,11 +353,31 @@ class FirebaseService {
 
   Future<void> saveCustomer(KmtCustomerModel customer) => _reportRepo.saveCustomer(customer);
 
-  Future<void> awardPoints({required String customerId, required int billAmount, double rate = 1.0}) =>
-      _reportRepo.awardPoints(customerId: customerId, billAmount: billAmount, rate: rate);
+  Future<void> awardPoints({
+    required String customerId,
+    required int billAmount,
+    double rate = 1.0,
+    int pointRedeemRate = 1000,
+    String? billCode,
+  }) => _reportRepo.awardPoints(
+    customerId: customerId,
+    billAmount: billAmount,
+    rate: rate,
+    pointRedeemRate: pointRedeemRate,
+    billCode: billCode,
+  );
 
-  Future<void> redeemCustomerPoints({required String customerId, required int points}) =>
-      _reportRepo.redeemCustomerPoints(customerId: customerId, points: points);
+  Future<void> redeemCustomerPoints({
+    required String customerId,
+    required int points,
+    String? billCode,
+  }) => _reportRepo.redeemCustomerPoints(
+    customerId: customerId,
+    points: points,
+    billCode: billCode,
+  );
+
+  Future<List<KmtCustomerModel>> getAllCustomers() => _reportRepo.getAllCustomers();
 
   // ==================== KIOTVIET TABLE RESERVATIONS ====================
   Future<void> reserveTable({

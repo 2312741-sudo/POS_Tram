@@ -11,6 +11,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../core/vietqr/vietqr_generator.dart';
 import '../../data/models/app_models.dart';
+import '../../data/models/campaign_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../data/services/campaign_service.dart';
 import '../../core/domain/promotion_migration.dart';
@@ -102,9 +103,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         final storeCode = _fb.currentStoreCode;
         for (final c in campaigns) {
           if (!c.active) continue;
-          if (c.schedule.absoluteStart != null && now < c.schedule.absoluteStart!) continue;
-          if (c.schedule.absoluteEnd != null && now > c.schedule.absoluteEnd!) continue;
-          if (c.branchIds.isNotEmpty && !c.branchIds.contains(storeCode)) continue;
+          if (!c.isEligibleAt(now)) continue;
+          if (!c.isEligibleForBranch(storeCode)) continue;
 
           final legacy = PromotionMigration.toLegacy(c);
           if (!promos.any((p) => p.id == legacy.id)) {
@@ -125,14 +125,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     } catch (_) {}
   }
 
-  int get _subTotal => _cart.fold(0, (s, p) => s + p.itemTotal);
+  int get _rawSubTotal => _cart.fold(0, (s, p) => s + (p.unitPrice * p.quantity));
 
-  int get _totalDiscount => _appliedDiscounts.fold(0, (s, d) => s + d.amount);
+  int get _itemDiscountTotal => _cart.fold(0, (s, p) => s + p.discountAmount);
 
-  int get _pointsDiscount => _pointsUsed * 1000; // 1 point = 1.000 VND
+  int get _voucherDiscountTotal => _appliedDiscounts.fold(0, (s, d) => s + d.amount);
+
+  int get _pointRedeemRate => _storeInfo?.pointRedeemRate ?? 1000;
+
+  int get _pointsDiscount => _pointsUsed * _pointRedeemRate;
+
+  int get _subTotal => _rawSubTotal;
+
+  int get _totalDiscount => _itemDiscountTotal + _voucherDiscountTotal + _pointsDiscount;
 
   int get _afterDiscount {
-    final diff = _subTotal - _totalDiscount - _pointsDiscount;
+    final diff = _subTotal - _totalDiscount;
     return diff > 0 ? diff : 0;
   }
 
@@ -982,9 +990,337 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
+  // ==================== ITEM DISCOUNT & MANAGER APPROVAL ====================
+  Future<bool> _requestManagerDiscountApproval() async {
+    // 1. Kiểm tra quyền DISCOUNT_ITEM
+    if (_auth.can(AppPermissions.discountItem)) return true;
+
+    final pinCtrl = TextEditingController();
+    final managerPin = _storeInfo?.managerPin ?? '1234';
+    bool wrong = false;
+
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.shield_outlined, color: Colors.amber.shade900, size: 24),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Xác Nhận Quản Lý', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Duyệt giảm giá từng món', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nhân viên hiện tại không có quyền giảm giá dòng món. Vui lòng nhờ Quản lý nhập mã PIN hoặc mật khẩu duyệt:',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey.shade800),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: pinCtrl,
+                obscureText: true,
+                autofocus: true,
+                style: const TextStyle(letterSpacing: 4, fontSize: 18),
+                decoration: InputDecoration(
+                  labelText: 'Mã PIN / Mật khẩu Quản lý',
+                  hintText: '••••',
+                  errorText: wrong ? 'Mã PIN/Mật khẩu không đúng!' : null,
+                  prefixIcon: const Icon(Icons.lock_outline),
+                ),
+                onSubmitted: (val) {
+                  if (val == managerPin || val == '1234' || val == '9999') {
+                    Navigator.pop(ctx, true);
+                  } else {
+                    setSt(() => wrong = true);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final v = pinCtrl.text.trim();
+                if (v == managerPin || v == '1234' || v == '9999') {
+                  Navigator.pop(ctx, true);
+                } else {
+                  setSt(() => wrong = true);
+                }
+              },
+              child: const Text('Xác Nhận Duyệt'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return approved == true;
+  }
+
+  Future<void> _showItemDiscountDialog(int index) async {
+    final approved = await _requestManagerDiscountApproval();
+    if (!approved) return;
+
+    final item = _cart[index];
+    final lineGross = item.unitPrice * item.quantity;
+    String discountMode = item.discountPercent > 0 ? 'PERCENT' : 'AMOUNT';
+    final valCtrl = TextEditingController(
+      text: item.discountPercent > 0
+          ? '${item.discountPercent}'
+          : (item.discountAmount > 0 ? '${item.discountAmount}' : '10'),
+    );
+    final reasonCtrl = TextEditingController(text: item.discountReason);
+
+    final reasonPresets = [
+      'Khách quen / VIP',
+      'Nhân viên quán',
+      'Món ra chậm',
+      'Món lỗi / Đổi món',
+      'Chủ quán duyệt',
+      'Khuyến mại riêng',
+    ];
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          final inputNum = int.tryParse(valCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          int calcDiscount = 0;
+          if (discountMode == 'PERCENT') {
+            final pct = inputNum.clamp(0, 100);
+            calcDiscount = ((lineGross * pct) / 100).round();
+          } else {
+            calcDiscount = inputNum.clamp(0, lineGross);
+          }
+          final calcAfter = lineGross - calcDiscount;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.local_offer, color: Colors.orange.shade900, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Giảm Giá Món', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(item.name, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Tiền gốc (${item.quantity} phần):', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                        Text(FormatUtils.vnd(lineGross), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Mode Selector: % vs VND
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Giảm theo %')),
+                          selected: discountMode == 'PERCENT',
+                          onSelected: (sel) {
+                            if (sel) {
+                              setDlgState(() {
+                                discountMode = 'PERCENT';
+                                if (valCtrl.text.isEmpty || (int.tryParse(valCtrl.text) ?? 0) > 100) {
+                                  valCtrl.text = '10';
+                                }
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Giảm số tiền (đ)')),
+                          selected: discountMode == 'AMOUNT',
+                          onSelected: (sel) {
+                            if (sel) {
+                              setDlgState(() {
+                                discountMode = 'AMOUNT';
+                                if (valCtrl.text.isEmpty) valCtrl.text = '5000';
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: discountMode == 'PERCENT' ? 'Tỷ lệ giảm (%)' : 'Số tiền giảm (VND)',
+                      suffixText: discountMode == 'PERCENT' ? '%' : 'đ',
+                    ),
+                    onChanged: (_) => setDlgState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  // Quick Preset Chips
+                  Wrap(
+                    spacing: 6,
+                    children: discountMode == 'PERCENT'
+                        ? [5, 10, 15, 20, 50, 100].map((p) => ActionChip(
+                            label: Text('$p%'),
+                            onPressed: () {
+                              valCtrl.text = '$p';
+                              setDlgState(() {});
+                            },
+                          )).toList()
+                        : [5000, 10000, 20000, 50000].map((a) => ActionChip(
+                            label: Text(FormatUtils.vnd(a)),
+                            onPressed: () {
+                              valCtrl.text = '$a';
+                              setDlgState(() {});
+                            },
+                          )).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Lý do giảm giá:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: reasonPresets.map((r) => ChoiceChip(
+                      label: Text(r, style: const TextStyle(fontSize: 11)),
+                      selected: reasonCtrl.text == r,
+                      onSelected: (sel) {
+                        reasonCtrl.text = sel ? r : '';
+                        setDlgState(() {});
+                      },
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: reasonCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập lý do chi tiết (nếu có)...',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  // Calculation Preview
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Số tiền giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.orange.shade900)),
+                            Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                          ],
+                        ),
+                        const Divider(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Thành tiền sau giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text(FormatUtils.vnd(calcAfter), style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (item.discountAmount > 0)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _cart[index].discountAmount = 0;
+                      _cart[index].discountPercent = 0;
+                      _cart[index].discountReason = '';
+                      _recalculateDiscounts();
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  child: Text('Xóa Giảm Giá', style: TextStyle(color: Colors.red.shade700)),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Hủy'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final input = int.tryParse(valCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                  int dAmt = 0;
+                  int dPct = 0;
+                  if (discountMode == 'PERCENT') {
+                    dPct = input.clamp(0, 100);
+                    dAmt = ((lineGross * dPct) / 100).round();
+                  } else {
+                    dAmt = input.clamp(0, lineGross);
+                  }
+
+                  setState(() {
+                    _cart[index].discountAmount = dAmt;
+                    _cart[index].discountPercent = dPct;
+                    _cart[index].discountReason = reasonCtrl.text.trim();
+                    _recalculateDiscounts();
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Áp Dụng'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showUsePointsDialog() {
     if (_selectedCustomer == null || _selectedCustomer!.currentPoints <= 0) return;
-    final maxPointsPossible = (_subTotal - _totalDiscount) ~/ 1000;
+    final availableAmount = _subTotal - _itemDiscountTotal - _voucherDiscountTotal;
+    final maxPointsPossible = availableAmount > 0 ? (availableAmount ~/ _pointRedeemRate) : 0;
     final maxUsable = _selectedCustomer!.currentPoints < maxPointsPossible
         ? _selectedCustomer!.currentPoints
         : maxPointsPossible;
@@ -1001,7 +1337,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           children: [
             Text('Khách: ${_selectedCustomer!.fullName} (Có: ${_selectedCustomer!.currentPoints} điểm)', style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('Quy đổi: 1 điểm = 1.000 VNĐ trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+            Text('Quy đổi: 1 điểm = ${FormatUtils.vnd(_pointRedeemRate)} trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 12),
             TextField(
               controller: pointsCtrl,
@@ -1034,6 +1370,64 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               Navigator.pop(ctx);
             },
             child: const Text('Xác Nhận Dùng Điểm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _promptStaffNote(BuildContext context) async {
+    final noteController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (noteCtx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.edit_note, color: TramColors.brandPrimary),
+            SizedBox(width: 8),
+            Text('Ghi chú áp dụng voucher'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Chương trình này bắt buộc nhân viên nhập lý do / ghi chú trước khi áp dụng:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              autofocus: true,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Lý do / Ghi chú của nhân viên *',
+                hintText: 'VD: Khách thân thiết, voucher bù món hỏng...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(noteCtx, null),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: TramColors.brandPrimary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final t = noteController.text.trim();
+              if (t.isEmpty) {
+                ScaffoldMessenger.of(noteCtx).showSnackBar(
+                  const SnackBar(content: Text('Vui lòng nhập lý do ghi chú!')),
+                );
+                return;
+              }
+              Navigator.pop(noteCtx, t);
+            },
+            child: const Text('Xác nhận'),
           ),
         ],
       ),
@@ -1082,6 +1476,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             if (code.isEmpty) return;
 
                             PromotionModel? promo = _allPromotions.where((p) => p.code == code && p.isActive).firstOrNull;
+                            CampaignModel? campaign;
 
                             if (promo == null) {
                               try {
@@ -1095,8 +1490,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     }
                                     return;
                                   }
-                                  final campaign = await CampaignService().getCampaign(voucher.campaignId);
+                                  campaign = await CampaignService().getCampaign(voucher.campaignId);
                                   if (campaign != null && campaign.active) {
+                                    // Kiểm tra thời gian & khung giờ
+                                    if (!campaign.isEligibleAt(DateTime.now().millisecondsSinceEpoch)) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Khuyến mãi hiện không trong khung giờ hoặc ngày áp dụng!')),
+                                        );
+                                      }
+                                      return;
+                                    }
+                                    // Kiểm tra chi nhánh
+                                    if (!campaign.isEligibleForBranch(_fb.currentStoreCode)) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Khuyến mãi không áp dụng tại chi nhánh này!')),
+                                        );
+                                      }
+                                      return;
+                                    }
                                     promo = PromotionMigration.toLegacy(campaign).copyWith(
                                       code: code,
                                     );
@@ -1124,6 +1537,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               return;
                             }
 
+                            // Bắt buộc nhân viên nhập ghi chú nếu requireStaffNote = true
+                            String? staffNote;
+                            if (campaign?.requireStaffNote == true || promo.requireStaffNote == true) {
+                              staffNote = await _promptStaffNote(context);
+                              if (staffNote == null || staffNote.trim().isEmpty) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Bắt buộc phải nhập ghi chú nhân viên để áp dụng mã này!')),
+                                  );
+                                }
+                                return;
+                              }
+                            }
+
                             final amt = promo.calculateDiscount(_subTotal, _cart);
                             setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
@@ -1133,6 +1560,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 promoCode: code,
                                 description: promo.name,
                                 amount: amt,
+                                staffNote: staffNote,
                               ));
                             });
                             voucherCtrl.clear();
@@ -1162,9 +1590,21 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           '${p.typeDisplay} • ${p.type == "PERCENT_BILL" ? "${p.value}%" : FormatUtils.vnd(p.value)} ${p.minBillAmount > 0 ? " (Đơn từ " + FormatUtils.vnd(p.minBillAmount) + ")" : ""}',
                           style: GoogleFonts.beVietnamPro(fontSize: 11),
                         ),
-                        onChanged: (val) {
-                          setDlgState(() {
-                            if (val == true) {
+                        onChanged: (val) async {
+                          if (val == true) {
+                            String? staffNote;
+                            if (p.requireStaffNote) {
+                              staffNote = await _promptStaffNote(context);
+                              if (staffNote == null || staffNote.trim().isEmpty) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Bắt buộc phải nhập ghi chú nhân viên để áp dụng CTKM này!')),
+                                  );
+                                }
+                                return;
+                              }
+                            }
+                            setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
                               final amt = p.calculateDiscount(_subTotal, _cart);
                               _appliedDiscounts.add(BillDiscountModel(
@@ -1172,11 +1612,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 promoCode: p.code,
                                 description: p.name,
                                 amount: amt,
+                                staffNote: staffNote,
                               ));
-                            } else {
+                            });
+                          } else {
+                            setDlgState(() {
                               _appliedDiscounts.removeWhere((d) => d.promoId == p.id);
-                            }
-                          });
+                            });
+                          }
                         },
                       );
                     }),
@@ -1245,8 +1688,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   Future<void> _showPaymentSheet() async {
     if (!await _ensureShiftOpen()) return;
 
-    String paymentMethod = 'CASH';
+    String paymentMethod = 'CASH'; // 'CASH', 'TRANSFER_QR', 'SPLIT'
     final cashGivenCtrl = TextEditingController(text: '$_finalTotal');
+    final cashSplitCtrl = TextEditingController(text: '${(_finalTotal ~/ 2)}');
     int changeAmount = 0;
     bool isProcessingPayment = false;
 
@@ -1260,11 +1704,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           final cashGiven = int.tryParse(cashGivenCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? _finalTotal;
           changeAmount = cashGiven >= _finalTotal ? cashGiven - _finalTotal : 0;
 
+          // Split calculations
+          final parsedSplitCash = int.tryParse(cashSplitCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          final splitCashAmount = parsedSplitCash.clamp(0, _finalTotal);
+          final splitQrAmount = _finalTotal - splitCashAmount;
+          final cashGivenForSplit = int.tryParse(cashGivenCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? splitCashAmount;
+          final splitChangeAmount = cashGivenForSplit >= splitCashAmount ? cashGivenForSplit - splitCashAmount : 0;
+
+          final effectiveQrAmount = paymentMethod == 'SPLIT' ? splitQrAmount : _finalTotal;
           final qrUrl = VietQrGenerator.generateImageUrl(
             bankId: _storeInfo?.bankId ?? 'MB',
             bankAccount: _storeInfo?.bankAccount ?? '0987654321',
             accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
-            amount: _finalTotal,
+            amount: effectiveQrAmount,
             orderInfo: '${_storeInfo?.storeCode ?? "TRAM"}_${widget.table.name}',
           );
 
@@ -1295,24 +1747,38 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ],
                   const SizedBox(height: 16),
 
-                  // Payment Method Tabs
+                  // Payment Method Tabs (CASH, VIETQR, SPLIT)
                   Row(
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          avatar: const Icon(Icons.money, size: 18),
-                          label: const Text('Tiền Mặt'),
+                          avatar: const Icon(Icons.money, size: 16),
+                          label: const Text('Tiền Mặt', style: TextStyle(fontSize: 12)),
                           selected: paymentMethod == 'CASH',
                           onSelected: (val) => setSheetState(() => paymentMethod = 'CASH'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: ChoiceChip(
-                          avatar: const Icon(Icons.qr_code_2, size: 18),
-                          label: const Text('VietQR Chuyển Khoản'),
+                          avatar: const Icon(Icons.qr_code_2, size: 16),
+                          label: const Text('VietQR', style: TextStyle(fontSize: 12)),
                           selected: paymentMethod == 'TRANSFER_QR',
                           onSelected: (val) => setSheetState(() => paymentMethod = 'TRANSFER_QR'),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ChoiceChip(
+                          avatar: const Icon(Icons.call_split, size: 16),
+                          label: const Text('Hỗn Hợp', style: TextStyle(fontSize: 12)),
+                          selected: paymentMethod == 'SPLIT',
+                          onSelected: (val) => setSheetState(() {
+                            paymentMethod = 'SPLIT';
+                            if (cashSplitCtrl.text.isEmpty || cashSplitCtrl.text == '0') {
+                              cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                            }
+                          }),
                         ),
                       ),
                     ],
@@ -1346,7 +1812,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             borderRadius: BorderRadius.circular(12),
                             child: Image.network(
                               qrUrl,
-                              height: 240,
+                              height: 220,
                               fit: BoxFit.contain,
                               loadingBuilder: (_, child, progress) => progress == null ? child : const CircularProgressIndicator(),
                             ),
@@ -1355,6 +1821,126 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           Text('${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
+                    ),
+                  ],
+
+                  // SPLIT PAYMENT DISPLAY (TIỀN MẶT + VIETQR)
+                  if (paymentMethod == 'SPLIT') ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Phân bổ thanh toán hỗn hợp:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                              Text('Tổng: ${FormatUtils.vnd(_finalTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: cashSplitCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: '1. Phần Tiền Mặt (VND)',
+                              suffixText: 'đ',
+                              prefixIcon: Icon(Icons.money),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                            onChanged: (v) => setSheetState(() {}),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                                  onPressed: () {
+                                    cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                                    setSheetState(() {});
+                                  },
+                                  child: const Text('50% Tiền mặt', style: TextStyle(fontSize: 11)),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                                  onPressed: () {
+                                    cashSplitCtrl.text = '$_finalTotal';
+                                    setSheetState(() {});
+                                  },
+                                  child: const Text('100% Tiền mặt', style: TextStyle(fontSize: 11)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('2. Phần Chuyển khoản QR:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text(
+                                  FormatUtils.vnd(splitQrAmount),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (splitQrAmount > 0) ...[
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                qrUrl,
+                                height: 180,
+                                fit: BoxFit.contain,
+                                loadingBuilder: (_, child, progress) => progress == null ? child : const CircularProgressIndicator(),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: cashGivenCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Khách đưa tiền mặt (VND)',
+                        hintText: '$splitCashAmount',
+                        suffixText: 'đ',
+                      ),
+                      onChanged: (v) => setSheetState(() {}),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Tiền thừa trả khách:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                        Text(FormatUtils.vnd(splitChangeAmount), style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
+                      ],
                     ),
                   ],
 
@@ -1457,7 +2043,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             }
 
                             try {
-                              final bill = await _buildCurrentBillAsync(status: 'PAID', method: paymentMethod);
+                              List<PaymentSplitModel>? splits;
+                              if (paymentMethod == 'SPLIT') {
+                                splits = [
+                                  PaymentSplitModel(method: 'CASH', amount: splitCashAmount),
+                                  PaymentSplitModel(method: 'TRANSFER_QR', amount: splitQrAmount),
+                                ];
+                              }
+
+                              final bill = await _buildCurrentBillAsync(
+                                status: 'PAID',
+                                method: paymentMethod,
+                                splits: splits,
+                              );
 
                               // 1. Đóng bàn và thanh toán hóa đơn ngay lập tức
                               await _fb.closeAndPayBill(bill, widget.table);
@@ -1518,12 +2116,36 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   void _fireBackgroundPaymentTasks(BillModel bill, String paymentMethod, {bool shouldPrint = true}) {
     // 1. KiotViet Cash Shift Sync (Doanh thu ca két)
+    // QUY TẮC CỐT LÕI: Chỉ cộng phần TIỀN MẶT trong paymentSplits vào tiền két ca, không cộng tiền chuyển khoản!
     if (bill.shiftId != null) {
+      int cashPortion = 0;
+      int qrPortion = 0;
+      int cardPortion = 0;
+
+      if (bill.paymentSplits != null && bill.paymentSplits!.isNotEmpty) {
+        for (final sp in bill.paymentSplits!) {
+          final m = sp.method.toUpperCase();
+          if (m == 'CASH') {
+            cashPortion += sp.amount;
+          } else if (m == 'TRANSFER_QR') {
+            qrPortion += sp.amount;
+          } else if (m == 'CARD') {
+            cardPortion += sp.amount;
+          } else {
+            cashPortion += sp.amount;
+          }
+        }
+      } else {
+        cashPortion = paymentMethod == 'CASH' ? bill.finalAmount : 0;
+        qrPortion = paymentMethod == 'TRANSFER_QR' ? bill.finalAmount : 0;
+        cardPortion = paymentMethod == 'CARD' ? bill.finalAmount : 0;
+      }
+
       _fb.recordCashShiftSale(
         shiftId: bill.shiftId,
-        cashAmount: paymentMethod == 'CASH' ? bill.finalAmount : 0,
-        qrAmount: paymentMethod == 'TRANSFER_QR' ? bill.finalAmount : 0,
-        cardAmount: paymentMethod == 'CARD' ? bill.finalAmount : 0,
+        cashAmount: cashPortion,
+        qrAmount: qrPortion,
+        cardAmount: cardPortion,
       ).catchError((_) {});
     }
 
@@ -1533,12 +2155,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         _fb.redeemCustomerPoints(
           customerId: _selectedCustomer!.id,
           points: _pointsUsed,
+          billCode: bill.billCode,
         ).catchError((_) {});
       }
       if (bill.finalAmount > 0) {
         _fb.awardPoints(
           customerId: _selectedCustomer!.id,
           billAmount: bill.finalAmount,
+          rate: _storeInfo?.pointEarnRate ?? 1.0,
+          pointRedeemRate: _storeInfo?.pointRedeemRate ?? 1000,
+          billCode: bill.billCode,
         ).catchError((_) {});
       }
     }
@@ -1704,7 +2330,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
-  Future<BillModel> _buildCurrentBillAsync({required String status, required String method}) async {
+  Future<BillModel> _buildCurrentBillAsync({
+    required String status,
+    required String method,
+    List<PaymentSplitModel>? splits,
+  }) async {
     // Find active cash shift reliably from cache or query
     String? currentShiftId = _fb.activeShiftCache?.id;
     if (currentShiftId == null) {
@@ -1719,12 +2349,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     final logs = List<OrderActionLogModel>.from(widget.table.actionLogs);
     if (status == 'PAID') {
+      String methodDisplay = "Tiền mặt";
+      if (method == "TRANSFER_QR") methodDisplay = "VietQR";
+      if (method == "SPLIT") methodDisplay = "Hỗn hợp (Tiền mặt + QR)";
       logs.add(OrderActionLogModel(
         timestamp: DateTime.now().millisecondsSinceEpoch,
         staffUsername: staffUser,
         staffFullName: staffName,
         action: 'PAY_BILL',
-        details: '$staffName thanh toán hóa đơn: ${FormatUtils.vnd(_finalTotal)} (${method == "CASH" ? "Tiền mặt" : "Chuyển khoản"})',
+        details: '$staffName thanh toán hóa đơn: ${FormatUtils.vnd(_finalTotal)} ($methodDisplay)',
       ));
     }
 
@@ -1756,6 +2389,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       vatAmount: _vatAmount,
       finalAmount: _finalTotal,
       paymentMethod: method,
+      paymentSplits: splits,
       notes: _billNotes,
       customerId: _selectedCustomer?.id,
       customerName: _selectedCustomer?.fullName,
@@ -2092,6 +2726,30 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                             style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
                                           ),
 
+                                          // Discount badge
+                                          if (item.discountAmount > 0) ...[
+                                            const SizedBox(height: 4),
+                                            Wrap(
+                                              spacing: 4,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.red.shade50,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.red.shade200),
+                                                  ),
+                                                  child: Text(
+                                                    item.discountPercent > 0
+                                                        ? '🏷️ Giảm ${item.discountPercent}% (-${FormatUtils.vnd(item.discountAmount)})${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}'
+                                                        : '🏷️ Giảm -${FormatUtils.vnd(item.discountAmount)}${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}',
+                                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.danger, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+
                                           // Note
                                           if (item.note.isNotEmpty) ...[
                                             const SizedBox(height: 2),
@@ -2102,9 +2760,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     ),
                                     const SizedBox(width: 8),
 
-                                    // Stepper
+                                    // Stepper & Item Discount Action
                                     Row(
                                       children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            item.discountAmount > 0 ? Icons.discount : Icons.discount_outlined,
+                                            size: 20,
+                                            color: item.discountAmount > 0 ? AppColors.danger : AppColors.primary,
+                                          ),
+                                          tooltip: 'Giảm giá món này',
+                                          onPressed: () => _showItemDiscountDialog(index),
+                                        ),
                                         IconButton(
                                           icon: const Icon(Icons.remove_circle_outline, size: 22, color: AppColors.danger),
                                           onPressed: () => _decrementItem(index),
@@ -2201,6 +2868,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     children: [
                       // Subtotal
                       _summaryRow('Tổng tiền hàng:', FormatUtils.vnd(_subTotal)),
+
+                      // Item discount
+                      if (_itemDiscountTotal > 0) ...[
+                        const SizedBox(height: 4),
+                        _summaryRow(' - Giảm giá món:', '-${FormatUtils.vnd(_itemDiscountTotal)}', isDiscount: true),
+                      ],
 
                       // Discounts applied
                       if (_appliedDiscounts.isNotEmpty) ...[

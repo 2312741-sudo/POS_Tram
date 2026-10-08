@@ -110,6 +110,7 @@ export interface ProductItem {
   unit: string;
   category: string;
   imageBase64?: string;
+  isTopping?: boolean;
 }
 
 export interface CategoryItem {
@@ -117,6 +118,7 @@ export interface CategoryItem {
   storeCode?: string;
   storeName?: string;
   name: string;
+  allowedToppingIds?: string[];
 }
 
 export interface UserItem {
@@ -220,14 +222,15 @@ interface DashboardContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   deleteTable: (tableId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
   saveProduct: (
-    productData: { id?: string; name: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string },
+    productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean },
     storeCode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (productId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
   saveCategory: (
     categoryName: string,
     storeCode?: string,
-    oldCategoryName?: string
+    oldCategoryName?: string,
+    allowedToppingIds?: string[]
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCategory: (
     categoryName: string,
@@ -560,6 +563,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           cList.push({
             id,
             name: typeof c === "string" ? c : (c.name || id),
+            allowedToppingIds: typeof c === "object" && c !== null && Array.isArray(c.allowedToppingIds) ? c.allowedToppingIds : [],
             storeCode: code,
           });
         });
@@ -1423,17 +1427,19 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const saveProduct = useCallback(
     async (
-      productData: { id?: string; name: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string },
+      productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean },
       storeCode?: string
     ) => {
       try {
         const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
         const payload: any = {
           name: productData.name.trim(),
+          code: (productData.code || "").trim(),
           price: Number(productData.price),
           costPrice: productData.costPrice != null ? Number(productData.costPrice) : 0,
           unit: (productData.unit || "").trim(),
           category: (productData.category || "").trim(),
+          isTopping: Boolean(productData.isTopping),
         };
         if (productData.imageBase64 !== undefined) {
           payload.imageBase64 = productData.imageBase64;
@@ -1474,7 +1480,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   );
 
   const saveCategory = useCallback(
-    async (categoryName: string, storeCode?: string, oldCategoryName?: string) => {
+    async (categoryName: string, storeCode?: string, oldCategoryName?: string, allowedToppingIds?: string[]) => {
       try {
         const cleanName = categoryName.trim();
         if (!cleanName) return { success: false, error: "Tên danh mục không được để trống" };
@@ -1495,8 +1501,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             }
           }
 
-          // Save new category
-          await set(ref(db, `stores/${code}/categories/${cleanName}`), { name: cleanName });
+          // Save new category with allowedToppingIds if provided
+          const catPayload: any = { name: cleanName };
+          if (allowedToppingIds !== undefined) {
+            catPayload.allowedToppingIds = allowedToppingIds;
+          }
+          await update(ref(db, `stores/${code}/categories/${cleanName}`), catPayload);
         }
 
         return { success: true };
