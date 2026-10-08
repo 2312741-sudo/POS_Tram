@@ -153,7 +153,11 @@ class AppScreen extends StatelessWidget {
           : null,
         actions: actions != null ? [...actions!, const SizedBox(width: 8)] : null,
       ),
-      body: body,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: body,
+      ),
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,
     );

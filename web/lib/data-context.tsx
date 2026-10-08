@@ -523,12 +523,16 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         bankId: info.bankId || "MB",
         bankAccount: info.bankAccount || "",
         accountName: info.accountName || "CHU QUAN FNB",
-        defaultVatRate: typeof info.defaultVatRate === "number" ? info.defaultVatRate : 0,
+        defaultVatRate: (info.defaultVatRate === 8 || info.defaultVatRate === "8") ? 0 : (typeof info.defaultVatRate === "number" ? info.defaultVatRate : 0),
         allowStackPromotions: info.allowStackPromotions ?? true,
         allowStaffViewShiftDifference: info.allowStaffViewShiftDifference ?? true,
         active: info.active ?? true,
         createdAt: info.createdAt || Date.now(),
       });
+
+      if (info.defaultVatRate === 8 || info.defaultVatRate === "8") {
+        update(ref(db, `stores/${code}/storeInfo`), { defaultVatRate: 0 }).catch(() => {});
+      }
 
       if (val.cash_shifts) {
         const sList: CashShiftItem[] = [];

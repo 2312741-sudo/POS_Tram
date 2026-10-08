@@ -54,7 +54,7 @@ class StoreInfoModel {
       bankAccount: map['bankAccount']?.toString() ?? '0987654321',
       accountName: map['accountName']?.toString() ?? 'CHU CUA HANG',
       allowStackPromotions: map['allowStackPromotions'] ?? true,
-      defaultVatRate: (map['defaultVatRate'] as num?)?.toDouble() ?? 0.0,
+      defaultVatRate: ((map['defaultVatRate'] as num?)?.toDouble() ?? 0.0) == 8.0 ? 0.0 : ((map['defaultVatRate'] as num?)?.toDouble() ?? 0.0),
       kitchenPrinterIp: map['kitchenPrinterIp']?.toString() ?? '192.168.1.200',
       billPrinterIp: map['billPrinterIp']?.toString() ?? '192.168.1.201',
       printerType: map['printerType']?.toString() ?? 'LAN',

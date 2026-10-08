@@ -9,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
 import 'data/services/firebase_service.dart';
+import 'widgets/keyboard_dismiss_wrapper.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -122,6 +123,9 @@ class TramApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: AppRouter.router,
+      builder: (context, child) {
+        return KeyboardDismissWrapper(child: child ?? const SizedBox.shrink());
+      },
     );
   }
 }

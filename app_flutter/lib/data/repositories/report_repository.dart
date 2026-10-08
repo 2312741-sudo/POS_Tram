@@ -88,7 +88,12 @@ class ReportRepository {
               : (_currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - $_currentStoreCode'),
         );
       }
-      return StoreInfoModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), _currentStoreCode);
+      final map = Map<dynamic, dynamic>.from(snap.value as Map);
+      if (map['defaultVatRate'] == 8 || map['defaultVatRate'] == 8.0) {
+        map['defaultVatRate'] = 0.0;
+        storeInfoRef.update({'defaultVatRate': 0.0}).catchError((_) {});
+      }
+      return StoreInfoModel.fromMap(map, _currentStoreCode);
     } catch (_) {
       return StoreInfoModel(
         storeCode: _currentStoreCode,

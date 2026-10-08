@@ -118,7 +118,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (mounted) {
         setState(() {
           _storeInfo = info;
-          _vatRate = info.defaultVatRate;
+          _vatRate = (info.defaultVatRate == 8.0) ? 0.0 : info.defaultVatRate;
           _allPromotions = promos;
         });
       }
