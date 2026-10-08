@@ -1016,7 +1016,7 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Search bar and Add button */}
+          {/* Search bar */}
           <div className="card" style={{ padding: "16px 20px" }}>
             <div style={{ display: "flex", gap: "12px", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ position: "relative", flex: "1", minWidth: "240px" }}>
@@ -1039,10 +1039,16 @@ export default function ProductsPage() {
                 />
               </div>
 
-              <button className="btn-primary" onClick={openAddCategory}>
-                <FolderPlus size={16} />
-                Thêm danh mục mới
-              </button>
+              {categorySearch && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setCategorySearch("")}
+                  style={{ fontSize: "12px", padding: "8px 14px", height: "38px" }}
+                >
+                  Xóa tìm kiếm
+                </button>
+              )}
             </div>
           </div>
 
