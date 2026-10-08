@@ -99,6 +99,8 @@ export default function ProductsPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [modalNoteText, setModalNoteText] = useState("");
 
   useEffect(() => {
     const notesRef = ref(db, `stores/${targetStoreCode}/product_notes`);
@@ -360,15 +362,21 @@ export default function ProductsPage() {
   };
 
   // Product Notes Actions
-  const handleAddNote = async () => {
-    const text = newNoteText.trim();
-    if (!text) return;
+  const handleAddNote = async (textOverride?: string) => {
+    const text = (textOverride !== undefined ? textOverride : newNoteText).trim();
+    if (!text) {
+      setModalNoteText("");
+      setShowNoteModal(true);
+      return;
+    }
     setNoteSaving(true);
     try {
       const now = Date.now();
       const noteId = `note_${now}_${Math.random().toString(36).slice(2, 6)}`;
       await set(ref(db, `stores/${targetStoreCode}/product_notes/${noteId}`), { text });
       setNewNoteText("");
+      setModalNoteText("");
+      setShowNoteModal(false);
     } catch (e: any) {
       alert("Lỗi lưu ghi chú: " + e.message);
     } finally {
@@ -452,10 +460,15 @@ export default function ProductsPage() {
                 Thêm sản phẩm
               </button>
             </>
-          ) : (
+          ) : activeTab === "categories" ? (
             <button className="btn-primary" onClick={openAddCategory}>
               <FolderPlus size={16} />
               Thêm danh mục mới
+            </button>
+          ) : (
+            <button className="btn-primary" onClick={() => setShowNoteModal(true)}>
+              <Plus size={16} />
+              Thêm ghi chú
             </button>
           )}
         </div>
@@ -1227,7 +1240,7 @@ export default function ProductsPage() {
             <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "14px", lineHeight: "1.5" }}>
               Các ghi chú mẫu sẽ xuất hiện dưới dạng chip chọn nhanh trên giao diện POS khi nhân viên order món (ví dụ: <em>Ít ngọt, Không đá, Uống nóng, Mang về, Để riêng đá...</em>).
             </p>
-            <div style={{ display: "flex", gap: "10px", maxWidth: "600px" }}>
+            <div style={{ display: "flex", gap: "10px", maxWidth: "600px", marginBottom: "14px" }}>
               <input
                 className="input-field"
                 placeholder="Nhập nội dung ghi chú (ví dụ: Ít đá, Không đường, Nóng...)"
@@ -1239,13 +1252,60 @@ export default function ProductsPage() {
                 style={{ flex: 1 }}
               />
               <button
+                type="button"
                 className="btn-primary"
-                onClick={handleAddNote}
-                disabled={noteSaving || !newNoteText.trim()}
+                onClick={() => handleAddNote()}
+                disabled={noteSaving}
                 style={{ whiteSpace: "nowrap" }}
               >
-                <Plus size={16} /> Thêm ghi chú
+                <Plus size={16} /> {noteSaving ? "Đang lưu..." : "Thêm ghi chú"}
               </button>
+            </div>
+
+            {/* Quick Suggestion Chips */}
+            <div>
+              <span style={{ fontSize: "12px", fontWeight: "600", color: "#8B8FA8", marginRight: "8px" }}>
+                Gợi ý thêm nhanh:
+              </span>
+              <div style={{ display: "inline-flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                {[
+                  "Ít ngọt",
+                  "Nhiều đá",
+                  "Không đá",
+                  "Ít đá",
+                  "Để riêng đá",
+                  "Mang về",
+                  "Không đường",
+                  "Uống nóng",
+                  "Ít cay",
+                  "Không hành",
+                  "Đậm vị",
+                ].map((sug) => {
+                  const alreadyExists = notes.some((n) => n.text.toLowerCase() === sug.toLowerCase());
+                  return (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => handleAddNote(sug)}
+                      disabled={noteSaving || alreadyExists}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "16px",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: alreadyExists ? "default" : "pointer",
+                        border: "1px dashed",
+                        borderColor: alreadyExists ? "#D1D5DB" : "#7E2930",
+                        background: alreadyExists ? "#F3F4F6" : "rgba(126,41,48,0.06)",
+                        color: alreadyExists ? "#9CA3AF" : "#7E2930",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {alreadyExists ? `✓ ${sug}` : `+ ${sug}`}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -1829,6 +1889,102 @@ export default function ProductsPage() {
                 <button className="btn-danger" onClick={handleDeleteCategory} style={{ flex: 1, justifyContent: "center" }}>
                   <Trash2 size={16} />
                   Xóa danh mục
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL: THÊM GHI CHÚ MẪU ==================== */}
+      {showNoteModal && (
+        <div className="modal-overlay" onClick={() => setShowNoteModal(false)}>
+          <div className="modal-content" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D" }}>
+                📝 Thêm ghi chú mẫu mới
+              </h2>
+              <button onClick={() => setShowNoteModal(false)} style={{ background: "none", border: "none", color: "#5D5B63", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                  Nội dung ghi chú *
+                </label>
+                <input
+                  className="input-field"
+                  placeholder="Ví dụ: Ít ngọt, Không đá, Để riêng đá, Mang về..."
+                  value={modalNoteText}
+                  onChange={(e) => setModalNoteText(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddNote(modalNoteText);
+                  }}
+                />
+              </div>
+
+              <div>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: "#8B8FA8", display: "block", marginBottom: "8px" }}>
+                  Hoặc chọn nhanh từ danh sách mẫu:
+                </span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {[
+                    "Ít ngọt",
+                    "Nhiều đá",
+                    "Không đá",
+                    "Ít đá",
+                    "Để riêng đá",
+                    "Mang về",
+                    "Không đường",
+                    "Uống nóng",
+                    "Ít cay",
+                    "Không hành",
+                    "Đậm vị",
+                  ].map((sug) => {
+                    const isSelected = modalNoteText === sug;
+                    return (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => setModalNoteText(sug)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "16px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          border: "1px solid",
+                          borderColor: isSelected ? "#7E2930" : "#E6DEC8",
+                          background: isSelected ? "#7E2930" : "#FAF7F2",
+                          color: isSelected ? "#FFFFFF" : "#5D5B63",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {sug}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowNoteModal(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => handleAddNote(modalNoteText)}
+                  disabled={noteSaving || !modalNoteText.trim()}
+                >
+                  <Plus size={16} /> {noteSaving ? "Đang lưu..." : "Lưu ghi chú"}
                 </button>
               </div>
             </div>

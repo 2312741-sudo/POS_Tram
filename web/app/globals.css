@@ -91,10 +91,19 @@ html, body {
   box-shadow: 0 2px 8px rgba(126, 41, 48, 0.25);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #94343C, #7E2930);
   box-shadow: 0 4px 14px rgba(126, 41, 48, 0.35);
   transform: translateY(-1px);
+}
+
+.btn-primary:disabled,
+.btn-primary[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  pointer-events: auto;
 }
 
 .btn-secondary {

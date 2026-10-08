@@ -3107,174 +3107,260 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               elevation: 1,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Product Name & Kitchen Badge
-                                          Row(
+                                    // 1. Tên món + Badge gửi bếp + Nút xóa món
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            spacing: 6,
+                                            runSpacing: 4,
                                             children: [
-                                              Expanded(
-                                                child: Text(
-                                                  item.name,
-                                                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14),
+                                              Text(
+                                                item.name,
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  color: AppColors.textPrimary,
                                                 ),
                                               ),
                                               if (item.isSentKitchen)
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(4)),
-                                                  child: Text('Đã gửi bếp', style: GoogleFonts.beVietnamPro(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.bold)),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.successLight,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    'Đã gửi bếp',
+                                                    style: GoogleFonts.beVietnamPro(
+                                                      fontSize: 10,
+                                                      color: AppColors.success,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
                                             ],
                                           ),
-                                          const SizedBox(height: 4),
-
-                                          // KiotViet Size, Sugar, Ice, Toppings detail badges
-                                          if (hasSize || hasSugar || hasIce || hasToppings) ...[
-                                            InkWell(
-                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: Wrap(
-                                                spacing: 4,
-                                                runSpacing: 2,
-                                                children: [
-                                                  if (hasSize)
-                                                    _buildAttrChip('Size ${item.selectedSize.trim()}', Colors.blue.shade800, Colors.blue.shade50),
-                                                  if (hasSugar)
-                                                    _buildAttrChip(item.selectedSugar.trim(), Colors.green.shade800, Colors.green.shade50),
-                                                  if (hasIce)
-                                                    _buildAttrChip(item.selectedIce.trim(), Colors.teal.shade800, Colors.teal.shade50),
-                                                  if (hasToppings)
-                                                    _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
-                                                ],
-                                              ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        // Nút xóa món gọn gàng
+                                        InkWell(
+                                          onTap: () => _confirmRemoveItem(index),
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(4),
+                                            child: Icon(
+                                              Icons.delete_outline,
+                                              size: 20,
+                                              color: Colors.grey.shade400,
                                             ),
-                                            const SizedBox(height: 4),
-                                          ],
-
-                                          // Unit price x Quantity = Item Total
-                                          Text(
-                                            '${FormatUtils.vnd(item.unitPrice)} x ${item.quantity} = ${FormatUtils.vnd(item.itemTotal)}',
-                                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
                                           ),
+                                        ),
+                                      ],
+                                    ),
 
-                                          // Discount badge
-                                          if (item.discountAmount > 0) ...[
-                                            const SizedBox(height: 4),
-                                            Wrap(
-                                              spacing: 4,
+                                    // 2. KiotViet Size, Sugar, Ice, Toppings detail badges
+                                    if (hasSize || hasSugar || hasIce || hasToppings) ...[
+                                      const SizedBox(height: 6),
+                                      InkWell(
+                                        onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Wrap(
+                                          spacing: 4,
+                                          runSpacing: 3,
+                                          children: [
+                                            if (hasSize)
+                                              _buildAttrChip('Size ${item.selectedSize.trim()}', Colors.blue.shade800, Colors.blue.shade50),
+                                            if (hasSugar)
+                                              _buildAttrChip(item.selectedSugar.trim(), Colors.green.shade800, Colors.green.shade50),
+                                            if (hasIce)
+                                              _buildAttrChip(item.selectedIce.trim(), Colors.teal.shade800, Colors.teal.shade50),
+                                            if (hasToppings)
+                                              _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+
+                                    // 3. Ghi chú món (nếu có)
+                                    if (item.note.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      InkWell(
+                                        onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.amber.shade300),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.edit_note, size: 15, color: Colors.amber.shade900),
+                                              const SizedBox(width: 4),
+                                              Flexible(
+                                                child: Text(
+                                                  'Ghi chú: ${item.note}',
+                                                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Icon(Icons.edit, size: 11, color: Colors.amber.shade800),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+
+                                    // 4. Giảm giá món (nếu có)
+                                    if (item.discountAmount > 0) ...[
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
+                                          item.discountPercent > 0
+                                              ? '🏷️ Giảm ${item.discountPercent}% (-${FormatUtils.vnd(item.discountAmount)})${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}'
+                                              : '🏷️ Giảm -${FormatUtils.vnd(item.discountAmount)}${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}',
+                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.danger, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+
+                                    const SizedBox(height: 8),
+
+                                    // 5. Chân thẻ: Giá tiền & Thao tác (Ghi chú, Giảm giá) & Stepper tăng giảm
+                                    Row(
+                                      children: [
+                                        // Đơn giá & Thành tiền
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '${FormatUtils.vnd(item.unitPrice)} x ${item.quantity}',
+                                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary),
+                                              ),
+                                              Text(
+                                                FormatUtils.vnd(item.itemTotal),
+                                                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        // Nút Ghi chú / Topping
+                                        InkWell(
+                                          onTap: () => _showEditItemNoteAndToppingDialog(index),
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF7F5F0),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: const Color(0xFFE2DDD3)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.red.shade50,
-                                                    borderRadius: BorderRadius.circular(4),
-                                                    border: Border.all(color: Colors.red.shade200),
-                                                  ),
-                                                  child: Text(
-                                                    item.discountPercent > 0
-                                                        ? '🏷️ Giảm ${item.discountPercent}% (-${FormatUtils.vnd(item.discountAmount)})${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}'
-                                                        : '🏷️ Giảm -${FormatUtils.vnd(item.discountAmount)}${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}',
-                                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.danger, fontWeight: FontWeight.w600),
+                                                const Icon(Icons.edit_note, size: 15, color: AppColors.textPrimary),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  item.note.isEmpty ? '+ Ghi chú' : 'Ghi chú',
+                                                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 6),
+
+                                        // Nút Giảm giá món
+                                        InkWell(
+                                          onTap: () => _showItemDiscountDialog(index),
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: item.discountAmount > 0 ? Colors.red.shade50 : const Color(0xFFF7F5F0),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: item.discountAmount > 0 ? Colors.red.shade300 : const Color(0xFFE2DDD3)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  item.discountAmount > 0 ? Icons.discount : Icons.discount_outlined,
+                                                  size: 13,
+                                                  color: item.discountAmount > 0 ? AppColors.danger : AppColors.textPrimary,
+                                                ),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  item.discountAmount > 0 ? 'Đã giảm' : 'Giảm món',
+                                                  style: GoogleFonts.beVietnamPro(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: item.discountAmount > 0 ? AppColors.danger : AppColors.textPrimary,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                          ],
-
-                                          // Note & Quick Edit Note / Topping Action Chip
-                                          if (item.note.isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            InkWell(
-                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.amber.shade50,
-                                                  borderRadius: BorderRadius.circular(6),
-                                                  border: Border.all(color: Colors.amber.shade300),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Icon(Icons.edit_note, size: 15, color: Colors.amber.shade900),
-                                                    const SizedBox(width: 4),
-                                                    Flexible(
-                                                      child: Text(
-                                                        'Ghi chú: ${item.note}',
-                                                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Icon(Icons.edit, size: 11, color: Colors.amber.shade800),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ] else ...[
-                                            const SizedBox(height: 4),
-                                            InkWell(
-                                              onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(vertical: 2),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(Icons.add_circle_outline, size: 13, color: AppColors.primary),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '+ Ghi chú / Topping',
-                                                      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    // Stepper & Item Actions
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit_note, size: 22, color: AppColors.primary),
-                                          tooltip: 'Sửa ghi chú & Topping',
-                                          onPressed: () => _showEditItemNoteAndToppingDialog(index),
-                                        ),
-                                        IconButton(
-                                          icon: Icon(
-                                            item.discountAmount > 0 ? Icons.discount : Icons.discount_outlined,
-                                            size: 20,
-                                            color: item.discountAmount > 0 ? AppColors.danger : AppColors.primary,
                                           ),
-                                          tooltip: 'Giảm giá món này',
-                                          onPressed: () => _showItemDiscountDialog(index),
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline, size: 22, color: AppColors.danger),
-                                          onPressed: () => _decrementItem(index),
-                                        ),
-                                        Text('${item.quantity}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15)),
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline, size: 22, color: AppColors.primary),
-                                          onPressed: () => _incrementItem(index),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, size: 22, color: AppColors.danger),
-                                          tooltip: 'Xóa món này',
-                                          onPressed: () => _confirmRemoveItem(index),
+
+                                        const SizedBox(width: 8),
+
+                                        // Stepper Tăng / Giảm số lượng
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF7F5F0),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFFE2DDD3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              InkWell(
+                                                onTap: () => _decrementItem(index),
+                                                borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                                                  child: Icon(Icons.remove, size: 15, color: AppColors.danger),
+                                                ),
+                                              ),
+                                              Container(
+                                                constraints: const BoxConstraints(minWidth: 24),
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  '${item.quantity}',
+                                                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                                                ),
+                                              ),
+                                              InkWell(
+                                                onTap: () => _incrementItem(index),
+                                                borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
+                                                child: const Padding(
+                                                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                                                  child: Icon(Icons.add, size: 15, color: AppColors.primary),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
                                     ),
