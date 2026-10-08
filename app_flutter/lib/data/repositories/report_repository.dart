@@ -161,7 +161,7 @@ class ReportRepository {
         bankAccount: '0987654321',
         accountName: 'CHU QUAN FNB',
         allowStackPromotions: true,
-        defaultVatRate: 8.0,
+        defaultVatRate: 0.0,
       );
       await storeRef.child('storeInfo').set(info.toMap()).timeout(const Duration(seconds: 2));
 

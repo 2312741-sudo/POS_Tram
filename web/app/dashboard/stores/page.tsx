@@ -64,7 +64,7 @@ export default function StoresManagementPage() {
   const [newBankId, setNewBankId] = useState("MB");
   const [newBankAccount, setNewBankAccount] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
-  const [newVatRate, setNewVatRate] = useState("8");
+  const [newVatRate, setNewVatRate] = useState("0");
   const [copyMenuFrom, setCopyMenuFrom] = useState("TRAM01");
 
   // Edit form state
@@ -75,7 +75,7 @@ export default function StoresManagementPage() {
   const [editBankId, setEditBankId] = useState("MB");
   const [editBankAccount, setEditBankAccount] = useState("");
   const [editAccountName, setEditAccountName] = useState("");
-  const [editVatRate, setEditVatRate] = useState("8");
+  const [editVatRate, setEditVatRate] = useState("0");
   const [editActive, setEditActive] = useState(true);
 
   // Filtered stores
@@ -112,7 +112,7 @@ export default function StoresManagementPage() {
     setEditBankId(store.bankId || "MB");
     setEditBankAccount(store.bankAccount || "");
     setEditAccountName(store.accountName || "");
-    setEditVatRate(String(store.defaultVatRate ?? 8));
+    setEditVatRate(String(typeof store.defaultVatRate === "number" ? store.defaultVatRate : 0));
     setEditActive(store.active !== false);
     setActionError("");
     setActionSuccess("");
@@ -127,6 +127,7 @@ export default function StoresManagementPage() {
     }
 
     setSubmitting(true);
+    const parsedNewVat = parseFloat(newVatRate);
     const res = await createStore(
       {
         storeCode: newStoreCode.trim().toUpperCase(),
@@ -137,7 +138,7 @@ export default function StoresManagementPage() {
         bankId: newBankId,
         bankAccount: newBankAccount.trim(),
         accountName: newAccountName.trim() || "CHU CUA HANG",
-        defaultVatRate: parseFloat(newVatRate) || 8,
+        defaultVatRate: isNaN(parsedNewVat) ? 0 : parsedNewVat,
         active: true,
       },
       copyMenuFrom ? copyMenuFrom : undefined
@@ -167,6 +168,7 @@ export default function StoresManagementPage() {
     setActionError("");
 
     setSubmitting(true);
+    const parsedEditVat = parseFloat(editVatRate);
     const res = await updateStore(editingStore.storeCode, {
       storeName: editName.trim(),
       address: editAddress.trim(),
@@ -175,7 +177,7 @@ export default function StoresManagementPage() {
       bankId: editBankId,
       bankAccount: editBankAccount.trim(),
       accountName: editAccountName.trim(),
-      defaultVatRate: parseFloat(editVatRate) || 8,
+      defaultVatRate: isNaN(parsedEditVat) ? 0 : parsedEditVat,
       active: editActive,
     });
     setSubmitting(false);
