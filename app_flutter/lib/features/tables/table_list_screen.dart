@@ -456,8 +456,10 @@ class _TableListScreenState extends State<TableListScreen> {
       floatingActionButton: _auth.can(AppPermissions.openTable)
           ? FloatingActionButton.extended(
               onPressed: () => _showAddTableDialog(),
-              icon: const Icon(Icons.add),
-              label: const Text('Thêm Bàn'),
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: Text('Thêm Bàn', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
             )
           : null,
         );

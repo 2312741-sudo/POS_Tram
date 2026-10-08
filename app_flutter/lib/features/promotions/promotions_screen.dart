@@ -319,8 +319,10 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddEditPromoDialog(),
-        icon: const Icon(Icons.add),
-        label: const Text('Thêm Khuyến Mãi'),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text('Thêm Khuyến Mãi', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

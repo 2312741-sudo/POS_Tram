@@ -576,8 +576,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () => _showProductDialog(),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Thêm sản phẩm'),
+                          icon: const Icon(Icons.add, color: Colors.white),
+                          label: Text('Thêm sản phẩm', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
@@ -604,9 +608,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showProductDialog(),
-        icon: const Icon(Icons.add),
-        label: Text('Thêm món mới', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text('Thêm món mới', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
     );
   }

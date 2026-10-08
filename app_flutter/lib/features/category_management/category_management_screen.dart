@@ -251,9 +251,10 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDialog,
-        icon: const Icon(Icons.add),
-        label: Text('Thêm danh mục vào [$_selectedStoreCode]', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text('Thêm danh mục vào [$_selectedStoreCode]', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
     );
   }

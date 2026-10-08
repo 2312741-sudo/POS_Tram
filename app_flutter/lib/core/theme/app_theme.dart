@@ -228,6 +228,15 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         side: BorderSide.none,
       ),
+
+      // Floating Action Button: Luôn dùng chữ và icon màu trắng rõ nét
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        extendedTextStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+      ),
     );
   }
 }
