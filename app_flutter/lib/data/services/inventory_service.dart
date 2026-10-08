@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import '../../data/models/inventory_models.dart';
+import '../../core/domain/order_integrity.dart';
 
 /// Dịch vụ xử lý các thao tác Firebase RTDB cho phân hệ kho (Inventory/Warehouse)
 class InventoryService {
@@ -156,43 +157,43 @@ class InventoryService {
     return StockBalanceModel.fromMap(Map<String, dynamic>.from(snapshot.value as Map<dynamic, dynamic>));
   }
 
-  /// Cập nhật số dư kho (Nội bộ)
+  /// Cập nhật số dư kho (Nội bộ) - dùng transaction để các giao dịch đồng thời không ghi đè nhau
   Future<void> _updateStockBalance(String itemId, int qtyDelta, int valueDelta) async {
     final balanceId = '${_currentStoreCode}_$itemId';
-    final balance = await getStockBalance(itemId);
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    if (balance != null) {
-      int newQty = balance.onHandQty + qtyDelta;
-      int newValue = balance.inventoryValue + valueDelta;
-      int newAvgCostScaled = balance.averageCostScaled;
-
+    final branchId = _currentStoreCode;
+    final res = await _storeRef.child('stock_balances/$balanceId').runTransaction((Object? current) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      int toInt(Object? v) => v is num ? v.toInt() : 0;
+      if (current == null) {
+        final unitCostScaled = qtyDelta > 0 ? ((valueDelta / qtyDelta) * 100).round() : 0;
+        return Transaction.success(StockBalanceModel(
+          balanceId: balanceId,
+          branchId: branchId,
+          itemId: itemId,
+          onHandQty: qtyDelta,
+          inventoryValue: valueDelta,
+          averageCostScaled: unitCostScaled,
+          lastEventSeq: 0,
+          updatedAt: now,
+        ).toMap());
+      }
+      final data = Map<String, dynamic>.from(current as Map);
+      final oldQty = toInt(data['onHandQty']);
+      int newAvgCostScaled = toInt(data['averageCostScaled']);
       // Cập nhật giá vốn bình quân nếu là nhập kho (qtyDelta > 0)
       if (qtyDelta > 0) {
-        int unitCostScaled = ((valueDelta / qtyDelta) * 100).round();
-        newAvgCostScaled = calculateNewAverageCost(balance.onHandQty, balance.averageCostScaled, qtyDelta, unitCostScaled);
+        final unitCostScaled = ((valueDelta / qtyDelta) * 100).round();
+        newAvgCostScaled = calculateNewAverageCost(oldQty, newAvgCostScaled, qtyDelta, unitCostScaled);
       }
-
-      final updated = balance.copyWith(
-        onHandQty: newQty,
-        inventoryValue: newValue,
-        averageCostScaled: newAvgCostScaled,
-        updatedAt: now,
-      );
-      await _storeRef.child('stock_balances/$balanceId').set(updated.toMap());
-    } else {
-      int unitCostScaled = qtyDelta > 0 ? ((valueDelta / qtyDelta) * 100).round() : 0;
-      final newBalance = StockBalanceModel(
-        balanceId: balanceId,
-        branchId: _currentStoreCode,
-        itemId: itemId,
-        onHandQty: qtyDelta,
-        inventoryValue: valueDelta,
-        averageCostScaled: unitCostScaled,
-        lastEventSeq: 0,
-        updatedAt: now,
-      );
-      await _storeRef.child('stock_balances/$balanceId').set(newBalance.toMap());
+      data['onHandQty'] = oldQty + qtyDelta;
+      data['inventoryValue'] = toInt(data['inventoryValue']) + valueDelta;
+      data['averageCostScaled'] = newAvgCostScaled;
+      data['updatedAt'] = now;
+      data['version'] = toInt(data['version']) + 1;
+      return Transaction.success(data);
+    });
+    if (!res.committed) {
+      throw Exception('Không cập nhật được tồn kho $itemId');
     }
   }
 
@@ -423,77 +424,125 @@ class InventoryService {
 
   // ==================== TIÊU HAO KHO (STOCK CONSUMPTION) ====================
 
-  /// Tiêu hao kho khi bán hàng
-  Future<void> consumeStockForBill(List<dynamic> billItems, String billId, String username) async {
-    final int now = DateTime.now().millisecondsSinceEpoch;
-    
-    // Tải danh sách công thức đang hoạt động
-    final snapshot = await _storeRef.child('recipes').orderByChild('status').equalTo('ACTIVE').get();
-    List<RecipeVersionModel> recipes = [];
-    if (snapshot.value != null) {
-      final Map<dynamic, dynamic> map = snapshot.value as Map<dynamic, dynamic>;
-      recipes = map.values.map((e) => RecipeVersionModel.fromMap(Map<String, dynamic>.from(e))).toList();
-    }
-    
-    for (var billItem in billItems) {
-      int qty = 1;
-      int productId = 0;
-      if (billItem is Map) {
-        qty = (billItem['quantity'] as num?)?.toInt() ?? 1;
-        productId = (billItem['product_id'] as num?)?.toInt() ?? 0;
-      }
-      
-      String targetItemId = productId.toString();
-      
-      // Tìm legacyProductId trong catalog
-      final catalogSnapshot = await _storeRef.child('catalog_items').orderByChild('legacyProductId').equalTo(productId).get();
-      if (catalogSnapshot.value != null) {
-        final Map<dynamic, dynamic> catMap = catalogSnapshot.value as Map<dynamic, dynamic>;
-        if (catMap.isNotEmpty) {
-           targetItemId = CatalogItemModel.fromMap(Map<String, dynamic>.from(catMap.values.first)).itemId;
-        }
-      }
+  /// Tiêu hao kho khi bán hàng.
+  ///
+  /// - Idempotent: đánh dấu stores/{s}/bill_stock_applied/{billId} = true (chỉ tạo mới);
+  ///   gọi lại cho cùng hóa đơn sẽ bỏ qua, không trừ kho 2 lần.
+  /// - Trừ số dư bằng transaction trên stock_balances/{id} (an toàn khi bán đồng thời).
+  /// - Trừ cả topping nếu topping có hàng kho (trùng tên) và công thức.
+  /// - Tải công thức + hàng kho 1 lần mỗi lần gọi.
+  /// [billItems] nhận List<OrderItemModel> hoặc List<Map> (khóa productId / product_id).
+  /// Ném [StockConsumptionException] nếu có dòng trừ kho thất bại.
+  Future<StockConsumptionResult> consumeStockForBill(
+    List<dynamic> billItems,
+    String billId,
+    String username, {
+    String? storeCode,
+  }) async {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    final store = storeRefFor(sc);
+    final lines = billItems.map(StockSaleLine.from).whereType<StockSaleLine>().toList();
+    if (lines.isEmpty) return StockConsumptionResult(applied: false, alreadyApplied: false);
 
-      RecipeVersionModel? matchedRecipe;
-      for (var r in recipes) {
-        if (r.outputItemId == targetItemId) {
-          matchedRecipe = r;
-          break;
-        }
-      }
-      
-      if (matchedRecipe != null) {
-        for (var ingredient in matchedRecipe.ingredients) {
-          int consumedQtyBase = ingredient.quantityBase * qty;
-          final eventId = 'EVT_${now}_${Random().nextInt(10000)}';
-          int valueDeltaMoney = 0;
-          
-          final balance = await getStockBalance(ingredient.itemId);
-          if (balance != null && balance.averageCostScaled > 0) {
-            valueDeltaMoney = -((consumedQtyBase * balance.averageCostScaled) / 100).round();
-          }
-          
-          final event = StockEventModel(
-            eventId: eventId,
-            commandId: 'BILL_$billId',
-            documentId: billId,
-            documentType: 'SALE',
-            branchId: _currentStoreCode,
-            itemId: ingredient.itemId,
-            qtyDeltaBase: -consumedQtyBase,
-            valueDeltaMoney: valueDeltaMoney,
-            unitCostSnapshot: balance?.averageCostScaled ?? 0,
-            occurredAt: now,
-            committedAt: now,
-            actorId: username,
-            sequence: now,
-          );
-          
-          await _appendStockEvent(event);
-          await _updateStockBalance(ingredient.itemId, -consumedQtyBase, valueDeltaMoney);
+    // 1. Tải công thức + hàng kho (1 lần cho cả hóa đơn)
+    final recipeSnap = await store.child('recipes').get();
+    final recipes = <RecipeVersionModel>[];
+    if (recipeSnap.value is Map) {
+      for (final e in (recipeSnap.value as Map).values) {
+        if (e is Map) {
+          try {
+            recipes.add(RecipeVersionModel.fromMap(Map<String, dynamic>.from(e)));
+          } catch (_) {}
         }
       }
     }
+    if (recipes.isEmpty) return StockConsumptionResult(applied: false, alreadyApplied: false);
+
+    final catalogSnap = await store.child('catalog_items').get();
+    final byLegacy = <int, String>{};
+    final byName = <String, String>{};
+    if (catalogSnap.value is Map) {
+      for (final e in (catalogSnap.value as Map).values) {
+        if (e is! Map) continue;
+        try {
+          final item = CatalogItemModel.fromMap(Map<String, dynamic>.from(e));
+          if (item.status == 'DISCONTINUED') continue;
+          if (item.legacyProductId != null) byLegacy.putIfAbsent(item.legacyProductId!, () => item.itemId);
+          byName.putIfAbsent(StockConsumptionPlanner.normalizeName(item.name), () => item.itemId);
+        } catch (_) {}
+      }
+    }
+
+    final plan = StockConsumptionPlanner.plan(
+      lines: lines,
+      recipes: recipes,
+      catalogIdByLegacyProductId: byLegacy,
+      catalogIdByName: byName,
+      branchId: sc,
+    );
+    if (plan.qtyByItem.isEmpty) {
+      return StockConsumptionResult(applied: false, alreadyApplied: false, unmapped: plan.unmapped);
+    }
+
+    // 2. Đánh dấu idempotent (chỉ tạo mới - nếu đã có thì bỏ qua)
+    final marker = await store.child('bill_stock_applied/$billId').runTransaction((Object? current) {
+      if (current != null) return Transaction.abort();
+      return Transaction.success(true);
+    });
+    if (!marker.committed) {
+      return StockConsumptionResult(applied: false, alreadyApplied: true, unmapped: plan.unmapped);
+    }
+
+    // 3. Trừ từng nguyên liệu bằng transaction + ghi sổ kho (ID xác định theo hóa đơn)
+    final failures = <String>[];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in plan.qtyByItem.entries) {
+      final itemId = entry.key;
+      final qty = entry.value;
+      final balanceId = '${sc}_$itemId';
+      try {
+        int avgCost = 0;
+        int valueDelta = 0;
+        final res = await store.child('stock_balances/$balanceId').runTransaction((Object? current) {
+          final next = StockConsumptionPlanner.applyConsumption(
+            current,
+            balanceId: balanceId,
+            branchId: sc,
+            itemId: itemId,
+            consumeQty: qty,
+            now: now,
+          );
+          avgCost = (next['averageCostScaled'] as num).toInt();
+          valueDelta = (next['inventoryValue'] as num).toInt() -
+              ((current is Map ? (current['inventoryValue'] as num?)?.toInt() : null) ?? 0);
+          return Transaction.success(next);
+        });
+        if (!res.committed) throw Exception('transaction không được commit');
+
+        final event = StockEventModel(
+          eventId: 'EVT_SALE_${billId}_$itemId',
+          commandId: 'BILL_$billId',
+          documentId: billId,
+          documentType: 'SALE',
+          branchId: sc,
+          itemId: itemId,
+          qtyDeltaBase: -qty,
+          valueDeltaMoney: valueDelta,
+          unitCostSnapshot: avgCost,
+          occurredAt: now,
+          committedAt: now,
+          actorId: username,
+          sequence: now,
+        );
+        await store.child('stock_events/${event.eventId}').set(event.toMap());
+      } catch (e) {
+        failures.add('$itemId (-$qty): $e');
+      }
+    }
+    if (failures.isNotEmpty) {
+      throw StockConsumptionException(billId, failures);
+    }
+    return StockConsumptionResult(applied: true, alreadyApplied: false, unmapped: plan.unmapped);
   }
 
   // ==================== CÔNG NỢ NHÀ CUNG CẤP (SUPPLIER LEDGER) ====================
@@ -537,4 +586,20 @@ class InventoryService {
     }
     return totalDebt;
   }
+}
+
+class StockConsumptionResult {
+  final bool applied;
+  final bool alreadyApplied;
+  final List<String> unmapped;
+  StockConsumptionResult({required this.applied, required this.alreadyApplied, this.unmapped = const []});
+}
+
+/// Một số nguyên liệu không trừ được kho cho hóa đơn (đã đánh dấu bill_stock_applied).
+class StockConsumptionException implements Exception {
+  final String billId;
+  final List<String> failures;
+  StockConsumptionException(this.billId, this.failures);
+  @override
+  String toString() => 'Trừ kho lỗi cho HĐ $billId: ${failures.join('; ')}';
 }

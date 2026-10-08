@@ -1,9 +1,10 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Plus, Tag, Ticket, ChevronRight, Settings } from "lucide-react";
 import { ref, onValue, set, push, remove, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
+import { errorMessage } from "@/lib/errors";
 
 function formatVND(amount: number | undefined) {
   if (amount === undefined) return "—";
@@ -17,6 +18,24 @@ function formatDate(ts: number | undefined) {
 }
 
 // ==================== TYPES ====================
+// Bậc ưu đãi của chiến dịch (đồng bộ với Flutter PromotionModel)
+interface CampaignTier {
+  tierId?: string;
+  tierIndex?: number;
+  threshold?: number;
+  thresholdValue?: number;
+  thresholdType?: string;
+  conditionBasis?: string;
+  benefitType?: string;
+  benefitMode?: string;
+  benefitValue?: number;
+  value?: number;
+  maxBenefitValue?: number;
+  maxDiscountMoney?: number;
+  sortOrder?: number;
+  [key: string]: unknown;
+}
+
 interface CampaignItem {
   campaignId: string;
   programCode: string;
@@ -36,8 +55,8 @@ interface CampaignItem {
   includedItemIds?: string[];
   includedGroupIds?: string[];
   excludedItemIds?: string[];
-  tiers: any[];
-  buyConditions: any[];
+  tiers: CampaignTier[];
+  buyConditions: Record<string, unknown>[];
   budgetMoney?: number;
   maxUses?: number;
   maxUsesPerCustomer?: number;
@@ -85,8 +104,12 @@ export default function PromotionsPage() {
   // Firebase data state
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [countersMap, setCountersMap] = useState<Record<string, CampaignCounters>>({});
-  const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Danh sách voucher kèm campaignId đã nạp — danh sách hiển thị được suy ra bên dưới
+  const [voucherState, setVoucherState] = useState<{ campaignId: string; list: VoucherItem[] } | null>(null);
+  // Mã chi nhánh đã nạp xong campaigns — loading được suy ra, không setState đồng bộ trong effect
+  const [loadedStoreCode, setLoadedStoreCode] = useState<string | null>(null);
+  // Mốc thời gian hiện tại cho trạng thái chiến dịch (không gọi Date.now() khi render), làm mới mỗi phút
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
   // Modal state for add/edit campaign
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -114,11 +137,18 @@ export default function PromotionsPage() {
   // Voucher form state
   const [voucherForm, setVoucherForm] = useState({ quantity: "10", prefix: "", customCode: "", isCustom: false });
 
-  const targetStoreCode = currentStoreCode === "ALL" ? "TRAM01" : currentStoreCode;
+  // Ở chế độ "ALL" dùng chi nhánh đầu tiên thực tế (không hardcode TRAM01)
+  const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "") : currentStoreCode;
+  const loading = !!targetStoreCode && loadedStoreCode !== targetStoreCode;
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Load data from Firebase
   useEffect(() => {
-    setLoading(true);
+    if (!targetStoreCode) return;
     const unsubs: (() => void)[] = [];
 
     // Campaigns
@@ -140,7 +170,7 @@ export default function PromotionsPage() {
         });
       });
       setCampaigns(cams.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-      setLoading(false);
+      setLoadedStoreCode(targetStoreCode);
     }));
 
     // Counters
@@ -172,17 +202,20 @@ export default function PromotionsPage() {
             usedAt: val.usedAt || val.redeemedAt
           });
         });
-        setVouchers(vs);
+        setVoucherState({ campaignId: selectedVoucherCampaign, list: vs });
       });
       return () => unsub();
-    } else {
-      setVouchers([]);
     }
   }, [activeTab, selectedVoucherCampaign, targetStoreCode]);
 
-  const getCampaignStatus = (cam: CampaignItem) => {
+  const vouchers = useMemo<VoucherItem[]>(() => {
+    if (activeTab !== "vouchers" || !selectedVoucherCampaign) return [];
+    return voucherState?.campaignId === selectedVoucherCampaign ? voucherState.list : [];
+  }, [activeTab, selectedVoucherCampaign, voucherState]);
+
+  const getCampaignStatus = useCallback((cam: CampaignItem) => {
     if (!cam.active) return "Tạm dừng";
-    const now = Date.now();
+    const now = nowTs;
     const start = cam.schedule?.absoluteStart || 0;
     const end = cam.schedule?.absoluteEnd || 0;
     if (end > 0 && now > end) return "Đã kết thúc";
@@ -227,7 +260,7 @@ export default function PromotionsPage() {
     }
 
     return "Đang chạy";
-  };
+  }, [nowTs]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -247,11 +280,11 @@ export default function PromotionsPage() {
     const status = getCampaignStatus(c);
     const matchStatus = filterStatus === "ALL" || status === filterStatus;
     return matchSearch && matchType && matchStatus;
-  }), [campaigns, search, filterType, filterStatus]);
+  }), [campaigns, search, filterType, filterStatus, getCampaignStatus]);
 
   // Vouchers stats
   const voucherStats = useMemo(() => {
-    let total = vouchers.length;
+    const total = vouchers.length;
     let issued = 0, used = 0, cancelled = 0;
     vouchers.forEach(v => {
       if (v.status === "ISSUED") issued++;
@@ -286,7 +319,7 @@ export default function PromotionsPage() {
       const campaignId = editingCampaign?.campaignId || `CAM_${now}_${Math.random().toString(36).slice(2, 6)}`;
       const programCode = editingCampaign?.programCode || campaignForm.programCode.trim() || `KM${String(campaigns.length + 1).padStart(4, "0")}`;
       
-      let tiers: any[] = editingCampaign?.tiers ? [...editingCampaign.tiers] : [];
+      let tiers: CampaignTier[] = editingCampaign?.tiers ? [...editingCampaign.tiers] : [];
       if (campaignForm.campaignType === "BILLDISCOUNT") {
         const isPercent = campaignForm.discountType === "PERCENT";
         const val = Number(campaignForm.discountValue) || 0;
@@ -326,7 +359,7 @@ export default function PromotionsPage() {
         }];
       }
 
-      const schedule: any = {};
+      const schedule: NonNullable<CampaignItem["schedule"]> = {};
       if (campaignForm.startDate) schedule.absoluteStart = new Date(campaignForm.startDate).getTime();
       if (campaignForm.endDate) schedule.absoluteEnd = new Date(campaignForm.endDate).getTime();
       if (campaignForm.daysOfWeek.length > 0) schedule.daysOfWeek = campaignForm.daysOfWeek;
@@ -360,8 +393,8 @@ export default function PromotionsPage() {
       await set(ref(db, `stores/${targetStoreCode}/campaigns/${campaignId}`), data);
       setShowCampaignModal(false);
       setEditingCampaign(null);
-    } catch (e: any) {
-      setFormError(e.message || "Lỗi lưu KM");
+    } catch (e) {
+      setFormError(errorMessage(e) || "Lỗi lưu KM");
     }
     setSaving(false);
   };
@@ -371,7 +404,7 @@ export default function PromotionsPage() {
     setSaving(true); setFormError("");
     try {
       const now = Date.now();
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
 
       if (voucherForm.isCustom) {
         const cleanCode = voucherForm.customCode.trim().toUpperCase();
@@ -430,7 +463,7 @@ export default function PromotionsPage() {
 
       await update(ref(db, `stores/${targetStoreCode}`), updates);
       setShowVoucherModal(false);
-    } catch (e: any) { setFormError(e.message || "Lỗi tạo mã"); }
+    } catch (e) { setFormError(errorMessage(e) || "Lỗi tạo mã"); }
     setSaving(false);
   };
 
@@ -525,6 +558,13 @@ export default function PromotionsPage() {
     { key: "campaigns" as const, label: "Chương trình KM", icon: Tag, count: campaigns.length },
     { key: "vouchers" as const, label: "Mã Voucher", icon: Ticket, count: 0 },
   ];
+
+  // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
+  if (!targetStoreCode) {
+    return (
+      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+    );
+  }
 
   return (
     <div style={{ padding: "24px" }}>

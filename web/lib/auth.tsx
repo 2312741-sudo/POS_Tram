@@ -1,9 +1,10 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { db, auth } from "./firebase";
+import { db, auth, functions } from "./firebase";
 import { ref, get, set, update } from "firebase/database";
+import { httpsCallable } from "firebase/functions";
 import {
-  signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   onAuthStateChanged,
   updatePassword,
@@ -242,6 +243,35 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   return isWebAdminRole(user.roleId || user.role, user.isRootOwner);
 }
 
+/**
+ * Chuyển lỗi từ Cloud Function staffSignIn thành thông báo tiếng Việt.
+ */
+export function mapStaffSignInError(err: unknown): string {
+  const e = err as { code?: string; message?: string; details?: { remainingSeconds?: number } };
+  const code = (e?.code || "").replace(/^functions\//, "");
+  switch (code) {
+    case "resource-exhausted": {
+      const seconds = typeof e.details?.remainingSeconds === "number" ? e.details.remainingSeconds : 0;
+      if (seconds > 0) {
+        const minutes = Math.max(1, Math.ceil(seconds / 60));
+        return `Tài khoản đã bị khóa tạm thời do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng thử lại sau ${minutes} phút hoặc liên hệ Quản lý.`;
+      }
+      return e.message || "Hệ thống đang tạm hạn chế đăng nhập. Vui lòng thử lại sau ít phút.";
+    }
+    case "unauthenticated":
+      return "Sai tài khoản hoặc mật khẩu.";
+    case "permission-denied":
+    case "invalid-argument":
+    case "failed-precondition":
+      return e.message || "Đăng nhập thất bại.";
+    case "unavailable":
+    case "deadline-exceeded":
+      return "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.";
+    default:
+      return "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin hoặc thử lại sau.";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 3. React Auth Context & Provider
 // ---------------------------------------------------------------------------
@@ -391,103 +421,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { success: false, error: "Vui lòng nhập mật khẩu" };
         }
 
-        // 1. Kiểm tra khóa tạm sau 5 lần nhập sai liên tiếp (Brute-Force Protection)
-        const attemptRef = ref(db, `stores/${cleanStore}/login_attempts/${cleanUser}`);
-        let failedCount = 0;
-        let lockedUntil = 0;
-        let attemptSnap: any = null;
-        try {
-          attemptSnap = await get(attemptRef);
-        } catch {
-          // Bỏ qua lỗi Permission Denied nếu chưa đăng nhập
-        }
-
-        if (attemptSnap && attemptSnap.exists()) {
-          const attemptData = attemptSnap.val() as { failedCount?: number; lockedUntil?: number };
-          failedCount = attemptData.failedCount || 0;
-          lockedUntil = attemptData.lockedUntil || 0;
-
-          if (lockedUntil > Date.now()) {
-            const minutesLeft = Math.ceil((lockedUntil - Date.now()) / 60000);
-            return {
-              success: false,
-              error: `Tài khoản đã bị khóa tạm thời 15 phút do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng thử lại sau ${minutesLeft} phút hoặc liên hệ Quản lý.`,
-            };
-          }
-        }
-
-        // 2. Tạo email ảo Firebase Auth: {username}.{storeCode.toLowerCase()}@tram.local
-        const email = generateEmail(cleanUser, cleanStore);
-
-        // 3. Thực hiện xác thực Firebase Auth
+        // 1-4. Xác thực phía máy chủ qua Cloud Function staffSignIn:
+        //      kiểm tra khóa tạm (5 lần sai -> khóa 15 phút), xác minh mật khẩu,
+        //      ghi bộ đếm login_attempts (chỉ Admin SDK) rồi trả về Custom Token.
         let cred;
         try {
-          cred = await signInWithEmailAndPassword(auth, email, cleanPass);
-        } catch (authError: unknown) {
-          const newFailed = failedCount + 1;
-          const now = Date.now();
-
-          if (newFailed >= 5) {
-            const lockTime = now + 15 * 60 * 1000; // 15 phút
-            await set(attemptRef, {
-              failedCount: newFailed,
-              lockedUntil: lockTime,
-              lastAttemptAt: now,
-            }).catch(() => {});
-
-            // Ghi audit log cảnh báo brute-force
-            const logId = `LOG_${now}_${Math.floor(Math.random() * 1000)}`;
-            await set(ref(db, `stores/${cleanStore}/audit_logs/${logId}`), {
-              action: "LOGIN_ATTEMPT_LOCKED_OUT",
-              targetType: "USER",
-              targetId: cleanUser,
-              details: `Khóa tài khoản 15 phút do nhập sai mật khẩu 5 lần liên tiếp: ${cleanUser}`,
-              timestamp: now,
-              isSuspicious: true,
-            }).catch(() => {});
-
-            return {
-              success: false,
-              error:
-                "Tài khoản đã bị khóa tạm thời 15 phút do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng thử lại sau hoặc liên hệ Quản lý.",
-            };
-          } else {
-            await set(attemptRef, {
-              failedCount: newFailed,
-              lockedUntil: null,
-              lastAttemptAt: now,
-            }).catch(() => {});
-
-            const remaining = 5 - newFailed;
-            const errCode = (authError as { code?: string })?.code;
-            if (
-              errCode === "auth/invalid-credential" ||
-              errCode === "auth/wrong-password" ||
-              errCode === "auth/user-not-found" ||
-              errCode === "auth/invalid-login-credentials"
-            ) {
-              return {
-                success: false,
-                error: `Sai tài khoản hoặc mật khẩu (còn ${remaining} lần thử trước khi bị khóa tạm thời)`,
-              };
-            }
-
-            if (errCode === "auth/too-many-requests") {
-              return {
-                success: false,
-                error: "Tài khoản bị tạm hạn chế do thử sai quá nhiều lần. Vui lòng thử lại sau ít phút.",
-              };
-            }
-
-            return {
-              success: false,
-              error: "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin hoặc thử lại sau.",
-            };
+          const staffSignIn = httpsCallable<
+            { storeCode: string; username: string; password: string },
+            { token?: string }
+          >(functions, "staffSignIn");
+          const res = await staffSignIn({ storeCode: cleanStore, username: cleanUser, password: cleanPass });
+          const token = res.data?.token;
+          if (!token) {
+            return { success: false, error: "Máy chủ không trả về phiên đăng nhập hợp lệ. Vui lòng thử lại." };
           }
+          cred = await signInWithCustomToken(auth, token);
+        } catch (authError: unknown) {
+          return { success: false, error: mapStaffSignInError(authError) };
         }
-
-        // 4. Đăng nhập thành công -> Reset bộ đếm lần sai
-        await set(attemptRef, { failedCount: 0, lockedUntil: null, lastAttemptAt: Date.now() }).catch(() => {});
 
         // 5. Nạp hồ sơ người dùng từ RTDB
         const userProfile = await loadUserProfile(cred.user, cleanStore);

@@ -1,5 +1,7 @@
 // lib/features/orders/order_cart_screen.dart
 import 'dart:convert';
+import 'dart:async';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -2127,7 +2129,71 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     int changeAmount = 0;
     bool isProcessingPayment = false;
 
-    await showModalBottomSheet(
+    final sheetOpenedTime = DateTime.now().millisecondsSinceEpoch;
+    StreamSubscription<DatabaseEvent>? paymentSubscription;
+    String? handledPaymentEventId;
+    String? activeListeningMethod;
+    int? activeListeningAmount;
+
+    Future<void> executeCheckout(
+      BuildContext ctx,
+      void Function(void Function()) setSheetState, {
+      int? overrideCashAmount,
+      int? overrideQrAmount,
+      String? matchedNote,
+    }) async {
+      if (isProcessingPayment) return;
+      setSheetState(() => isProcessingPayment = true);
+      if (!await _ensureShiftOpen()) {
+        setSheetState(() => isProcessingPayment = false);
+        return;
+      }
+
+      try {
+        List<PaymentSplitModel>? splits;
+        if (paymentMethod == 'SPLIT') {
+          splits = [
+            PaymentSplitModel(method: 'CASH', amount: overrideCashAmount ?? 0),
+            PaymentSplitModel(method: 'TRANSFER_QR', amount: overrideQrAmount ?? 0),
+          ];
+        }
+
+        final bill = await _buildCurrentBillAsync(
+          status: 'PAID',
+          method: paymentMethod,
+          splits: splits,
+        );
+
+        await _fb.closeAndPayBill(bill, widget.table);
+
+        if (ctx.mounted) Navigator.pop(ctx);
+        if (mounted) {
+          final successMsg = matchedNote != null
+              ? '⚡ $matchedNote! Đã tự động chốt đơn (${bill.billCode}) & bàn ${widget.table.name}! 🎉${_autoPrintBill ? " (Đang in bill)" : ""}'
+              : 'Thanh toán thành công ${widget.table.name}: ${FormatUtils.vnd(bill.finalAmount)}! 🎉${_autoPrintBill ? " (Đang in bill)" : " (Không in bill)"}';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(successMsg),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          context.go('/tables');
+        }
+
+        _fireBackgroundPaymentTasks(bill, paymentMethod, shouldPrint: _autoPrintBill);
+      } catch (e) {
+        if (ctx.mounted) {
+          setSheetState(() => isProcessingPayment = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi thanh toán: $e'), backgroundColor: AppColors.danger),
+          );
+        }
+      }
+    }
+
+    try {
+      await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -2152,6 +2218,57 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             amount: effectiveQrAmount,
             orderInfo: '${_storeInfo?.storeCode ?? "TRAM"}_${widget.table.name}',
           );
+
+          // Auto QR Check Listener Management
+          void updatePaymentListener() {
+            final currentTargetAmount = effectiveQrAmount;
+            if (activeListeningMethod == paymentMethod && activeListeningAmount == currentTargetAmount) {
+              return;
+            }
+            activeListeningMethod = paymentMethod;
+            activeListeningAmount = currentTargetAmount;
+            paymentSubscription?.cancel();
+            paymentSubscription = null;
+
+            if ((paymentMethod == 'TRANSFER_QR' || paymentMethod == 'SPLIT') && currentTargetAmount > 0) {
+              paymentSubscription = _fb.listenPaymentEvents(sinceTimestamp: sheetOpenedTime - 15000).listen((event) async {
+                if (!ctx.mounted || isProcessingPayment) return;
+                final val = event.snapshot.value;
+                if (val is! Map) return;
+
+                final eventId = val['eventId']?.toString() ?? event.snapshot.key ?? '';
+                final status = val['status']?.toString() ?? 'UNPROCESSED';
+                if (status == 'PROCESSED' || handledPaymentEventId == eventId) return;
+
+                final amount = (val['amount'] as num?)?.toInt() ?? 0;
+                if (amount <= 0 || amount != currentTargetAmount) return;
+
+                final content = (val['content']?.toString() ?? '').toLowerCase();
+                final bankName = val['bankName']?.toString() ?? 'Ngân hàng';
+                final tableNameClean = widget.table.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final contentClean = content.replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final storeClean = (_storeInfo?.storeCode ?? 'tram').toLowerCase();
+
+                final isMatched = tableNameClean.isNotEmpty && contentClean.contains(tableNameClean) ||
+                                  contentClean.contains(storeClean) ||
+                                  (val['timestamp'] as num? ?? 0) >= sheetOpenedTime - 10000;
+
+                if (isMatched) {
+                  handledPaymentEventId = eventId;
+                  await _fb.markPaymentEventProcessed(eventId);
+                  await executeCheckout(
+                    ctx,
+                    setSheetState,
+                    overrideCashAmount: splitCashAmount,
+                    overrideQrAmount: splitQrAmount,
+                    matchedNote: 'Trạm Bot phát hiện tiền vào ${FormatUtils.vnd(amount)} từ $bankName',
+                  );
+                }
+              });
+            }
+          }
+
+          updatePaymentListener();
 
           return Padding(
             padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
@@ -2252,6 +2369,31 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text('${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF86EFAC)),
+                            ),
+                            child: Row(
+                              children: [
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF16A34A)),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF166534), fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -2351,6 +2493,31 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Text(
                               'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
                               style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF86EFAC)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF16A34A)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
+                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF166534), fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -2468,55 +2635,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             backgroundColor: AppColors.success,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          onPressed: isProcessingPayment ? null : () async {
-                            setSheetState(() => isProcessingPayment = true);
-                            if (!await _ensureShiftOpen()) {
-                              setSheetState(() => isProcessingPayment = false);
-                              return;
-                            }
-
-                            try {
-                              List<PaymentSplitModel>? splits;
-                              if (paymentMethod == 'SPLIT') {
-                                splits = [
-                                  PaymentSplitModel(method: 'CASH', amount: splitCashAmount),
-                                  PaymentSplitModel(method: 'TRANSFER_QR', amount: splitQrAmount),
-                                ];
-                              }
-
-                              final bill = await _buildCurrentBillAsync(
-                                status: 'PAID',
-                                method: paymentMethod,
-                                splits: splits,
-                              );
-
-                              // 1. Đóng bàn và thanh toán hóa đơn ngay lập tức
-                              await _fb.closeAndPayBill(bill, widget.table);
-
-                              // 2. Lập tức đóng modal và chuyển về danh sách bàn kèm thông báo thành công
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Thanh toán thành công ${widget.table.name}: ${FormatUtils.vnd(bill.finalAmount)}! 🎉${_autoPrintBill ? " (Đang in bill)" : " (Không in bill)"}'),
-                                    backgroundColor: AppColors.success,
-                                    duration: const Duration(seconds: 2),
+                          onPressed: isProcessingPayment
+                              ? null
+                              : () => executeCheckout(
+                                    ctx,
+                                    setSheetState,
+                                    overrideCashAmount: splitCashAmount,
+                                    overrideQrAmount: splitQrAmount,
                                   ),
-                                );
-                                context.go('/tables');
-                              }
-
-                              // 3. Chạy các tác vụ phụ ngầm không bao giờ làm treo giao diện thu ngân
-                              _fireBackgroundPaymentTasks(bill, paymentMethod, shouldPrint: _autoPrintBill);
-                            } catch (e) {
-                              if (ctx.mounted) {
-                                setSheetState(() => isProcessingPayment = false);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Lỗi thanh toán: $e'), backgroundColor: AppColors.danger),
-                                );
-                              }
-                            }
-                          },
                           child: isProcessingPayment
                               ? const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2545,6 +2671,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         },
       ),
     );
+    } finally {
+      paymentSubscription?.cancel();
+    }
   }
 
   void _fireBackgroundPaymentTasks(BillModel bill, String paymentMethod, {bool shouldPrint = true}) {

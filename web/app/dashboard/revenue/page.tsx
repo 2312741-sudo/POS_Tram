@@ -37,6 +37,25 @@ function getTableServingTotal(t: TableItem): number {
   }
 }
 
+// Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ReadonlyArray<{ value?: unknown }>;
+  label?: string | number;
+}
+
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "10px", padding: "10px 16px", boxShadow: "0 6px 20px rgba(0,0,0,0.08)" }}>
+        <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: "#7E2930", fontWeight: "700", fontSize: "14px" }}>{formatVND(Number(payload[0].value || 0))}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function RevenuePage() {
   const { stores, currentStoreCode, setCurrentStoreCode, historyData, historyLoaded, tables } = useDashboardData();
   const loading = !historyLoaded && historyData.length === 0;
@@ -145,17 +164,6 @@ export default function RevenuePage() {
     exportPaymentMethodsReport(paymentMethods, storeInfo).toExcel();
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "10px", padding: "10px 16px", boxShadow: "0 6px 20px rgba(0,0,0,0.08)" }}>
-          <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
-          <p style={{ color: "#7E2930", fontWeight: "700", fontSize: "14px" }}>{formatVND(payload[0].value)}</p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   const periodOptions: { key: PeriodType; label: string }[] = [
     { key: "DAY", label: "Theo Ngày" },

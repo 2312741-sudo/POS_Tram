@@ -38,7 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     _fb.tablesStream().listen((t) {
       if (mounted) setState(() => _tables = t);
-    });
+    }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
     _fb.onlineOrdersStream().listen((o) {
       if (mounted) setState(() => _onlineOrders = o);
     });

@@ -72,16 +72,19 @@ const docTypeLabels: Record<string, string> = {
 };
 
 export default function InventoryReportPage() {
-  const { currentStoreCode } = useDashboardData();
-  const targetStoreCode = currentStoreCode === "ALL" ? "TRAM01" : currentStoreCode;
+  const { stores, currentStoreCode } = useDashboardData();
+  // Ở chế độ "ALL" dùng chi nhánh đầu tiên thực tế (không hardcode TRAM01)
+  const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "") : currentStoreCode;
 
-  const [loading, setLoading] = useState(true);
+  // Mã chi nhánh đã nạp xong catalog — loading được suy ra, không setState đồng bộ trong effect
+  const [loadedStoreCode, setLoadedStoreCode] = useState<string | null>(null);
+  const loading = !!targetStoreCode && loadedStoreCode !== targetStoreCode;
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [stockBalances, setStockBalances] = useState<StockBalanceItem[]>([]);
   const [stockEvents, setStockEvents] = useState<StockEventItem[]>([]);
 
   useEffect(() => {
-    setLoading(true);
+    if (!targetStoreCode) return;
     const unsubs: (() => void)[] = [];
 
     // Catalog Items
@@ -135,7 +138,7 @@ export default function InventoryReportPage() {
       // Sort desc by eventId (which usually contains timestamp) or createdAt
       evts.sort((a, b) => b.eventId.localeCompare(a.eventId));
       setStockEvents(evts.slice(0, 50));
-      setLoading(false);
+      setLoadedStoreCode(targetStoreCode);
     }));
 
     return () => unsubs.forEach((u) => u());
@@ -152,7 +155,7 @@ export default function InventoryReportPage() {
     let tc = 0;
     let lc = 0;
     let oc = 0;
-    const alts: any[] = [];
+    const alts: { item: CatalogItem; balance: StockBalanceItem; ratio: number; missing: number }[] = [];
 
     stockBalances.forEach((bal) => {
       const item = catalogMap[bal.itemId];
@@ -175,6 +178,13 @@ export default function InventoryReportPage() {
 
   if (loading) {
     return <div style={{ padding: "60px", textAlign: "center", color: "#999" }}>⏳ Đang tải báo cáo...</div>;
+  }
+
+  // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
+  if (!targetStoreCode) {
+    return (
+      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+    );
   }
 
   return (

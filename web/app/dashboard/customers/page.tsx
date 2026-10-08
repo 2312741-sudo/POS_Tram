@@ -35,6 +35,98 @@ export interface KmtCustomer {
   soDonDaMua?: number;
 }
 
+interface PointConfig {
+  pointRedeemRate?: number;
+  pointEarnRate?: number;
+}
+
+// Đọc cấu hình quy đổi điểm từ store_info (không setState — để effect/handler tự áp dụng)
+async function fetchPointConfig(): Promise<PointConfig> {
+  try {
+    const snap = await get(ref(db, "store_info"));
+    if (snap.exists()) {
+      const val = snap.val();
+      return {
+        pointRedeemRate: val.pointRedeemRate != null ? Number(val.pointRedeemRate) : undefined,
+        pointEarnRate: val.pointEarnRate != null ? Number(val.pointEarnRate) : undefined,
+      };
+    }
+  } catch (e) {
+    console.warn("Could not load point config from store_info:", e);
+  }
+  return {};
+}
+
+// Fetch all customers from Firestore kmt_customers with RTDB fallback
+async function fetchCustomerList(): Promise<KmtCustomer[]> {
+  const map = new Map<string, KmtCustomer>();
+
+  // 1. Fetch from Firestore collection kmt_customers
+  try {
+    const colRef = collection(firestore, "kmt_customers");
+    const snap = await getDocs(colRef);
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const phone = String(data.so_dien_thoai || data.phone || docSnap.id || "").trim();
+      const code = String(data.ma_khach_hang || data.customer_code || docSnap.id || "").trim();
+      const name = String(data.ho_ten || data.fullName || data.name || "Khách hàng KMT").trim();
+      const points = Number(data.diem_hien_tai ?? data.current_points ?? data.points ?? 0);
+      const tier = String(data.hang_thanh_vien || data.rank || (points >= 500 ? "Kim Cương" : points >= 200 ? "Vàng" : points >= 50 ? "Bạc" : "Thành viên"));
+      const created = data.ngay_tao || data.createdAt ? new Date(data.ngay_tao || data.createdAt).toLocaleDateString("vi-VN") : undefined;
+
+      if (phone || code) {
+        const key = phone || code;
+        map.set(key, {
+          id: docSnap.id,
+          soDienThoai: phone,
+          maKhachHang: code,
+          hoTen: name,
+          diemHienTai: points,
+          hangThanhVien: tier,
+          ngayTao: created,
+          tongChiTieu: Number(data.tong_chi_tieu || 0),
+          soDonDaMua: Number(data.so_don || 0),
+        });
+      }
+    });
+  } catch (err) {
+    console.warn("Firestore kmt_customers fetch fallback to RTDB:", err);
+  }
+
+  // 2. Fetch from RTDB customers fallback
+  try {
+    const rtdbSnap = await get(ref(db, "customers"));
+    if (rtdbSnap.exists()) {
+      const val = rtdbSnap.val();
+      if (typeof val === "object" && val !== null) {
+        Object.entries(val as Record<string, Record<string, unknown>>).forEach(([k, v]) => {
+          const phone = String(v.phone || v.so_dien_thoai || k).trim();
+          const code = String(v.customerCode || v.ma_khach_hang || k).trim();
+          const key = phone || code;
+          if (!map.has(key)) {
+            const pts = Number(v.currentPoints ?? v.diem_hien_tai ?? 0);
+            map.set(key, {
+              id: k,
+              soDienThoai: phone,
+              maKhachHang: code,
+              hoTen: String(v.fullName || v.ho_ten || "Khách lẻ"),
+              diemHienTai: pts,
+              hangThanhVien: String(v.tier || (pts >= 500 ? "Kim Cương" : pts >= 200 ? "Vàng" : pts >= 50 ? "Bạc" : "Thành viên")),
+              ngayTao: v.createdAt ? new Date(v.createdAt as string | number).toLocaleDateString("vi-VN") : undefined,
+              tongChiTieu: Number(v.totalSpent || 0),
+              soDonDaMua: Number(v.orderCount || 0),
+            });
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("RTDB customers fetch error:", e);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.diemHienTai - a.diemHienTai);
+}
+
 export default function CustomersPage() {
   const { user } = useAuth();
   const { stores, currentStoreCode } = useDashboardData();
@@ -61,102 +153,33 @@ export default function CustomersPage() {
   }, [user]);
 
   // Load point config from store info
-  const loadPointConfig = useCallback(async () => {
-    try {
-      const snap = await get(ref(db, "store_info"));
-      if (snap.exists()) {
-        const val = snap.val();
-        if (val.pointRedeemRate != null) {
-          setPointRedeemRate(Number(val.pointRedeemRate));
-          setEditingRedeemRate(String(val.pointRedeemRate));
-        }
-        if (val.pointEarnRate != null) {
-          setPointEarnRate(Number(val.pointEarnRate));
-          setEditingEarnRate(String(val.pointEarnRate));
-        }
-      }
-    } catch (e) {
-      console.warn("Could not load point config from store_info:", e);
+  const applyPointConfig = useCallback((cfg: PointConfig) => {
+    if (cfg.pointRedeemRate != null) {
+      setPointRedeemRate(cfg.pointRedeemRate);
+      setEditingRedeemRate(String(cfg.pointRedeemRate));
+    }
+    if (cfg.pointEarnRate != null) {
+      setPointEarnRate(cfg.pointEarnRate);
+      setEditingEarnRate(String(cfg.pointEarnRate));
     }
   }, []);
 
-  // Fetch all customers from Firestore kmt_customers with RTDB fallback
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    const map = new Map<string, KmtCustomer>();
-
-    // 1. Fetch from Firestore collection kmt_customers
-    try {
-      const colRef = collection(firestore, "kmt_customers");
-      const snap = await getDocs(colRef);
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const phone = String(data.so_dien_thoai || data.phone || docSnap.id || "").trim();
-        const code = String(data.ma_khach_hang || data.customer_code || docSnap.id || "").trim();
-        const name = String(data.ho_ten || data.fullName || data.name || "Khách hàng KMT").trim();
-        const points = Number(data.diem_hien_tai ?? data.current_points ?? data.points ?? 0);
-        const tier = String(data.hang_thanh_vien || data.rank || (points >= 500 ? "Kim Cương" : points >= 200 ? "Vàng" : points >= 50 ? "Bạc" : "Thành viên"));
-        const created = data.ngay_tao || data.createdAt ? new Date(data.ngay_tao || data.createdAt).toLocaleDateString("vi-VN") : undefined;
-
-        if (phone || code) {
-          const key = phone || code;
-          map.set(key, {
-            id: docSnap.id,
-            soDienThoai: phone,
-            maKhachHang: code,
-            hoTen: name,
-            diemHienTai: points,
-            hangThanhVien: tier,
-            ngayTao: created,
-            tongChiTieu: Number(data.tong_chi_tieu || 0),
-            soDonDaMua: Number(data.so_don || 0),
-          });
-        }
-      });
-    } catch (err) {
-      console.warn("Firestore kmt_customers fetch fallback to RTDB:", err);
-    }
-
-    // 2. Fetch from RTDB customers fallback
-    try {
-      const rtdbSnap = await get(ref(db, "customers"));
-      if (rtdbSnap.exists()) {
-        const val = rtdbSnap.val();
-        if (typeof val === "object" && val !== null) {
-          Object.entries(val).forEach(([k, v]: [string, any]) => {
-            const phone = String(v.phone || v.so_dien_thoai || k).trim();
-            const code = String(v.customerCode || v.ma_khach_hang || k).trim();
-            const key = phone || code;
-            if (!map.has(key)) {
-              const pts = Number(v.currentPoints ?? v.diem_hien_tai ?? 0);
-              map.set(key, {
-                id: k,
-                soDienThoai: phone,
-                maKhachHang: code,
-                hoTen: String(v.fullName || v.ho_ten || "Khách lẻ"),
-                diemHienTai: pts,
-                hangThanhVien: String(v.tier || (pts >= 500 ? "Kim Cương" : pts >= 200 ? "Vàng" : pts >= 50 ? "Bạc" : "Thành viên")),
-                ngayTao: v.createdAt ? new Date(v.createdAt).toLocaleDateString("vi-VN") : undefined,
-                tongChiTieu: Number(v.totalSpent || 0),
-                soDonDaMua: Number(v.orderCount || 0),
-              });
-            }
-          });
-        }
-      }
-    } catch (e) {
-      console.warn("RTDB customers fetch error:", e);
-    }
-
-    const list = Array.from(map.values()).sort((a, b) => b.diemHienTai - a.diemHienTai);
-    setCustomers(list);
-    setLoading(false);
+  const reloadAll = useCallback(() => {
+    return Promise.all([fetchPointConfig(), fetchCustomerList()]);
   }, []);
 
   useEffect(() => {
-    loadPointConfig();
-    fetchCustomers();
-  }, [loadPointConfig, fetchCustomers]);
+    let active = true;
+    reloadAll().then(([cfg, list]) => {
+      if (!active) return;
+      applyPointConfig(cfg);
+      setCustomers(list);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [reloadAll, applyPointConfig]);
 
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
@@ -266,8 +289,12 @@ export default function CustomersPage() {
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button
               onClick={() => {
-                loadPointConfig();
-                fetchCustomers();
+                setLoading(true);
+                reloadAll().then(([cfg, list]) => {
+                  applyPointConfig(cfg);
+                  setCustomers(list);
+                  setLoading(false);
+                });
               }}
               style={{
                 display: "flex",

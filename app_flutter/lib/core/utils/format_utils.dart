@@ -1,5 +1,6 @@
 // lib/core/utils/format_utils.dart
 import 'package:intl/intl.dart';
+import '../domain/order_integrity.dart';
 
 class FormatUtils {
   static final _currencyFormat = NumberFormat('#,###', 'vi_VN');
@@ -38,20 +39,16 @@ class FormatUtils {
     return DateFormat('dd/MM/yyyy').format(dt);
   }
 
-  /// Mã hóa đơn thanh toán chính thức (HD-yyMMdd-HHmmss)
+  /// Mã hóa đơn TẠM (HD-yyMMdd-HHmmss-XXXX, có hậu tố ngẫu nhiên để 2 máy không trùng).
+  /// Mã chính thức tuần tự HD-yyMMdd-NNNN được cấp khi thanh toán
+  /// (OrderRepository.allocateBillCode).
   static String billCode([String prefix = 'HD']) {
-    final now = DateTime.now();
-    final dateStr = DateFormat('yyMMdd').format(now);
-    final timeStr = DateFormat('HHmmss').format(now);
-    return '$prefix-$dateStr-$timeStr';
+    return BillCodeGenerator.fallback(at: DateTime.now(), prefix: prefix);
   }
 
-  /// Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
+  /// Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss-XXXX)
   static String orderCode([String prefix = 'OD']) {
-    final now = DateTime.now();
-    final dateStr = DateFormat('yyMMdd').format(now);
-    final timeStr = DateFormat('HHmmss').format(now);
-    return '$prefix-$dateStr-$timeStr';
+    return BillCodeGenerator.fallback(at: DateTime.now(), prefix: prefix);
   }
 
   static String roleLabel(String role) {

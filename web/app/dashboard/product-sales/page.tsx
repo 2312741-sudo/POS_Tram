@@ -129,7 +129,8 @@ export default function ProductSalesReportPage() {
     const map: Record<string | number, ProductItem> = {};
     products.forEach((p) => {
       if (p.id != null) map[p.id] = p;
-      if ((p as any).productId != null) map[(p as any).productId] = p;
+      const pid = (p as { productId?: string | number }).productId;
+      if (pid != null) map[pid] = p;
       if (p.name) map[p.name] = p;
     });
     return map;
@@ -298,7 +299,7 @@ export default function ProductSalesReportPage() {
               <Calendar size={16} color="#7E2930" />
               <select
                 value={dateRange}
-                onChange={(e) => setDateRange(e.target.value as any)}
+                onChange={(e) => setDateRange(e.target.value as typeof dateRange)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -394,7 +395,7 @@ export default function ProductSalesReportPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -531,7 +532,7 @@ export default function ProductSalesReportPage() {
               {/* Sort by */}
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",

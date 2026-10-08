@@ -129,7 +129,8 @@ export default function EndOfDayReportPage() {
     const map: Record<string | number, ProductItem> = {};
     products.forEach((p) => {
       if (p.id != null) map[p.id] = p;
-      if ((p as any).productId != null) map[(p as any).productId] = p;
+      const pid = (p as { productId?: string | number }).productId;
+      if (pid != null) map[pid] = p;
       if (p.name) map[p.name] = p;
     });
     return map;
@@ -373,7 +374,7 @@ export default function EndOfDayReportPage() {
               <Calendar size={16} color="#7E2930" />
               <select
                 value={dateRange}
-                onChange={(e) => setDateRange(e.target.value as any)}
+                onChange={(e) => setDateRange(e.target.value as typeof dateRange)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -470,7 +471,7 @@ export default function EndOfDayReportPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 style={{
                   padding: "10px 20px",
                   fontSize: "14px",
@@ -850,7 +851,7 @@ export default function EndOfDayReportPage() {
 
               <select
                 value={productSortBy}
-                onChange={(e) => setProductSortBy(e.target.value as any)}
+                onChange={(e) => setProductSortBy(e.target.value as typeof productSortBy)}
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",

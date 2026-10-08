@@ -756,8 +756,10 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         targetBranches = [_inventoryService.currentStoreCode];
       }
 
+      // Không có chi nhánh hợp lệ -> dừng lại, không ghi mặc định vào chi nhánh khác
+      targetBranches = targetBranches.where((c) => c.trim().isNotEmpty).toList();
       if (targetBranches.isEmpty) {
-        targetBranches = ['TRAM01'];
+        throw Exception('Không xác định được chi nhánh hiện tại để nhập kho');
       }
 
       for (final branch in targetBranches) {

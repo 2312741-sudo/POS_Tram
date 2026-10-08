@@ -27,23 +27,15 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
   final _auth = AuthService();
   final _fb = FirebaseService();
   late int _currentIndex;
-  List<StoreInfoModel> _stores = [
-    StoreInfoModel(
-      storeCode: 'TRAM01',
-      storeName: 'POS Trạm - Trụ sở 01 (Đà Lạt)',
-      address: 'Số 123 Đường Ba Tháng Tư, Phường 3, TP. Đà Lạt',
-    ),
-    StoreInfoModel(
-      storeCode: 'TRAM02',
-      storeName: 'POS Trạm - Chi nhánh 02 (Sài Gòn)',
-      address: 'Số 456 Nguyễn Thị Minh Khai, Quận 1, TP. Hồ Chí Minh',
-    ),
-  ];
+  // Danh sách chi nhánh nạp từ Firebase; khởi tạo bằng chi nhánh đang đăng nhập
+  List<StoreInfoModel> _stores = [];
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
+    final current = _auth.currentStoreInfo;
+    if (current != null) _stores = [current];
     _loadStores();
   }
 

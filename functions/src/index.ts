@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import {
   canCallerManageUsers,
@@ -9,6 +10,14 @@ import {
   buildSyntheticEmail,
   UserProfile,
 } from "./permissions";
+import {
+  LoginAttemptRecord,
+  reserveAttempt,
+  applyFailure,
+  remainingLockSeconds,
+  buildLockoutMessage,
+  isInvalidCredentialError,
+} from "./loginLockout";
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -20,6 +29,14 @@ const db = admin.database();
 const auth = admin.auth();
 
 const FUNCTION_REGION = "asia-southeast1";
+
+/**
+ * Web API Key của project (không phải bí mật, nhưng KHÔNG hardcode trong mã nguồn).
+ * Khai báo trong functions/.env (WEB_API_KEY=...) hoặc nhập khi `firebase deploy` hỏi.
+ */
+const WEB_API_KEY = defineString("WEB_API_KEY", {
+  description: "Firebase Web API Key dùng để xác minh mật khẩu qua Identity Toolkit REST (signInWithPassword)",
+});
 
 /**
  * 1. Hàm tạo tài khoản nhân viên (createStaffAccount)
@@ -269,6 +286,196 @@ export const setStaffDisabled = onCall(
     return {
       success: true,
       message: `${disabled ? "Khóa" : "Mở khóa"} tài khoản thành công.`,
+    };
+  }
+);
+
+
+/**
+ * Xác minh mật khẩu qua Identity Toolkit REST (signInWithPassword).
+ * Trả về uid nếu đúng, ném lỗi kèm mã lỗi REST nếu sai.
+ */
+async function verifyPasswordViaRest(email: string, password: string): Promise<{ ok: true; uid: string } | { ok: false; code: string }> {
+  const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  const base = emulatorHost
+    ? `http://${emulatorHost}/identitytoolkit.googleapis.com`
+    : "https://identitytoolkit.googleapis.com";
+  const apiKey = WEB_API_KEY.value() || (emulatorHost ? "fake-api-key" : "");
+  if (!apiKey) {
+    throw new HttpsError("failed-precondition", "Máy chủ chưa cấu hình WEB_API_KEY cho chức năng đăng nhập.");
+  }
+
+  const resp = await fetch(`${base}/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, returnSecureToken: false }),
+  });
+  const body = (await resp.json().catch(() => ({}))) as { localId?: string; error?: { message?: string } };
+  if (resp.ok && body.localId) {
+    return { ok: true, uid: body.localId };
+  }
+  return { ok: false, code: body.error?.message || `HTTP_${resp.status}` };
+}
+
+/**
+ * 4. Đăng nhập nhân viên có khóa tạm chống brute-force (staffSignIn)
+ *
+ * - Kiểm tra & ghi bộ đếm sai tại stores/{storeCode}/login_attempts/{username} (chỉ Admin SDK truy cập được).
+ * - Xác minh mật khẩu phía máy chủ qua Identity Toolkit REST.
+ * - Thành công: trả về Custom Token để client gọi signInWithCustomToken.
+ * - Sai {MAX_FAILED_ATTEMPTS} lần liên tiếp: khóa tạm 15 phút (mã lỗi resource-exhausted).
+ * - Không tạo bản ghi đếm cho username không tồn tại (tránh rác dữ liệu / dò tài khoản hàng loạt).
+ */
+export const staffSignIn = onCall(
+  { region: FUNCTION_REGION },
+  async (request) => {
+    const { storeCode, username, password } = (request.data || {}) as {
+      storeCode?: unknown;
+      username?: unknown;
+      password?: unknown;
+    };
+
+    if (typeof storeCode !== "string" || typeof username !== "string" || typeof password !== "string") {
+      throw new HttpsError("invalid-argument", "Thiếu mã cửa hàng, tên đăng nhập hoặc mật khẩu.");
+    }
+
+    const cleanStoreCode = storeCode.trim().toUpperCase();
+    const cleanUser = normalizeUsername(username);
+    if (!/^[A-Z0-9_-]{2,30}$/.test(cleanStoreCode)) {
+      throw new HttpsError("invalid-argument", "Mã cửa hàng không hợp lệ.");
+    }
+    if (!/^[a-z0-9_-]{3,30}$/.test(cleanUser)) {
+      throw new HttpsError("invalid-argument", "Tên đăng nhập không hợp lệ.");
+    }
+    if (!password || password.length > 256) {
+      throw new HttpsError("invalid-argument", "Mật khẩu không hợp lệ.");
+    }
+
+    const INVALID_MSG = "Sai tài khoản hoặc mật khẩu.";
+    const email = buildSyntheticEmail(cleanUser, cleanStoreCode);
+
+    // 1. Tài khoản không tồn tại -> trả lỗi chung, KHÔNG ghi bộ đếm
+    try {
+      await auth.getUserByEmail(email);
+    } catch (e: unknown) {
+      if ((e as { code?: string })?.code === "auth/user-not-found") {
+        throw new HttpsError("unauthenticated", INVALID_MSG);
+      }
+      throw new HttpsError("internal", "Không thể kiểm tra tài khoản. Vui lòng thử lại sau.");
+    }
+
+    // 2. Giữ chỗ 1 lượt thử bằng transaction (an toàn khi gửi song song)
+    const attemptRef = db.ref(`stores/${cleanStoreCode}/login_attempts/${cleanUser}`);
+    let allowed = false;
+    const reserveTx = await attemptRef.transaction((current: LoginAttemptRecord | null) => {
+      const r = reserveAttempt(current, Date.now());
+      allowed = r.allowed;
+      return r.next;
+    });
+    const afterReserve = (reserveTx.snapshot.val() || null) as LoginAttemptRecord | null;
+    if (!allowed) {
+      const remaining = Math.max(remainingLockSeconds(afterReserve, Date.now()), 1);
+      throw new HttpsError("resource-exhausted", buildLockoutMessage(remaining), {
+        reason: "LOCKED_OUT",
+        remainingSeconds: remaining,
+        lockedUntil: afterReserve?.lockedUntil ?? null,
+      });
+    }
+
+    // 3. Xác minh mật khẩu
+    const result = await verifyPasswordViaRest(email, password).catch((e: unknown) => {
+      if (e instanceof HttpsError) throw e;
+      throw new HttpsError("unavailable", "Không thể kết nối máy chủ xác thực. Vui lòng thử lại.");
+    });
+
+    if (!result.ok) {
+      if (result.code.startsWith("USER_DISABLED")) {
+        throw new HttpsError("permission-denied", "Tài khoản đã bị tạm khóa bởi chủ quán.");
+      }
+      if (!isInvalidCredentialError(result.code)) {
+        // Lỗi hạ tầng (quota, cấu hình...) -> trả lại lượt đã giữ chỗ
+        await attemptRef
+          .transaction((current: LoginAttemptRecord | null) => {
+            if (!current || typeof current.failedCount !== "number") return current;
+            return { ...current, failedCount: Math.max(current.failedCount - 1, 0) };
+          })
+          .catch(() => undefined);
+        if (result.code.startsWith("TOO_MANY_ATTEMPTS")) {
+          throw new HttpsError("resource-exhausted", "Hệ thống đang tạm hạn chế đăng nhập do quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.");
+        }
+        throw new HttpsError("internal", "Đăng nhập thất bại do lỗi máy chủ xác thực.");
+      }
+
+      let justLocked = false;
+      let lockedRec: LoginAttemptRecord | null = null;
+      await attemptRef.transaction((current: LoginAttemptRecord | null) => {
+        const r = applyFailure(current, Date.now());
+        justLocked = r.justLocked;
+        lockedRec = r.next;
+        return r.next;
+      });
+
+      if (justLocked) {
+        const now = Date.now();
+        const logId = `LOG_${now}_${Math.random().toString(36).substring(2, 7)}`;
+        await db
+          .ref(`stores/${cleanStoreCode}/audit_logs/${logId}`)
+          .set({
+            timestamp: now,
+            action: "LOGIN_ATTEMPT_LOCKED_OUT",
+            username: cleanUser,
+            userFullName: cleanUser,
+            userRole: "UNKNOWN",
+            targetType: "AUTH",
+            targetId: cleanUser,
+            isSuspicious: true,
+            details: `Tài khoản @${cleanUser} bị khóa tạm 15 phút do nhập sai mật khẩu nhiều lần liên tiếp`,
+          })
+          .catch(() => undefined);
+        const remaining = Math.max(remainingLockSeconds(lockedRec, now), 1);
+        throw new HttpsError("resource-exhausted", buildLockoutMessage(remaining), {
+          reason: "LOCKED_OUT",
+          remainingSeconds: remaining,
+        });
+      }
+      throw new HttpsError("unauthenticated", INVALID_MSG);
+    }
+
+    // 4. Mật khẩu đúng -> xóa bộ đếm
+    const uid = result.uid;
+    await attemptRef.remove().catch(() => undefined);
+
+    // 5. Kiểm tra hồ sơ & quyền thuộc quán (userIndex chỉ Admin SDK ghi được)
+    const [profileSnap, indexSnap] = await Promise.all([
+      db.ref(`stores/${cleanStoreCode}/users/${uid}`).get(),
+      db.ref(`userIndex/${uid}/${cleanStoreCode}`).get(),
+    ]);
+    if (!profileSnap.exists() || indexSnap.val() !== true) {
+      throw new HttpsError(
+        "permission-denied",
+        `Không tìm thấy thông tin tài khoản nhân viên tại chi nhánh ${cleanStoreCode}. Vui lòng liên hệ Quản lý.`
+      );
+    }
+    const profile = profileSnap.val() as UserProfile;
+    if (profile.isActive === false) {
+      throw new HttpsError("permission-denied", "Tài khoản đã bị tạm khóa bởi chủ quán.");
+    }
+
+    // 6. Cấp Custom Token
+    let token: string;
+    try {
+      token = await auth.createCustomToken(uid);
+    } catch {
+      // Thường do service account của Functions thiếu quyền iam.serviceAccounts.signBlob
+      throw new HttpsError("internal", "Máy chủ chưa đủ quyền cấp phiên đăng nhập (Service Account Token Creator).");
+    }
+    await db.ref(`stores/${cleanStoreCode}/users/${uid}/lastLoginAt`).set(Date.now()).catch(() => undefined);
+
+    return {
+      success: true,
+      token,
+      uid,
+      mustChangePassword: profile.mustChangePassword === true,
     };
   }
 );

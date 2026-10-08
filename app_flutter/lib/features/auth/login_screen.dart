@@ -19,7 +19,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _auth = AuthService();
   final _fb = FirebaseService();
-  final _storeCodeCtrl = TextEditingController(text: 'TRAM01');
+  // Để trống lần đầu; mã chi nhánh dùng lần trước được nạp lại trong _initSavedStoreCode()
+  final _storeCodeCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
@@ -34,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    // Cập nhật lại chip chi nhánh đang chọn khi nhân viên tự gõ mã
+    _storeCodeCtrl.addListener(_onStoreCodeChanged);
     _initSavedStoreCode();
     _checkAutoLogin();
     _loadStores();
@@ -42,10 +45,21 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _lockoutTimer?.cancel();
+    _storeCodeCtrl.removeListener(_onStoreCodeChanged);
     _storeCodeCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
+  }
+
+  void _onStoreCodeChanged() {
+    if (mounted && _availableStores.isNotEmpty) setState(() {});
+  }
+
+  String _formatLockout(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return m > 0 ? '$m phút ${s.toString().padLeft(2, '0')} giây' : '$s giây';
   }
 
   Future<void> _initSavedStoreCode() async {
@@ -121,12 +135,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isLoading) return; // Chặn bấm đúp / Enter liên tục
     final store = _storeCodeCtrl.text.trim();
     final username = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text;
 
     if (store.isEmpty || username.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Vui lòng nhập đầy đủ Mã cửa hàng, Tên đăng nhập và Mật khẩu.');
+      setState(() => _errorMessage =
+          'Vui lòng nhập đầy đủ Mã cửa hàng, Tên đăng nhập và Mật khẩu.');
       return;
     }
 
@@ -153,15 +169,16 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         setState(() => _errorMessage = e.message);
-        // Kiểm tra xem có phải lỗi khóa tạm hay không để đếm ngược
-        final remaining = await _auth.getLockoutRemainingSeconds(store, username);
+        // Máy chủ (staffSignIn) trả về số giây khóa tạm còn lại nếu tài khoản bị khóa
+        final remaining = e.lockoutSeconds;
         if (remaining != null && remaining > 0) {
           _startLockoutCountdown(remaining);
         }
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
+        setState(
+            () => _errorMessage = e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -170,243 +187,308 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLockedOut = _lockoutSecondsRemaining != null && _lockoutSecondsRemaining! > 0;
+    final isLockedOut =
+        _lockoutSecondsRemaining != null && _lockoutSecondsRemaining! > 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Card(
-              elevation: 4,
-              shadowColor: AppColors.shadow,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: const BorderSide(color: AppColors.border, width: 1),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // App Logo
-                    Container(
-                      width: 88,
-                      height: 88,
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.shadow,
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                        border: Border.all(color: AppColors.border, width: 1.5),
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.asset(
-                            'assets/images/logo.jpg',
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Card(
+                elevation: 4,
+                shadowColor: AppColors.shadow,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: const BorderSide(color: AppColors.border, width: 1),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // App Logo
+                      Container(
+                        width: 88,
+                        height: 88,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadow,
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                          border:
+                              Border.all(color: AppColors.border, width: 1.5),
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/logo.png',
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.primaryLight,
-                              child: const Icon(Icons.restaurant_menu, size: 40, color: AppColors.primary),
+                            errorBuilder: (_, __, ___) => Image.asset(
+                              'assets/images/logo.jpg',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.primaryLight,
+                                child: const Icon(Icons.restaurant_menu,
+                                    size: 40, color: AppColors.primary),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'POS TRẠM',
-                      style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: 0.5),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Hệ Thống Bán Hàng & Quản Lý Chi Nhánh',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                      Text(
+                        'POS TRẠM',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Hệ thống bán hàng & quản lý chi nhánh',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Error or Lockout Banner
-                    if (isLockedOut) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningLight,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.timer_outlined, color: AppColors.warning, size: 22),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Tài khoản đang bị khóa tạm. Vui lòng thử lại sau ${(_lockoutSecondsRemaining! ~/ 60)} phút ${(_lockoutSecondsRemaining! % 60)} giây.',
-                                style: GoogleFonts.beVietnamPro(color: AppColors.warningInk, fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.dangerLight,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMessage!,
-                                style: GoogleFonts.beVietnamPro(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w500),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // Store Code Input
-                    TextField(
-                      controller: _storeCodeCtrl,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        labelText: 'Mã Cửa Hàng (Store Code) *',
-                        prefixIcon: Icon(Icons.storefront_outlined),
-                        hintText: 'VD: TRAM01, TRAM02',
-                      ),
-                    ),
-                    if (_availableStores.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: _availableStores.map((s) {
-                          final isSelected = _storeCodeCtrl.text.trim().toUpperCase() == s.storeCode;
-                          return ChoiceChip(
-                            label: Text(
-                              '${s.storeCode} (${s.storeName.split("-").last.trim()})',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
-                              ),
-                            ),
-                            selected: isSelected,
-                            selectedColor: AppColors.primary,
-                            onSelected: (_) {
-                              setState(() {
-                                _storeCodeCtrl.text = s.storeCode;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-
-                    // Username Input
-                    TextField(
-                      controller: _usernameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Tên đăng nhập *',
-                        prefixIcon: Icon(Icons.person_outline),
-                        hintText: 'VD: thungan1, ql_kho...',
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Password Input
-                    TextField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Mật khẩu *',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                            color: AppColors.textSecondary,
+                      // Error or Lockout Banner
+                      if (isLockedOut) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.warningLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.4)),
                           ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.timer_outlined,
+                                  color: AppColors.warning, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Tài khoản đang bị khóa tạm. Vui lòng thử lại sau ${_formatLockout(_lockoutSecondsRemaining!)}.',
+                                  style: GoogleFonts.beVietnamPro(
+                                      color: AppColors.warningInk,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      onSubmitted: (_) => isLockedOut ? null : _handleLogin(),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Remember Store Option Checkbox
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _rememberStore,
-                          activeColor: AppColors.primary,
-                          onChanged: (val) {
-                            setState(() => _rememberStore = val ?? true);
-                          },
-                        ),
-                        Text(
-                          'Ghi nhớ mã cửa hàng',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textPrimary),
+                      ] else if (_errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.dangerLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: AppColors.danger.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  color: AppColors.danger, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: GoogleFonts.beVietnamPro(
+                                      color: AppColors.danger,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
 
-                    // Login Button (Red Gradient)
-                    Container(
-                      width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: isLockedOut ? null : AppColors.primaryGradient,
-                        color: isLockedOut ? Colors.grey.shade400 : null,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: isLockedOut
-                            ? null
-                            : [
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.4),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                      ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      // Store Code Input
+                      TextField(
+                        controller: _storeCodeCtrl,
+                        textCapitalization: TextCapitalization.characters,
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Mã cửa hàng *',
+                          prefixIcon: Icon(Icons.storefront_outlined),
+                          hintText: 'VD: TRAM01, TRAM02',
                         ),
-                        onPressed: (_isLoading || isLockedOut) ? null : _handleLogin,
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                              )
-                            : Text(
-                                isLockedOut ? 'TÀI KHOẢN ĐANG KHÓA TẠM' : 'ĐĂNG NHẬP',
-                                style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
                       ),
-                    ),
-                  ],
+                      if (_availableStores.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: _availableStores.map((s) {
+                            final isSelected =
+                                _storeCodeCtrl.text.trim().toUpperCase() ==
+                                    s.storeCode;
+                            return ChoiceChip(
+                              showCheckmark: false,
+                              visualDensity: VisualDensity.compact,
+                              label: Text(
+                                '${s.storeCode} (${s.storeName.split("-").last.trim()})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                              selected: isSelected,
+                              selectedColor: AppColors.primary,
+                              onSelected: (_) {
+                                setState(() {
+                                  _storeCodeCtrl.text = s.storeCode;
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+
+                      // Username Input (gói trong AutofillGroup để trình quản lý mật khẩu gợi ý)
+                      TextField(
+                        controller: _usernameCtrl,
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        autofillHints: const [AutofillHints.username],
+                        decoration: const InputDecoration(
+                          labelText: 'Tên đăng nhập *',
+                          prefixIcon: Icon(Icons.person_outline),
+                          hintText: 'VD: thungan1, ql_kho...',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Password Input
+                      TextField(
+                        controller: _passwordCtrl,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        decoration: InputDecoration(
+                          labelText: 'Mật khẩu *',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Hiện mật khẩu'
+                                : 'Ẩn mật khẩu',
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                        onSubmitted: (_) {
+                          if (!isLockedOut) _handleLogin();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Remember Store Option Checkbox
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () =>
+                            setState(() => _rememberStore = !_rememberStore),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: _rememberStore,
+                              activeColor: AppColors.primary,
+                              onChanged: (val) {
+                                setState(() => _rememberStore = val ?? true);
+                              },
+                            ),
+                            Flexible(
+                              child: Text(
+                                'Ghi nhớ mã cửa hàng',
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13, color: AppColors.textPrimary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Login Button (Red Gradient)
+                      Container(
+                        width: double.infinity,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient:
+                              isLockedOut ? null : AppColors.primaryGradient,
+                          color: isLockedOut ? AppColors.textDisabled : null,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: isLockedOut
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                        ),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            disabledBackgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed:
+                              (_isLoading || isLockedOut) ? null : _handleLogin,
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2.5, color: Colors.white),
+                                )
+                              : Text(
+                                  isLockedOut
+                                      ? 'Đang khóa • ${_formatLockout(_lockoutSecondsRemaining!)}'
+                                      : 'ĐĂNG NHẬP',
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

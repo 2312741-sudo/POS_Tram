@@ -35,6 +35,10 @@ yarn-error.log*
 .dart_tool/
 app_flutter/.dart_tool/
 app_flutter/build/
+tools/tram_payment_bot/.dart_tool/
+tools/tram_payment_bot/build/
+tools/tram_payment_bot/android/.gradle/
+tools/tram_payment_bot/android/local.properties
 app_flutter/.flutter-plugins
 app_flutter/.flutter-plugins-dependencies
 app_flutter/.pub-cache/

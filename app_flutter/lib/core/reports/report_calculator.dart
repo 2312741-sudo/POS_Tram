@@ -743,8 +743,8 @@ class ReportCalculator {
     Map<int, ProductModel>? productsMap,
     Map<String, int>? toppingCosts,
     String? dateStr,
-    String storeCode = 'TRAM01',
-    String storeName = 'POS Trạm - Trụ sở 01 (Đà Lạt)',
+    String storeCode = '',
+    String storeName = '',
   }) {
     final overview = calculateOverviewReport(
       bills,

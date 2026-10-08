@@ -1320,7 +1320,9 @@ export function exportUsers(data: Array<Record<string, unknown>>) {
   downloadWorkbook(wb, `NhanVien_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }
 
-export function exportProducts(data: Array<any>) {
+export function exportProducts(
+  data: Array<{ name?: string; category?: string; price?: number; costPrice?: number; unit?: string }>
+) {
   const rows = data.map((item) => ({
     "Tên sản phẩm": item.name || "",
     "Danh mục": item.category || "",

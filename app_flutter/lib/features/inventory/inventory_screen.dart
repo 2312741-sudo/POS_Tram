@@ -710,7 +710,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
       );
       final items = await _inventoryService.getCatalogItems();
       final balances = await _inventoryService.getStockBalances();
-      final currentStore = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'Chi nhánh trung tâm');
+      final currentStore = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm - ${_auth.currentStoreCode}');
       if (mounted) Navigator.of(context).pop();
 
       await InventoryExcelService.exportInventoryExcel(

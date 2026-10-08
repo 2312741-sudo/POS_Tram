@@ -27,6 +27,36 @@ interface StatCard {
 }
 
 import { useDashboardData } from "@/lib/data-context";
+import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
+
+// Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ReadonlyArray<{ value?: unknown }>;
+  label?: string | number;
+}
+
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
+  if (active && payload && payload.length) {
+    return (
+      <div
+        style={{
+          background: "#FFFFFF",
+          border: "1px solid #E6DEC8",
+          borderRadius: "10px",
+          padding: "10px 16px",
+          boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
+        }}
+      >
+        <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: "#7E2930", fontWeight: "800", fontSize: "15px" }}>
+          {formatVND(Number(payload[0].value || 0))}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function DashboardPage() {
   const { historyData, tables: tablesData, onlineOrders, loading: ctxLoading } = useDashboardData();
@@ -50,20 +80,9 @@ export default function DashboardPage() {
     .filter((t) => t.inUse && !t.mergedIntoTable)
     .reduce((sum, t) => {
       if (!t.currentOrderJson) return sum;
-      try {
-        const items = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
-        if (!Array.isArray(items)) return sum;
-        return sum + items.reduce((isum: number, it: any) => {
-          const qty = it.quantity || it.count || 1;
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          return isum + ((Number(it.price) || 0) + toppingSum) * qty;
-        }, 0);
-      } catch {
-        return sum;
-      }
+      // Cùng công thức với lúc thanh toán (size + topping - giảm giá dòng)
+      const { subTotal, itemDiscounts } = summarizeOrderLines(parseOrderJson(t.currentOrderJson));
+      return sum + Math.max(0, subTotal - itemDiscounts);
     }, 0);
 
   // 7-day revenue chart
@@ -87,8 +106,8 @@ export default function DashboardPage() {
   const productCountMap: { [key: string]: { name: string; count: number; total: number } } = {};
   historyData.forEach((order) => {
     if (order.items && Array.isArray(order.items)) {
-      order.items.forEach((item: any) => {
-        const key = item.productId || item.name;
+      order.items.forEach((item) => {
+        const key = String(item.productId || item.name);
         if (!productCountMap[key]) {
           productCountMap[key] = { name: item.name, count: 0, total: 0 };
         }
@@ -145,27 +164,6 @@ export default function DashboardPage() {
     },
   ];
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div
-          style={{
-            background: "#FFFFFF",
-            border: "1px solid #E6DEC8",
-            borderRadius: "10px",
-            padding: "10px 16px",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
-          }}
-        >
-          <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
-          <p style={{ color: "#7E2930", fontWeight: "800", fontSize: "15px" }}>
-            {formatVND(payload[0].value)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   if (loading) {
     return (

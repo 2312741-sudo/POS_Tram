@@ -3,7 +3,27 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { db, auth } from "./firebase";
 import { ref, onValue, query, limitToLast, set, update, remove, get, push } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
-import { deduplicateBills } from "./reports";
+import { deduplicateBills, mergeHistoryAndBills } from "./reports";
+import { generateBillCode } from "./bill-code";
+import { parseOrderJson, summarizeOrderLines } from "./order-math";
+import { errorMessage } from "./errors";
+
+/**
+ * Giá trị thô đọc từ RTDB snapshot. Dữ liệu do nhiều phiên bản Flutter/Web cũ ghi nên không có
+ * schema tĩnh; chỉ dùng ở lớp parse (processStoreDataMap / sanitizeHistoryOrder), nơi mọi trường
+ * đều được chuẩn hóa và gán mặc định trước khi đưa ra các kiểu đã định nghĩa bên dưới.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ranh giới parse dữ liệu RTDB không schema
+type RtdbNode = any;
+
+/** Đơn hàng online (stores/{code}/online_orders) */
+export interface OnlineOrderItem {
+  id: string;
+  storeCode?: string;
+  storeName?: string;
+  status?: string;
+  [key: string]: unknown;
+}
 
 export interface OrderActionLog {
   timestamp: number | string;
@@ -28,7 +48,7 @@ export interface OrderItem {
   selectedSize?: string;
   selectedSugar?: string;
   selectedIce?: string;
-  selectedToppings?: any[];
+  selectedToppings?: unknown[];
   toppingPrice?: number;
   sizeExtraPrice?: number;
   discountAmount?: number;
@@ -80,7 +100,12 @@ export interface HistoryOrder {
   mergedTableNames?: string[] | null;
   items?: OrderItem[];
   actionLogs?: OrderActionLog[];
-  [key: string]: any;
+  orderType?: string;
+  cancelReason?: string;
+  cancellationReason?: string;
+  cancelledAt?: number;
+  cancelledBy?: string;
+  [key: string]: unknown;
 }
 
 export interface TableItem {
@@ -95,7 +120,16 @@ export interface TableItem {
   currentOrderJson?: string;
   currentBillId?: string | null;
   currentOrderCode?: string | null;
-  [key: string]: any;
+  actionLogsJson?: string | null;
+  actionLogs?: OrderActionLog[];
+  orderStaff?: string;
+  mergedIntoTable?: string | null;
+  isReserved?: boolean;
+  reservationCustomer?: string;
+  reservationPhone?: string;
+  reservationTime?: string;
+  reservationDeposit?: number;
+  [key: string]: unknown;
 }
 
 export interface ProductItem {
@@ -134,7 +168,10 @@ export interface UserItem {
   isActive?: boolean;
   isRootOwner?: boolean;
   customPermissions?: string[];
-  [key: string]: any;
+  createdAt?: number;
+  lastLoginAt?: number | null;
+  mustChangePassword?: boolean;
+  [key: string]: unknown;
 }
 
 export interface AuditLogItem {
@@ -149,9 +186,9 @@ export interface AuditLogItem {
   targetType?: string;
   targetId?: string;
   isSuspicious?: boolean;
-  beforeState?: Record<string, any>;
-  afterState?: Record<string, any>;
-  [key: string]: any;
+  beforeState?: Record<string, unknown>;
+  afterState?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface StoreItem {
@@ -173,7 +210,7 @@ export interface StoreItem {
   inUseTables?: number;
   totalRevenue?: number;
   totalOrders?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CashShiftItem {
@@ -195,7 +232,8 @@ export interface CashShiftItem {
   difference?: number;
   status: "OPEN" | "CLOSED";
   notes?: string;
-  [key: string]: any;
+  startTime?: number;
+  [key: string]: unknown;
 }
 
 interface DashboardContextType {
@@ -215,7 +253,7 @@ interface DashboardContextType {
       staffName?: string;
       discountAmount?: number;
     }
-  ) => Promise<{ success: boolean; billId?: string; error?: string }>;
+  ) => Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }>;
   saveTable: (
     tableData: { id?: string; name: string; zone: string; inUse?: boolean },
     storeCode?: string
@@ -267,7 +305,7 @@ interface DashboardContextType {
   usersList: UserItem[];
   allUsers: UserItem[];
   auditLogs: AuditLogItem[];
-  onlineOrders: any[];
+  onlineOrders: OnlineOrderItem[];
   cashShifts: CashShiftItem[];
   loading: boolean;
   historyLoaded: boolean;
@@ -314,8 +352,35 @@ const DashboardContext = createContext<DashboardContextType>({
 });
 
 // Helper to strip heavy base64 strings from history items to optimize memory & render speed
-function sanitizeHistoryOrder(raw: any, id: string): HistoryOrder {
-  const mapItem = (it: any): OrderItem => {
+/**
+ * Xác định mã chi nhánh để GHI dữ liệu. Không còn mặc định ngầm về TRAM01:
+ * nếu đang ở chế độ "ALL" hoặc không có chi nhánh thì báo lỗi để người dùng chọn chi nhánh cụ thể.
+ */
+export function resolveWriteStoreCode(code?: string | null): string {
+  const clean = (code || "").trim();
+  if (!clean || clean === "ALL") {
+    throw new Error("Vui lòng chọn một chi nhánh cụ thể trước khi thực hiện thao tác này.");
+  }
+  return clean;
+}
+
+/** Đọc nhật ký thao tác của bàn (ưu tiên actionLogsJson, fallback mảng actionLogs) */
+function parseActionLogs(table: TableItem): OrderActionLog[] {
+  if (table.actionLogsJson) {
+    try {
+      const p = JSON.parse(table.actionLogsJson);
+      if (Array.isArray(p)) return p as OrderActionLog[];
+    } catch {
+      // JSON hỏng — bỏ qua nhật ký cũ, không chặn thanh toán
+    }
+  } else if (Array.isArray(table.actionLogs)) {
+    return [...table.actionLogs];
+  }
+  return [];
+}
+
+function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
+  const mapItem = (it: RtdbNode): OrderItem => {
     const { imageBase64, ...rest } = it;
     return {
       ...rest,
@@ -396,7 +461,8 @@ function sanitizeHistoryOrder(raw: any, id: string): HistoryOrder {
     ];
   }
 
-  const storeCode = raw.storeCode || (raw.id && raw.id.includes("TRAM02") ? "TRAM02" : "TRAM01");
+  // Không đoán mã chi nhánh — nơi gọi sẽ gán theo nút stores/{storeCode} chứa hóa đơn
+  const storeCode: string | undefined = raw.storeCode || undefined;
   const subTotal = Number(raw.subTotal != null ? raw.subTotal : (raw.totalAmount || 0));
   const finalAmount = Number(raw.finalAmount != null ? raw.finalAmount : (raw.totalAmount || 0));
   const totalAmount = finalAmount;
@@ -406,9 +472,10 @@ function sanitizeHistoryOrder(raw: any, id: string): HistoryOrder {
   const vatRate = Number(raw.vatRate || 0);
   const pointsDiscount = Number(raw.pointsDiscount || 0);
   const pointsUsed = Number(raw.pointsUsed || 0);
-  const refundAmount = Number(raw.refundAmount || 0);
+  // refundAmount / cogs giữ undefined khi thiếu để báo cáo tự suy ra (từ finalAmount / giá vốn từng món)
+  const refundAmount = raw.refundAmount != null ? Number(raw.refundAmount) : undefined;
   const guestCount = Number(raw.guestCount || 0);
-  const cogs = Number(raw.cogs || 0);
+  const cogs = raw.cogs != null ? Number(raw.cogs) : undefined;
 
   return {
     ...raw,
@@ -460,14 +527,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const [rawCategoriesMap, setRawCategoriesMap] = useState<Record<string, CategoryItem[]>>({});
   const [rawUsersMap, setRawUsersMap] = useState<Record<string, UserItem[]>>({});
   const [rawAuditLogs, setRawAuditLogs] = useState<AuditLogItem[]>([]);
-  const [onlineOrders, setOnlineOrders] = useState<any[]>([]);
+  const [onlineOrders, setOnlineOrders] = useState<OnlineOrderItem[]>([]);
   const [rawCashShifts, setRawCashShifts] = useState<Record<string, CashShiftItem[]>>({});
 
   const [loading, setLoading] = useState<boolean>(true);
   const [historyLoaded, setHistoryLoaded] = useState<boolean>(false);
 
   // Xử lý dữ liệu gom từ các chi nhánh được cấp quyền
-  const processStoreDataMap = useCallback((dataMap: Record<string, any>) => {
+  const processStoreDataMap = useCallback((dataMap: Record<string, RtdbNode>) => {
     const entries = Object.entries(dataMap);
     if (entries.length === 0) {
       // Fallback default store nếu chưa có dữ liệu chi nhánh
@@ -508,9 +575,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     const branchTablesMap: Record<string, TableItem[]> = {};
     const historyList: HistoryOrder[] = [];
     const logsList: AuditLogItem[] = [];
-    const onlineList: any[] = [];
+    const onlineList: OnlineOrderItem[] = [];
 
-    entries.forEach(([code, val]: [string, any]) => {
+    entries.forEach(([code, val]: [string, RtdbNode]) => {
       if (!val) return;
       const info = val.storeInfo || val;
       list.push({
@@ -536,7 +603,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
       if (val.cash_shifts) {
         const sList: CashShiftItem[] = [];
-        Object.entries(val.cash_shifts).forEach(([id, s]: [string, any]) => {
+        Object.entries(val.cash_shifts).forEach(([id, s]: [string, RtdbNode]) => {
           sList.push({
             ...s,
             id,
@@ -548,7 +615,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
       if (val.products) {
         const pList: ProductItem[] = [];
-        Object.entries(val.products).forEach(([id, p]: [string, any]) => {
+        Object.entries(val.products).forEach(([id, p]: [string, RtdbNode]) => {
           pList.push({
             ...p,
             id,
@@ -563,7 +630,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
       if (val.categories) {
         const cList: CategoryItem[] = [];
-        Object.entries(val.categories).forEach(([id, c]: [string, any]) => {
+        Object.entries(val.categories).forEach(([id, c]: [string, RtdbNode]) => {
           cList.push({
             id,
             name: typeof c === "string" ? c : (c.name || id),
@@ -576,7 +643,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
       if (val.users) {
         const uList: UserItem[] = [];
-        Object.entries(val.users).forEach(([id, u]: [string, any]) => {
+        Object.entries(val.users).forEach(([id, u]: [string, RtdbNode]) => {
           const uName = u.username || id;
           uList.push({
             ...u,
@@ -598,7 +665,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
       if (val.tables) {
         const tArr: TableItem[] = [];
-        Object.entries(val.tables).forEach(([id, v]: any) => {
+        Object.entries(val.tables).forEach(([id, v]: [string, RtdbNode]) => {
           tArr.push({
             ...v,
             id,
@@ -610,9 +677,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         branchTablesMap[code] = tArr;
       }
 
-      const historySource = val.history || val.bills;
-      if (historySource) {
-        Object.entries(historySource).forEach(([id, v]: any) => {
+      // Đọc cả history (bản chốt, có thể chỉ tóm tắt) lẫn bills (bản đầy đủ từ Flutter) rồi gộp theo id
+      if (val.history || val.bills) {
+        mergeHistoryAndBills(val.history, val.bills).forEach(([id, v]) => {
           const sanitized = sanitizeHistoryOrder(v, id);
           sanitized.storeCode = sanitized.storeCode || code;
           sanitized.storeName = sanitized.storeName || info.storeName || code;
@@ -621,7 +688,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       }
 
       if (val.audit_logs) {
-        Object.entries(val.audit_logs).forEach(([id, v]: any) => {
+        Object.entries(val.audit_logs).forEach(([id, v]: [string, RtdbNode]) => {
           logsList.push({
             ...v,
             id,
@@ -632,7 +699,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       }
 
       if (val.online_orders) {
-        Object.entries(val.online_orders).forEach(([id, v]: any) => {
+        Object.entries(val.online_orders).forEach(([id, v]: [string, RtdbNode]) => {
           onlineList.push({
             ...v,
             id,
@@ -674,7 +741,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     let isMounted = true;
     const storeListeners = new Map<string, () => void>();
-    const storeDataMap: Record<string, any> = {};
+    const storeDataMap: Record<string, RtdbNode> = {};
 
     function updateStoreSubscriptions(storeCodes: string[]) {
       const uniqueCodes = Array.from(new Set(storeCodes.filter(Boolean)));
@@ -997,8 +1064,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       await set(ref(db, `stores/${cleanCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Lỗi khi tạo chi nhánh mới." };
+    } catch (e) {
+      return { success: false, error: errorMessage(e) || "Lỗi khi tạo chi nhánh mới." };
     }
   }, []);
 
@@ -1019,8 +1086,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       await set(ref(db, `stores/${storeCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Lỗi khi cập nhật chi nhánh." };
+    } catch (e) {
+      return { success: false, error: errorMessage(e) || "Lỗi khi cập nhật chi nhánh." };
     }
   }, []);
 
@@ -1042,15 +1109,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       await set(ref(db, `stores/${storeCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Lỗi khi xóa chi nhánh." };
+    } catch (e) {
+      return { success: false, error: errorMessage(e) || "Lỗi khi xóa chi nhánh." };
     }
   }, []);
 
   const updateStoreShiftDifferenceSetting = useCallback(
     async (storeCode: string, allow: boolean) => {
       try {
-        const targetCode = storeCode === "ALL" ? (stores[0]?.storeCode || "TRAM01") : storeCode;
+        const targetCode = storeCode === "ALL" ? resolveWriteStoreCode(stores[0]?.storeCode) : resolveWriteStoreCode(storeCode);
         const storeRefNode = ref(db, `stores/${targetCode}/storeInfo`);
         await update(storeRefNode, { allowStaffViewShiftDifference: allow });
 
@@ -1065,14 +1132,57 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         };
         await set(ref(db, `stores/${targetCode}/audit_logs/LOG_${Date.now()}`), logEntry);
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi khi cập nhật cấu hình két tiền." };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi khi cập nhật cấu hình két tiền." };
       }
     },
     [stores]
   );
 
-  // Table operations (multi-store aware with dual-write to root)
+  // Table operations (multi-store aware)
+  // Thanh toán / hủy đơn được ghi bằng MỘT lệnh update() đa đường dẫn (bills + history + bàn + audit log)
+  // để không bao giờ xảy ra trạng thái nửa vời (đã ghi hóa đơn nhưng bàn chưa trả, hoặc ngược lại).
+  const buildCloseTableUpdates = useCallback(
+    (targetStoreCode: string, table: TableItem, prefix: Record<string, unknown>) => {
+      const clearPayload: Record<string, unknown> = {
+        inUse: false,
+        currentOrderJson: "",
+        guestCount: 0,
+        openedAt: null,
+        currentBillId: null,
+        currentOrderCode: null,
+        mergedIntoTable: null,
+        actionLogsJson: null,
+      };
+      const updates: Record<string, unknown> = { ...prefix };
+      // Chỉ ghi vào khóa bàn chuẩn {zone}_{name} nếu nút đó thực sự tồn tại (tránh tạo bàn "ma")
+      const stdKey = `${table.zone}_${table.name}`;
+      const storeTables = rawTables[targetStoreCode] || [];
+      const tableKeys = [table.id];
+      if (stdKey !== table.id && storeTables.some((t) => t.id === stdKey)) tableKeys.push(stdKey);
+      for (const key of tableKeys) {
+        for (const [field, value] of Object.entries(clearPayload)) {
+          updates[`stores/${targetStoreCode}/tables/${key}/${field}`] = value;
+        }
+      }
+      return { updates, clearPayload };
+    },
+    [rawTables]
+  );
+
+  const applyClosedTableLocally = useCallback(
+    (targetStoreCode: string, table: TableItem, clearPayload: Record<string, unknown>) => {
+      setRawTables((prev) => {
+        const next = { ...prev };
+        const updateList = (list: TableItem[]) =>
+          list.map((t) => (t.id === table.id || t.name === table.name ? { ...t, ...clearPayload } : t));
+        if (next[targetStoreCode]) next[targetStoreCode] = updateList(next[targetStoreCode]);
+        return next;
+      });
+    },
+    []
+  );
+
   const checkoutAndFreeTable = useCallback(
     async (
       table: TableItem,
@@ -1081,51 +1191,34 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         staffName?: string;
         discountAmount?: number;
       }
-    ) => {
+    ): Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }> => {
       try {
-        const targetStoreCode = table.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
         const targetStore = stores.find((s) => s.storeCode === targetStoreCode) || currentStore;
         const storeName =
           targetStore?.storeName ||
-          (targetStoreCode === "TRAM01" ? "POS Trạm - Trụ sở 01 (Đà Lạt)" : `POS Trạm - Chi nhánh ${targetStoreCode}`);
+          `POS Trạm - Chi nhánh ${targetStoreCode}`;
 
-        let items: any[] = [];
-        try {
-          if (table.currentOrderJson) {
-            const parsed = JSON.parse(table.currentOrderJson);
-            if (Array.isArray(parsed)) items = parsed;
-          }
-        } catch {}
+        const items = parseOrderJson(table.currentOrderJson);
+        if (items.length === 0) {
+          return { success: false, error: "Bàn chưa có món nào để thanh toán" };
+        }
 
-        const subTotal = items.reduce((sum, it) => {
-          const qty = it.quantity || it.count || 1;
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          return sum + (Number(it.price || 0) + toppingSum) * qty;
-        }, 0);
-
-        const discountAmount = options?.discountAmount || 0;
-        const finalAmount = Math.max(0, subTotal - discountAmount);
+        const { subTotal, itemDiscounts } = summarizeOrderLines(items);
+        const billDiscounts = Math.max(0, Number(options?.discountAmount || 0));
+        const totalDiscount = Math.min(subTotal, itemDiscounts + billDiscounts);
+        const finalAmount = Math.max(0, subTotal - totalDiscount);
         const paymentMethod = options?.paymentMethod || "CASH";
         const cashierName = options?.staffName || "Quản trị viên Web";
         const now = Date.now();
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-        const billCode = table.currentBillId || `HD-${dateStr}-${randomSuffix}`;
+        // Mã hóa đơn tuần tự HD-yyMMdd-NNNN dùng chung bộ đếm với Flutter POS
+        const billCode =
+          table.currentBillId && table.currentBillId.startsWith("HD-")
+            ? table.currentBillId
+            : await generateBillCode(db, targetStoreCode, now);
         const billId = `bill_${now}_${Math.floor(Math.random() * 1000)}`;
 
-        let actionLogs: any[] = [];
-        if (table.actionLogsJson) {
-          try {
-            const p = JSON.parse(table.actionLogsJson);
-            if (Array.isArray(p)) actionLogs = p;
-          } catch {}
-        } else if (Array.isArray(table.actionLogs)) {
-          actionLogs = [...table.actionLogs];
-        }
-
+        const actionLogs = parseActionLogs(table);
         actionLogs.push({
           timestamp: now,
           staffUsername: "admin_web",
@@ -1148,8 +1241,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           totalAmount: finalAmount,
           finalAmount: finalAmount,
           subTotal: subTotal,
-          discountAmount: discountAmount,
-          totalDiscount: discountAmount,
+          discountAmount: totalDiscount,
+          totalDiscount: totalDiscount,
+          itemDiscounts: itemDiscounts,
+          billDiscounts: billDiscounts,
+          vatRate: 0,
+          vatAmount: 0,
           paymentMethod: paymentMethod,
           status: "PAID",
           timestamp: now,
@@ -1159,38 +1256,16 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           staffUsername: "admin_web",
           staffFullName: cashierName,
           orderStaff: table.orderStaff || "POS Staff",
-          items: items,
+          items: items as unknown as OrderItem[],
           actionLogs: actionLogs,
         };
 
-        const clearPayload = {
-          inUse: false,
-          currentOrderJson: "",
-          guestCount: 0,
-          openedAt: null,
-          currentBillId: null,
-          currentOrderCode: null,
-          mergedIntoTable: null,
-          actionLogsJson: null,
-        };
-
-        // 1. Write history and bills to store
         const rawHistoryMap = {
           ...historyBill,
           itemsJson: JSON.stringify(items),
           actionLogsJson: JSON.stringify(actionLogs),
         };
-        await set(ref(db, `stores/${targetStoreCode}/history/${billId}`), rawHistoryMap);
-        await set(ref(db, `stores/${targetStoreCode}/bills/${billId}`), rawHistoryMap).catch(() => {});
 
-        // 2. Clear table in scoped store
-        const stdKey = `${table.zone}_${table.name}`;
-        await update(ref(db, `stores/${targetStoreCode}/tables/${table.id}`), clearPayload);
-        if (stdKey !== table.id) {
-          await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), clearPayload).catch(() => {});
-        }
-
-        // 3. Write Audit Log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
@@ -1210,27 +1285,25 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             paymentMethod: paymentMethod,
           },
         };
-        await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
 
-        // 4. Optimistic UI update
-        setRawTables((prev) => {
-          const next = { ...prev };
-          const updateList = (list: TableItem[]) =>
-            list.map((t) => (t.id === table.id || t.name === table.name ? { ...t, ...clearPayload } : t));
-          if (next[targetStoreCode]) next[targetStoreCode] = updateList(next[targetStoreCode]);
-          if (next["TRAM01_ROOT"]) next["TRAM01_ROOT"] = updateList(next["TRAM01_ROOT"]);
-          return next;
+        const { updates, clearPayload } = buildCloseTableUpdates(targetStoreCode, table, {
+          [`stores/${targetStoreCode}/bills/${billId}`]: rawHistoryMap,
+          [`stores/${targetStoreCode}/history/${billId}`]: rawHistoryMap,
+          [`stores/${targetStoreCode}/audit_logs/${logId}`]: auditPayload,
         });
+        // Ghi nguyên tử: thành công tất cả hoặc không ghi gì
+        await update(ref(db), updates);
 
+        applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(historyBill, billId), ...prev]);
 
-        return { success: true, billId };
-      } catch (e: any) {
+        return { success: true, billId, billCode };
+      } catch (e) {
         console.error("checkoutAndFreeTable error:", e);
-        return { success: false, error: e.message || "Lỗi khi thanh toán trả bàn" };
+        return { success: false, error: errorMessage(e, "Lỗi khi thanh toán trả bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally]
   );
 
   const cancelActiveTable = useCallback(
@@ -1241,48 +1314,23 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     ): Promise<{ success: boolean; billId?: string; error?: string }> => {
       try {
         const targetStoreCode =
-          table.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+          table.storeCode || resolveWriteStoreCode(currentStoreCode);
         const storeObj = stores.find((s) => s.storeCode === targetStoreCode) || currentStore;
         const storeName = storeObj ? storeObj.storeName : "POS Trạm - Chi nhánh " + targetStoreCode;
 
-        let items: any[] = [];
-        try {
-          if (table.currentOrderJson) {
-            const parsed = JSON.parse(table.currentOrderJson);
-            if (Array.isArray(parsed)) items = parsed;
-          }
-        } catch {}
-
-        const totalAmount = items.reduce((sum, it) => {
-          const qty = it.quantity || it.count || 1;
-          let toppingSum = 0;
-          if (Array.isArray(it.selectedToppings)) {
-            toppingSum = it.selectedToppings.reduce((ts: number, tp: any) => ts + (tp.price || 0), 0);
-          }
-          return sum + (Number(it.price || 0) + toppingSum) * qty;
-        }, 0);
+        const items = parseOrderJson(table.currentOrderJson);
+        const { subTotal: totalAmount } = summarizeOrderLines(items);
 
         const cancellerName = staffName || "Quản trị viên Web";
         const now = Date.now();
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
         const billCode =
           table.currentBillId && table.currentBillId.startsWith("HD-")
             ? table.currentBillId
-            : `HD-${dateStr}-${randomSuffix}`;
-        const orderCode = table.currentOrderCode || `OD-${dateStr}-${randomSuffix}`;
-        const cancelBillId = `BILL_CANCELLED_${now}`;
+            : await generateBillCode(db, targetStoreCode, now);
+        const orderCode = table.currentOrderCode || billCode;
+        const cancelBillId = `BILL_CANCELLED_${now}_${Math.floor(Math.random() * 1000)}`;
 
-        let actionLogs: any[] = [];
-        if (table.actionLogsJson) {
-          try {
-            const p = JSON.parse(table.actionLogsJson);
-            if (Array.isArray(p)) actionLogs = p;
-          } catch {}
-        } else if (Array.isArray(table.actionLogs)) {
-          actionLogs = [...table.actionLogs];
-        }
-
+        const actionLogs = parseActionLogs(table);
         actionLogs.push({
           timestamp: now,
           staffUsername: "admin_web",
@@ -1317,19 +1365,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           staffUsername: "admin_web",
           staffFullName: cancellerName,
           orderStaff: table.orderStaff || "POS Staff",
-          items: items,
+          items: items as unknown as OrderItem[],
           actionLogs: actionLogs,
-        };
-
-        const clearPayload = {
-          inUse: false,
-          currentOrderJson: "",
-          guestCount: 0,
-          openedAt: null,
-          currentBillId: null,
-          currentOrderCode: null,
-          mergedIntoTable: null,
-          actionLogsJson: null,
         };
 
         const rawCancelMap = {
@@ -1338,18 +1375,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           actionLogsJson: JSON.stringify(actionLogs),
         };
 
-        // Write to history and bills in store
-        await set(ref(db, `stores/${targetStoreCode}/history/${cancelBillId}`), rawCancelMap);
-        await set(ref(db, `stores/${targetStoreCode}/bills/${cancelBillId}`), rawCancelMap).catch(() => {});
-
-        // Clear table in scoped store
-        const stdKey = `${table.zone}_${table.name}`;
-        await update(ref(db, `stores/${targetStoreCode}/tables/${table.id}`), clearPayload);
-        if (stdKey !== table.id) {
-          await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), clearPayload).catch(() => {});
-        }
-
-        // Write Audit Log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
@@ -1370,27 +1395,25 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             reason: reason,
           },
         };
-        await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
 
-        // Optimistic UI update
-        setRawTables((prev) => {
-          const next = { ...prev };
-          const updateList = (list: TableItem[]) =>
-            list.map((t) => (t.id === table.id || t.name === table.name ? { ...t, ...clearPayload } : t));
-          if (next[targetStoreCode]) next[targetStoreCode] = updateList(next[targetStoreCode]);
-          if (next["TRAM01_ROOT"]) next["TRAM01_ROOT"] = updateList(next["TRAM01_ROOT"]);
-          return next;
+        const { updates, clearPayload } = buildCloseTableUpdates(targetStoreCode, table, {
+          [`stores/${targetStoreCode}/bills/${cancelBillId}`]: rawCancelMap,
+          [`stores/${targetStoreCode}/history/${cancelBillId}`]: rawCancelMap,
+          [`stores/${targetStoreCode}/audit_logs/${logId}`]: auditPayload,
         });
+        // Ghi nguyên tử: thành công tất cả hoặc không ghi gì
+        await update(ref(db), updates);
 
+        applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(cancelRecord, cancelBillId), ...prev]);
 
         return { success: true, billId: cancelBillId };
-      } catch (e: any) {
+      } catch (e) {
         console.error("cancelActiveTable error:", e);
-        return { success: false, error: e.message || "Lỗi khi hủy đơn bàn" };
+        return { success: false, error: errorMessage(e, "Lỗi khi hủy đơn bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally]
   );
 
   const saveTable = useCallback(
@@ -1399,7 +1422,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       storeCode?: string
     ) => {
       try {
-        const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetCode = storeCode || resolveWriteStoreCode(currentStoreCode);
         const key = tableData.id || `${tableData.zone}_${tableData.name}`;
         const payload = {
           name: tableData.name,
@@ -1409,8 +1432,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         };
         await set(ref(db, `stores/${targetCode}/tables/${key}`), payload);
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi lưu bàn" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi lưu bàn" };
       }
     },
     [currentStoreCode]
@@ -1419,11 +1442,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const deleteTable = useCallback(
     async (tableId: string, storeCode?: string) => {
       try {
-        const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetCode = storeCode || resolveWriteStoreCode(currentStoreCode);
         await remove(ref(db, `stores/${targetCode}/tables/${tableId}`));
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi xóa bàn" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi xóa bàn" };
       }
     },
     [currentStoreCode]
@@ -1435,8 +1458,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       storeCode?: string
     ) => {
       try {
-        const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
-        const payload: any = {
+        const targetCode = storeCode || resolveWriteStoreCode(currentStoreCode);
+        const payload: Record<string, unknown> = {
           name: productData.name.trim(),
           code: (productData.code || "").trim(),
           price: Number(productData.price),
@@ -1463,8 +1486,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi lưu sản phẩm" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi lưu sản phẩm" };
       }
     },
     [currentStoreCode]
@@ -1473,11 +1496,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const deleteProduct = useCallback(
     async (productId: string, storeCode?: string) => {
       try {
-        const targetCode = storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetCode = storeCode || resolveWriteStoreCode(currentStoreCode);
         await remove(ref(db, `stores/${targetCode}/products/${productId}`));
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi xóa sản phẩm" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi xóa sản phẩm" };
       }
     },
     [currentStoreCode]
@@ -1490,7 +1513,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (!cleanName) return { success: false, error: "Tên danh mục không được để trống" };
 
         const targetStores = (!storeCode || storeCode === "ALL")
-          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : ["TRAM01"])
+          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : [resolveWriteStoreCode(currentStoreCode)])
           : [storeCode];
 
         for (const code of targetStores) {
@@ -1506,7 +1529,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           }
 
           // Save new category with allowedToppingIds if provided
-          const catPayload: any = { name: cleanName };
+          const catPayload: Record<string, unknown> = { name: cleanName };
           if (allowedToppingIds !== undefined) {
             catPayload.allowedToppingIds = allowedToppingIds;
           }
@@ -1514,11 +1537,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi lưu danh mục" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi lưu danh mục" };
       }
     },
-    [stores, allProducts]
+    [stores, allProducts, currentStoreCode]
   );
 
   const deleteCategory = useCallback(
@@ -1526,7 +1549,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       try {
         const cleanName = categoryName.trim();
         const targetStores = (!storeCode || storeCode === "ALL")
-          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : ["TRAM01"])
+          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : [resolveWriteStoreCode(currentStoreCode)])
           : [storeCode];
 
         for (const code of targetStores) {
@@ -1534,11 +1557,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi xóa danh mục" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi xóa danh mục" };
       }
     },
-    [stores]
+    [stores, currentStoreCode]
   );
 
   const saveUser = useCallback(
@@ -1559,12 +1582,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (!cleanUsername) return { success: false, error: "Tên đăng nhập không được để trống" };
         if (!userData.fullName?.trim()) return { success: false, error: "Họ tên không được để trống" };
 
-        const finalStoreCode = targetStoreCode || userData.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const finalStoreCode = targetStoreCode || userData.storeCode || resolveWriteStoreCode(currentStoreCode);
         const role = userData.role || "ROLE_WAITER";
         const isRootOwner = role === "ROLE_OWNER" || role === "OWNER";
         const now = Date.now();
 
-        const payload: any = {
+        const payload = {
           username: cleanUsername,
           fullName: userData.fullName.trim(),
           roleId: role,
@@ -1614,8 +1637,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         });
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi lưu thông tin nhân viên" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi lưu thông tin nhân viên" };
       }
     },
     [currentStoreCode, stores]
@@ -1628,7 +1651,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (!cleanUsername) return { success: false, error: "Tên đăng nhập không hợp lệ" };
 
         const targetStores = (!storeCode || storeCode === "ALL")
-          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : ["TRAM01"])
+          ? (stores.length > 0 ? stores.map((s) => s.storeCode) : [resolveWriteStoreCode(currentStoreCode)])
           : [storeCode];
 
         const now = Date.now();
@@ -1647,10 +1670,10 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           action: "DELETE_USER",
           targetType: "USER",
           targetId: cleanUsername,
-          storeCode: targetStores[0] || "TRAM01",
+          storeCode: resolveWriteStoreCode(targetStores[0]),
           details: `Xóa nhân viên @${cleanUsername} khỏi hệ thống`,
         };
-        await set(ref(db, `stores/${targetStores[0] || "TRAM01"}/audit_logs/${logId}`), auditPayload).catch(() => {});
+        await set(ref(db, `stores/${resolveWriteStoreCode(targetStores[0])}/audit_logs/${logId}`), auditPayload).catch(() => {});
 
         // Optimistic state updates
         setRawUsersMap((prev) => {
@@ -1664,11 +1687,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         });
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi xóa nhân viên" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi xóa nhân viên" };
       }
     },
-    [stores]
+    [stores, currentStoreCode]
   );
 
   const cancelOrder = useCallback(
@@ -1681,7 +1704,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const order = allHistory.find((h) => h.id === orderId);
         if (!order) return { success: false, error: "Không tìm thấy hóa đơn" };
 
-        const targetStoreCode = storeCode || order.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetStoreCode = storeCode || order.storeCode || resolveWriteStoreCode(currentStoreCode);
         const now = Date.now();
 
         const cancelLog = {
@@ -1702,10 +1725,6 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           actionLogsJson: JSON.stringify(updatedLogs),
         };
 
-        // Update in stores/{targetStoreCode}/history/{orderId} and bills
-        await update(ref(db, `stores/${targetStoreCode}/history/${orderId}`), patch);
-        await update(ref(db, `stores/${targetStoreCode}/bills/${orderId}`), patch).catch(() => {});
-
         // Audit log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
@@ -1719,7 +1738,27 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           storeCode: targetStoreCode,
           details: `Hủy hóa đơn ${order.billCode || order.orderCode || orderId} bàn ${order.tableName} (${new Intl.NumberFormat("vi-VN").format(order.totalAmount || 0)}đ). Lý do: ${reason}`,
         };
-        await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
+
+        // Cập nhật history + bills (nếu bản ghi tồn tại) + audit log trong MỘT update() nguyên tử.
+        // Kiểm tra tồn tại trước để không tạo bản ghi "ma" chỉ có vài trường.
+        const basePath = `stores/${targetStoreCode}`;
+        const [historySnap, billSnap] = await Promise.all([
+          get(ref(db, `${basePath}/history/${orderId}`)),
+          get(ref(db, `${basePath}/bills/${orderId}`)),
+        ]);
+        if (!historySnap.exists() && !billSnap.exists()) {
+          return { success: false, error: "Hóa đơn không còn tồn tại trên hệ thống" };
+        }
+        const updates: Record<string, unknown> = {
+          [`${basePath}/audit_logs/${logId}`]: auditPayload,
+        };
+        for (const [node, snap] of [["history", historySnap], ["bills", billSnap]] as const) {
+          if (!snap.exists()) continue;
+          for (const [field, value] of Object.entries(patch)) {
+            updates[`${basePath}/${node}/${orderId}/${field}`] = value;
+          }
+        }
+        await update(ref(db), updates);
 
         // Optimistic update
         setAllHistory((prev) =>
@@ -1727,8 +1766,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         );
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi khi hủy hóa đơn" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi khi hủy hóa đơn" };
       }
     },
     [allHistory, currentStoreCode]
@@ -1741,12 +1780,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const order = allHistory.find((h) => h.id === orderId);
-        const targetStoreCode = storeCode || order?.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        const targetStoreCode = storeCode || order?.storeCode || resolveWriteStoreCode(currentStoreCode);
         const now = Date.now();
-
-        // Remove from history and bills
-        await remove(ref(db, `stores/${targetStoreCode}/history/${orderId}`));
-        await remove(ref(db, `stores/${targetStoreCode}/bills/${orderId}`)).catch(() => {});
 
         // Audit log
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
@@ -1761,14 +1796,20 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           storeCode: targetStoreCode,
           details: `Xóa vĩnh viễn hóa đơn ${order?.billCode || order?.orderCode || orderId} khỏi hệ thống`,
         };
-        await set(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), auditPayload);
+
+        // Xóa history + bills và ghi audit log trong MỘT update() nguyên tử
+        await update(ref(db), {
+          [`stores/${targetStoreCode}/history/${orderId}`]: null,
+          [`stores/${targetStoreCode}/bills/${orderId}`]: null,
+          [`stores/${targetStoreCode}/audit_logs/${logId}`]: auditPayload,
+        });
 
         // Optimistic update
         setAllHistory((prev) => prev.filter((h) => h.id !== orderId));
 
         return { success: true };
-      } catch (e: any) {
-        return { success: false, error: e.message || "Lỗi khi xóa hóa đơn" };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi khi xóa hóa đơn" };
       }
     },
     [allHistory, currentStoreCode]

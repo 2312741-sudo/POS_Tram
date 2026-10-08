@@ -33,7 +33,7 @@ class PaymentSplitModel {
 // ==================== BILL MODEL ====================
 class BillModel {
   final String id;
-  final String billCode; // Mã hóa đơn chính thức (HD-yyMMdd-HHmmss)
+  String billCode; // Mã hóa đơn chính thức (HD-yyMMdd-NNNN, cấp tuần tự khi thanh toán)
   final String? orderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
   final String tableName;
   final String zone;

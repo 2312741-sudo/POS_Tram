@@ -143,7 +143,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
           });
         }
       },
-      selectedColor: TramColors.brandPrimary.withOpacity(0.2),
+      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
       labelStyle: TextStyle(
         color: isSelected ? TramColors.brandPrimary : Colors.black87,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -225,7 +225,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: TramColors.brandPrimary.withOpacity(0.1),
+                    color: TramColors.brandPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -237,7 +237,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                     ),
                   ),
                 ),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (statusColor).withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: statusColor)), child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (statusColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: statusColor)), child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold))),
               ],
             ),
             const SizedBox(height: 8),

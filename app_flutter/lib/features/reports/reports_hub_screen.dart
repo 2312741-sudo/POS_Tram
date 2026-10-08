@@ -157,7 +157,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
       _fb.tablesStream().listen((t) {
         if (mounted) setState(() => _tables = t);
-      });
+      }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
 
       _fb.productsStream(storeCode: _selectedStoreCode).listen((prods) {
         if (mounted) {

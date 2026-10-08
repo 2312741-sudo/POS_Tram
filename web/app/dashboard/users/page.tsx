@@ -132,7 +132,7 @@ const emptyForm: UserForm = {
   password: "",
   role: "ROLE_WAITER",
   phone: "",
-  storeCode: "TRAM01",
+  storeCode: "",
   isActive: true,
   customPermissions: [],
 };
@@ -261,7 +261,7 @@ export default function UsersPage() {
       storeCode:
         currentStoreCode !== "ALL"
           ? currentStoreCode
-          : storesList[0]?.storeCode || activeStoreCode || "TRAM01",
+          : storesList[0]?.storeCode || activeStoreCode || "",
     });
     setError("");
     setShowPassword(false);
@@ -276,7 +276,7 @@ export default function UsersPage() {
       password: "",
       role: u.roleId || u.role || "ROLE_WAITER",
       phone: u.phone || "",
-      storeCode: u.storeCode || (storesList[0]?.storeCode || "TRAM01"),
+      storeCode: u.storeCode || storesList[0]?.storeCode || activeStoreCode || "",
       isActive: u.isActive !== false,
       customPermissions: u.customPermissions || [],
     });
@@ -418,7 +418,11 @@ export default function UsersPage() {
       }
 
       const newActive = !u.isActive;
-      const targetStore = u.storeCode || activeStoreCode || "TRAM01";
+      const targetStore = u.storeCode || activeStoreCode || "";
+      if (!targetStore) {
+        alert("Không xác định được chi nhánh của nhân viên.");
+        return;
+      }
       const targetUid = u.uid || u.id;
 
       try {
@@ -464,7 +468,8 @@ export default function UsersPage() {
     setResetPasswordError("");
 
     try {
-      const targetStore = resetPasswordTarget.storeCode || activeStoreCode || "TRAM01";
+      const targetStore = resetPasswordTarget.storeCode || activeStoreCode || "";
+      if (!targetStore) throw new Error("Không xác định được chi nhánh của nhân viên.");
       const targetUid = resetPasswordTarget.uid || resetPasswordTarget.id;
 
       const resetFn = httpsCallable<
@@ -497,7 +502,11 @@ export default function UsersPage() {
       return;
     }
 
-    const targetStore = deleteTarget.storeCode || activeStoreCode || "TRAM01";
+    const targetStore = deleteTarget.storeCode || activeStoreCode || "";
+    if (!targetStore) {
+      alert("Không xác định được chi nhánh của nhân viên.");
+      return;
+    }
     const targetUid = deleteTarget.uid || deleteTarget.id;
 
     try {

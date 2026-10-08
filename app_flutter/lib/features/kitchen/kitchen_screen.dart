@@ -121,7 +121,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
               decoration: BoxDecoration(
                 color: AppColors.danger,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: AppColors.danger.withOpacity(0.5), blurRadius: 12)],
+                boxShadow: [BoxShadow(color: AppColors.danger.withValues(alpha: 0.5), blurRadius: 12)],
               ),
               child: Center(
                 child: Text('${_orders.length}', style: GoogleFonts.beVietnamPro(
@@ -163,7 +163,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 72),
@@ -225,7 +225,7 @@ class _KitchenOrderCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
-          color: AppColors.success.withOpacity(0.2),
+          color: AppColors.success.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -246,12 +246,12 @@ class _KitchenOrderCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: waiting.inMinutes >= 10
-              ? AppColors.danger.withOpacity(0.5)
+              ? AppColors.danger.withValues(alpha: 0.5)
               : AppColors.border,
             width: waiting.inMinutes >= 10 ? 2 : 1,
           ),
           boxShadow: waiting.inMinutes >= 10
-            ? [BoxShadow(color: AppColors.danger.withOpacity(0.2), blurRadius: 16)]
+            ? [BoxShadow(color: AppColors.danger.withValues(alpha: 0.2), blurRadius: 16)]
             : null,
         ),
         child: Padding(
@@ -280,9 +280,9 @@ class _KitchenOrderCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: timerColor.withOpacity(0.15),
+                      color: timerColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: timerColor.withOpacity(0.3)),
+                      border: Border.all(color: timerColor.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -306,7 +306,7 @@ class _KitchenOrderCard extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.cardElevated.withOpacity(0.5),
+                  color: AppColors.cardElevated.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white10),
                 ),
@@ -337,9 +337,9 @@ class _KitchenOrderCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.kitchenAccent.withOpacity(0.2),
+                            color: AppColors.kitchenAccent.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.kitchenAccent.withOpacity(0.5)),
+                            border: Border.all(color: AppColors.kitchenAccent.withValues(alpha: 0.5)),
                           ),
                           child: Text(
                             'x${item.quantity}',
@@ -359,9 +359,9 @@ class _KitchenOrderCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.15),
+                            color: Colors.amber.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                           ),
                           child: Text(
                             '⚙️ ${item.optionsSummary}',

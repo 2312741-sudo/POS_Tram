@@ -53,7 +53,7 @@ class _RevenueTabState extends State<RevenueTab> {
           _tables = t;
         });
       }
-    });
+    }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
   }
 
   // Active serving tables

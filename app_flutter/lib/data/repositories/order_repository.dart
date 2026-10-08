@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+import '../../core/domain/order_integrity.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
@@ -73,7 +76,78 @@ class OrderRepository {
     return [];
   }
 
+  // ==================== GHI DỮ LIỆU AN TOÀN ====================
+  static const Duration _writeAckTimeout = Duration(seconds: 6);
+  static const Duration _readTimeout = Duration(seconds: 3);
+  static const Duration _txnTimeout = Duration(seconds: 4);
+
+  /// Chờ server xác nhận một thao tác ghi.
+  /// - true: server đã xác nhận.
+  /// - false: quá thời gian chờ (mất mạng) - dữ liệu đã nằm trong bộ đệm cục bộ và
+  ///   Firebase SDK sẽ tự đồng bộ (nguyên tử) khi có mạng lại.
+  /// - Lỗi thật (VD: permission-denied) được ném ra dạng [DataWriteException].
+  Future<bool> _commitWrite(Future<void> write, String what) async {
+    try {
+      await write.timeout(_writeAckTimeout);
+      return true;
+    } on TimeoutException {
+      debugPrint('[OrderRepository] Chưa có xác nhận từ server cho "$what" - đang chờ đồng bộ.');
+      unawaited(write.catchError((Object e) {
+        debugPrint('[OrderRepository] Ghi "$what" thất bại khi đồng bộ: $e');
+        _safeLog(AuditLogModel(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          username: 'system',
+          userFullName: 'Hệ thống',
+          userRole: 'SYSTEM',
+          action: 'SYNC_WRITE_FAILED',
+          targetType: 'DATA',
+          targetId: what,
+          details: 'Ghi "$what" bị từ chối khi đồng bộ: $e',
+          isSuspicious: true,
+        ));
+      }));
+      return false;
+    } catch (e) {
+      throw DataWriteException('Không lưu được $what: $e', e);
+    }
+  }
+
+  /// Ghi audit log nhưng không bao giờ ném lỗi (dùng cho tác vụ phụ)
+  Future<void> _safeLog(AuditLogModel log) async {
+    try {
+      await _logAction(log).timeout(_writeAckTimeout);
+    } catch (e) {
+      debugPrint('[OrderRepository] Không ghi được audit log ${log.action}: $e');
+    }
+  }
+
+  final Map<String, String> _storeNameCache = {};
+
+  /// Tên cửa hàng thật từ stores/{code}/storeInfo/storeName (có cache, fallback = mã cửa hàng)
+  Future<String> _resolveStoreName(String storeCode) async {
+    Future<String?> fetch() async {
+      try {
+        final snap = await _root.child('stores/$storeCode/storeInfo/storeName').get().timeout(_readTimeout);
+        final name = snap.value?.toString().trim();
+        if (name != null && name.isNotEmpty) {
+          _storeNameCache[storeCode] = name;
+          return name;
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    final cached = _storeNameCache[storeCode];
+    if (cached != null) {
+      unawaited(fetch()); // làm mới nền
+      return cached;
+    }
+    return await fetch() ?? storeCode;
+  }
+
   // ==================== TABLES ====================
+  /// Danh sách bàn realtime. DB trống -> danh sách rỗng (bàn mẫu chỉ được tạo khi khởi tạo
+  /// cửa hàng). Lỗi (VD: không có quyền) được đẩy ra stream để UI hiển thị, không trả bàn giả.
   Stream<List<TableModel>> tablesStream() {
     return tablesRef.onValue.map<List<TableModel>>((event) {
       if (event.snapshot.exists && event.snapshot.value != null) {
@@ -81,71 +155,77 @@ class OrderRepository {
           event.snapshot.value,
           (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
         );
-        if (list.isNotEmpty) {
-          return list..sort(compareTables);
-        }
+        return list..sort(compareTables);
       }
-      return SeedData.defaultTables;
-    }).handleError((_) => SeedData.defaultTables);
+      return <TableModel>[];
+    });
   }
 
+  /// Lưu bàn. Lỗi thật được ném ra ([DataWriteException]); nếu mất mạng thì dữ liệu được
+  /// giữ cục bộ và tự đồng bộ sau (không ném lỗi).
   Future<void> saveTable(TableModel table) async {
-    try {
-      await tablesRef.child(table.firebaseKey).set(table.toMap()).timeout(const Duration(seconds: 2));
-    } catch (_) {}
+    await _commitWrite(
+      tablesRef.child(table.firebaseKey).set(table.toMap()),
+      'bàn ${table.name}',
+    );
   }
 
   Future<void> deleteTable(TableModel table) async {
     await tablesRef.child(table.firebaseKey).remove();
   }
 
-  Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
-    final sourceItems = sourceTable.currentItems;
-    final targetItems = targetTable.currentItems;
+  TableModel _copyTable(TableModel t) => TableModel.fromMap(t.toMap(), t.firebaseKey);
 
-    final Map<int, OrderItemModel> combined = {};
-    for (final item in targetItems) {
-      combined[item.productId] = item;
-    }
-    for (final item in sourceItems) {
-      if (combined.containsKey(item.productId)) {
-        final existing = combined[item.productId]!;
-        combined[item.productId] = existing.copyWith(
-          quantity: existing.quantity + item.quantity,
-          note: '${existing.note} ${item.note}'.trim(),
-        );
-      } else {
-        combined[item.productId] = item;
-      }
-    }
+  void _applyTableState(TableModel dst, TableModel src) {
+    dst.inUse = src.inUse;
+    dst.currentOrderJson = src.currentOrderJson;
+    dst.mergedIntoTable = src.mergedIntoTable;
+    dst.currentBillId = src.currentBillId;
+    dst.currentOrderCode = src.currentOrderCode;
+    dst.openedAt = src.openedAt;
+    dst.guestCount = src.guestCount;
+    dst.actionLogsJson = src.actionLogsJson;
+  }
+
+  /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
+  /// đá, ghi chú, giá...). Ghi cả 2 bàn trong 1 lệnh multi-path (không thể áp dụng một nửa).
+  Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
+    if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
+    final sourceItems = sourceTable.currentItems;
+    final combined = OrderLineMerger.merge(targetTable.currentItems, sourceItems);
 
     final sourceItemNames = sourceItems.map((e) => "${e.name} (x${e.quantity})").join(", ");
-    targetTable.inUse = true;
-    targetTable.currentOrderJson = jsonEncode(combined.values.map((e) => e.toMap()).toList());
-    final int combinedGuests = (targetTable.guestCount ?? 0) + (sourceTable.guestCount ?? 0);
-    targetTable.guestCount = combinedGuests > 0 ? combinedGuests : null;
-    if (targetTable.openedAt == null || (sourceTable.openedAt != null && sourceTable.openedAt! < targetTable.openedAt!)) {
-      targetTable.openedAt = sourceTable.openedAt ?? targetTable.openedAt ?? DateTime.now().millisecondsSinceEpoch;
+    final target = _copyTable(targetTable);
+    target.inUse = true;
+    target.currentOrderJson = jsonEncode(combined.map((e) => e.toMap()).toList());
+    final int combinedGuests = (target.guestCount ?? 0) + (sourceTable.guestCount ?? 0);
+    target.guestCount = combinedGuests > 0 ? combinedGuests : null;
+    if (target.openedAt == null || (sourceTable.openedAt != null && sourceTable.openedAt! < target.openedAt!)) {
+      target.openedAt = sourceTable.openedAt ?? target.openedAt ?? DateTime.now().millisecondsSinceEpoch;
     }
-    targetTable.addActionLog(OrderActionLogModel(
+    target.addActionLog(OrderActionLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       staffUsername: staffUsername ?? 'staff',
       staffFullName: staffName ?? 'Nhân viên',
       action: 'MERGE_TABLE',
-      details: 'Gộp ${sourceTable.name} vào ${targetTable.name}: chuyển ${sourceItems.length} món ($sourceItemNames)',
+      details: 'Gộp ${sourceTable.name} vào ${target.name}: chuyển ${sourceItems.length} món ($sourceItemNames)',
     ));
-    await saveTable(targetTable);
 
-    sourceTable.inUse = false;
-    sourceTable.currentOrderJson = '';
-    sourceTable.openedAt = null;
-    sourceTable.guestCount = null;
-    sourceTable.currentBillId = null;
-    sourceTable.mergedIntoTable = targetTable.name;
-    sourceTable.actionLogsJson = null;
-    await saveTable(sourceTable);
+    final source = _copyTable(sourceTable);
+    source.clearTable();
+    source.mergedIntoTable = target.name;
 
-    await _logAction(AuditLogModel(
+    await _commitWrite(
+      tablesRef.update({
+        target.firebaseKey: target.toMap(),
+        source.firebaseKey: source.toMap(),
+      }),
+      'gộp bàn ${sourceTable.name} -> ${targetTable.name}',
+    );
+    _applyTableState(targetTable, target);
+    _applyTableState(sourceTable, source);
+
+    await _safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: staffUsername ?? 'staff',
       userFullName: staffName ?? 'Nhân viên',
@@ -157,33 +237,41 @@ class OrderRepository {
     ));
   }
 
+  /// Chuyển bàn: ghi bàn đích và dọn bàn nguồn trong 1 lệnh multi-path.
   Future<void> transferTable(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
+    if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
+    final itemCount = sourceTable.currentItems.length;
     final itemNames = sourceTable.currentItems.map((e) => "${e.name} (x${e.quantity})").join(", ");
-    targetTable.inUse = true;
-    targetTable.currentOrderJson = sourceTable.currentOrderJson;
-    targetTable.openedAt = sourceTable.openedAt;
-    targetTable.guestCount = sourceTable.guestCount;
-    targetTable.currentBillId = sourceTable.currentBillId;
-    targetTable.actionLogsJson = sourceTable.actionLogsJson;
-    targetTable.addActionLog(OrderActionLogModel(
+    final target = _copyTable(targetTable);
+    target.inUse = true;
+    target.currentOrderJson = sourceTable.currentOrderJson;
+    target.openedAt = sourceTable.openedAt;
+    target.guestCount = sourceTable.guestCount;
+    target.currentBillId = sourceTable.currentBillId;
+    target.currentOrderCode = sourceTable.currentOrderCode;
+    target.actionLogsJson = sourceTable.actionLogsJson;
+    target.addActionLog(OrderActionLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       staffUsername: staffUsername ?? 'staff',
       staffFullName: staffName ?? 'Nhân viên',
       action: 'TRANSFER_TABLE',
-      details: 'Chuyển toàn bộ món từ ${sourceTable.name} sang ${targetTable.name}',
+      details: 'Chuyển toàn bộ món từ ${sourceTable.name} sang ${target.name}',
     ));
-    await saveTable(targetTable);
 
-    sourceTable.inUse = false;
-    sourceTable.currentOrderJson = '';
-    sourceTable.openedAt = null;
-    sourceTable.guestCount = null;
-    sourceTable.currentBillId = null;
-    sourceTable.mergedIntoTable = null;
-    sourceTable.actionLogsJson = null;
-    await saveTable(sourceTable);
+    final source = _copyTable(sourceTable);
+    source.clearTable();
 
-    await _logAction(AuditLogModel(
+    await _commitWrite(
+      tablesRef.update({
+        target.firebaseKey: target.toMap(),
+        source.firebaseKey: source.toMap(),
+      }),
+      'chuyển bàn ${sourceTable.name} -> ${targetTable.name}',
+    );
+    _applyTableState(targetTable, target);
+    _applyTableState(sourceTable, source);
+
+    await _safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: staffUsername ?? 'staff',
       userFullName: staffName ?? 'Nhân viên',
@@ -191,7 +279,7 @@ class OrderRepository {
       action: 'TRANSFER_TABLE',
       targetType: 'TABLE',
       targetId: '${sourceTable.name} -> ${targetTable.name}',
-      details: '${staffName ?? "Nhân viên"} chuyển bàn từ ${sourceTable.name} sang ${targetTable.name} (${sourceTable.currentItems.length} món: $itemNames)',
+      details: '${staffName ?? "Nhân viên"} chuyển bàn từ ${sourceTable.name} sang ${targetTable.name} ($itemCount món: $itemNames)',
     ));
   }
 
@@ -245,91 +333,111 @@ class OrderRepository {
     await billsRef.child(bill.id).set(bill.toMap());
   }
 
-  Future<void> closeAndPayBill(BillModel bill, TableModel table) async {
+  // ==================== MÃ HÓA ĐƠN TUẦN TỰ ====================
+  /// Cấp mã hóa đơn tuần tự HD-yyMMdd-NNNN bằng transaction trên
+  /// stores/{store}/counters/bill_seq/{yyMMdd}. Nếu offline / lỗi thì dùng mã dự phòng
+  /// (thời gian + hậu tố ngẫu nhiên) để không bao giờ chặn bán hàng.
+  Future<String> allocateBillCode({String? storeCode, DateTime? at}) async {
+    final now = at ?? DateTime.now();
+    final sc = storeCode ?? _currentStoreCode;
+    final day = BillCodeGenerator.dayKey(now);
+    try {
+      final result = await _root.child('stores/$sc/counters/bill_seq/$day').runTransaction((Object? current) {
+        final n = current is num ? current.toInt() : 0;
+        return Transaction.success(n + 1);
+      }).timeout(_txnTimeout);
+      final v = result.snapshot.value;
+      if (result.committed && v is num && v > 0) {
+        return BillCodeGenerator.sequential(v.toInt(), at: now);
+      }
+    } catch (e) {
+      debugPrint('[OrderRepository] Không cấp được số hóa đơn tuần tự, dùng mã dự phòng: $e');
+    }
+    return BillCodeGenerator.fallback(at: now);
+  }
+
+  // ==================== THANH TOÁN ====================
+  /// Thanh toán & đóng bàn.
+  ///
+  /// 1. Cấp mã hóa đơn tuần tự (bill.billCode được cập nhật tại chỗ).
+  /// 2. Giữ lượt dùng khuyến mãi/voucher bằng transaction có kiểm tra giới hạn
+  ///    (ném [PromotionLimitExceededException] nếu vượt).
+  /// 3. Ghi NGUYÊN TỬ 1 lệnh multi-path: bills/{id}, history/{id}, tables/{key}.
+  ///    Lỗi được ném ra ([DataWriteException]) và lượt khuyến mãi được hoàn tác.
+  /// 4. Tác vụ phụ chạy nền (trừ kho, audit log) - lỗi được ghi audit log, không bị nuốt.
+  ///
+  /// Trả về true nếu server đã xác nhận, false nếu đang chờ đồng bộ (mất mạng,
+  /// dữ liệu đã lưu cục bộ và sẽ tự đồng bộ).
+  Future<bool> closeAndPayBill(BillModel bill, TableModel table) async {
+    final storeCode = _currentStoreCode;
+    if (!BillCodeGenerator.isSequential(bill.billCode)) {
+      bill.billCode = await allocateBillCode(storeCode: storeCode);
+    }
     bill.status = 'PAID';
     bill.closedAt = DateTime.now().millisecondsSinceEpoch;
-    await saveBill(bill);
 
-    final historyMap = {
-      'id': bill.id,
-      'storeCode': _currentStoreCode,
-      'storeName': _currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - Chi nhánh $_currentStoreCode',
-      'billCode': bill.billCode,
-      'orderCode': bill.orderCode ?? bill.billCode,
-      'tableName': bill.tableName,
-      'zone': bill.zone,
-      'totalAmount': bill.finalAmount,
-      'subTotal': bill.subTotal,
-      'discountAmount': bill.totalDiscount,
-      'paymentMethod': bill.paymentMethod,
-      'status': 'PAID',
-      'timestamp': bill.closedAt ?? bill.createdAt,
-      'createdAt': bill.createdAt,
-      'closedAt': bill.closedAt,
-      'staffUsername': bill.staffUsername,
-      'staffFullName': bill.staffFullName,
-      'cashierName': bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername,
-      'orderStaff': bill.orderStaffSummary,
-      'items': bill.items.map((i) => i.toMap()).toList(),
-      'itemsJson': jsonEncode(bill.items.map((i) => i.toMap()).toList()),
-      'actionLogs': bill.actionLogs.map((a) => a.toMap()).toList(),
-      'actionLogsJson': jsonEncode(bill.actionLogs.map((a) => a.toMap()).toList()),
-    };
-    billsRef.child(bill.id).set(historyMap).catchError((_) {});
-    _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
-
-    table.clearTable();
-    await saveTable(table);
-
-    for (final d in bill.discounts) {
-      if (d.promoId != null) {
-        incrementPromotionUsage(d.promoId!);
-      }
+    final lateProblems = <String>[];
+    void onLate(String msg) {
+      _safeLog(AuditLogModel(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        username: bill.staffUsername,
+        userFullName: bill.staffFullName,
+        userRole: 'CASHIER',
+        action: 'PROMO_SYNC_FAILED',
+        targetType: 'BILL',
+        targetId: bill.billCode,
+        details: 'Khuyến mãi của HĐ ${bill.billCode}: $msg',
+        isSuspicious: true,
+      ));
     }
 
+    final promo = await _reservePromotions(bill, storeCode, onLate, lateProblems);
+
+    final storeName = await _resolveStoreName(storeCode);
+    final record = BillRecordBuilder.build(bill, storeCode: storeCode, storeName: storeName, guestCount: table.guestCount);
+    final cleared = _copyTable(table)..clearTable();
+
+    final bool synced;
     try {
-      await InventoryService().consumeStockForBill(
-        bill.items,
-        bill.id,
-        bill.staffUsername,
+      synced = await _commitWrite(
+        _root.child('stores/$storeCode').update({
+          'bills/${bill.id}': record,
+          'history/${bill.id}': record,
+          'tables/${table.firebaseKey}': cleared.toMap(),
+        }),
+        'hóa đơn ${bill.billCode}',
       );
-    } catch (_) {}
-
-    try {
-      for (final d in bill.discounts) {
-        if (d.promoCode != null && d.promoCode!.isNotEmpty) {
-          final v = await CampaignService().lookupVoucherByCode(d.promoCode!);
-          if (v != null) {
-            await CampaignService().commitPromotionUsage(
-              campaignId: v.campaignId,
-              discountMoney: d.amount,
-              billId: bill.id,
-              username: bill.staffUsername,
-              voucherCode: d.promoCode,
-              staffNote: d.staffNote,
-              customerId: null,
-            );
-            continue;
-          }
-        }
-        if (d.promoId != null && d.promoId!.isNotEmpty) {
-          final cam = await CampaignService().getCampaign(d.promoId!);
-          if (cam != null) {
-            await CampaignService().commitPromotionUsage(
-              campaignId: cam.campaignId,
-              discountMoney: d.amount,
-              billId: bill.id,
-              username: bill.staffUsername,
-              voucherCode: d.promoCode,
-              staffNote: d.staffNote,
-              customerId: null,
-            );
-          }
-        }
+    } catch (e) {
+      final rollbackErrors = await _rollbackPromotions(promo, storeCode);
+      if (rollbackErrors.isNotEmpty) {
+        onLate('Hoàn tác khuyến mãi sau khi ghi hóa đơn lỗi thất bại: ${rollbackErrors.join("; ")}');
       }
-    } catch (_) {}
+      rethrow;
+    }
+    table.clearTable();
 
-    await _logAction(AuditLogModel(
+    unawaited(_runPaymentFollowUps(bill, storeCode, [...promo.notes, ...lateProblems], synced));
+    return synced;
+  }
+
+  /// Trừ kho cho hóa đơn (idempotent - có thể gọi lại để thử lại khi lần trước lỗi).
+  Future<void> applyStockForBill(BillModel bill, {String? storeCode}) async {
+    await InventoryService().consumeStockForBill(
+      bill.items,
+      bill.id,
+      bill.staffUsername,
+      storeCode: storeCode ?? _currentStoreCode,
+    );
+  }
+
+  Future<void> _runPaymentFollowUps(BillModel bill, String storeCode, List<String> problems, bool synced) async {
+    try {
+      await applyStockForBill(bill, storeCode: storeCode);
+    } catch (e) {
+      problems.add('Trừ kho chưa hoàn tất (gọi lại applyStockForBill để thử lại): $e');
+    }
+
+    await _safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: bill.staffUsername,
       userFullName: bill.staffFullName,
@@ -337,8 +445,139 @@ class OrderRepository {
       action: 'PAY_BILL',
       targetType: 'BILL',
       targetId: bill.billCode,
-      details: 'Thanh toán hóa đơn ${bill.billCode} bàn ${bill.tableName}: ${bill.finalAmount}đ (${bill.paymentMethod})',
+      details: 'Thanh toán hóa đơn ${bill.billCode} bàn ${bill.tableName}: ${bill.finalAmount}đ (${bill.paymentMethod})${synced ? "" : " [chờ đồng bộ]"}',
     ));
+
+    if (problems.isNotEmpty) {
+      await _safeLog(AuditLogModel(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        username: bill.staffUsername,
+        userFullName: bill.staffFullName,
+        userRole: 'CASHIER',
+        action: 'PAY_BILL_FOLLOWUP_FAILED',
+        targetType: 'BILL',
+        targetId: bill.id,
+        details: 'HĐ ${bill.billCode}: ${problems.join(" | ")}',
+        isSuspicious: true,
+      ));
+    }
+  }
+
+  /// Giữ lượt dùng cho mọi khuyến mãi trên hóa đơn; nếu 1 khuyến mãi vượt giới hạn thì
+  /// hoàn tác những cái đã giữ và ném lỗi.
+  Future<_PromoCommit> _reservePromotions(
+    BillModel bill,
+    String storeCode,
+    void Function(String) onLate,
+    List<String> problems,
+  ) async {
+    final out = _PromoCommit();
+    final cs = CampaignService();
+    try {
+      for (final d in bill.discounts) {
+        final code = d.promoCode?.trim().toUpperCase() ?? '';
+        final promoId = d.promoId?.trim() ?? '';
+        String? campaignId;
+        String? voucherCode;
+
+        if (code.isNotEmpty) {
+          try {
+            final lookup = await _root.child('stores/$storeCode/voucher_lookup/$code').get().timeout(_readTimeout);
+            if (lookup.value is Map) {
+              campaignId = (lookup.value as Map)['campaignId']?.toString();
+              voucherCode = code;
+            }
+          } catch (_) {
+            // Mất mạng: giả định là voucher của chương trình promoId, để transaction chạy nền
+            if (promoId.isNotEmpty) {
+              campaignId = promoId;
+              voucherCode = code;
+            }
+            out.notes.add('Không tra được voucher $code lúc thanh toán (mất mạng)');
+          }
+        }
+        if (campaignId == null && promoId.isNotEmpty) {
+          try {
+            final snap = await _root.child('stores/$storeCode/campaigns/$promoId').get().timeout(_readTimeout);
+            if (snap.exists) campaignId = promoId;
+          } catch (_) {
+            out.notes.add('Không đọc được khuyến mãi $promoId lúc thanh toán (mất mạng)');
+          }
+        }
+
+        if (campaignId != null && campaignId.isNotEmpty) {
+          final r = await cs.reservePromotionUsage(
+            campaignId: campaignId,
+            discountMoney: d.amount,
+            customerId: bill.customerId,
+            voucherCode: voucherCode,
+            staffNote: d.staffNote,
+            billId: bill.id,
+            username: bill.staffUsername,
+            storeCode: storeCode,
+            timeout: _txnTimeout,
+            onLateFailure: onLate,
+          );
+          out.campaigns.add(r);
+          if (r.unverified) out.notes.add('Lượt dùng khuyến mãi $campaignId chưa được server xác nhận (đang đồng bộ)');
+        } else if (promoId.isNotEmpty) {
+          final ok = await _changeLegacyPromotionUsage(storeCode, promoId, 1, onLate: onLate);
+          if (ok == false) {
+            throw PromotionLimitExceededException('Khuyến mãi "${d.description}" đã hết lượt sử dụng');
+          }
+          if (ok == true) out.legacyIds.add(promoId);
+        }
+      }
+    } catch (e) {
+      final errors = await _rollbackPromotions(out, storeCode);
+      problems.addAll(errors);
+      if (errors.isNotEmpty) onLate('Hoàn tác khuyến mãi lỗi: ${errors.join("; ")}');
+      rethrow;
+    }
+    return out;
+  }
+
+  Future<List<String>> _rollbackPromotions(_PromoCommit promo, String storeCode) async {
+    final errors = <String>[];
+    for (final r in promo.campaigns) {
+      errors.addAll(await CampaignService().rollbackPromotionUsage(r, timeout: _txnTimeout));
+    }
+    for (final id in promo.legacyIds) {
+      final ok = await _changeLegacyPromotionUsage(storeCode, id, -1);
+      if (ok != true) errors.add('Hoàn tác lượt dùng khuyến mãi $id chưa xác nhận');
+    }
+    promo.campaigns.clear();
+    promo.legacyIds.clear();
+    return errors;
+  }
+
+  /// Tăng/giảm usageCount của khuyến mãi cũ (promotions/{id}) bằng transaction,
+  /// kiểm tra maxUsage trong transaction khi tăng.
+  /// true = đã ghi; false = vượt giới hạn; null = khuyến mãi không tồn tại hoặc chưa xác nhận (offline).
+  Future<bool?> _changeLegacyPromotionUsage(String storeCode, String promoId, int delta, {void Function(String)? onLate}) async {
+    final ref = _root.child('stores/$storeCode/promotions/$promoId');
+    final fut = ref.runTransaction((Object? current) {
+      // Cache có thể trống: ghi null để server trả về dữ liệu thật rồi chạy lại
+      if (current == null) return Transaction.success(null);
+      final m = Map<String, dynamic>.from(current as Map);
+      final maxUsage = (m['maxUsage'] as num?)?.toInt() ?? 0;
+      final next = PromotionUsageMath.applyLegacyUsage(m['usageCount'], delta: delta, maxUsage: maxUsage);
+      if (next == null) return Transaction.abort();
+      m['usageCount'] = next;
+      return Transaction.success(m);
+    });
+    try {
+      final res = await fut.timeout(_txnTimeout);
+      if (!res.committed) return false;
+      return res.snapshot.value == null ? null : true;
+    } on TimeoutException {
+      unawaited(fut.then((res) {
+        if (!res.committed) onLate?.call('Khuyến mãi $promoId vượt giới hạn khi đồng bộ');
+      }, onError: (Object e) {
+        onLate?.call('Cập nhật lượt dùng khuyến mãi $promoId lỗi: $e');
+      }));
+      return null;
+    }
   }
 
   Future<void> cancelActiveBill(
@@ -348,6 +587,7 @@ class OrderRepository {
     required String staffFullName,
     required String staffRole,
   }) async {
+    final storeCode = _currentStoreCode;
     final items = table.currentItems;
     final totalAmount = items.fold(0, (sum, i) => sum + i.itemTotal);
     final billCode = (table.currentBillId != null && table.currentBillId!.startsWith('HD-'))
@@ -356,6 +596,13 @@ class OrderRepository {
     final orderCode = table.currentOrderCode ?? FormatUtils.orderCode();
     final now = DateTime.now().millisecondsSinceEpoch;
     final cancelBillId = 'BILL_CANCELLED_$now';
+    final cancelLog = OrderActionLogModel(
+      timestamp: now,
+      staffUsername: staffUsername,
+      staffFullName: staffFullName,
+      action: 'CANCEL_BILL',
+      details: '$staffFullName hủy hóa đơn bàn ${table.name}. Lý do: $reason',
+    ).toMap();
 
     final billRecord = {
       'id': cancelBillId,
@@ -363,7 +610,8 @@ class OrderRepository {
       'orderCode': orderCode,
       'tableName': table.name,
       'zone': table.zone,
-      'storeCode': _currentStoreCode,
+      'storeCode': storeCode,
+      'storeName': await _resolveStoreName(storeCode),
       'totalAmount': totalAmount,
       'subTotal': totalAmount,
       'discountAmount': 0,
@@ -380,32 +628,22 @@ class OrderRepository {
       'orderStaff': staffFullName,
       'items': items.map((i) => i.toMap()).toList(),
       'itemsJson': jsonEncode(items.map((i) => i.toMap()).toList()),
-      'actionLogs': [
-        OrderActionLogModel(
-          timestamp: now,
-          staffUsername: staffUsername,
-          staffFullName: staffFullName,
-          action: 'CANCEL_BILL',
-          details: '$staffFullName hủy hóa đơn bàn ${table.name}. Lý do: $reason',
-        ).toMap(),
-      ],
-      'actionLogsJson': jsonEncode([
-        OrderActionLogModel(
-          timestamp: now,
-          staffUsername: staffUsername,
-          staffFullName: staffFullName,
-          action: 'CANCEL_BILL',
-          details: '$staffFullName hủy hóa đơn bàn ${table.name}. Lý do: $reason',
-        ).toMap(),
-      ]),
+      'actionLogs': [cancelLog],
+      'actionLogsJson': jsonEncode([cancelLog]),
     };
-    _root.child('stores/$_currentStoreCode/history').child(cancelBillId).set(billRecord).catchError((_) {});
-    billsRef.child(cancelBillId).set(billRecord).catchError((_) {});
+    final cleared = _copyTable(table)..clearTable();
 
+    await _commitWrite(
+      _root.child('stores/$storeCode').update({
+        'history/$cancelBillId': billRecord,
+        'bills/$cancelBillId': billRecord,
+        'tables/${table.firebaseKey}': cleared.toMap(),
+      }),
+      'hủy hóa đơn bàn ${table.name}',
+    );
     table.clearTable();
-    await saveTable(table);
 
-    await _logAction(AuditLogModel(
+    await _safeLog(AuditLogModel(
       timestamp: now,
       username: staffUsername,
       userFullName: staffFullName,
@@ -425,8 +663,8 @@ class OrderRepository {
     required String staffFullName,
     required String staffRole,
   }) async {
+    final storeCode = _currentStoreCode;
     final now = DateTime.now().millisecondsSinceEpoch;
-    bill.status = 'CANCELLED';
     final cancelLog = OrderActionLogModel(
       timestamp: now,
       staffUsername: staffUsername,
@@ -434,46 +672,41 @@ class OrderRepository {
       action: 'CANCEL_BILL',
       details: '$staffFullName hủy hóa đơn ${bill.billCode}. Lý do: $reason',
     );
-    bill.actionLogs.add(cancelLog);
+    final previousStatus = bill.status;
+    final previousLogs = bill.actionLogs;
+    bill.status = 'CANCELLED';
+    bill.actionLogs = [...bill.actionLogs, cancelLog];
 
-    await billsRef.child(bill.id).set(bill.toMap());
-
-    final historyMap = {
-      'id': bill.id,
-      'storeCode': _currentStoreCode,
-      'storeName': _currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - Chi nhánh $_currentStoreCode',
-      'billCode': bill.billCode,
-      'orderCode': bill.orderCode ?? bill.billCode,
-      'tableName': bill.tableName,
-      'zone': bill.zone,
-      'totalAmount': bill.finalAmount,
-      'subTotal': bill.subTotal,
-      'discountAmount': bill.totalDiscount,
-      'paymentMethod': bill.paymentMethod,
-      'status': 'CANCELLED',
-      'cancelReason': reason,
-      'cancelledAt': now,
-      'cancelledBy': staffFullName,
-      'timestamp': bill.closedAt ?? bill.createdAt,
-      'createdAt': bill.createdAt,
-      'closedAt': bill.closedAt,
-      'staffUsername': bill.staffUsername,
-      'staffFullName': bill.staffFullName,
-      'cashierName': bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername,
-      'orderStaff': bill.orderStaffSummary,
-      'items': bill.items.map((i) => i.toMap()).toList(),
-      'itemsJson': jsonEncode(bill.items.map((i) => i.toMap()).toList()),
-      'actionLogs': bill.actionLogs.map((a) => a.toMap()).toList(),
-      'actionLogsJson': jsonEncode(bill.actionLogs.map((a) => a.toMap()).toList()),
-    };
-    billsRef.child(bill.id).set(historyMap).catchError((_) {});
-    _root.child('stores/$_currentStoreCode/history').child(bill.id).set(historyMap).catchError((_) {});
+    final record = BillRecordBuilder.build(
+      bill,
+      storeCode: storeCode,
+      storeName: await _resolveStoreName(storeCode),
+      extra: {
+        'cancelReason': reason,
+        'cancellationReason': reason,
+        'cancelledAt': now,
+        'cancelledBy': staffFullName,
+      },
+    );
+    try {
+      await _commitWrite(
+        _root.child('stores/$storeCode').update({
+          'bills/${bill.id}': record,
+          'history/${bill.id}': record,
+        }),
+        'hủy hóa đơn ${bill.billCode}',
+      );
+    } catch (_) {
+      bill.status = previousStatus;
+      bill.actionLogs = previousLogs;
+      rethrow;
+    }
 
     if (_onDeductCashShift != null) {
       await _onDeductCashShift(bill.paymentMethod, bill.finalAmount);
     }
 
-    await _logAction(AuditLogModel(
+    await _safeLog(AuditLogModel(
       timestamp: now,
       username: staffUsername,
       userFullName: staffFullName,
@@ -495,14 +728,19 @@ class OrderRepository {
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    await billsRef.child(bill.id).remove();
-    await _root.child('stores/$_currentStoreCode/history').child(bill.id).remove().catchError((_) {});
+    await _commitWrite(
+      _root.child('stores/$_currentStoreCode').update({
+        'bills/${bill.id}': null,
+        'history/${bill.id}': null,
+      }),
+      'xóa hóa đơn ${bill.billCode}',
+    );
 
     if (bill.status == 'PAID' && _onDeductCashShift != null) {
       await _onDeductCashShift(bill.paymentMethod, bill.finalAmount);
     }
 
-    await _logAction(AuditLogModel(
+    await _safeLog(AuditLogModel(
       timestamp: now,
       username: staffUsername,
       userFullName: staffFullName,
@@ -547,13 +785,10 @@ class OrderRepository {
     await promotionsRef.child(promoId).remove();
   }
 
-  Future<void> incrementPromotionUsage(String promoId) async {
-    try {
-      final snap = await promotionsRef.child(promoId).child('usageCount').get().timeout(const Duration(seconds: 2));
-      final count = (snap.value as num?)?.toInt() ?? 0;
-      await promotionsRef.child(promoId).child('usageCount').set(count + 1);
-    } catch (_) {}
-  }
+  /// Tăng lượt dùng khuyến mãi (transaction, kiểm tra maxUsage).
+  /// true = đã tăng; false = đã hết lượt; null = không tồn tại / chưa xác nhận (offline).
+  Future<bool?> incrementPromotionUsage(String promoId) =>
+      _changeLegacyPromotionUsage(_currentStoreCode, promoId, 1);
 
   // ==================== PRODUCTS & CATEGORIES ====================
   DatabaseReference getProductsRef([String? storeCode]) {
@@ -741,11 +976,11 @@ class OrderRepository {
     }).handleError((_) => <KitchenOrderModel>[]);
   }
 
+  /// Gửi phiếu bếp. Lỗi thật được ném ra ([DataWriteException]); mất mạng thì phiếu được
+  /// giữ cục bộ và tự đồng bộ.
   Future<void> sendKitchenOrder(KitchenOrderModel order) async {
     final key = kitchenOrdersRef.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
-    try {
-      await kitchenOrdersRef.child(key).set(order.toMap()).timeout(const Duration(seconds: 2));
-    } catch (_) {}
+    await _commitWrite(kitchenOrdersRef.child(key).set(order.toMap()), 'phiếu bếp bàn ${order.tableName}');
   }
 
   Future<void> sendOrderToKitchen({
@@ -817,4 +1052,11 @@ class OrderRepository {
     }
     return matchesA.length.compareTo(matchesB.length);
   }
+}
+
+/// Các lượt khuyến mãi đã giữ cho 1 hóa đơn (để hoàn tác nếu ghi hóa đơn thất bại)
+class _PromoCommit {
+  final List<PromotionUsageReservation> campaigns = [];
+  final List<String> legacyIds = [];
+  final List<String> notes = [];
 }

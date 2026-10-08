@@ -78,7 +78,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     });
     _fb.tablesStream().listen((t) {
       if (mounted) setState(() => _tables = t);
-    });
+    }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
     _fb.cashShiftsStream().listen((s) {
       if (mounted) setState(() => _shifts = s);
     });
@@ -460,7 +460,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   _selectedStoreCode.isEmpty ? Icons.check_circle : Icons.store,
                   color: _selectedStoreCode.isEmpty ? TramColors.brandPrimary : Colors.grey,
                 ),
-                title: const Text('Chi nhánh trung tâm (Hiện tại)'),
+                title: Text('${_auth.currentStoreInfo?.storeName ?? _auth.currentStoreCode} (Hiện tại)'),
                 onTap: () {
                   setState(() => _selectedStoreCode = _auth.currentStoreCode);
                   Navigator.pop(ctx);
@@ -555,7 +555,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
       final currentStoreName = _stores.firstWhere(
         (s) => s.storeCode == _selectedStoreCode,
-        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'Chi nhánh trung tâm'),
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm - ${_auth.currentStoreCode}'),
       ).storeName;
 
       // Header Info
@@ -796,7 +796,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   Widget build(BuildContext context) {
     final currentStoreName = _stores.firstWhere(
       (s) => s.storeCode == _selectedStoreCode,
-      orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'Chi nhánh trung tâm'),
+      orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm - ${_auth.currentStoreCode}'),
     ).storeName;
 
     return Scaffold(
@@ -1008,7 +1008,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     try {
       final store = _stores.firstWhere(
         (s) => s.storeCode == _selectedStoreCode,
-        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm - ${_auth.currentStoreCode}'),
       );
       final z = ReportCalculator.generateEndOfDayZReport(
         bills: _rangeBills,
@@ -1073,7 +1073,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     try {
       final store = _stores.firstWhere(
         (s) => s.storeCode == _selectedStoreCode,
-        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+        orElse: () => _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm - ${_auth.currentStoreCode}'),
       );
       final z = ReportCalculator.generateEndOfDayZReport(
         bills: _rangeBills,

@@ -119,7 +119,7 @@ export default function ShiftsPage() {
   // Shift bills & promotion stats for selected shift (Module 4)
   const selectedShiftBills = useMemo(() => {
     if (!selectedShift) return [];
-    const sId = selectedShift.shiftId || (selectedShift as any).id || "";
+    const sId = selectedShift.shiftId || (selectedShift as { id?: string }).id || "";
     return historyData.filter((b) => {
       if (b.shiftId && sId) return b.shiftId === sId;
       const bTime = Number(b.closedAt || b.createdAt || b.timestamp || 0);
@@ -178,7 +178,7 @@ export default function ShiftsPage() {
     const storeInfo =
       targetStore || {
         storeName: "POS Trạm",
-        storeCode: selectedShift.storeCode || "TRAM01",
+        storeCode: selectedShift.storeCode || currentStoreCode || "",
       };
     exportShiftPromotionsExcel(selectedShift, selectedShiftBills, storeInfo).toExcel();
   };

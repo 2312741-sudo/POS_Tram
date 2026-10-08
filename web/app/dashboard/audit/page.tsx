@@ -28,6 +28,7 @@ import {
   Copy,
   Check,
   Printer,
+  type LucideIcon,
 } from "lucide-react";
 import { exportAuditLogs, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, AuditLogItem } from "@/lib/data-context";
@@ -37,7 +38,7 @@ import { calculateCancellationReport, formatVND } from "@/lib/reports";
 interface ActionConfig {
   label: string;
   shortLabel: string;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   bg: string;
   border: string;

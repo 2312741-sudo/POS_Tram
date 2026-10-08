@@ -414,7 +414,7 @@ export default function OrdersPage() {
           <select
             className="input-field"
             value={datePreset}
-            onChange={(e: any) => { setDatePreset(e.target.value); setPage(1); }}
+            onChange={(e) => { setDatePreset(e.target.value as typeof datePreset); setPage(1); }}
             style={{ width: "auto", minWidth: "160px" }}
           >
             <option value="ALL">📅 Tất cả thời gian</option>

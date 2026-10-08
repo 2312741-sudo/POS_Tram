@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import '../../data/models/campaign_models.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/domain/order_integrity.dart';
 
 /// Dịch vụ quản lý Chương trình khuyến mãi & Voucher
 class CampaignService {
@@ -132,30 +134,6 @@ class CampaignService {
     return CampaignCountersModel.fromMap(Map<String, dynamic>.from(snapshot.value as Map<dynamic, dynamic>));
   }
 
-  /// Cập nhật atomics bộ đếm khuyến mãi
-  Future<void> _updateCampaignCounters(String campaignId, {int spentDelta = 0, int useDelta = 0}) async {
-    final ref = _storeRef.child('campaign_counters/$campaignId');
-    await ref.runTransaction((Object? postData) {
-      if (postData == null) {
-        return Transaction.success({
-          'campaignId': campaignId,
-          'spentMoney': spentDelta,
-          'reservedMoney': 0,
-          'committedUseCount': useDelta,
-          'reservedUseCount': 0,
-          'version': 1,
-        });
-      }
-      
-      Map<dynamic, dynamic> data = postData as Map<dynamic, dynamic>;
-      data['spentMoney'] = (data['spentMoney'] as int? ?? 0) + spentDelta;
-      data['committedUseCount'] = (data['committedUseCount'] as int? ?? 0) + useDelta;
-      data['version'] = (data['version'] as int? ?? 0) + 1;
-      
-      return Transaction.success(data);
-    });
-  }
-
   // ==================== CUSTOMER CAMPAIGN COUNTERS ====================
 
   /// Lấy số lần khách hàng đã dùng khuyến mãi này
@@ -171,27 +149,6 @@ class CampaignService {
       );
     }
     return CustomerCampaignCounterModel.fromMap(Map<String, dynamic>.from(snapshot.value as Map<dynamic, dynamic>));
-  }
-
-  /// Tăng số lượt dùng của khách hàng
-  Future<void> _incrementCustomerCounter(String campaignId, String customerId) async {
-    final key = '${campaignId}_$customerId';
-    final ref = _storeRef.child('customer_campaign_counters/$key');
-    await ref.runTransaction((Object? postData) {
-      if (postData == null) {
-        return Transaction.success({
-          'campaignId': campaignId,
-          'customerId': customerId,
-          'usedCount': 1,
-          'heldCount': 0,
-        });
-      }
-      
-      Map<dynamic, dynamic> data = postData as Map<dynamic, dynamic>;
-      data['usedCount'] = (data['usedCount'] as int? ?? 0) + 1;
-      
-      return Transaction.success(data);
-    });
   }
 
   // ==================== VOUCHERS ====================
@@ -283,52 +240,67 @@ class CampaignService {
     return VoucherModel.fromMap(Map<String, dynamic>.from(voucherSnap.value as Map<dynamic, dynamic>));
   }
 
-  /// Đổi voucher
+  /// Handler transaction đổi voucher: chỉ đổi được khi voucher ở trạng thái hợp lệ.
+  /// [onReject] nhận lý do từ chối ('MINE' nếu đã được chính hóa đơn này đổi trước đó).
+  TransactionHandler _redeemVoucherHandler({
+    required String billId,
+    required String username,
+    String? staffNote,
+    required void Function(String reason) onReject,
+  }) {
+    return (Object? current) {
+      // Cache cục bộ có thể chưa có dữ liệu: ghi null để server trả về giá trị thật và chạy lại
+      if (current == null) return Transaction.success(null);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final m = Map<String, dynamic>.from(current as Map);
+      final state = m['state']?.toString() ?? '';
+      if (state == VoucherState.redeemed.toMap()) {
+        onReject(m['redeemedBillId'] == billId ? 'MINE' : 'Mã voucher đã được sử dụng');
+        return Transaction.abort();
+      }
+      if (state == VoucherState.cancelled.toMap()) {
+        onReject('Mã voucher đã bị hủy');
+        return Transaction.abort();
+      }
+      if (state == VoucherState.draft.toMap()) {
+        onReject('Mã voucher chưa được phát hành');
+        return Transaction.abort();
+      }
+      if (state == VoucherState.reserved.toMap()) {
+        final exp = (m['holdExpiresAt'] as num?)?.toInt();
+        if (exp != null && now < exp) {
+          onReject('Mã voucher đang được giữ bởi giao dịch khác');
+          return Transaction.abort();
+        }
+      }
+      m['state'] = VoucherState.redeemed.toMap();
+      m['redeemedAt'] = now;
+      m['redeemedBillId'] = billId;
+      m['redeemedBy'] = username;
+      m['holdId'] = null;
+      m['holdExpiresAt'] = null;
+      m['version'] = ((m['version'] as num?)?.toInt() ?? 0) + 1;
+      if (staffNote != null && staffNote.isNotEmpty) m['staffNote'] = staffNote;
+      return Transaction.success(m);
+    };
+  }
+
+  /// Đổi voucher (transaction - chống 2 máy cùng dùng 1 mã)
   Future<VoucherModel?> redeemVoucher(String code, String billId, String username, {String? staffNote}) async {
     final normalized = code.trim().toUpperCase();
     final voucher = await lookupVoucherByCode(normalized);
-    
     if (voucher == null) {
       throw Exception('Không tìm thấy mã voucher');
     }
-    
-    final now = DateTime.now().millisecondsSinceEpoch;
-    
-    // Kiểm tra trạng thái và hạn hold
-    if (voucher.state == VoucherState.cancelled.toMap()) {
-      throw Exception('Mã voucher đã bị hủy');
-    }
-    if (voucher.state == VoucherState.redeemed.toMap()) {
-      throw Exception('Mã voucher đã được sử dụng');
-    }
-    if (voucher.state == VoucherState.reserved.toMap()) {
-      if (voucher.holdExpiresAt != null && now < voucher.holdExpiresAt!) {
-        throw Exception('Mã voucher đang được giữ bởi giao dịch khác');
-      }
-      // Nếu hết hạn hold thì cho phép redeem
-    }
-    if (voucher.state == VoucherState.draft.toMap()) {
-      throw Exception('Mã voucher chưa được phát hành');
-    }
-
-    // Cập nhật trạng thái voucher
-    final updatedVoucher = voucher.copyWith(
-      state: VoucherState.redeemed.toMap(),
-      redeemedAt: now,
-      redeemedBillId: billId,
-      redeemedBy: username,
+    String? reason;
+    final res = await _storeRef.child('vouchers/${voucher.campaignId}/${voucher.voucherId}').runTransaction(
+      _redeemVoucherHandler(billId: billId, username: username, staffNote: staffNote, onReject: (r) => reason = r),
     );
-    final map = updatedVoucher.toMap();
-    map['holdId'] = null;
-    map['holdExpiresAt'] = null;
-    map['version'] = voucher.version + 1;
-    if (staffNote != null && staffNote.isNotEmpty) {
-      map['staffNote'] = staffNote;
+    if (!res.committed || res.snapshot.value == null) {
+      if (reason == 'MINE') return voucher;
+      throw Exception(reason ?? 'Không tìm thấy mã voucher');
     }
-    
-    await _storeRef.child('vouchers/${voucher.campaignId}/${voucher.voucherId}').set(map);
-    
-    return updatedVoucher;
+    return VoucherModel.fromMap(Map<String, dynamic>.from(res.snapshot.value as Map<dynamic, dynamic>));
   }
 
   /// Giữ voucher (reserve) với TTL
@@ -406,7 +378,238 @@ class CampaignService {
 
   // ==================== COMMIT PROMOTION TO BILL ====================
 
-  /// Xác nhận sử dụng khuyến mãi cho hóa đơn
+  DatabaseReference _refFor(String? storeCode) =>
+      (storeCode != null && storeCode.trim().isNotEmpty) ? _db.ref('stores/${storeCode.trim().toUpperCase()}') : _storeRef;
+
+  /// Chạy transaction có timeout.
+  /// true = đã commit, false = bị từ chối (abort / vượt giới hạn),
+  /// null = chưa xác nhận được (offline) - transaction vẫn tiếp tục chạy nền khi có mạng.
+  Future<bool?> _runTxn(
+    DatabaseReference ref,
+    TransactionHandler handler, {
+    required Duration timeout,
+    required bool offline,
+    required String label,
+    void Function(String message)? onLateFailure,
+  }) async {
+    final fut = ref.runTransaction(handler);
+    void watchLate() {
+      fut.then((res) {
+        if (!res.committed) onLateFailure?.call('$label: bị từ chối khi đồng bộ (vượt giới hạn?)');
+      }, onError: (Object e) {
+        onLateFailure?.call('$label: $e');
+      });
+    }
+
+    if (offline) {
+      watchLate();
+      return null;
+    }
+    try {
+      final res = await fut.timeout(timeout);
+      return res.committed;
+    } on TimeoutException {
+      watchLate();
+      return null;
+    }
+  }
+
+  /// Giữ/ghi nhận lượt dùng khuyến mãi cho hóa đơn một cách nguyên tử (transaction),
+  /// kiểm tra giới hạn maxUses / budgetMoney / maxUsesPerCustomer và trạng thái voucher
+  /// NGAY TRONG transaction. Ném [PromotionLimitExceededException] nếu vượt giới hạn
+  /// (các bước đã áp dụng sẽ được hoàn tác).
+  ///
+  /// Khi mất mạng (timeout) không chặn bán hàng: các transaction còn lại được xếp hàng
+  /// chạy nền, reservation.unverified = true, lỗi muộn báo qua [onLateFailure].
+  Future<PromotionUsageReservation> reservePromotionUsage({
+    required String campaignId,
+    required int discountMoney,
+    String? customerId,
+    String? voucherCode,
+    String? staffNote,
+    required String billId,
+    required String username,
+    String? storeCode,
+    Duration timeout = const Duration(seconds: 4),
+    void Function(String message)? onLateFailure,
+  }) async {
+    final store = _refFor(storeCode);
+    final r = PromotionUsageReservation(
+      campaignId: campaignId,
+      discountMoney: discountMoney,
+      customerId: (customerId != null && customerId.isNotEmpty) ? customerId : null,
+      voucherCode: (voucherCode != null && voucherCode.trim().isNotEmpty) ? voucherCode.trim().toUpperCase() : null,
+      billId: billId,
+      storeCode: storeCode,
+    );
+    bool offline = false;
+
+    CampaignModel? campaign;
+    try {
+      final snap = await store.child('campaigns/$campaignId').get().timeout(timeout);
+      if (snap.value != null) {
+        campaign = CampaignModel.fromMap(Map<String, dynamic>.from(snap.value as Map<dynamic, dynamic>));
+      }
+    } catch (_) {
+      offline = true; // Không đọc được cấu hình -> không kiểm tra được giới hạn, không chặn bán
+    }
+    final campaignName = campaign?.name ?? campaignId;
+
+    Future<void> fail(String message) async {
+      await rollbackPromotionUsage(r, timeout: timeout);
+      throw PromotionLimitExceededException(message);
+    }
+
+    // 1. Voucher (mã dùng 1 lần)
+    if (r.voucherCode != null) {
+      try {
+        if (offline) throw TimeoutException('offline');
+        final lookup = await store.child('voucher_lookup/${r.voucherCode}').get().timeout(timeout);
+        if (lookup.value is Map) {
+          final m = Map<String, dynamic>.from(lookup.value as Map);
+          r.voucherCampaignId = m['campaignId']?.toString();
+          r.voucherId = m['voucherId']?.toString();
+        }
+      } catch (_) {
+        offline = true;
+      }
+      if (r.voucherId != null && r.voucherCampaignId != null) {
+        String? reason;
+        final ok = await _runTxn(
+          store.child('vouchers/${r.voucherCampaignId}/${r.voucherId}'),
+          _redeemVoucherHandler(billId: billId, username: username, staffNote: staffNote, onReject: (x) => reason = x),
+          timeout: timeout,
+          offline: offline,
+          label: 'Đổi voucher ${r.voucherCode} (HĐ $billId)',
+          onLateFailure: onLateFailure,
+        );
+        if (ok == null) {
+          offline = true;
+          r.voucherRedeemed = true; // Đã xếp hàng, coi như áp dụng
+        } else if (ok) {
+          r.voucherRedeemed = true;
+        } else if (reason == 'MINE') {
+          r.voucherRedeemed = false; // đã đổi từ trước bởi chính hóa đơn này, không hoàn tác
+        } else {
+          await fail('${reason ?? "Mã voucher không khả dụng"} (${r.voucherCode})');
+        }
+      } else if (offline) {
+        onLateFailure?.call('Chưa xác nhận được voucher ${r.voucherCode} cho HĐ $billId (mất mạng)');
+      }
+    }
+
+    // 2. Bộ đếm tổng của chương trình
+    final counterOk = await _runTxn(
+      store.child('campaign_counters/$campaignId'),
+      (cur) {
+        final next = PromotionUsageMath.applyCampaignUsage(
+          cur,
+          campaignId: campaignId,
+          spentDelta: discountMoney,
+          useDelta: 1,
+          maxUses: campaign?.maxUses,
+          budgetMoney: campaign?.budgetMoney,
+        );
+        return next == null ? Transaction.abort() : Transaction.success(next);
+      },
+      timeout: timeout,
+      offline: offline,
+      label: 'Bộ đếm khuyến mãi $campaignName (HĐ $billId)',
+      onLateFailure: onLateFailure,
+    );
+    if (counterOk == false) {
+      await fail('Khuyến mãi "$campaignName" đã hết lượt sử dụng hoặc hết ngân sách');
+    }
+    if (counterOk == null) offline = true;
+    r.counterApplied = true;
+
+    // 3. Bộ đếm theo khách hàng
+    if (r.customerId != null) {
+      final key = '${campaignId}_${r.customerId}';
+      final custOk = await _runTxn(
+        store.child('customer_campaign_counters/$key'),
+        (cur) {
+          final next = PromotionUsageMath.applyCustomerUsage(
+            cur,
+            campaignId: campaignId,
+            customerId: r.customerId!,
+            delta: 1,
+            maxUsesPerCustomer: campaign?.maxUsesPerCustomer,
+          );
+          return next == null ? Transaction.abort() : Transaction.success(next);
+        },
+        timeout: timeout,
+        offline: offline,
+        label: 'Lượt dùng của khách ${r.customerId} - $campaignName (HĐ $billId)',
+        onLateFailure: onLateFailure,
+      );
+      if (custOk == false) {
+        await fail('Khách hàng đã dùng hết số lượt cho phép của khuyến mãi "$campaignName"');
+      }
+      if (custOk == null) offline = true;
+      r.customerApplied = true;
+    }
+
+    r.unverified = offline;
+    return r;
+  }
+
+  /// Hoàn tác các bước đã áp dụng của [r] (khi ghi hóa đơn thất bại / vượt giới hạn).
+  /// Trả về danh sách lỗi (rỗng nếu thành công) - không ném lỗi.
+  Future<List<String>> rollbackPromotionUsage(
+    PromotionUsageReservation r, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final store = _refFor(r.storeCode);
+    final errors = <String>[];
+    Future<void> guard(String label, Future<void> Function() op) async {
+      try {
+        await op().timeout(timeout);
+      } catch (e) {
+        errors.add('$label: $e');
+      }
+    }
+
+    if (r.customerApplied && r.customerId != null) {
+      await guard('Hoàn tác lượt khách', () async {
+        await store.child('customer_campaign_counters/${r.campaignId}_${r.customerId}').runTransaction((cur) {
+          if (cur == null) return Transaction.success(null);
+          return Transaction.success(PromotionUsageMath.applyCustomerUsage(cur,
+              campaignId: r.campaignId, customerId: r.customerId!, delta: -1));
+        });
+      });
+      r.customerApplied = false;
+    }
+    if (r.counterApplied) {
+      await guard('Hoàn tác bộ đếm khuyến mãi', () async {
+        await store.child('campaign_counters/${r.campaignId}').runTransaction((cur) {
+          if (cur == null) return Transaction.success(null);
+          return Transaction.success(PromotionUsageMath.applyCampaignUsage(cur,
+              campaignId: r.campaignId, spentDelta: -r.discountMoney, useDelta: -1));
+        });
+      });
+      r.counterApplied = false;
+    }
+    if (r.voucherRedeemed && r.voucherId != null && r.voucherCampaignId != null) {
+      await guard('Hoàn tác voucher', () async {
+        await store.child('vouchers/${r.voucherCampaignId}/${r.voucherId}').runTransaction((cur) {
+          if (cur == null) return Transaction.success(null);
+          final m = Map<String, dynamic>.from(cur as Map);
+          if (m['redeemedBillId'] != r.billId) return Transaction.abort();
+          m['state'] = VoucherState.released.toMap();
+          m['redeemedAt'] = null;
+          m['redeemedBillId'] = null;
+          m['redeemedBy'] = null;
+          m['version'] = ((m['version'] as num?)?.toInt() ?? 0) + 1;
+          return Transaction.success(m);
+        });
+      });
+      r.voucherRedeemed = false;
+    }
+    return errors;
+  }
+
+  /// Xác nhận sử dụng khuyến mãi cho hóa đơn (giữ tương thích API cũ).
   Future<void> commitPromotionUsage({
     required String campaignId,
     required int discountMoney,
@@ -416,18 +619,15 @@ class CampaignService {
     required String billId,
     required String username,
   }) async {
-    // 1. Cập nhật campaign counters
-    await _updateCampaignCounters(campaignId, spentDelta: discountMoney, useDelta: 1);
-    
-    // 2. Cập nhật customer counter nếu có
-    if (customerId != null && customerId.isNotEmpty) {
-      await _incrementCustomerCounter(campaignId, customerId);
-    }
-    
-    // 3. Redeem voucher nếu có
-    if (voucherCode != null && voucherCode.isNotEmpty) {
-      await redeemVoucher(voucherCode, billId, username, staffNote: staffNote);
-    }
+    await reservePromotionUsage(
+      campaignId: campaignId,
+      discountMoney: discountMoney,
+      customerId: customerId,
+      voucherCode: voucherCode,
+      staffNote: staffNote,
+      billId: billId,
+      username: username,
+    );
   }
 
   // ==================== HELPER ====================
@@ -440,4 +640,31 @@ class CampaignService {
     }
     return result;
   }
+}
+
+/// Kết quả giữ lượt dùng khuyến mãi cho 1 hóa đơn (dùng để hoàn tác nếu ghi hóa đơn lỗi)
+class PromotionUsageReservation {
+  final String campaignId;
+  final int discountMoney;
+  final String? customerId;
+  final String? voucherCode;
+  final String billId;
+  final String? storeCode;
+  String? voucherCampaignId;
+  String? voucherId;
+  bool voucherRedeemed = false;
+  bool counterApplied = false;
+  bool customerApplied = false;
+
+  /// true nếu có bước chưa được server xác nhận (offline) - đang chạy nền
+  bool unverified = false;
+
+  PromotionUsageReservation({
+    required this.campaignId,
+    required this.discountMoney,
+    this.customerId,
+    this.voucherCode,
+    required this.billId,
+    this.storeCode,
+  });
 }

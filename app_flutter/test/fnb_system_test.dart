@@ -508,11 +508,11 @@ void main() {
     test('FormatUtils.billCode and FormatUtils.orderCode generate standard separate codes', () {
       final billCode = FormatUtils.billCode();
       expect(billCode.startsWith('HD-'), isTrue);
-      expect(billCode.length, equals(16)); // HD-yyMMdd-HHmmss
+      expect(billCode.length, equals(21)); // HD-yyMMdd-HHmmss-XXXX (mã tạm)
 
       final orderCode = FormatUtils.orderCode();
       expect(orderCode.startsWith('OD-'), isTrue);
-      expect(orderCode.length, equals(16)); // OD-yyMMdd-HHmmss
+      expect(orderCode.length, equals(21)); // OD-yyMMdd-HHmmss-XXXX
 
       final customBill = FormatUtils.billCode('INV');
       expect(customBill.startsWith('INV-'), isTrue);

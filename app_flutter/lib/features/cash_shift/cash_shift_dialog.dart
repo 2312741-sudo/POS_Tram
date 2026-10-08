@@ -206,7 +206,12 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       initialCash: initial,
     );
 
-    await _fb.openCashShift(newShift);
+    try {
+      await _fb.openCashShift(newShift);
+    } catch (e) {
+      _showShiftError(e);
+      return;
+    }
     if (mounted) {
       setState(() {
         _isSubmitting = false;
@@ -222,6 +227,14 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     }
   }
 
+  void _showShiftError(Object e) {
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Lỗi lưu ca: $e'), backgroundColor: AppColors.danger),
+    );
+  }
+
   Future<void> _addAdjustment(bool isCashIn) async {
     if (_currentShift == null || _isSubmitting) return;
     final amount = int.tryParse(_adjustAmountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
@@ -235,12 +248,17 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
 
     setState(() => _isSubmitting = true);
 
-    await _fb.addCashShiftAdjustment(
-      shiftId: _currentShift!.id,
-      amount: amount,
-      isCashIn: isCashIn,
-      reason: reason,
-    );
+    try {
+      await _fb.addCashShiftAdjustment(
+        shiftId: _currentShift!.id,
+        amount: amount,
+        isCashIn: isCashIn,
+        reason: reason,
+      );
+    } catch (e) {
+      _showShiftError(e);
+      return;
+    }
 
     _adjustAmountCtrl.clear();
     _adjustReasonCtrl.clear();
@@ -264,7 +282,12 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
 
     setState(() => _isSubmitting = true);
 
-    await _fb.closeCashShift(shiftToClose, actual, notes);
+    try {
+      await _fb.closeCashShift(shiftToClose, actual, notes);
+    } catch (e) {
+      _showShiftError(e);
+      return;
+    }
     final diff = actual - shiftToClose.expectedCash;
 
     if (mounted) {
@@ -419,7 +442,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           runSpacing: 8,
           children: [0, 500000, 1000000, 2000000, 3000000, 5000000].map((amt) {
             return ActionChip(
-              backgroundColor: TramColors.primaryLight.withOpacity(0.4),
+              backgroundColor: TramColors.primaryLight.withValues(alpha: 0.4),
               label: Text(
                 FormatUtils.vnd(amt),
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: TramColors.primaryDark),

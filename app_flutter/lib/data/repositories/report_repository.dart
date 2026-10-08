@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
 import '../../core/reports/report_calculator.dart';
 import '../../core/reports/report_date_utils.dart';
@@ -274,9 +275,8 @@ class ReportRepository {
         }
       }
     } catch (_) {}
-    try {
-      await cashShiftsRef.child(shift.id).set(shift.toMap());
-    } catch (_) {}
+    // Lỗi ghi ca được ném ra cho UI (mất mạng: dữ liệu giữ cục bộ, tự đồng bộ)
+    await _awaitWrite(cashShiftsRef.child(shift.id).set(shift.toMap()), 'mở ca ${shift.shiftCode}');
     logAction(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: shift.staffUsername,
@@ -289,31 +289,87 @@ class ReportRepository {
     ));
   }
 
+  /// Chờ server xác nhận ghi; quá thời gian (mất mạng) thì coi như đã xếp hàng đồng bộ,
+  /// lỗi thật (VD: permission-denied) được ném ra.
+  Future<void> _awaitWrite(Future<void> write, String what) async {
+    try {
+      await write.timeout(const Duration(seconds: 6));
+    } on TimeoutException {
+      unawaited(write.catchError((Object e) => _logSyncFailure(what, e)));
+    } catch (e) {
+      throw Exception('Không lưu được $what: $e');
+    }
+  }
+
+  void _logSyncFailure(String what, Object e) {
+    logAction(AuditLogModel(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      username: 'system',
+      userFullName: 'Hệ thống',
+      userRole: 'SYSTEM',
+      action: 'SYNC_WRITE_FAILED',
+      targetType: 'SHIFT',
+      targetId: what,
+      details: 'Ghi "$what" thất bại: $e',
+      isSuspicious: true,
+    ));
+  }
+
+  /// Cộng dồn số liệu ca bằng transaction (nhiều máy cùng ca không ghi đè nhau).
+  /// Trả về ca sau khi cập nhật (null nếu ca không tồn tại / chưa xác nhận do mất mạng).
+  Future<CashShiftModel?> _incrementShift(
+    String shiftId, {
+    int cash = 0,
+    int qr = 0,
+    int card = 0,
+    int cashIn = 0,
+    int cashOut = 0,
+    required String what,
+  }) async {
+    final fut = cashShiftsRef.child(shiftId).runTransaction((Object? current) {
+      if (current == null) return Transaction.success(null);
+      final m = Map<String, dynamic>.from(current as Map);
+      int add(String k, int d) {
+        final v = ((m[k] as num?)?.toInt() ?? 0) + d;
+        return v < 0 ? 0 : v;
+      }
+      m['totalCashSales'] = add('totalCashSales', cash);
+      m['totalQrSales'] = add('totalQrSales', qr);
+      m['totalCardSales'] = add('totalCardSales', card);
+      m['cashIn'] = add('cashIn', cashIn);
+      m['cashOut'] = add('cashOut', cashOut);
+      return Transaction.success(m);
+    });
+    try {
+      final res = await fut.timeout(const Duration(seconds: 6));
+      final v = res.snapshot.value;
+      if (!res.committed || v == null) return null;
+      final updated = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(v as Map), shiftId);
+      if (activeShiftCache == null || activeShiftCache!.id == shiftId) {
+        activeShiftCache = updated.isOpen ? updated : activeShiftCache;
+      }
+      return updated;
+    } on TimeoutException {
+      unawaited(fut.then((_) {}, onError: (Object e) => _logSyncFailure(what, e)));
+      return null;
+    }
+  }
+
   Future<void> recordCashShiftSale({
     required int cashAmount,
     required int qrAmount,
     required int cardAmount,
     String? shiftId,
   }) async {
+    final targetId = shiftId ?? (activeShiftCache ?? await getCurrentOpenShift())?.id;
+    if (targetId == null) return;
     try {
-      CashShiftModel? shift;
-      if (shiftId != null && activeShiftCache != null && activeShiftCache!.id == shiftId) {
-        shift = activeShiftCache;
-      } else if (shiftId != null) {
-        final snap = await cashShiftsRef.child(shiftId).get();
-        if (snap.exists && snap.value != null) {
-          shift = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), shiftId);
-        }
-      }
-      shift ??= await getCurrentOpenShift();
-      if (shift != null) {
-        shift.totalCashSales += cashAmount;
-        shift.totalQrSales += qrAmount;
-        shift.totalCardSales += cardAmount;
-        activeShiftCache = shift;
-        await cashShiftsRef.child(shift.id).set(shift.toMap());
-      }
-    } catch (_) {}
+      await _incrementShift(targetId,
+          cash: cashAmount, qr: qrAmount, card: cardAmount, what: 'doanh số ca $targetId');
+    } catch (e) {
+      _logSyncFailure('doanh số ca $targetId (+$cashAmount TM, +$qrAmount QR, +$cardAmount thẻ)', e);
+      rethrow;
+    }
   }
 
   Future<void> addCashShiftAdjustment({
@@ -322,26 +378,12 @@ class ReportRepository {
     required bool isCashIn,
     required String reason,
   }) async {
-    try {
-      CashShiftModel? shift;
-      if (activeShiftCache != null && activeShiftCache!.id == shiftId) {
-        shift = activeShiftCache;
-      } else {
-        final snap = await cashShiftsRef.child(shiftId).get();
-        if (snap.exists && snap.value == null) return;
-        if (snap.exists && snap.value != null) {
-          shift = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), shiftId);
-        }
-      }
-      if (shift == null) return;
-      if (isCashIn) {
-        shift.cashIn += amount;
-      } else {
-        shift.cashOut += amount;
-      }
-      activeShiftCache = shift;
-      await cashShiftsRef.child(shiftId).set(shift.toMap());
-    } catch (_) {}
+    await _incrementShift(
+      shiftId,
+      cashIn: isCashIn ? amount : 0,
+      cashOut: isCashIn ? 0 : amount,
+      what: '${isCashIn ? "nộp" : "chi"} $amount ca $shiftId',
+    );
   }
 
   Future<void> closeCashShift(CashShiftModel shift, int actualCash, String notes) async {
@@ -351,9 +393,17 @@ class ReportRepository {
     shift.actualCash = actualCash;
     shift.difference = actualCash - shift.expectedCash;
     shift.notes = notes;
-    try {
-      await cashShiftsRef.child(shift.id).set(shift.toMap());
-    } catch (_) {}
+    // Chỉ cập nhật các trường chốt ca (không ghi đè doanh số do máy khác cộng dồn)
+    await _awaitWrite(
+      cashShiftsRef.child(shift.id).update({
+        'status': shift.status,
+        'closedAt': shift.closedAt,
+        'actualCash': shift.actualCash,
+        'difference': shift.difference,
+        'notes': shift.notes,
+      }),
+      'chốt ca ${shift.shiftCode}',
+    );
     logAction(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: shift.staffUsername,
@@ -367,21 +417,23 @@ class ReportRepository {
   }
 
   Future<void> deductCashShiftSale(String paymentMethod, int amount) async {
+    final shift = activeShiftCache ?? await getCurrentOpenShift();
+    if (shift == null || !shift.isOpen) return;
+    final m = paymentMethod.toUpperCase();
+    int cash = 0, qr = 0, card = 0;
+    if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
+      cash = -amount;
+    } else if (m.contains('QR') || m.contains('TRANSFER')) {
+      qr = -amount;
+    } else if (m.contains('CARD') || m.contains('THẺ')) {
+      card = -amount;
+    }
     try {
-      final shift = activeShiftCache ?? await getCurrentOpenShift();
-      if (shift != null && shift.isOpen) {
-        final m = paymentMethod.toUpperCase();
-        if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
-          shift.totalCashSales = (shift.totalCashSales - amount).clamp(0, 999999999);
-        } else if (m.contains('QR') || m.contains('TRANSFER')) {
-          shift.totalQrSales = (shift.totalQrSales - amount).clamp(0, 999999999);
-        } else if (m.contains('CARD') || m.contains('THẺ')) {
-          shift.totalCardSales = (shift.totalCardSales - amount).clamp(0, 999999999);
-        }
-        activeShiftCache = shift;
-        await cashShiftsRef.child(shift.id).set(shift.toMap()).catchError((_) {});
-      }
-    } catch (_) {}
+      await _incrementShift(shift.id, cash: cash, qr: qr, card: card, what: 'trừ doanh số ca ${shift.id}');
+    } catch (e) {
+      // Không chặn thao tác hủy/xóa hóa đơn, nhưng ghi nhận để đối soát
+      _logSyncFailure('trừ doanh số ca ${shift.id} ($paymentMethod -$amount)', e);
+    }
   }
 
   // ==================== KIOTVIET CUSTOMER LOYALTY (CRM) ====================

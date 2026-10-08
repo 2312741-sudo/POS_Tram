@@ -409,7 +409,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                   children: [
                                     CircleAvatar(
                                       radius: 22,
-                                      backgroundColor: isVip ? Colors.amber.shade100 : TramColors.primaryLight.withOpacity(0.4),
+                                      backgroundColor: isVip ? Colors.amber.shade100 : TramColors.primaryLight.withValues(alpha: 0.4),
                                       child: Text(
                                         c.fullName.isNotEmpty ? c.fullName.substring(0, 1).toUpperCase() : 'K',
                                         style: TextStyle(
@@ -505,9 +505,9 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,7 +543,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     return ChoiceChip(
       label: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       selected: isSelected,
-      selectedColor: TramColors.brandPrimary.withOpacity(0.15),
+      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.15),
       labelStyle: TextStyle(color: isSelected ? TramColors.brandPrimary : Colors.black87),
       onSelected: (val) {
         if (val) setState(() => _selectedTier = key);

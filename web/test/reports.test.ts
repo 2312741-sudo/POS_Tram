@@ -334,6 +334,7 @@ describe("Modules 4, 5, 6 Specific Edge Cases & Calculations", () => {
         {
           id: 1,
           productId: 1,
+          name: "Cà phê",
           productName: "Cà phê",
           quantity: 2,
           price: 50000,
@@ -374,7 +375,11 @@ describe("Modules 4, 5, 6 Specific Edge Cases & Calculations", () => {
     const shift = {
       id: "SHIFT_SPLIT_01",
       shiftCode: "CA-SPLIT-01",
+      staffUsername: "thungan1",
+      staffFullName: "Thu Ngân 1",
       initialCash: 1000000,
+      cashIn: 0,
+      cashOut: 0,
       openedAt: 100,
       closedAt: 500,
       status: "CLOSED" as const,

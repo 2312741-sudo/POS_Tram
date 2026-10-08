@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   PieChart,
   Pie,
@@ -68,9 +68,15 @@ export default function AnalyticsPage() {
     return { year, month, day, dateStr };
   };
 
+  // Mốc "hiện tại" giữ trong state (không gọi Date.now() trong render), tự làm mới mỗi phút
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   // UTC+7 filtering
   const filteredHistory = useMemo(() => {
-    const nowTs = Date.now();
     const nowParts = toDateParts(getUTC7Date(nowTs));
 
     return historyData.filter((h) => {
@@ -104,7 +110,7 @@ export default function AnalyticsPage() {
       }
       return true;
     });
-  }, [historyData, currentStoreCode, period]);
+  }, [historyData, currentStoreCode, period, nowTs]);
 
   // Pure report calculations
   const overviewReport = useMemo(() => {
@@ -146,9 +152,11 @@ export default function AnalyticsPage() {
     filteredHistory.forEach((h) => {
       if ((h.status || "PAID").toUpperCase() !== "PAID") return;
       const items = h.items || [];
-      items.forEach((it: any) => {
-        const n = it.name || it.productName || "Món chưa đặt tên";
-        const q = Number(it.quantity || it.qty || 1);
+      items.forEach((it) => {
+        // Dữ liệu cũ có thể dùng productName / qty
+        const legacy = it as { productName?: string; qty?: number };
+        const n = it.name || legacy.productName || "Món chưa đặt tên";
+        const q = Number(it.quantity || legacy.qty || 1);
         const price = Number(it.price || 0);
         const disc = Number(it.discountAmount || 0);
         const net = Math.max(0, price - disc) * q;
@@ -554,7 +562,7 @@ export default function AnalyticsPage() {
                   tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
                 />
                 <Tooltip
-                  formatter={(value: any) => [formatVND(Number(value)), "Doanh thu thuần"]}
+                  formatter={(value) => [formatVND(Number(value)), "Doanh thu thuần"]}
                   labelFormatter={(label) => `Khung giờ: ${label}`}
                 />
                 <Bar dataKey="netRevenue" fill="#7E2930" radius={[4, 4, 0, 0]} maxBarSize={28} />
@@ -746,7 +754,7 @@ export default function AnalyticsPage() {
                         <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke="none" />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: any) => [formatVND(Number(value)), "Doanh thu"]} />
+                    <Tooltip formatter={(value) => [formatVND(Number(value)), "Doanh thu"]} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
@@ -803,7 +811,7 @@ export default function AnalyticsPage() {
                     width={140}
                   />
                   <Tooltip
-                    formatter={(value: any, name: any) => [
+                    formatter={(value, name) => [
                       name === "qty" ? `${value} phần` : formatVND(Number(value)),
                       name === "qty" ? "Số lượng bán" : "Doanh thu",
                     ]}

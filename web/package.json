@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint app/login app/dashboard/users components/Sidebar.tsx lib/auth.tsx lib/firebase.ts test",
+    "lint": "eslint .",
     "test": "npx vitest run"
   },
   "dependencies": {
@@ -15,13 +15,13 @@
     "date-fns": "^4.4.0",
     "firebase": "^12.14.0",
     "lucide-react": "^1.18.0",
-    "next": "16.2.9",
+    "next": "16.3.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
     "sharp": "^0.35.1",
     "tailwind-merge": "^3.6.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -29,7 +29,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.3.2",

@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
@@ -9,7 +10,10 @@ import '../../core/permissions/app_permissions.dart';
 
 class AuthException implements Exception {
   final String message;
-  const AuthException(this.message);
+
+  /// Số giây khóa tạm còn lại (chỉ có khi máy chủ trả về lỗi khóa tạm do nhập sai nhiều lần)
+  final int? lockoutSeconds;
+  const AuthException(this.message, {this.lockoutSeconds});
 
   @override
   String toString() => message;
@@ -39,7 +43,17 @@ class AuthService extends ChangeNotifier {
     _authMock = mock;
   }
 
-  String _currentStoreCode = 'TRAM01';
+  static const String _functionsRegion = 'asia-southeast1';
+  FirebaseFunctions? _functionsMock;
+  FirebaseFunctions get _functions => _functionsMock ?? FirebaseFunctions.instanceFor(region: _functionsRegion);
+
+  @visibleForTesting
+  void setFunctionsMock(FirebaseFunctions? mock) {
+    _functionsMock = mock;
+  }
+
+  // Không mặc định cứng mã cửa hàng: được gán khi đăng nhập / tự đăng nhập / đổi chi nhánh
+  String _currentStoreCode = '';
   String get currentStoreCode => _currentStoreCode;
 
   UserModel? _currentUser;
@@ -99,9 +113,8 @@ class AuthService extends ChangeNotifier {
     _fb.switchStore(_currentStoreCode);
     _currentStoreInfo = StoreInfoModel(
       storeCode: _currentStoreCode,
-      storeName: _currentStoreCode == 'TRAM02'
-          ? 'POS Trạm - Chi nhánh 02 (Sài Gòn)'
-          : (_currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - Chi nhánh $_currentStoreCode'),
+      // Tên tạm thời; tên thật được nạp từ storeInfo trong refreshRolesAndStoreInfo()
+      storeName: 'POS Trạm - Chi nhánh $_currentStoreCode',
     );
     notifyListeners();
 
@@ -153,67 +166,52 @@ class AuthService extends ChangeNotifier {
     return false;
   }
 
-  /// Kiểm tra thời gian khóa tạm còn lại (tính bằng giây)
-  Future<int?> getLockoutRemainingSeconds(String storeCode, String username) async {
+  /// Gọi Cloud Function staffSignIn: máy chủ kiểm tra khóa tạm, xác minh mật khẩu,
+  /// ghi nhận lần sai (stores/{storeCode}/login_attempts chỉ Admin SDK truy cập được)
+  /// và trả về Custom Token nếu hợp lệ.
+  Future<String> _requestSignInToken(String storeCode, String username, String password) async {
     try {
-      final snap = await _fb.storeRef
-          .child('login_attempts')
-          .child(username)
-          .get()
-          .timeout(const Duration(seconds: 3));
-      if (snap.exists && snap.value != null && snap.value is Map) {
-        final map = snap.value as Map;
-        final lockedUntil = (map['lockedUntil'] as num?)?.toInt() ?? 0;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (isLockoutActive(lockedUntil, now)) {
-          return calculateRemainingLockoutSeconds(lockedUntil, now);
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  /// Ghi nhận 1 lần đăng nhập thất bại
-  Future<void> _recordFailedAttempt(String storeCode, String username) async {
-    try {
-      final ref = _fb.storeRef.child('login_attempts').child(username);
-      final snap = await ref.get().timeout(const Duration(seconds: 3));
-      int failedCount = 0;
-      if (snap.exists && snap.value != null && snap.value is Map) {
-        final map = snap.value as Map;
-        failedCount = (map['failedCount'] as num?)?.toInt() ?? 0;
-      }
-      failedCount += 1;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      int lockedUntil = 0;
-
-      if (failedCount >= maxFailedAttempts) {
-        lockedUntil = now + lockoutDurationMs;
-        _fb.logAction(AuditLogModel(
-          timestamp: now,
-          username: username,
-          userFullName: username,
-          userRole: 'UNKNOWN',
-          action: 'LOGIN_ATTEMPT_LOCKED_OUT',
-          targetType: 'AUTH',
-          targetId: username,
-          details: 'Tài khoản @$username bị khóa tạm 15 phút do nhập sai mật khẩu $failedCount lần liên tiếp',
-        )).catchError((_) {});
-      }
-
-      await ref.set({
-        'failedCount': failedCount,
-        'lastFailedAt': now,
-        'lockedUntil': lockedUntil,
+      final callable = _functions.httpsCallable(
+        'staffSignIn',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+      );
+      final result = await callable.call<dynamic>({
+        'storeCode': storeCode,
+        'username': username,
+        'password': password,
       });
-    } catch (_) {}
-  }
-
-  /// Xóa bộ đếm đăng nhập sai khi thành công
-  Future<void> _resetLoginAttempts(String storeCode, String username) async {
-    try {
-      await _fb.storeRef.child('login_attempts').child(username).remove();
-    } catch (_) {}
+      final data = result.data;
+      final token = data is Map ? data['token']?.toString() : null;
+      if (token == null || token.isEmpty) {
+        throw const AuthException('Máy chủ không trả về phiên đăng nhập hợp lệ. Vui lòng thử lại.');
+      }
+      return token;
+    } on FirebaseFunctionsException catch (e) {
+      switch (e.code) {
+        case 'resource-exhausted':
+          final details = e.details;
+          final seconds = details is Map ? (details['remainingSeconds'] as num?)?.toInt() : null;
+          if (seconds != null && seconds > 0) {
+            final minutes = (seconds / 60).ceil();
+            throw AuthException(
+              'Tài khoản đã bị khóa tạm thời do nhập sai mật khẩu $maxFailedAttempts lần liên tiếp. Vui lòng thử lại sau $minutes phút hoặc liên hệ Quản lý.',
+              lockoutSeconds: seconds,
+            );
+          }
+          throw AuthException(e.message ?? 'Hệ thống đang tạm hạn chế đăng nhập. Vui lòng thử lại sau ít phút.');
+        case 'unauthenticated':
+          throw const AuthException('Sai tài khoản hoặc mật khẩu.');
+        case 'permission-denied':
+        case 'invalid-argument':
+        case 'failed-precondition':
+          throw AuthException(e.message ?? 'Đăng nhập thất bại.');
+        case 'unavailable':
+        case 'deadline-exceeded':
+          throw const AuthException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng Internet và thử lại.');
+        default:
+          throw AuthException('Đăng nhập thất bại: ${e.message ?? e.code}');
+      }
+    }
   }
 
   /// Đăng nhập tài khoản qua Firebase Authentication
@@ -244,41 +242,24 @@ class AuthService extends ChangeNotifier {
     _currentStoreCode = cleanStore;
     _fb.switchStore(cleanStore);
 
-    // 2. Kiểm tra khóa tạm thời do sai mật khẩu 5 lần liên tiếp
-    final lockoutRemaining = await getLockoutRemainingSeconds(cleanStore, cleanUser);
-    if (lockoutRemaining != null && lockoutRemaining > 0) {
-      final minutes = (lockoutRemaining / 60).ceil();
-      throw AuthException(
-        'Tài khoản đã bị khóa tạm thời $minutes phút do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng thử lại sau hoặc liên hệ Quản lý.',
-      );
-    }
-
-    // 3. Chuẩn hóa Email Firebase Auth
-    final email = AuthUtils.buildAuthEmail(cleanUser, cleanStore);
-
-    // 4. Xác thực với Firebase Authentication
+    // 2-4. Xác thực phía máy chủ (Cloud Function staffSignIn): kiểm tra khóa tạm 15 phút
+    //      sau 5 lần sai liên tiếp, xác minh mật khẩu, rồi đăng nhập bằng Custom Token.
     UserCredential credential;
     try {
-      credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      ).timeout(const Duration(seconds: 10));
+      final token = await _requestSignInToken(cleanStore, cleanUser, password).timeout(const Duration(seconds: 25));
+      credential = await _firebaseAuth.signInWithCustomToken(token).timeout(const Duration(seconds: 10));
+    } on AuthException {
+      rethrow;
     } on FirebaseAuthException catch (e) {
-      await _recordFailedAttempt(cleanStore, cleanUser);
-      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'invalid-login-credentials') {
-        throw const AuthException('Sai tài khoản hoặc mật khẩu.');
-      } else if (e.code == 'network-request-failed') {
+      if (e.code == 'network-request-failed') {
         throw const AuthException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng Internet và thử lại.');
       } else if (e.code == 'too-many-requests') {
         throw const AuthException('Quá nhiều yêu cầu không thành công. Hệ thống đang tạm hạn chế, vui lòng thử lại sau ít phút.');
-      } else {
-        throw AuthException('Đăng nhập thất bại: ${e.message ?? e.code}');
       }
+      throw AuthException('Đăng nhập thất bại: ${e.message ?? e.code}');
     } on TimeoutException {
       throw const AuthException('Kết nối đến máy chủ quá chậm hoặc gián đoạn. Vui lòng kiểm tra đường truyền và thử lại.');
     } catch (e) {
-      if (e is AuthException) rethrow;
-      await _recordFailedAttempt(cleanStore, cleanUser);
       throw AuthException('Đăng nhập thất bại: ${e.toString()}');
     }
 
@@ -293,15 +274,9 @@ class AuthService extends ChangeNotifier {
       final snap = await _fb.storeRef.child('users').child(uid).get().timeout(const Duration(seconds: 6));
       if (snap.exists && snap.value != null && snap.value is Map) {
         userProfile = UserModel.fromMap(snap.value as Map, uid);
-      } else {
-        // Fallback kiểm tra node legacy stores/{storeCode}/users/{username}
-        final legacySnap = await _fb.storeRef.child('users').child(cleanUser).get().timeout(const Duration(seconds: 4));
-        if (legacySnap.exists && legacySnap.value != null && legacySnap.value is Map) {
-          userProfile = UserModel.fromMap(legacySnap.value as Map, uid);
-          // Tự động nâng cấp ghi hồ sơ sang key UID
-          await _fb.storeRef.child('users').child(uid).set(userProfile.copyWith(uid: uid).toMap()).catchError((_) {});
-        }
       }
+      // Lưu ý: client KHÔNG được tự tạo/nâng cấp hồ sơ (rules chặn tự đăng ký).
+      // Hồ sơ legacy theo username phải được chuyển bằng scripts/migrate_legacy_users.
     } on TimeoutException {
       await _firebaseAuth.signOut();
       throw const AuthException('Tải hồ sơ người dùng quá thời gian cho phép. Vui lòng thử lại.');
@@ -321,8 +296,7 @@ class AuthService extends ChangeNotifier {
       throw const AuthException('Tài khoản đã bị tạm khóa bởi chủ quán.');
     }
 
-    // 7. Đăng nhập thành công -> Reset bộ đếm đăng nhập sai
-    await _resetLoginAttempts(cleanStore, cleanUser);
+    // 7. Bộ đếm đăng nhập sai đã được máy chủ (staffSignIn) xóa khi xác thực thành công
 
     // 8. Cập nhật lastLoginAt và ghi nhận Audit Log
     final now = DateTime.now().millisecondsSinceEpoch;

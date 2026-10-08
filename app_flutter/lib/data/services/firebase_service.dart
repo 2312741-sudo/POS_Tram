@@ -7,12 +7,15 @@ import '../repositories/auth_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/report_repository.dart';
 import 'export_service.dart';
+import 'inventory_service.dart';
+import 'campaign_service.dart';
 
 export '../repositories/seed_data.dart';
 export '../repositories/auth_repository.dart';
 export '../repositories/order_repository.dart';
 export '../repositories/report_repository.dart';
 export 'export_service.dart';
+export '../../core/domain/order_integrity.dart' show DataWriteException, PromotionLimitExceededException;
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -67,6 +70,7 @@ class FirebaseService {
     if (storeCode != null && storeCode.isNotEmpty) {
       _currentStoreCode = storeCode.toUpperCase().trim();
     }
+    _syncDependentServices();
     try {
       final dbInstance = FirebaseDatabase.instanceFor(
         app: Firebase.app(),
@@ -86,6 +90,15 @@ class FirebaseService {
   void switchStore(String storeCode) {
     _currentStoreCode = storeCode.toUpperCase().trim();
     _reportRepo.clearShiftCache();
+    _syncDependentServices();
+  }
+
+  /// Đồng bộ chi nhánh cho các service kho / khuyến mãi (trước đây luôn dùng TRAM01)
+  void _syncDependentServices() {
+    try {
+      InventoryService().switchStore(_currentStoreCode);
+      CampaignService().switchStore(_currentStoreCode);
+    } catch (_) {}
   }
 
   // ==================== DEFAULT FALLBACK DATA ====================
@@ -174,8 +187,12 @@ class FirebaseService {
 
   Future<void> saveBill(BillModel bill) => _orderRepo.saveBill(bill);
 
-  Future<void> closeAndPayBill(BillModel bill, TableModel table) =>
+  /// Trả về true nếu server đã xác nhận, false nếu đang chờ đồng bộ (mất mạng).
+  /// Ném [DataWriteException] / [PromotionLimitExceededException] khi thất bại.
+  Future<bool> closeAndPayBill(BillModel bill, TableModel table) =>
       _orderRepo.closeAndPayBill(bill, table);
+
+  Future<void> applyStockForBill(BillModel bill) => _orderRepo.applyStockForBill(bill);
 
   // ==================== CANCEL ACTIVE BILL ====================
   Future<void> cancelActiveBill(
@@ -230,7 +247,7 @@ class FirebaseService {
 
   Future<void> deletePromotion(String promoId) => _orderRepo.deletePromotion(promoId);
 
-  Future<void> incrementPromotionUsage(String promoId) => _orderRepo.incrementPromotionUsage(promoId);
+  Future<bool?> incrementPromotionUsage(String promoId) => _orderRepo.incrementPromotionUsage(promoId);
 
   // ==================== AUDIT LOGS ====================
   Stream<List<AuditLogModel>> auditLogsStream() => _reportRepo.auditLogsStream();
@@ -412,4 +429,25 @@ class FirebaseService {
     rows: rows,
     bills: bills,
   );
+
+  // ==================== AUTO PAYMENT BOT INTEGRATION ====================
+  DatabaseReference get paymentEventsRef => _root.child('stores').child(_currentStoreCode).child('payment_events');
+
+  Stream<DatabaseEvent> listenPaymentEvents({int? sinceTimestamp}) {
+    Query query = paymentEventsRef.orderByChild('timestamp');
+    if (sinceTimestamp != null) {
+      query = query.startAt(sinceTimestamp);
+    }
+    return query.onChildAdded;
+  }
+
+  Future<void> markPaymentEventProcessed(String eventId, {String? billCode}) async {
+    try {
+      await paymentEventsRef.child(eventId).update({
+        'status': 'PROCESSED',
+        'processedAt': ServerValue.timestamp,
+        if (billCode != null) 'billCode': billCode,
+      });
+    } catch (_) {}
+  }
 }

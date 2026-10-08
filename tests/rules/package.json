@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:emulator": "firebase emulators:exec --config ../../firebase.json --only database --project demo-tram-pos \"npm test\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

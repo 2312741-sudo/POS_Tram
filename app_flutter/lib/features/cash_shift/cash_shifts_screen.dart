@@ -144,7 +144,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     final List<BillModel> paidBills = List<BillModel>.from(promo['paidBills']);
     final storeInfo = _auth.currentStoreInfo;
     final storeName = storeInfo?.storeName ?? 'POS Trạm F&B';
-    final storeCode = storeInfo?.storeCode ?? 'TRAM01';
+    final storeCode = storeInfo?.storeCode ?? _auth.currentStoreCode;
     final storeAddress = storeInfo?.address ?? 'Đà Lạt, Lâm Đồng';
     final storePhone = storeInfo?.phone ?? '0987654321';
 

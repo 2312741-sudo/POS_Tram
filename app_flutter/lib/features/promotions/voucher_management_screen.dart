@@ -156,7 +156,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           });
         }
       },
-      selectedColor: TramColors.brandPrimary.withOpacity(0.2),
+      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
       labelStyle: TextStyle(
         color: isSelected ? TramColors.brandPrimary : Colors.black87,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -242,7 +242,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           subtitle: v.state == VoucherState.redeemed.toMap() && v.redeemedAt != null
               ? Text('Dùng bởi \${v.redeemedBy ?? "?"} lúc \${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.redeemedAt!))}\\nBill: \${v.redeemedBillId}')
               : Text('Tạo lúc \${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.createdAt))}'),
-          trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (stateColor).withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: stateColor)), child: Text(stateText, style: TextStyle(color: stateColor, fontSize: 12, fontWeight: FontWeight.bold))),
+          trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (stateColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: stateColor)), child: Text(stateText, style: TextStyle(color: stateColor, fontSize: 12, fontWeight: FontWeight.bold))),
         ),
       ),
     );
@@ -293,7 +293,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                               onSelected: (val) {
                                 if (val) setDialogState(() => isCustom = false);
                               },
-                              selectedColor: TramColors.brandPrimary.withOpacity(0.2),
+                              selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -304,7 +304,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                               onSelected: (val) {
                                 if (val) setDialogState(() => isCustom = true);
                               },
-                              selectedColor: TramColors.brandPrimary.withOpacity(0.2),
+                              selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
                             ),
                           ),
                         ],

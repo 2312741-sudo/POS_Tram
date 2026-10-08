@@ -24,6 +24,7 @@ import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
 import { useAuth, hasPermission } from "@/lib/auth";
 import * as XLSX from "xlsx";
+import { errorMessage } from "@/lib/errors";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -209,7 +210,8 @@ export default function InventoryPage() {
   const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
   const [stockBalances, setStockBalances] = useState<StockBalanceItem[]>([]);
   const [documents, setDocuments] = useState<InventoryDocItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Mã chi nhánh đã nạp xong catalog — loading được suy ra, không setState đồng bộ trong effect
+  const [loadedStoreCode, setLoadedStoreCode] = useState<string | null>(null);
 
   // Modal state for add/edit
   const [showItemModal, setShowItemModal] = useState(false);
@@ -274,11 +276,13 @@ export default function InventoryPage() {
   const [importSuccessMsg, setImportSuccessMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const targetStoreCode = currentStoreCode === "ALL" ? "TRAM01" : currentStoreCode;
+  // Ở chế độ "ALL" dùng chi nhánh đầu tiên thực tế (không hardcode TRAM01)
+  const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "") : currentStoreCode;
+  const loading = !!targetStoreCode && loadedStoreCode !== targetStoreCode;
 
   // Load data from Firebase
   useEffect(() => {
-    setLoading(true);
+    if (!targetStoreCode) return;
     const unsubs: (() => void)[] = [];
 
     // Catalog Items
@@ -313,7 +317,7 @@ export default function InventoryPage() {
           });
         });
         setCatalogItems(items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-        setLoading(false);
+        setLoadedStoreCode(targetStoreCode);
       })
     );
 
@@ -487,8 +491,8 @@ export default function InventoryPage() {
       await set(ref(db, `stores/${targetStoreCode}/catalog_items/${itemId}`), data);
       setShowItemModal(false);
       setEditingItem(null);
-    } catch (e: any) {
-      setFormError(e.message || "Lỗi lưu hàng");
+    } catch (e) {
+      setFormError(errorMessage(e) || "Lỗi lưu hàng");
     }
     setSaving(false);
   };
@@ -524,8 +528,8 @@ export default function InventoryPage() {
       await set(ref(db, `stores/${targetStoreCode}/suppliers/${supplierId}`), data);
       setShowSupplierModal(false);
       setEditingSupplier(null);
-    } catch (e: any) {
-      setFormError(e.message || "Lỗi lưu NCC");
+    } catch (e) {
+      setFormError(errorMessage(e) || "Lỗi lưu NCC");
     }
     setSaving(false);
   };
@@ -771,8 +775,8 @@ export default function InventoryPage() {
 
       setShowDocModal(false);
       setDocLines([]);
-    } catch (e: any) {
-      setDocError(e.message || "Lỗi lưu phiếu kho");
+    } catch (e) {
+      setDocError(errorMessage(e) || "Lỗi lưu phiếu kho");
     } finally {
       setDocSaving(false);
     }
@@ -790,8 +794,8 @@ export default function InventoryPage() {
     try {
       await applyDocCompletion(doc);
       setViewingDoc(null);
-    } catch (e: any) {
-      alert("Lỗi khi duyệt phiếu: " + (e.message || String(e)));
+    } catch (e) {
+      alert("Lỗi khi duyệt phiếu: " + (errorMessage(e) || String(e)));
     } finally {
       setActionInProgress(false);
     }
@@ -808,8 +812,8 @@ export default function InventoryPage() {
         cancelReason: "Huỷ bởi người dùng",
       });
       setViewingDoc(null);
-    } catch (e: any) {
-      alert("Lỗi khi huỷ phiếu: " + (e.message || String(e)));
+    } catch (e) {
+      alert("Lỗi khi huỷ phiếu: " + (errorMessage(e) || String(e)));
     } finally {
       setActionInProgress(false);
     }
@@ -945,7 +949,7 @@ export default function InventoryPage() {
         const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rawJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const rawJson: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         if (!rawJson || rawJson.length < 2) {
           alert("File Excel không có dữ liệu hàng hóa!");
@@ -999,7 +1003,7 @@ export default function InventoryPage() {
             rawSku = `SP${String(i).padStart(6, "0")}`;
           }
 
-          const cleanNum = (val: any, fallback = 0) => {
+          const cleanNum = (val: unknown, fallback = 0) => {
             if (typeof val === "number") return val;
             if (!val) return fallback;
             const cleaned = String(val).replace(/[^0-9\-]/g, "");
@@ -1089,8 +1093,8 @@ export default function InventoryPage() {
         }
 
         setParsedRows(rows);
-      } catch (err: any) {
-        alert("Lỗi khi đọc file Excel: " + (err.message || String(err)));
+      } catch (err) {
+        alert("Lỗi khi đọc file Excel: " + (errorMessage(err) || String(err)));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -1170,8 +1174,8 @@ export default function InventoryPage() {
         setImportedFile(null);
         setParsedRows([]);
       }, 2000);
-    } catch (e: any) {
-      alert("Lỗi khi nhập dữ liệu: " + (e.message || String(e)));
+    } catch (e) {
+      alert("Lỗi khi nhập dữ liệu: " + (errorMessage(e) || String(e)));
     } finally {
       setIsImporting(false);
     }
@@ -1183,6 +1187,13 @@ export default function InventoryPage() {
     { key: "documents" as const, label: "Phiếu kho", icon: ClipboardList, count: documents.length },
     { key: "suppliers" as const, label: "Nhà cung cấp", icon: Truck, count: suppliers.length },
   ];
+
+  // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
+  if (!targetStoreCode) {
+    return (
+      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+    );
+  }
 
   return (
     <div style={{ padding: "24px" }}>

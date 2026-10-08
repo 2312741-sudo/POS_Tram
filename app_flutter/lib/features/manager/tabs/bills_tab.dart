@@ -55,7 +55,7 @@ class _BillsTabState extends State<BillsTab> {
           _tables = t;
         });
       }
-    });
+    }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
   }
 
   bool _isTakeaway(BillModel b) {

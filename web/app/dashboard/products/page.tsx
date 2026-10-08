@@ -23,8 +23,9 @@ import {
 import { ref, onValue, set, remove, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
-import { useDashboardData, ProductItem, CategoryItem } from "@/lib/data-context";
+import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -50,7 +51,7 @@ const emptyProductForm: ProductFormData = {
   unit: "",
   category: "",
   imageBase64: "",
-  storeCode: "TRAM01",
+  storeCode: "",
   isTopping: false,
 };
 
@@ -62,7 +63,7 @@ interface CategoryFormData {
 
 const emptyCategoryForm: CategoryFormData = {
   name: "",
-  storeCode: "TRAM01",
+  storeCode: "",
   allowedToppingIds: [],
 };
 
@@ -95,7 +96,7 @@ export default function ProductsPage() {
   const { user } = useAuth();
   const targetStoreCode = currentStoreCode !== "ALL"
     ? currentStoreCode
-    : (user?.storeCode || stores[0]?.storeCode || "TRAM01");
+    : (user?.storeCode || stores[0]?.storeCode || "");
 
   // Product Notes State
   const [notes, setNotes] = useState<ProductNoteItem[]>([]);
@@ -107,16 +108,18 @@ export default function ProductsPage() {
   const [modalNoteText, setModalNoteText] = useState("");
 
   useEffect(() => {
+    if (!targetStoreCode) return;
     const notesRef = ref(db, `stores/${targetStoreCode}/product_notes`);
     const unsub = onValue(notesRef, (snap) => {
       if (snap.exists()) {
         const val = snap.val();
         const list: ProductNoteItem[] = [];
-        Object.entries(val).forEach(([k, v]: [string, any]) => {
+        Object.entries(val as Record<string, unknown>).forEach(([k, v]) => {
           if (typeof v === "string") {
             list.push({ id: k, text: v });
           } else if (v && typeof v === "object") {
-            list.push({ id: k, text: v.text || v.name || "" });
+            const obj = v as { text?: string; name?: string };
+            list.push({ id: k, text: obj.text || obj.name || "" });
           }
         });
         setNotes(list);
@@ -206,7 +209,7 @@ export default function ProductsPage() {
     setProductForm({
       ...emptyProductForm,
       code: generateProductCode(),
-      storeCode: currentStoreCode !== "ALL" ? currentStoreCode : stores[0]?.storeCode || "TRAM01",
+      storeCode: currentStoreCode !== "ALL" ? currentStoreCode : stores[0]?.storeCode || "",
       category: filterCategory || (categories[0]?.name ?? ""),
     });
     setProductError("");
@@ -224,7 +227,7 @@ export default function ProductsPage() {
       unit: p.unit || "",
       category: p.category || "",
       imageBase64: p.imageBase64 || "",
-      storeCode: p.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01"),
+      storeCode: p.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : ""),
       isTopping: Boolean(p.isTopping || p.category?.toLowerCase() === "topping"),
     });
     setProductError("");
@@ -273,7 +276,7 @@ export default function ProductsPage() {
     setProductError("");
     try {
       const targetStore =
-        productForm.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        resolveWriteStoreCode(productForm.storeCode || currentStoreCode);
       const res = await saveProduct(
         {
           id: editProductId || undefined,
@@ -294,8 +297,8 @@ export default function ProductsPage() {
         return;
       }
       closeProductModal();
-    } catch (e: any) {
-      setProductError(e.message || "Lỗi lưu dữ liệu");
+    } catch (e) {
+      setProductError(errorMessage(e) || "Lỗi lưu dữ liệu");
     }
     setProductSaving(false);
   };
@@ -359,8 +362,8 @@ export default function ProductsPage() {
         return;
       }
       closeCategoryModal();
-    } catch (e: any) {
-      setCategoryError(e.message || "Lỗi lưu danh mục");
+    } catch (e) {
+      setCategoryError(errorMessage(e) || "Lỗi lưu danh mục");
     }
     setCategorySaving(false);
   };
@@ -377,12 +380,12 @@ export default function ProductsPage() {
     try {
       const now = Date.now();
       const noteId = `note_${now}_${Math.random().toString(36).slice(2, 6)}`;
-      await set(ref(db, `stores/${targetStoreCode}/product_notes/${noteId}`), { text });
+      await set(ref(db, `stores/${resolveWriteStoreCode(targetStoreCode)}/product_notes/${noteId}`), { text });
       setNewNoteText("");
       setModalNoteText("");
       setShowNoteModal(false);
-    } catch (e: any) {
-      alert("Lỗi lưu ghi chú: " + e.message);
+    } catch (e) {
+      alert("Lỗi lưu ghi chú: " + errorMessage(e));
     } finally {
       setNoteSaving(false);
     }
@@ -391,19 +394,19 @@ export default function ProductsPage() {
   const handleUpdateNote = async (id: string, text: string) => {
     if (!text.trim()) return;
     try {
-      await set(ref(db, `stores/${targetStoreCode}/product_notes/${id}`), { text: text.trim() });
+      await set(ref(db, `stores/${resolveWriteStoreCode(targetStoreCode)}/product_notes/${id}`), { text: text.trim() });
       setEditingNoteId(null);
-    } catch (e: any) {
-      alert("Lỗi sửa ghi chú: " + e.message);
+    } catch (e) {
+      alert("Lỗi sửa ghi chú: " + errorMessage(e));
     }
   };
 
   const handleDeleteNote = async (id: string) => {
     if (!confirm("Xóa ghi chú mẫu này?")) return;
     try {
-      await remove(ref(db, `stores/${targetStoreCode}/product_notes/${id}`));
-    } catch (e: any) {
-      alert("Lỗi xóa ghi chú: " + e.message);
+      await remove(ref(db, `stores/${resolveWriteStoreCode(targetStoreCode)}/product_notes/${id}`));
+    } catch (e) {
+      alert("Lỗi xóa ghi chú: " + errorMessage(e));
     }
   };
 
@@ -420,12 +423,14 @@ export default function ProductsPage() {
     if (!clean) return;
     try {
       const targetStore =
-        productForm.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
+        resolveWriteStoreCode(productForm.storeCode || currentStoreCode);
       await saveCategory(clean, targetStore);
       setProductForm((f) => ({ ...f, category: clean }));
       setQuickCatName("");
       setQuickAddCatOpen(false);
-    } catch {}
+    } catch (e) {
+      alert(errorMessage(e) || "Không thể thêm danh mục.");
+    }
   };
 
   const handleExport = () => {
@@ -1845,7 +1850,7 @@ export default function ProductsPage() {
                 Xác nhận xóa món
               </h2>
               <p style={{ color: "#8B8FA8", fontSize: "14px", marginBottom: "24px" }}>
-                Bạn có chắc muốn xóa món <strong>"{deleteProductTarget.name}"</strong>
+                Bạn có chắc muốn xóa món <strong>&ldquo;{deleteProductTarget.name}&rdquo;</strong>
                 {deleteProductTarget.storeCode ? ` thuộc chi nhánh ${deleteProductTarget.storeCode}` : ""}? Hành động này không thể hoàn tác.
               </p>
               <div style={{ display: "flex", gap: "10px" }}>
@@ -1872,7 +1877,7 @@ export default function ProductsPage() {
                 Xác nhận xóa danh mục
               </h2>
               <p style={{ color: "#8B8FA8", fontSize: "14px", marginBottom: "14px" }}>
-                Bạn có chắc muốn xóa danh mục <strong>"{deleteCategoryTarget.name}"</strong>
+                Bạn có chắc muốn xóa danh mục <strong>&ldquo;{deleteCategoryTarget.name}&rdquo;</strong>
                 {deleteCategoryTarget.storeCode ? ` khỏi chi nhánh ${deleteCategoryTarget.storeCode}` : ""}?
               </p>
               {(categoryStats.counts[deleteCategoryTarget.name] || 0) > 0 && (

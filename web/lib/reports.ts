@@ -18,7 +18,7 @@ export interface OrderItem {
   selectedSize?: string;
   selectedSugar?: string;
   selectedIce?: string;
-  selectedToppings?: any[];
+  selectedToppings?: unknown[];
   toppingPrice?: number;
   sizeExtraPrice?: number;
   unitPrice?: number;
@@ -33,6 +33,7 @@ export interface OrderItem {
   orderedAt?: number | string;
   optionsSummary?: string;
   note?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload RTDB mở (Flutter/Web cũ thêm trường tự do)
   [key: string]: any;
 }
 
@@ -89,7 +90,8 @@ export interface HistoryOrder {
   items?: OrderItem[];
   itemsJson?: string;
   paymentSplits?: Array<{ method: string; amount: number; reference?: string }>;
-  actionLogs?: any[];
+  actionLogs?: Array<{ timestamp: number | string; staffUsername?: string; staffFullName?: string; action: string; details: string }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload RTDB mở (Flutter/Web cũ thêm trường tự do)
   [key: string]: any;
 }
 
@@ -147,6 +149,17 @@ export interface ProductItem {
   storeName?: string;
   imageBase64?: string;
   [key: string]: unknown;
+}
+
+/** Thông tin tối thiểu của món dùng để tra cứu khi bill thiếu danh mục/đơn vị/giá */
+export interface ProductLookup {
+  code?: string;
+  productCode?: string;
+  name?: string;
+  price?: number;
+  unit?: string;
+  category?: string;
+  costPrice?: number;
 }
 
 export type PeriodType = "DAY" | "WEEK" | "MONTH" | "YEAR";
@@ -428,6 +441,53 @@ export function deduplicateBills(rawList: HistoryOrder[]): HistoryOrder[] {
     }
   }
   return Array.from(map.values());
+}
+
+/** Trạng thái hóa đơn còn đang mở — chưa phải chứng từ đã chốt */
+const OPEN_BILL_STATUSES = new Set(["OPEN", "ACTIVE", "PENDING", "PRE_PRINT"]);
+
+function hasItems(rec: Record<string, unknown>): boolean {
+  if (Array.isArray(rec.items) && rec.items.length > 0) return true;
+  return typeof rec.itemsJson === "string" && rec.itemsJson.length > 2;
+}
+
+/**
+ * Gộp hai nguồn hóa đơn của một chi nhánh:
+ *  - history/{id}: bản ghi đã chốt (có thể chỉ là bản tóm tắt, không có items)
+ *  - bills/{id}: bản đầy đủ BillModel.toMap() (Flutter) — có items, discounts, paymentSplits...
+ * Quy tắc: lấy bills làm nền, history ghi đè (trạng thái hủy/hoàn tiền mới nhất nằm ở history),
+ * nhưng nếu history thiếu items thì giữ items/itemsJson của bills. Hóa đơn chỉ có ở bills
+ * mà còn đang mở (OPEN/PENDING...) thì bỏ qua để không lẫn vào báo cáo.
+ */
+export function mergeHistoryAndBills(
+  history?: Record<string, unknown> | null,
+  bills?: Record<string, unknown> | null
+): Array<[string, Record<string, unknown>]> {
+  const asRecord = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  const h = asRecord(history) || {};
+  const b = asRecord(bills) || {};
+  const result: Array<[string, Record<string, unknown>]> = [];
+  const ids = new Set<string>([...Object.keys(h), ...Object.keys(b)]);
+  for (const id of ids) {
+    const hRec = asRecord(h[id]);
+    const bRec = asRecord(b[id]);
+    if (hRec && bRec) {
+      const merged: Record<string, unknown> = { ...bRec, ...hRec };
+      if (!hasItems(hRec) && hasItems(bRec)) {
+        merged.items = bRec.items;
+        merged.itemsJson = bRec.itemsJson;
+      }
+      result.push([id, merged]);
+    } else if (hRec) {
+      result.push([id, hRec]);
+    } else if (bRec) {
+      const status = String(bRec.status || "").toUpperCase();
+      if (OPEN_BILL_STATUSES.has(status)) continue;
+      result.push([id, bRec]);
+    }
+  }
+  return result;
 }
 
 /**
@@ -729,7 +789,7 @@ export function calculateRevenueByPeriod(
  */
 export function calculateCategoryReport(
   bills: HistoryOrder[],
-  productsMap?: Record<string | number, any>
+  productsMap?: Record<string | number, ProductLookup>
 ): CategoryReportItem[] {
   const deduped = deduplicateBills(bills);
   const paidBills = deduped.filter((b) => (b.status || "PAID").toUpperCase() === "PAID");
@@ -817,7 +877,7 @@ export function calculateCategoryReport(
  */
 export function calculateProductReport(
   bills: HistoryOrder[],
-  productsMap?: Record<string | number, any>
+  productsMap?: Record<string | number, ProductLookup>
 ): ProductReportItem[] {
   const deduped = deduplicateBills(bills);
   const paidBills = deduped.filter((b) => (b.status || "PAID").toUpperCase() === "PAID");
@@ -1110,7 +1170,7 @@ export function calculatePromotionsReport(
         totalDiscountAmount += amt;
 
         if (!promoMap.has(code)) {
-          let name: string = String(d.promoName || (d as any).name || "");
+          let name: string = String(d.promoName || (d as { name?: string }).name || "");
           if (campaignsMap && campaignsMap[code]) {
             name = campaignsMap[code];
           } else if (!name) {
@@ -1338,7 +1398,7 @@ export function calculateCashShiftReport(
  */
 export function calculateGrossProfitReport(
   bills: HistoryOrder[],
-  productsMap?: Record<string | number, any>
+  productsMap?: Record<string | number, ProductLookup>
 ): GrossProfitReportResult {
   const prodItems = calculateProductReport(bills, productsMap);
 
@@ -1390,7 +1450,7 @@ export function generateEndOfDayZReport(
   bills: HistoryOrder[],
   shifts: CashShiftItem[],
   tables: TableItem[],
-  productsMap?: Record<string | number, any>,
+  productsMap?: Record<string | number, ProductLookup>,
   options?: { date?: string; storeCode?: string; storeName?: string }
 ): EndOfDayReportData {
   const deduped = deduplicateBills(bills);

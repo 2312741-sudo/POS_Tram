@@ -38,7 +38,10 @@ interface OrderItem {
   unit?: string;
   category?: string;
   selectedSize?: string;
-  selectedToppings?: any[];
+  selectedToppings?: unknown[];
+  sizeExtraPrice?: number;
+  toppingPrice?: number;
+  discountAmount?: number;
   note?: string;
   imageBase64?: string;
 }
@@ -54,13 +57,14 @@ interface Table {
   openedAt?: string | null;
   currentOrderJson?: string;
   currentBillId?: string | null;
+  currentOrderCode?: string | null;
   actionLogsJson?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
   reservationTime?: string;
   reservationDeposit?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface TableFormData {
@@ -73,7 +77,9 @@ const emptyForm: TableFormData = {
   zone: "",
 };
 
-import { useDashboardData } from "@/lib/data-context";
+import { useDashboardData, resolveWriteStoreCode } from "@/lib/data-context";
+import { errorMessage } from "@/lib/errors";
+import { lineQuantity, lineUnitPrice, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
 
 export default function TablesPage() {
   const {
@@ -108,22 +114,18 @@ export default function TablesPage() {
   const [error, setError] = useState("");
 
   // Order Details Modal & Payment
-  const [selectedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
+  const [pickedTableForOrder, setSelectedTableForOrder] = useState<Table | null>(null);
   const [completingPayment, setCompletingPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "TRANSFER">("CASH");
   const [checkoutToast, setCheckoutToast] = useState<string | null>(null);
 
-  // Update selectedTableForOrder if tables change
-  useEffect(() => {
-    if (selectedTableForOrder) {
-      const updated = tables.find((t) => t.id === selectedTableForOrder.id || t.name === selectedTableForOrder.name);
-      if (updated && updated.inUse) {
-        setSelectedTableForOrder(updated);
-      } else if (updated && !updated.inUse) {
-        setSelectedTableForOrder(null);
-      }
-    }
-  }, [tables]);
+  // Bàn đang xem luôn lấy bản mới nhất từ danh sách realtime; bàn đã được giải phóng thì đóng modal
+  const selectedTableForOrder = useMemo<Table | null>(() => {
+    if (!pickedTableForOrder) return null;
+    const updated = tables.find((t) => t.id === pickedTableForOrder.id || t.name === pickedTableForOrder.name);
+    if (!updated) return pickedTableForOrder;
+    return updated.inUse ? updated : null;
+  }, [pickedTableForOrder, tables]);
 
   const filtered = useMemo(() => {
     return tables.filter((t) => {
@@ -162,15 +164,10 @@ export default function TablesPage() {
     }
   };
 
+  // Tổng tiền tạm tính giống hệt cách tính khi thanh toán (size + topping - giảm giá dòng)
   const calculateTableTotal = (items: OrderItem[]): number => {
-    return items.reduce((sum, it) => {
-      const qty = it.quantity || it.count || 1;
-      let toppingSum = 0;
-      if (Array.isArray(it.selectedToppings)) {
-        toppingSum = it.selectedToppings.reduce((ts, tp) => ts + (tp.price || 0), 0);
-      }
-      return sum + (it.price + toppingSum) * qty;
-    }, 0);
+    const { subTotal, itemDiscounts } = summarizeOrderLines(items as unknown as RawOrderLine[]);
+    return Math.max(0, subTotal - itemDiscounts);
   };
 
   const getElapsedMinutes = (openedAt?: string | null): string => {
@@ -235,8 +232,8 @@ export default function TablesPage() {
       } else {
         closeModal();
       }
-    } catch (e: any) {
-      setError(e.message || "Lỗi lưu dữ liệu");
+    } catch (e) {
+      setError(errorMessage(e) || "Lỗi lưu dữ liệu");
     }
     setSaving(false);
   };
@@ -248,8 +245,8 @@ export default function TablesPage() {
         alert("Lỗi khi xóa bàn: " + res.error);
       }
       setDeleteId(null);
-    } catch (e: any) {
-      alert("Lỗi xóa bàn: " + e.message);
+    } catch (e) {
+      alert("Lỗi xóa bàn: " + errorMessage(e));
     }
   };
 
@@ -264,14 +261,14 @@ export default function TablesPage() {
     try {
       const res = await checkoutAndFreeTable(t, { paymentMethod });
       if (res.success) {
-        setCheckoutToast(`✅ Đã thanh toán hóa đơn ${res.billId} và trả bàn ${t.name} thành công!`);
+        setCheckoutToast(`✅ Đã thanh toán hóa đơn ${res.billCode || res.billId} và trả bàn ${t.name} thành công!`);
         setTimeout(() => setCheckoutToast(null), 5000);
         setSelectedTableForOrder(null);
       } else {
         alert("Lỗi khi trả bàn: " + (res.error || "Không xác định"));
       }
-    } catch (e: any) {
-      alert("Lỗi khi trả bàn: " + e.message);
+    } catch (e) {
+      alert("Lỗi khi trả bàn: " + errorMessage(e));
     }
     setCompletingPayment(false);
   };
@@ -292,39 +289,43 @@ export default function TablesPage() {
       } else {
         alert("Lỗi khi hủy đơn bàn: " + (res.error || "Không xác định"));
       }
-    } catch (e: any) {
-      alert("Lỗi khi hủy đơn bàn: " + e.message);
+    } catch (e) {
+      alert("Lỗi khi hủy đơn bàn: " + errorMessage(e));
     }
     setCompletingPayment(false);
   };
 
+  // Ghi các trường của bàn bằng MỘT update() đa đường dẫn (khóa chính + khóa chuẩn {zone}_{name} nếu tồn tại).
+  // Lỗi được ném ra để handler hiển thị cho người dùng, không bị nuốt.
+  const writeTableFields = async (table: Table, payload: Record<string, unknown>) => {
+    const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+    const stdKey = `${table.zone}_${table.name}`;
+    const keys = [table.id];
+    if (stdKey !== table.id && tables.some((t) => t.id === stdKey && (t.storeCode || targetStoreCode) === targetStoreCode)) {
+      keys.push(stdKey);
+    }
+    const updates: Record<string, unknown> = {};
+    for (const key of keys) {
+      for (const [field, value] of Object.entries(payload)) {
+        updates[`stores/${targetStoreCode}/tables/${key}/${field}`] = value;
+      }
+    }
+    await update(ref(db), updates);
+  };
+
   const handleUpdateGuestCount = async (table: Table, count: number) => {
     try {
-      const targetStoreCode = table.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
-      const key = table.id;
-      const stdKey = `${table.zone}_${table.name}`;
-      await update(ref(db, `stores/${targetStoreCode}/tables/${key}`), { guestCount: count });
-      if (stdKey !== key) {
-        await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), { guestCount: count }).catch(() => {});
-      }
-      if (targetStoreCode === "TRAM01") {
-        await update(ref(db, `tables/${key}`), { guestCount: count }).catch(() => {});
-        if (stdKey !== key) {
-          await update(ref(db, `tables/${stdKey}`), { guestCount: count }).catch(() => {});
-        }
-      }
+      await writeTableFields(table, { guestCount: count });
       setSelectedTableForOrder((prev) => (prev ? { ...prev, guestCount: count } : null));
-    } catch (e: any) {
+    } catch (e) {
       console.error("Lỗi cập nhật số khách:", e);
+      alert("Lỗi cập nhật số khách: " + errorMessage(e, "Không xác định"));
     }
   };
 
   const handleCheckInReservation = async (table: Table) => {
     if (!confirm(`Xác nhận nhận khách vào ${table.name}?`)) return;
     try {
-      const targetStoreCode = table.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
-      const key = table.id;
-      const stdKey = `${table.zone}_${table.name}`;
       const payload = {
         inUse: true,
         isReserved: false,
@@ -335,29 +336,17 @@ export default function TablesPage() {
         reservationTime: null,
         reservationDeposit: 0,
       };
-      await update(ref(db, `stores/${targetStoreCode}/tables/${key}`), payload);
-      if (stdKey !== key) {
-        await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), payload).catch(() => {});
-      }
-      if (targetStoreCode === "TRAM01") {
-        await update(ref(db, `tables/${key}`), payload).catch(() => {});
-        if (stdKey !== key) {
-          await update(ref(db, `tables/${stdKey}`), payload).catch(() => {});
-        }
-      }
+      await writeTableFields(table, payload);
       setCheckoutToast(`✅ Đã nhận khách vào ${table.name}!`);
       setTimeout(() => setCheckoutToast(null), 4000);
-    } catch (e: any) {
-      alert("Lỗi nhận bàn: " + e.message);
+    } catch (e) {
+      alert("Lỗi nhận bàn: " + errorMessage(e));
     }
   };
 
   const handleCancelReservation = async (table: Table) => {
     if (!confirm(`Xác nhận hủy đặt trước cho bàn ${table.name}?`)) return;
     try {
-      const targetStoreCode = table.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01");
-      const key = table.id;
-      const stdKey = `${table.zone}_${table.name}`;
       const payload = {
         isReserved: false,
         reservationCustomer: null,
@@ -365,20 +354,11 @@ export default function TablesPage() {
         reservationTime: null,
         reservationDeposit: 0,
       };
-      await update(ref(db, `stores/${targetStoreCode}/tables/${key}`), payload);
-      if (stdKey !== key) {
-        await update(ref(db, `stores/${targetStoreCode}/tables/${stdKey}`), payload).catch(() => {});
-      }
-      if (targetStoreCode === "TRAM01") {
-        await update(ref(db, `tables/${key}`), payload).catch(() => {});
-        if (stdKey !== key) {
-          await update(ref(db, `tables/${stdKey}`), payload).catch(() => {});
-        }
-      }
+      await writeTableFields(table, payload);
       setCheckoutToast(`Đã hủy đặt trước bàn ${table.name}!`);
       setTimeout(() => setCheckoutToast(null), 4000);
-    } catch (e: any) {
-      alert("Lỗi hủy đặt bàn: " + e.message);
+    } catch (e) {
+      alert("Lỗi hủy đặt bàn: " + errorMessage(e));
     }
   };
 
@@ -400,7 +380,7 @@ export default function TablesPage() {
           ${it.selectedSize ? `<br/><small>Size: ${it.selectedSize}</small>` : ""}
           ${
             it.selectedToppings && it.selectedToppings.length > 0
-              ? `<br/><small>+ ${it.selectedToppings.map((tp) => tp.name).join(", ")}</small>`
+              ? `<br/><small>+ ${it.selectedToppings.map(toppingLabel).filter(Boolean).join(", ")}</small>`
               : ""
           }
         </td>
@@ -921,7 +901,7 @@ export default function TablesPage() {
                       </div>
 
                       {/* Mã Hóa Đơn & Mã Đặt Món */}
-                      {(t.currentBillId || (t as any).currentOrderCode) && (
+                      {(t.currentBillId || t.currentOrderCode) && (
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px" }}>
                           {t.currentBillId && (
                             <span
@@ -939,7 +919,7 @@ export default function TablesPage() {
                               HĐ: {t.currentBillId}
                             </span>
                           )}
-                          {(t as any).currentOrderCode && (
+                          {t.currentOrderCode && (
                             <span
                               style={{
                                 fontSize: "11px",
@@ -952,7 +932,7 @@ export default function TablesPage() {
                                 letterSpacing: "0.02em",
                               }}
                             >
-                              Đơn: {(t as any).currentOrderCode}
+                              Đơn: {t.currentOrderCode}
                             </span>
                           )}
                         </div>
@@ -1365,9 +1345,9 @@ export default function TablesPage() {
                             HĐ: {t.currentBillId}
                           </div>
                         )}
-                        {(t as any).currentOrderCode && (
+                        {t.currentOrderCode && (
                           <div style={{ fontSize: "11px", fontWeight: "600", color: "#146A65", marginTop: "1px" }}>
-                            Đơn: {(t as any).currentOrderCode}
+                            Đơn: {t.currentOrderCode}
                           </div>
                         )}
                       </td>
@@ -1644,16 +1624,10 @@ export default function TablesPage() {
                     </thead>
                     <tbody>
                       {parseOrderItems(selectedTableForOrder.currentOrderJson).map((item, idx) => {
-                        const qty = item.quantity || item.count || 1;
-                        let toppingTotal = 0;
-                        if (Array.isArray(item.selectedToppings)) {
-                          toppingTotal = item.selectedToppings.reduce(
-                            (s, tp) => s + (tp.price || 0),
-                            0
-                          );
-                        }
-                        const itemPriceWithTopping = item.price + toppingTotal;
-                        const lineTotal = itemPriceWithTopping * qty;
+                        const line = item as unknown as RawOrderLine;
+                        const qty = lineQuantity(line);
+                        const itemPriceWithTopping = lineUnitPrice(line);
+                        const lineTotal = Math.max(0, itemPriceWithTopping * qty - Number(item.discountAmount || 0));
 
                         return (
                           <tr key={idx} style={{ borderBottom: "1px solid #ECE5D8" }}>
@@ -1667,7 +1641,7 @@ export default function TablesPage() {
                               {Array.isArray(item.selectedToppings) &&
                                 item.selectedToppings.length > 0 && (
                                   <div style={{ fontSize: "11px", color: "#146A65" }}>
-                                    + {item.selectedToppings.map((tp) => tp.name).join(", ")}
+                                    + {item.selectedToppings.map(toppingLabel).filter(Boolean).join(", ")}
                                   </div>
                                 )}
                               {item.note && (

@@ -593,6 +593,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
+  /// Handler báo lỗi lưu bàn (lưu nền, không chặn điều hướng). Lấy ScaffoldMessenger
+  /// trước khi rời màn hình để vẫn hiển thị được thông báo.
+  void Function(Object) _saveErrorHandler() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final tableName = widget.table.name;
+    return (Object e) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Lỗi lưu bàn $tableName: $e'), backgroundColor: AppColors.danger),
+      );
+    };
+  }
+
   // ==================== SEND TO KITCHEN LOGIC ====================
   Future<void> _sendToKitchen() async {
     if (!await _ensureShiftOpen()) return;
@@ -632,10 +644,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
       if (t.openedAt == null) t.openedAt = DateTime.now().millisecondsSinceEpoch;
       t.currentOrderJson = jsonEncode(updatedCart.map((e) => e.toMap()).toList());
 
-      // 2. Gửi phiếu sang bếp và lưu bàn song song (không treo UI)
+      // 2. Gửi phiếu sang bếp và lưu bàn song song (mất mạng: SDK tự đồng bộ; lỗi thật: báo ở catch)
       await Future.wait([
-        _fb.sendKitchenOrder(kitchenOrder).catchError((_) {}),
-        _fb.saveTable(t).catchError((_) {}),
+        _fb.sendKitchenOrder(kitchenOrder),
+        _fb.saveTable(t),
       ]);
 
       // 3. Ghi nhật ký thao tác (Audit Log)
@@ -690,7 +702,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
               widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
               widget.table.inUse = true;
             }
-            _fb.saveTable(widget.table);
+            _fb.saveTable(widget.table).catchError(_saveErrorHandler());
             Navigator.of(context).pop(_cart);
           },
         ),
@@ -795,7 +807,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       // Cập nhật giỏ hàng tạm thời vào bàn
                       widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
                       widget.table.inUse = true;
-                      _fb.saveTable(widget.table);
+                      _fb.saveTable(widget.table).catchError(_saveErrorHandler());
 
                       if (widget.isAddingMore) {
                         Navigator.of(context).pop(_cart);
@@ -978,10 +990,10 @@ class _ProductListRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isInCart ? AppColors.primaryLight.withOpacity(0.35) : Colors.white,
+        color: isInCart ? AppColors.primaryLight.withValues(alpha: 0.35) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isInCart ? AppColors.primary.withOpacity(0.5) : AppColors.border,
+          color: isInCart ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border,
           width: isInCart ? 1.5 : 1,
         ),
         boxShadow: const [
@@ -1106,7 +1118,7 @@ class _ProductListRow extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
+                            color: AppColors.primary.withValues(alpha: 0.3),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1135,7 +1147,7 @@ class _ProductListRow extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
                           ),
                           child: const Icon(Icons.remove, color: AppColors.primary, size: 16),
                         ),

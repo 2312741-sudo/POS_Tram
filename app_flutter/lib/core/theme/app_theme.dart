@@ -82,6 +82,14 @@ class TramColors {
   static const Color infoLight = infoSurface;
   static const Color secondary = managerAccent;
 
+  // 7. Bàn chờ thanh toán (đã in tạm tính) – dùng cho chú thích sơ đồ bàn
+  static const Color tableAwaitingPayment = Color(0xFF1C4E6B);
+  static const Color tableAwaitingPaymentBg = Color(0xFFE3EFF7);
+
+  // 8. Chữ trên nền tối (KDS bếp / dark theme)
+  static const Color darkTextPrimary = Color(0xFFF1F5F9);
+  static const Color darkTextSecondary = Color(0xFFA7B1C2);
+
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [brandPrimary, brandDark],
     begin: Alignment.topLeft,
@@ -92,6 +100,42 @@ class TramColors {
 /// Alias tương thích ngược cho AppColors
 typedef AppColors = TramColors;
 
+/// KHOẢNG CÁCH CHUẨN (bội số 4) – dùng thay cho số "magic" trong padding/SizedBox
+class AppSpacing {
+  AppSpacing._();
+  static const double xxs = 2;
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 20;
+  static const double xxl = 24;
+  static const double xxxl = 32;
+
+  /// Vùng chạm tối thiểu theo khuyến nghị Material/Apple (dp)
+  static const double minTapTarget = 44;
+
+  /// Mốc chiều rộng bố cục
+  static const double tabletBreakpoint = 720;
+  static const double wideBreakpoint = 1024;
+}
+
+/// BO GÓC CHUẨN
+class AppRadius {
+  AppRadius._();
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 20;
+  static const double pill = 999;
+
+  static const BorderRadius brSm = BorderRadius.all(Radius.circular(sm));
+  static const BorderRadius brMd = BorderRadius.all(Radius.circular(md));
+  static const BorderRadius brLg = BorderRadius.all(Radius.circular(lg));
+  static const BorderRadius brXl = BorderRadius.all(Radius.circular(xl));
+}
+
 /// HỆ THỐNG THEME TRẠM (MATERIAL 3)
 class AppTheme {
   AppTheme._();
@@ -100,45 +144,89 @@ class AppTheme {
   static ThemeData get ownerTheme => buildTheme(primaryColor: TramColors.ownerAccent, surfaceColor: TramColors.ownerSurface);
   static ThemeData get managerTheme => buildTheme(primaryColor: TramColors.managerAccent, surfaceColor: TramColors.managerSurface);
 
+  /// Theme tối – dùng cho màn hình Bếp/Bar (KDS) và sẵn sàng cho chế độ tối toàn app.
+  static ThemeData get darkTheme => buildTheme(
+        primaryColor: TramColors.kitchenAccent,
+        surfaceColor: TramColors.kitchenCard,
+        brightness: Brightness.dark,
+      );
+
   static ThemeData buildTheme({
     required Color primaryColor,
     required Color surfaceColor,
+    Brightness brightness = Brightness.light,
   }) {
-    final baseTextTheme = GoogleFonts.beVietnamProTextTheme();
+    final isDark = brightness == Brightness.dark;
+    final textPrimary = isDark ? TramColors.darkTextPrimary : TramColors.textPrimary;
+    final textSecondary = isDark ? TramColors.darkTextSecondary : TramColors.textSecondary;
+    final scaffoldBg = isDark ? TramColors.kitchenBg : TramColors.background;
+    final borderColor = isDark ? TramColors.kitchenCardBorder : TramColors.border;
+    final borderLight = isDark ? TramColors.kitchenCardBorder : TramColors.borderLight;
+    final inputFill = isDark ? const Color(0xFF111827) : Colors.white;
+
+    final baseTextTheme = GoogleFonts.beVietnamProTextTheme(
+      isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+    );
+
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: primaryColor,
+      brightness: brightness,
+    ).copyWith(
+      primary: primaryColor,
+      onPrimary: Colors.white,
+      secondary: TramColors.managerAccent,
+      onSecondary: Colors.white,
+      surface: surfaceColor,
+      onSurface: textPrimary,
+      onSurfaceVariant: textSecondary,
+      outline: borderColor,
+      outlineVariant: borderLight,
+      error: TramColors.danger,
+      onError: Colors.white,
+    );
+
+    TextStyle? tint(TextStyle? s, {FontWeight? w, Color? c}) =>
+        s?.copyWith(fontWeight: w, color: c ?? textPrimary);
 
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryColor,
-        primary: primaryColor,
-        onPrimary: Colors.white,
-        surface: surfaceColor,
-        background: TramColors.background,
-        error: TramColors.danger,
-        brightness: Brightness.light,
-      ),
-      scaffoldBackgroundColor: TramColors.background,
+      brightness: brightness,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: scaffoldBg,
       fontFamily: GoogleFonts.beVietnamPro().fontFamily,
       primaryColor: primaryColor,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
 
-      // Typography
+      // Typography – cỡ chữ đủ lớn để đọc ở khoảng cách một cánh tay trên tablet
       textTheme: baseTextTheme.copyWith(
-        displayLarge: baseTextTheme.displayLarge?.copyWith(fontWeight: FontWeight.w800, color: TramColors.textPrimary),
-        headlineLarge: baseTextTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w700, color: TramColors.textPrimary),
-        headlineMedium: baseTextTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700, color: TramColors.textPrimary),
-        titleLarge: baseTextTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: TramColors.textPrimary),
-        titleMedium: baseTextTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: TramColors.textPrimary),
-        bodyLarge: baseTextTheme.bodyLarge?.copyWith(color: TramColors.textPrimary),
-        bodyMedium: baseTextTheme.bodyMedium?.copyWith(color: TramColors.textSecondary),
-        labelLarge: baseTextTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        displayLarge: tint(baseTextTheme.displayLarge, w: FontWeight.w800),
+        displayMedium: tint(baseTextTheme.displayMedium, w: FontWeight.w800),
+        displaySmall: tint(baseTextTheme.displaySmall, w: FontWeight.w800),
+        headlineLarge: tint(baseTextTheme.headlineLarge, w: FontWeight.w700),
+        headlineMedium: tint(baseTextTheme.headlineMedium, w: FontWeight.w700),
+        headlineSmall: tint(baseTextTheme.headlineSmall, w: FontWeight.w700),
+        titleLarge: tint(baseTextTheme.titleLarge, w: FontWeight.w700),
+        titleMedium: tint(baseTextTheme.titleMedium, w: FontWeight.w600),
+        titleSmall: tint(baseTextTheme.titleSmall, w: FontWeight.w600),
+        bodyLarge: tint(baseTextTheme.bodyLarge),
+        bodyMedium: tint(baseTextTheme.bodyMedium, c: textSecondary),
+        bodySmall: tint(baseTextTheme.bodySmall, c: textSecondary),
+        labelLarge: tint(baseTextTheme.labelLarge, w: FontWeight.w600),
+        labelMedium: tint(baseTextTheme.labelMedium, w: FontWeight.w600),
+        labelSmall: tint(baseTextTheme.labelSmall, w: FontWeight.w600, c: textSecondary),
       ),
 
       // AppBar
       appBarTheme: AppBarTheme(
-        backgroundColor: primaryColor,
+        backgroundColor: isDark ? TramColors.kitchenCard : primaryColor,
         foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
         titleTextStyle: GoogleFonts.beVietnamPro(
           fontSize: 18,
           fontWeight: FontWeight.w700,
@@ -150,83 +238,191 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: surfaceColor,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: TramColors.borderLight, width: 1),
+          borderRadius: AppRadius.brLg,
+          side: BorderSide(color: borderLight, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
 
-      // Buttons: Bo góc 12px, cao 52px
+      // Buttons: Bo góc 12px, cao 52px (nút chính của POS – dễ bấm)
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE4DED3),
+          disabledForegroundColor: isDark ? TramColors.darkTextSecondary : TramColors.textDisabled,
           minimumSize: const Size.fromHeight(52),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+          textStyle: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(64, 48),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           textStyle: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: primaryColor,
-          side: BorderSide(color: primaryColor, width: 1.5),
+          foregroundColor: isDark ? textPrimary : primaryColor,
+          side: BorderSide(color: isDark ? borderColor : primaryColor, width: 1.5),
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           textStyle: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: primaryColor,
+          foregroundColor: isDark ? textPrimary : primaryColor,
+          minimumSize: const Size(48, AppSpacing.minTapTarget),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.brSm),
           textStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(AppSpacing.minTapTarget, AppSpacing.minTapTarget),
         ),
       ),
 
       // Inputs: Bo góc 12px
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: inputFill,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: TramColors.border),
+          borderRadius: AppRadius.brMd,
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: TramColors.border),
+          borderRadius: AppRadius.brMd,
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.brMd,
           borderSide: BorderSide(color: primaryColor, width: 2),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: TramColors.danger),
+        errorBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.brMd,
+          borderSide: BorderSide(color: TramColors.danger),
         ),
-        labelStyle: GoogleFonts.beVietnamPro(color: TramColors.textSecondary),
+        focusedErrorBorder: const OutlineInputBorder(
+          borderRadius: AppRadius.brMd,
+          borderSide: BorderSide(color: TramColors.danger, width: 2),
+        ),
+        prefixIconColor: textSecondary,
+        suffixIconColor: textSecondary,
+        labelStyle: GoogleFonts.beVietnamPro(color: textSecondary),
+        floatingLabelStyle: GoogleFonts.beVietnamPro(color: isDark ? textPrimary : primaryColor, fontWeight: FontWeight.w600),
         hintStyle: GoogleFonts.beVietnamPro(color: TramColors.textDisabled),
+        errorStyle: GoogleFonts.beVietnamPro(color: TramColors.danger, fontSize: 12),
       ),
 
       // Dialog: Bo góc 20px
       dialogTheme: DialogThemeData(
         backgroundColor: surfaceColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brXl),
+        titleTextStyle: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.w700, color: textPrimary),
+        contentTextStyle: GoogleFonts.beVietnamPro(fontSize: 14, color: textSecondary, height: 1.45),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       ),
 
       // BottomSheet: Bo góc 20px
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: isDark ? TramColors.kitchenCard : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        dragHandleColor: borderColor,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
         ),
+      ),
+
+      // SnackBar: nổi, bo góc, chữ rõ ràng
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isDark ? const Color(0xFF334155) : TramColors.textPrimary,
+        contentTextStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+        actionTextColor: const Color(0xFFFFD58A),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        insetPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        elevation: 4,
       ),
 
       // Chip
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        side: BorderSide.none,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brSm),
+        side: BorderSide(color: borderLight),
+        backgroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+        selectedColor: isDark ? primaryColor.withValues(alpha: 0.35) : TramColors.primaryLight,
+        checkmarkColor: isDark ? Colors.white : primaryColor,
+        labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: textPrimary),
+        secondaryLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: isDark ? Colors.white : primaryColor),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+
+      // Tabs
+      tabBarTheme: TabBarThemeData(
+        labelColor: isDark ? Colors.white : primaryColor,
+        unselectedLabelColor: textSecondary,
+        indicatorColor: isDark ? Colors.white : primaryColor,
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: borderLight,
+        labelStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+
+      listTileTheme: ListTileThemeData(
+        iconColor: textSecondary,
+        textColor: textPrimary,
+        minVerticalPadding: 10,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        titleTextStyle: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary),
+        subtitleTextStyle: GoogleFonts.beVietnamPro(fontSize: 12.5, color: textSecondary),
+      ),
+
+      dividerTheme: DividerThemeData(color: borderLight, thickness: 1, space: 1),
+
+      popupMenuTheme: PopupMenuThemeData(
+        color: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
+        textStyle: GoogleFonts.beVietnamPro(fontSize: 14, color: textPrimary),
+      ),
+
+      drawerTheme: DrawerThemeData(
+        backgroundColor: isDark ? TramColors.kitchenCard : surfaceColor,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: TramColors.textPrimary.withValues(alpha: 0.92),
+          borderRadius: AppRadius.brSm,
+        ),
+        textStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white),
+      ),
+
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: primaryColor),
+
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? Colors.white : null),
+        trackColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? primaryColor : null),
+      ),
+
+      checkboxTheme: CheckboxThemeData(
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(5))),
+        fillColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? primaryColor : null),
       ),
 
       // Floating Action Button: Luôn dùng chữ và icon màu trắng rõ nét
@@ -234,7 +430,7 @@ class AppTheme {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.brLg),
         extendedTextStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
       ),
     );
