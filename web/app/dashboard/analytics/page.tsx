@@ -22,7 +22,6 @@ import {
   Users,
   Clock,
   DollarSign,
-  ShieldAlert,
   Percent,
   Receipt,
   Layers,
@@ -37,6 +36,7 @@ import {
   getUTC7Date,
   formatVND,
   formatNumber,
+  itemLineDiscount,
 } from "@/lib/reports";
 import {
   exportOverviewReport,
@@ -158,8 +158,8 @@ export default function AnalyticsPage() {
         const n = it.name || legacy.productName || "Món chưa đặt tên";
         const q = Number(it.quantity || legacy.qty || 1);
         const price = Number(it.price || 0);
-        const disc = Number(it.discountAmount || 0);
-        const net = Math.max(0, price - disc) * q;
+        // Giảm giá dòng là tổng CẢ DÒNG (không nhân số lượng)
+        const net = Math.max(0, price * q - itemLineDiscount(it));
         if (!map.has(n)) {
           map.set(n, { name: n, qty: 0, netRevenue: 0 });
         }
@@ -221,7 +221,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div style={{ color: "#7E2930", fontWeight: "700" }}>Đang tải dữ liệu phân tích...</div>
+        <div style={{ color: "var(--primary)", fontWeight: "700" }}>Đang tải dữ liệu phân tích...</div>
       </div>
     );
   }
@@ -231,9 +231,9 @@ export default function AnalyticsPage() {
       {/* Top Header Card */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px 24px",
           marginBottom: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
@@ -242,13 +242,13 @@ export default function AnalyticsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Phân tích & Quản trị Bán hàng
               </h1>
               <span
                 style={{
-                  background: "#FBECEE",
-                  color: "#7E2930",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "12px",
@@ -258,7 +258,7 @@ export default function AnalyticsPage() {
                 Executive BI Dashboard
               </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
               20 chỉ số tài chính, nhiệt độ kinh doanh theo khung giờ và năng suất bán hàng nhân viên
             </p>
           </div>
@@ -270,8 +270,8 @@ export default function AnalyticsPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
               }}
@@ -286,7 +286,7 @@ export default function AnalyticsPage() {
                   outline: "none",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#1C1A2D",
+                  color: "var(--text)",
                   cursor: "pointer",
                 }}
               >
@@ -327,7 +327,7 @@ export default function AnalyticsPage() {
                     alignItems: "center",
                     gap: "6px",
                     padding: "7px 14px",
-                    background: "#7E2930",
+                    background: "var(--primary)",
                     color: "#FFFFFF",
                     border: "none",
                     borderRadius: "8px",
@@ -359,9 +359,9 @@ export default function AnalyticsPage() {
               style={{
                 padding: "6px 14px",
                 borderRadius: "8px",
-                border: "1px solid #E6DEC8",
-                background: period === p.id ? "#7E2930" : "#FFFFFF",
-                color: period === p.id ? "#FFFFFF" : "#555",
+                border: "1px solid var(--border)",
+                background: period === p.id ? "var(--primary)" : "var(--surface)",
+                color: period === p.id ? "#FFFFFF" : "var(--subtext)",
                 fontSize: "12px",
                 fontWeight: "600",
                 cursor: "pointer",
@@ -377,59 +377,59 @@ export default function AnalyticsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
           gap: "16px",
           marginBottom: "20px",
         }}
       >
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Doanh thu thuần</span>
             <DollarSign size={18} color="#7E2930" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#7E2930", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--primary)", marginTop: "8px" }}>
             {formatVND(overviewReport.netRevenue)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Gộp: {formatVND(overviewReport.grossRevenue)}
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Tổng chiết khấu & Giảm giá</span>
             <Percent size={18} color="#C93B2B" />
           </div>
           <div style={{ fontSize: "24px", fontWeight: "800", color: "#C93B2B", marginTop: "8px" }}>
             {formatVND(overviewReport.totalDiscount)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Món: {formatVND(overviewReport.itemDiscounts)} • Đơn/Voucher: {formatVND(overviewReport.billDiscounts)}
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Lợi nhuận gộp</span>
             <TrendingUp size={18} color="#146A65" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#146A65", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--success)", marginTop: "8px" }}>
             {formatVND(overviewReport.grossProfit)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Tỷ suất LN: <strong>{overviewReport.grossProfitMarginPercent}%</strong> (Giá vốn: {formatVND(overviewReport.totalCostPrice)})
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Hóa đơn hoàn tất</span>
             <Receipt size={18} color="#1877F2" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
             {formatNumber(overviewReport.paidBillsCount)} đơn
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             TB/đơn: {formatVND(overviewReport.avgRevenuePerPaidBill)} • Khách: {overviewReport.totalGuests}
           </div>
         </div>
@@ -439,7 +439,7 @@ export default function AnalyticsPage() {
       <div
         style={{
           display: "flex",
-          borderBottom: "2px solid #E6DEC8",
+          borderBottom: "2px solid var(--border)",
           marginBottom: "20px",
           gap: "8px",
         }}
@@ -458,9 +458,9 @@ export default function AnalyticsPage() {
               style={{
                 padding: "10px 18px",
                 border: "none",
-                borderBottom: isActive ? "3px solid #7E2930" : "3px solid transparent",
+                borderBottom: isActive ? "3px solid var(--primary)" : "3px solid transparent",
                 background: "transparent",
-                color: isActive ? "#7E2930" : "#666",
+                color: isActive ? "var(--primary)" : "var(--subtext)",
                 fontWeight: isActive ? "700" : "500",
                 fontSize: "14px",
                 cursor: "pointer",
@@ -478,19 +478,20 @@ export default function AnalyticsPage() {
       {activeTab === "OVERVIEW" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
             boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+            overflowX: "auto",
           }}
         >
-          <div style={{ fontSize: "16px", fontWeight: "800", color: "#1C1A2D", marginBottom: "16px" }}>
+          <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text)", marginBottom: "16px" }}>
             Bảng kê 20 Chỉ số Quản trị Tài chính & Vận hành ({dateRangeLabel})
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+              <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                 <th style={{ padding: "10px 12px", textAlign: "left" }}>STT</th>
                 <th style={{ padding: "10px 12px", textAlign: "left" }}>Tên chỉ số quản trị</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Giá trị ghi nhận</th>
@@ -521,12 +522,12 @@ export default function AnalyticsPage() {
                 { stt: 20, name: "Tỷ suất lợi nhuận gộp (%)", val: `${overviewReport.grossProfitMarginPercent}%`, note: "Lợi nhuận gộp / Doanh thu sau giảm giá" },
               ].map((row) => (
                 <tr key={row.stt} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                  <td style={{ padding: "10px 12px", color: "#888" }}>{row.stt}</td>
-                  <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{row.name}</td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                  <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{row.stt}</td>
+                  <td style={{ padding: "10px 12px", fontWeight: "600", color: "var(--text)" }}>{row.name}</td>
+                  <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--primary)" }}>
                     {row.val}
                   </td>
-                  <td style={{ padding: "10px 12px", color: "#666", fontSize: "12px" }}>{row.note}</td>
+                  <td style={{ padding: "10px 12px", color: "var(--subtext)", fontSize: "12px" }}>{row.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -540,16 +541,18 @@ export default function AnalyticsPage() {
           {/* Chart */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+              overflowX: "auto",
+              minWidth: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <Clock size={18} color="#D97706" />
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Biểu đồ Doanh thu theo 24 Khung giờ ({dateRangeLabel})
               </h2>
             </div>
@@ -573,9 +576,9 @@ export default function AnalyticsPage() {
           {/* Table */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
               overflowX: "auto",
@@ -583,7 +586,7 @@ export default function AnalyticsPage() {
           >
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                   <th style={{ padding: "10px 12px", textAlign: "left" }}>Khung giờ</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số hóa đơn</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu gộp</th>
@@ -596,12 +599,12 @@ export default function AnalyticsPage() {
               <tbody>
                 {hourlyReport.map((h) => (
                   <tr key={h.hour} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                    <td style={{ padding: "8px 12px", fontWeight: "600", color: "#1C1A2D" }}>{h.hourLabel}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: "600", color: "var(--text)" }}>{h.hourLabel}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right" }}>{h.billCount}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right" }}>{formatVND(h.grossRevenue)}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right", color: "#C93B2B" }}>{formatVND(h.totalDiscount)}</td>
                     <td style={{ padding: "8px 12px", textAlign: "right" }}>{formatVND(h.vatAmount)}</td>
-                    <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                    <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: "700", color: "var(--primary)" }}>
                       {formatVND(h.netRevenue)}
                     </td>
                     <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: "600" }}>{h.proportion || 0}%</td>
@@ -615,26 +618,28 @@ export default function AnalyticsPage() {
 
       {/* TAB 3: NĂNG SUẤT NHÂN VIÊN */}
       {activeTab === "STAFF" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+        <div className="grid-stack-md" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
           {/* Order Staff */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+              overflowX: "auto",
+              minWidth: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <Users size={18} color="#146A65" />
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Năng suất Nhân viên Order ({staffReport.orderStaff.length} nhân viên)
               </h2>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                   <th style={{ padding: "10px 12px", textAlign: "left" }}>Nhân viên</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số món gọi</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu thuần</th>
@@ -643,7 +648,7 @@ export default function AnalyticsPage() {
               <tbody>
                 {staffReport.orderStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ textAlign: "center", padding: "20px", color: "#999" }}>
+                    <td colSpan={3} style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
                       Chưa có dữ liệu ghi nhận
                     </td>
                   </tr>
@@ -651,11 +656,11 @@ export default function AnalyticsPage() {
                   staffReport.orderStaff.map((s) => (
                     <tr key={s.staffUsername} style={{ borderBottom: "1px solid #F0ECE1" }}>
                       <td style={{ padding: "10px 12px" }}>
-                        <div style={{ fontWeight: "700", color: "#1C1A2D" }}>{s.staffFullName}</div>
-                        <div style={{ fontSize: "11px", color: "#888" }}>@{s.staffUsername}</div>
+                        <div style={{ fontWeight: "700", color: "var(--text)" }}>{s.staffFullName}</div>
+                        <div style={{ fontSize: "11px", color: "var(--muted)" }}>@{s.staffUsername}</div>
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{s.itemsCount}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#146A65" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--success)" }}>
                         {formatVND(s.netRevenue)}
                       </td>
                     </tr>
@@ -668,22 +673,24 @@ export default function AnalyticsPage() {
           {/* Cashier Staff */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+              overflowX: "auto",
+              minWidth: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <Receipt size={18} color="#7E2930" />
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Năng suất Thu ngân chốt Bill ({staffReport.cashierStaff.length} thu ngân)
               </h2>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                   <th style={{ padding: "10px 12px", textAlign: "left" }}>Thu ngân</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số hóa đơn</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh số thực thu</th>
@@ -692,7 +699,7 @@ export default function AnalyticsPage() {
               <tbody>
                 {staffReport.cashierStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ textAlign: "center", padding: "20px", color: "#999" }}>
+                    <td colSpan={3} style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
                       Chưa có dữ liệu ghi nhận
                     </td>
                   </tr>
@@ -700,11 +707,11 @@ export default function AnalyticsPage() {
                   staffReport.cashierStaff.map((s) => (
                     <tr key={s.staffUsername} style={{ borderBottom: "1px solid #F0ECE1" }}>
                       <td style={{ padding: "10px 12px" }}>
-                        <div style={{ fontWeight: "700", color: "#1C1A2D" }}>{s.staffFullName}</div>
-                        <div style={{ fontSize: "11px", color: "#888" }}>@{s.staffUsername}</div>
+                        <div style={{ fontWeight: "700", color: "var(--text)" }}>{s.staffFullName}</div>
+                        <div style={{ fontSize: "11px", color: "var(--muted)" }}>@{s.staffUsername}</div>
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{s.billCount}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--primary)" }}>
                         {formatVND(s.netRevenue)}
                       </td>
                     </tr>
@@ -718,25 +725,27 @@ export default function AnalyticsPage() {
 
       {/* TAB 4: MẶT HÀNG & THANH TOÁN */}
       {activeTab === "PRODUCTS" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "20px" }}>
+        <div className="grid-stack-md" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "20px" }}>
           {/* Payment Method Pie */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+              overflowX: "auto",
+              minWidth: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <PieIcon size={18} color="#7E2930" />
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Tỷ trọng Hình thức Thanh toán
               </h2>
             </div>
             {paymentChartData.length === 0 ? (
-              <div style={{ textAlign: "center", color: "#999", padding: "40px" }}>Không có dữ liệu</div>
+              <div style={{ textAlign: "center", color: "var(--muted)", padding: "40px" }}>Không có dữ liệu</div>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={200}>
@@ -759,7 +768,7 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
                   {paymentChartData.map((d, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div key={i} style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div
                           style={{
@@ -769,9 +778,9 @@ export default function AnalyticsPage() {
                             background: PIE_COLORS[i % PIE_COLORS.length],
                           }}
                         />
-                        <span style={{ fontSize: "13px", color: "#5D5B63" }}>{d.name}</span>
+                        <span style={{ fontSize: "13px", color: "var(--subtext)" }}>{d.name}</span>
                       </div>
-                      <span style={{ fontSize: "13px", fontWeight: "700", color: "#1C1A2D" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>
                         {formatVND(d.value)} ({d.proportion || 0}%)
                       </span>
                     </div>
@@ -784,21 +793,23 @@ export default function AnalyticsPage() {
           {/* Top 10 Best Sellers */}
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
               boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+              overflowX: "auto",
+              minWidth: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <BarChart2 size={18} color="#146A65" />
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Top 10 Món Bán Chạy Nhất Trong Kỳ
               </h2>
             </div>
             {topProducts.length === 0 ? (
-              <div style={{ textAlign: "center", color: "#999", padding: "40px" }}>Không có dữ liệu</div>
+              <div style={{ textAlign: "center", color: "var(--muted)", padding: "40px" }}>Không có dữ liệu</div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={topProducts} layout="vertical" margin={{ left: 20 }}>

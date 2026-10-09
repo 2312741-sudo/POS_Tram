@@ -1,13 +1,12 @@
 "use client";
 import React, { useState, useMemo } from "react";
-import { useDashboardData, TableItem, ProductItem } from "@/lib/data-context";
+import { useDashboardData, ProductItem } from "@/lib/data-context";
 import {
   generateEndOfDayZReport,
   calculateCancellationReport,
   formatVND,
   getBillTimestamp,
   getUTC7Date,
-  HistoryOrder,
 } from "@/lib/reports";
 import { exportEndOfDayZReport, exportProductSalesReport, ReportStoreInfo } from "@/lib/export";
 import {
@@ -287,9 +286,9 @@ export default function EndOfDayReportPage() {
       {/* Top Header Card */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px 24px",
           marginBottom: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
@@ -298,13 +297,13 @@ export default function EndOfDayReportPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Báo cáo tổng hợp cuối ngày (Z-Report)
               </h1>
               <span
                 style={{
-                  background: "#FBECEE",
-                  color: "#7E2930",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "12px",
@@ -314,7 +313,7 @@ export default function EndOfDayReportPage() {
                 KiotViet Dual Sync
               </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
               Thống kê tổng kết bán hàng, thu chi, hàng hoá bán ra và hiệu suất phòng bàn theo thời gian thực (UTC+7)
             </p>
           </div>
@@ -328,7 +327,7 @@ export default function EndOfDayReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
-                background: "#146A65",
+                background: "var(--success)",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
@@ -346,7 +345,7 @@ export default function EndOfDayReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
-                background: "#7E2930",
+                background: "var(--primary)",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
@@ -365,8 +364,8 @@ export default function EndOfDayReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
               }}
@@ -381,7 +380,7 @@ export default function EndOfDayReportPage() {
                   outline: "none",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#1C1A2D",
+                  color: "var(--text)",
                   cursor: "pointer",
                 }}
               >
@@ -403,11 +402,11 @@ export default function EndOfDayReportPage() {
                   style={{
                     padding: "6px 10px",
                     borderRadius: "8px",
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                     fontSize: "12px",
                   }}
                 />
-                <span style={{ fontSize: "12px", color: "#666" }}>đến</span>
+                <span style={{ fontSize: "12px", color: "var(--subtext)" }}>đến</span>
                 <input
                   type="date"
                   value={customEnd}
@@ -415,7 +414,7 @@ export default function EndOfDayReportPage() {
                   style={{
                     padding: "6px 10px",
                     borderRadius: "8px",
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                     fontSize: "12px",
                   }}
                 />
@@ -428,8 +427,8 @@ export default function EndOfDayReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
               }}
@@ -444,7 +443,7 @@ export default function EndOfDayReportPage() {
                   outline: "none",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#1C1A2D",
+                  color: "var(--text)",
                   cursor: "pointer",
                 }}
               >
@@ -460,7 +459,7 @@ export default function EndOfDayReportPage() {
         </div>
 
         {/* 4 Tabs Bar */}
-        <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid #E6DEC8", paddingBottom: "1px" }}>
+        <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid var(--border)", paddingBottom: "1px" }}>
           {[
             { id: "tonghop", label: "Tổng hợp" },
             { id: "thuchi", label: "Thu chi" },
@@ -476,8 +475,8 @@ export default function EndOfDayReportPage() {
                   padding: "10px 20px",
                   fontSize: "14px",
                   fontWeight: active ? "700" : "500",
-                  color: active ? "#7E2930" : "#666",
-                  borderBottom: active ? "3px solid #7E2930" : "3px solid transparent",
+                  color: active ? "var(--primary)" : "var(--subtext)",
+                  borderBottom: active ? "3px solid var(--primary)" : "3px solid transparent",
                   background: "transparent",
                   borderTop: "none",
                   borderLeft: "none",
@@ -499,9 +498,9 @@ export default function EndOfDayReportPage() {
           {/* Ô DOANH THU ƯỚC TÍNH NGÀY */}
           <div
             style={{
-              background: "linear-gradient(135deg, #FFF9F5 0%, #FFFFFF 100%)",
+              background: "linear-gradient(135deg, #FFF9F5 0%, var(--surface) 100%)",
               borderRadius: "16px",
-              border: "2px solid #7E2930",
+              border: "2px solid var(--primary)",
               padding: "20px 24px",
               boxShadow: "0 4px 16px rgba(126, 41, 48, 0.08)",
               display: "flex",
@@ -515,7 +514,7 @@ export default function EndOfDayReportPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span
                   style={{
-                    background: "#7E2930",
+                    background: "var(--primary)",
                     color: "#FFFFFF",
                     padding: "3px 8px",
                     borderRadius: "6px",
@@ -526,36 +525,36 @@ export default function EndOfDayReportPage() {
                 >
                   KPI TRỌNG TÂM
                 </span>
-                <span style={{ fontSize: "15px", fontWeight: "800", color: "#1C1A2D" }}>
+                <span style={{ fontSize: "15px", fontWeight: "800", color: "var(--text)" }}>
                   DOANH THU ƯỚC TÍNH NGÀY
                 </span>
               </div>
-              <div style={{ fontSize: "13px", color: "#666", marginTop: "6px" }}>
+              <div style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "6px" }}>
                 Công thức: <strong>Tổng doanh thu</strong> ({formatVND(zReport.tab1_tongHop.netRevenue)}) + <strong>Đơn đang phục vụ</strong> ({formatVND(servingMetrics.estimatedRevenue)} từ {servingMetrics.tableCount} bàn)
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "28px", fontWeight: "900", color: "#7E2930" }}>
+              <div style={{ fontSize: "28px", fontWeight: "900", color: "var(--primary)" }}>
                 {formatVND(zReport.tab1_tongHop.netRevenue + servingMetrics.estimatedRevenue)}
               </div>
-              <div style={{ fontSize: "12px", color: "#888", fontWeight: "600" }}>
+              <div style={{ fontSize: "12px", color: "var(--muted)", fontWeight: "600" }}>
                 Tổng doanh thu thực tế + Giá trị bàn đang sử dụng
               </div>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))", gap: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(460px, 100%), 1fr))", gap: "20px" }}>
             {/* Card 1: TỔNG KẾT BÁN HÀNG */}
             <div
               style={{
-                background: "#FFFFFF",
+                background: "var(--surface)",
                 borderRadius: "16px",
-                border: "1px solid #E6DEC8",
+                border: "1px solid var(--border)",
                 padding: "20px",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
                 TỔNG KẾT BÁN HÀNG
               </div>
               <div style={{ display: "flex", flexDirection: "column" }}>
@@ -594,9 +593,9 @@ export default function EndOfDayReportPage() {
               {/* Card 2: ĐANG PHỤC VỤ */}
               <div
                 style={{
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   borderRadius: "16px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   padding: "20px",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                 }}
@@ -604,17 +603,17 @@ export default function EndOfDayReportPage() {
                 <div
                   onClick={() => setShowServingModal(true)}
                   style={{
-                    display: "flex",
+                    display: "flex", flexWrap: "wrap", rowGap: "8px",
                     alignItems: "center",
                     justifyContent: "space-between",
                     cursor: "pointer",
                     marginBottom: "12px",
                   }}
                 >
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     ĐANG PHỤC VỤ
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "#7E2930", fontWeight: "600" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "var(--primary)", fontWeight: "600" }}>
                     Xem chi tiết bàn <ChevronRight size={14} />
                   </div>
                 </div>
@@ -635,14 +634,14 @@ export default function EndOfDayReportPage() {
               {/* Card 3: HÓA ĐƠN */}
               <div
                 style={{
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   borderRadius: "16px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   padding: "20px",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                 }}
               >
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
                   HÓA ĐƠN
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
@@ -655,14 +654,14 @@ export default function EndOfDayReportPage() {
               {/* Card 4: HÓA ĐƠN ĐÃ HỦY */}
               <div
                 style={{
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   borderRadius: "16px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   padding: "20px",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                 }}
               >
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
                   HÓA ĐƠN ĐÃ HỦY (KIỂM TOÁN THẤT THOÁT)
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
@@ -682,16 +681,16 @@ export default function EndOfDayReportPage() {
 
       {/* ==================== TAB 2: THU CHI ==================== */}
       {activeTab === "thuchi" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))", gap: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(460px, 100%), 1fr))", gap: "20px" }}>
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
             }}
           >
-            <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", marginBottom: "14px" }}>
               PHƯƠNG THỨC THANH TOÁN BÁN HÀNG
             </div>
             <ReportRow label="Tiền mặt (CASH)" value={formatVND(zReport.tab2_thuChi.cashSales)} isBold valueColor="#146A65" />
@@ -707,13 +706,13 @@ export default function EndOfDayReportPage() {
 
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               padding: "20px",
             }}
           >
-            <div style={{ fontSize: "13px", fontWeight: "700", color: "#777", textTransform: "uppercase", marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", marginBottom: "14px" }}>
               DÒNG TIỀN KÉT & THUẾ
             </div>
             <ReportRow label="Tiền nộp thêm vào két (Cash In)" value={formatVND(zReport.tab2_thuChi.cashInTotal)} />
@@ -729,9 +728,9 @@ export default function EndOfDayReportPage() {
       {activeTab === "hanghoa" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
           }}
         >
@@ -743,8 +742,8 @@ export default function EndOfDayReportPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  background: "#F8F4EE",
-                  border: "1px solid #E6DEC8",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
                   borderRadius: "10px",
                   padding: "6px 12px",
                   width: "100%",
@@ -769,7 +768,7 @@ export default function EndOfDayReportPage() {
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               {/* Segmented View Mode Toggle */}
-              <div style={{ display: "flex", border: "1px solid #E6DEC8", borderRadius: "10px", overflow: "hidden", background: "#F8F4EE" }}>
+              <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden", background: "var(--bg)" }}>
                 <button
                   onClick={() => {
                     setProductViewMode("AMOUNT");
@@ -777,8 +776,8 @@ export default function EndOfDayReportPage() {
                   }}
                   style={{
                     padding: "6px 14px",
-                    background: productViewMode === "AMOUNT" ? "#7E2930" : "transparent",
-                    color: productViewMode === "AMOUNT" ? "#FFFFFF" : "#555",
+                    background: productViewMode === "AMOUNT" ? "var(--primary)" : "transparent",
+                    color: productViewMode === "AMOUNT" ? "#FFFFFF" : "var(--subtext)",
                     border: "none",
                     fontSize: "12px",
                     fontWeight: "700",
@@ -798,8 +797,8 @@ export default function EndOfDayReportPage() {
                   }}
                   style={{
                     padding: "6px 14px",
-                    background: productViewMode === "QUANTITY" ? "#7E2930" : "transparent",
-                    color: productViewMode === "QUANTITY" ? "#FFFFFF" : "#555",
+                    background: productViewMode === "QUANTITY" ? "var(--primary)" : "transparent",
+                    color: productViewMode === "QUANTITY" ? "#FFFFFF" : "var(--subtext)",
                     border: "none",
                     fontSize: "12px",
                     fontWeight: "700",
@@ -820,8 +819,8 @@ export default function EndOfDayReportPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
-                  background: "#F8F4EE",
-                  border: "1px solid #E6DEC8",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
                   borderRadius: "10px",
                   padding: "6px 10px",
                 }}
@@ -836,7 +835,7 @@ export default function EndOfDayReportPage() {
                     outline: "none",
                     fontSize: "12px",
                     fontWeight: "600",
-                    color: "#1C1A2D",
+                    color: "var(--text)",
                     cursor: "pointer",
                   }}
                 >
@@ -855,10 +854,10 @@ export default function EndOfDayReportPage() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   fontSize: "13px",
                   fontWeight: "600",
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   cursor: "pointer",
                 }}
               >
@@ -873,7 +872,7 @@ export default function EndOfDayReportPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
-                  background: "#7E2930",
+                  background: "var(--primary)",
                   color: "#FFFFFF",
                   border: "none",
                   borderRadius: "10px",
@@ -894,7 +893,7 @@ export default function EndOfDayReportPage() {
               display: "flex",
               gap: "24px",
               padding: "12px 16px",
-              background: "#F8F4EE",
+              background: "var(--bg)",
               borderRadius: "10px",
               marginBottom: "16px",
               fontSize: "13px",
@@ -904,10 +903,10 @@ export default function EndOfDayReportPage() {
               Tổng số mặt hàng bán ra: <strong>{productSalesList.length} món</strong>
             </div>
             <div>
-              Tổng sản lượng: <strong style={{ color: productViewMode === "QUANTITY" ? "#7E2930" : "#1C1A2D" }}>{totalProductQty} phần</strong>
+              Tổng sản lượng: <strong style={{ color: productViewMode === "QUANTITY" ? "var(--primary)" : "var(--text)" }}>{totalProductQty} phần</strong>
             </div>
             <div>
-              Tổng doanh số món: <strong style={{ color: productViewMode === "AMOUNT" ? "#7E2930" : "#1C1A2D" }}>{formatVND(totalProductRev)}</strong>
+              Tổng doanh số món: <strong style={{ color: productViewMode === "AMOUNT" ? "var(--primary)" : "var(--text)" }}>{formatVND(totalProductRev)}</strong>
             </div>
           </div>
 
@@ -915,7 +914,7 @@ export default function EndOfDayReportPage() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                   <th style={{ padding: "10px 12px" }}>Hạng</th>
                   <th style={{ padding: "10px 12px" }}>Mã món</th>
                   <th style={{ padding: "10px 12px" }}>Tên sản phẩm</th>
@@ -925,8 +924,8 @@ export default function EndOfDayReportPage() {
                     style={{
                       padding: "10px 12px",
                       textAlign: "right",
-                      background: productViewMode === "QUANTITY" ? "#FBECEE" : "transparent",
-                      color: productViewMode === "QUANTITY" ? "#7E2930" : "#666",
+                      background: productViewMode === "QUANTITY" ? "var(--primary-light)" : "transparent",
+                      color: productViewMode === "QUANTITY" ? "var(--primary)" : "var(--subtext)",
                     }}
                   >
                     Số lượng bán
@@ -935,8 +934,8 @@ export default function EndOfDayReportPage() {
                     style={{
                       padding: "10px 12px",
                       textAlign: "right",
-                      background: productViewMode === "AMOUNT" ? "#FBECEE" : "transparent",
-                      color: productViewMode === "AMOUNT" ? "#7E2930" : "#666",
+                      background: productViewMode === "AMOUNT" ? "var(--primary-light)" : "transparent",
+                      color: productViewMode === "AMOUNT" ? "var(--primary)" : "var(--subtext)",
                     }}
                   >
                     Doanh thu
@@ -949,7 +948,7 @@ export default function EndOfDayReportPage() {
               <tbody>
                 {productSalesList.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "30px", color: "var(--muted)" }}>
                       Không có sản phẩm nào bán ra trong khoảng thời gian đã chọn
                     </td>
                   </tr>
@@ -962,22 +961,22 @@ export default function EndOfDayReportPage() {
 
                     return (
                       <tr key={String(p.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                        <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "#7E2930" : "#555" }}>
+                        <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "var(--primary)" : "var(--subtext)" }}>
                           #{idx + 1}
                         </td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#8B8FA8" }}>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "var(--muted)" }}>
                           {p.productCode || "—"}
                         </td>
-                        <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1C1A2D" }}>{p.productName}</td>
-                        <td style={{ padding: "10px 12px", color: "#666" }}>{p.category}</td>
+                        <td style={{ padding: "10px 12px", fontWeight: "600", color: "var(--text)" }}>{p.productName}</td>
+                        <td style={{ padding: "10px 12px", color: "var(--subtext)" }}>{p.category}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.basePrice)}</td>
                         <td
                           style={{
                             padding: "10px 12px",
                             textAlign: "right",
                             fontWeight: isAmt ? "600" : "800",
-                            color: isAmt ? "#1C1A2D" : "#7E2930",
-                            background: !isAmt ? "#FFF5F6" : "transparent",
+                            color: isAmt ? "var(--text)" : "var(--primary)",
+                            background: !isAmt ? "var(--primary-light)" : "transparent",
                           }}
                         >
                           {p.quantity} {p.unit}
@@ -987,13 +986,13 @@ export default function EndOfDayReportPage() {
                             padding: "10px 12px",
                             textAlign: "right",
                             fontWeight: isAmt ? "800" : "600",
-                            color: isAmt ? "#7E2930" : "#1C1A2D",
-                            background: isAmt ? "#FFF5F6" : "transparent",
+                            color: isAmt ? "var(--primary)" : "var(--text)",
+                            background: isAmt ? "var(--primary-light)" : "transparent",
                           }}
                         >
                           {formatVND(p.netRevenue)}
                         </td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{pct}%</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--subtext)" }}>{pct}%</td>
                       </tr>
                     );
                   })
@@ -1008,19 +1007,19 @@ export default function EndOfDayReportPage() {
       {activeTab === "phongban" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
           }}
         >
-          <div style={{ fontSize: "14px", fontWeight: "700", color: "#1C1A2D", marginBottom: "14px" }}>
+          <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginBottom: "14px" }}>
             Hiệu suất doanh thu theo Khu vực & Phòng bàn
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                   <th style={{ padding: "10px 12px" }}>Khu vực</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượt hóa đơn</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Tổng doanh thu</th>
@@ -1030,7 +1029,7 @@ export default function EndOfDayReportPage() {
               <tbody>
                 {zReport.tab4_phongBan.zones.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: "center", padding: "30px", color: "#999" }}>
+                    <td colSpan={4} style={{ textAlign: "center", padding: "30px", color: "var(--muted)" }}>
                       Không có dữ liệu bàn nào trong khoảng thời gian đã chọn
                     </td>
                   </tr>
@@ -1041,15 +1040,15 @@ export default function EndOfDayReportPage() {
                     return (
                       <tr key={z.zone} style={{ borderBottom: "1px solid #F0ECE1" }}>
                         <td style={{ padding: "10px 12px" }}>
-                          <span style={{ padding: "3px 10px", background: "#FBECEE", color: "#7E2930", borderRadius: "6px", fontSize: "12px", fontWeight: "700" }}>
+                          <span style={{ padding: "3px 10px", background: "var(--primary-light)", color: "var(--primary)", borderRadius: "6px", fontSize: "12px", fontWeight: "700" }}>
                             {z.zone}
                           </span>
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{z.billCount} hóa đơn</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--primary)" }}>
                           {formatVND(z.netRevenue)}
                         </td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{pct}%</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--subtext)" }}>{pct}%</td>
                       </tr>
                     );
                   })
@@ -1077,7 +1076,7 @@ export default function EndOfDayReportPage() {
         >
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
               padding: "24px",
               maxWidth: "600px",
@@ -1087,14 +1086,14 @@ export default function EndOfDayReportPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Chi tiết bàn đang phục vụ ({activeTables.length} bàn)
               </h3>
               <button
                 onClick={() => setShowServingModal(false)}
                 style={{
-                  background: "#F0ECE1",
+                  background: "var(--surface-muted)",
                   border: "none",
                   borderRadius: "50%",
                   width: "28px",
@@ -1107,7 +1106,7 @@ export default function EndOfDayReportPage() {
             </div>
 
             {activeTables.length === 0 ? (
-              <p style={{ textAlign: "center", color: "#999", padding: "20px 0" }}>Hiện tại không có bàn nào đang mở</p>
+              <p style={{ textAlign: "center", color: "var(--muted)", padding: "20px 0" }}>Hiện tại không có bàn nào đang mở</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {activeTables.map((t) => {
@@ -1127,22 +1126,22 @@ export default function EndOfDayReportPage() {
                       key={t.id}
                       style={{
                         padding: "12px",
-                        border: "1px solid #E6DEC8",
+                        border: "1px solid var(--border)",
                         borderRadius: "10px",
-                        display: "flex",
+                        display: "flex", flexWrap: "wrap", rowGap: "8px",
                         justifyContent: "space-between",
                         alignItems: "center",
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: "700", fontSize: "14px", color: "#1C1A2D" }}>
+                        <div style={{ fontWeight: "700", fontSize: "14px", color: "var(--text)" }}>
                           {t.name} ({t.zone})
                         </div>
-                        <div style={{ fontSize: "12px", color: "#666" }}>
+                        <div style={{ fontSize: "12px", color: "var(--subtext)" }}>
                           {t.guestCount || 1} khách • {items.length} món đang phục vụ
                         </div>
                       </div>
-                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#7E2930" }}>
+                      <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--primary)" }}>
                         {formatVND(total)}
                       </div>
                     </div>
@@ -1173,7 +1172,7 @@ function ReportRow({
   return (
     <div
       style={{
-        display: "flex",
+        display: "flex", flexWrap: "wrap", rowGap: "8px",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "10px 0",
@@ -1181,8 +1180,8 @@ function ReportRow({
       }}
     >
       <div>
-        <div style={{ fontSize: "14px", fontWeight: isBold ? "700" : "500", color: "#1C1A2D" }}>{label}</div>
-        {subtitle && <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>{subtitle}</div>}
+        <div style={{ fontSize: "14px", fontWeight: isBold ? "700" : "500", color: "var(--text)" }}>{label}</div>
+        {subtitle && <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{subtitle}</div>}
       </div>
       <div style={{ fontSize: "14px", fontWeight: isBold ? "800" : "600", color: valueColor }}>{value}</div>
     </div>

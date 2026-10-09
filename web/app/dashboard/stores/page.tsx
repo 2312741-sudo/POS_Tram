@@ -1,7 +1,5 @@
 "use client";
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
 import {
   Store,
   Plus,
@@ -9,18 +7,12 @@ import {
   Phone,
   Wifi,
   CreditCard,
-  DollarSign,
   Utensils,
   CheckCircle2,
-  AlertCircle,
   Edit2,
   Power,
-  Copy,
-  Check,
   Building2,
   Search,
-  ExternalLink,
-  ChevronRight,
   TrendingUp,
   X,
 } from "lucide-react";
@@ -231,9 +223,9 @@ export default function StoresManagementPage() {
       {actionSuccess && (
         <div
           style={{
-            background: "#E6F4F2",
+            background: "var(--success-bg)",
             border: "1px solid #A3D9D2",
-            color: "#146A65",
+            color: "var(--success)",
             borderRadius: "10px",
             padding: "12px 16px",
             display: "flex",
@@ -249,55 +241,55 @@ export default function StoresManagementPage() {
       )}
 
       {/* KPI Overview Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(210px, 100%), 1fr))", gap: "16px" }}>
         <div className="card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#5D5B63" }}>Tổng số chi nhánh</span>
-            <Store size={20} style={{ color: "#7E2930" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--subtext)" }}>Tổng số chi nhánh</span>
+            <Store size={20} style={{ color: "var(--primary)" }} />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
-            {ecoStats.totalStores} <span style={{ fontSize: "14px", fontWeight: "500", color: "#5D5B63" }}>cửa hàng</span>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
+            {ecoStats.totalStores} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--subtext)" }}>cửa hàng</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#146A65", marginTop: "4px", fontWeight: "600" }}>
+          <div style={{ fontSize: "12px", color: "var(--success)", marginTop: "4px", fontWeight: "600" }}>
             ● {ecoStats.activeStores} chi nhánh đang hoạt động
           </div>
         </div>
 
         <div className="card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#5D5B63" }}>Doanh thu toàn chuỗi</span>
-            <TrendingUp size={20} style={{ color: "#146A65" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--subtext)" }}>Doanh thu toàn chuỗi</span>
+            <TrendingUp size={20} style={{ color: "var(--success)" }} />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#146A65", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--success)", marginTop: "8px" }}>
             {formatVnd(ecoStats.totalRev)}
           </div>
-          <div style={{ fontSize: "12px", color: "#5D5B63", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             {ecoStats.totalOrders} hóa đơn đã hoàn tất
           </div>
         </div>
 
         <div className="card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#5D5B63" }}>Sơ đồ bàn toàn chuỗi</span>
-            <Utensils size={20} style={{ color: "#D97706" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--subtext)" }}>Sơ đồ bàn toàn chuỗi</span>
+            <Utensils size={20} style={{ color: "var(--warning)" }} />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
-            {ecoStats.totalTables} <span style={{ fontSize: "14px", fontWeight: "500", color: "#5D5B63" }}>bàn</span>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
+            {ecoStats.totalTables} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--subtext)" }}>bàn</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#D97706", marginTop: "4px", fontWeight: "600" }}>
+          <div style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px", fontWeight: "600" }}>
             ⚡ {ecoStats.totalInUse} bàn đang có khách ngồi
           </div>
         </div>
 
         <div className="card" style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#5D5B63" }}>Chi nhánh đang xem</span>
-            <Building2 size={20} style={{ color: "#7E2930" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--subtext)" }}>Chi nhánh đang xem</span>
+            <Building2 size={20} style={{ color: "var(--primary)" }} />
           </div>
-          <div style={{ fontSize: "18px", fontWeight: "800", color: "#7E2930", marginTop: "8px" }}>
+          <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--primary)", marginTop: "8px" }}>
             {currentStoreCode === "ALL" ? "🌐 Toàn hệ thống" : `🏪 ${currentStoreCode}`}
           </div>
-          <div style={{ fontSize: "12px", color: "#5D5B63", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             {currentStoreCode === "ALL" ? "Xem dữ liệu tổng hợp" : (stores.find(s => s.storeCode === currentStoreCode)?.storeName || "Chi nhánh đã chọn")}
           </div>
         </div>
@@ -307,7 +299,7 @@ export default function StoresManagementPage() {
       <div className="card" style={{ padding: "16px 20px" }}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: "260px" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
+            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               className="input-field"
               placeholder="Tìm theo mã chi nhánh, tên cửa hàng, địa chỉ..."
@@ -323,8 +315,8 @@ export default function StoresManagementPage() {
               onClick={() => setCurrentStoreCode("ALL")}
               style={{
                 fontSize: "13px",
-                borderColor: currentStoreCode === "ALL" ? "#7E2930" : "#E6DEC8",
-                background: currentStoreCode === "ALL" ? "#FBECEE" : "#FFFFFF",
+                borderColor: currentStoreCode === "ALL" ? "var(--primary)" : "var(--border)",
+                background: currentStoreCode === "ALL" ? "var(--primary-light)" : "var(--surface)",
                 fontWeight: currentStoreCode === "ALL" ? "700" : "500",
               }}
             >
@@ -335,7 +327,7 @@ export default function StoresManagementPage() {
       </div>
 
       {/* Stores List Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: "20px" }}>
         {filteredStores.map((store) => {
           const isSelected = currentStoreCode === store.storeCode;
           const isActive = store.active !== false;
@@ -346,20 +338,20 @@ export default function StoresManagementPage() {
               className="card"
               style={{
                 padding: "24px",
-                border: isSelected ? "2px solid #7E2930" : "1px solid #E6DEC8",
+                border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
                 position: "relative",
-                background: isSelected ? "#FFFEFB" : "#FFFFFF",
+                background: isSelected ? "#FFFEFB" : "var(--surface)",
                 boxShadow: isSelected ? "0 8px 24px rgba(126, 41, 48, 0.12)" : "0 2px 8px rgba(0, 0, 0, 0.04)",
               }}
             >
               {/* Card Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <span
                       style={{
                         padding: "4px 10px",
-                        background: "#7E2930",
+                        background: "var(--primary)",
                         color: "#FFFFFF",
                         borderRadius: "8px",
                         fontWeight: "800",
@@ -378,15 +370,15 @@ export default function StoresManagementPage() {
                         borderRadius: "12px",
                         fontSize: "11px",
                         fontWeight: "700",
-                        background: isActive ? "#E6F4F2" : "#FEE2E2",
-                        color: isActive ? "#146A65" : "#DC2626",
+                        background: isActive ? "var(--success-bg)" : "var(--danger-bg)",
+                        color: isActive ? "var(--success)" : "var(--danger)",
                         border: `1px solid ${isActive ? "#A3D9D2" : "#FCA5A5"}`,
                       }}
                     >
                       {isActive ? "🟢 Đang hoạt động" : "⏸️ Tạm dừng"}
                     </span>
                   </div>
-                  <h3 style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px", lineHeight: 1.3 }}>
+                  <h3 style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)", marginTop: "8px", lineHeight: 1.3 }}>
                     {store.storeName}
                   </h3>
                 </div>
@@ -402,21 +394,21 @@ export default function StoresManagementPage() {
               </div>
 
               {/* Branch Details */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "#5D5B63", marginBottom: "18px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px", color: "var(--subtext)", marginBottom: "18px" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                  <MapPin size={15} style={{ color: "#7E2930", flexShrink: 0, marginTop: "2px" }} />
+                  <MapPin size={15} style={{ color: "var(--primary)", flexShrink: 0, marginTop: "2px" }} />
                   <span>{store.address || "Chưa cập nhật địa chỉ"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Phone size={15} style={{ color: "#7E2930", flexShrink: 0 }} />
+                  <Phone size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
                   <span>{store.phone || "Chưa có số điện thoại"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Wifi size={15} style={{ color: "#7E2930", flexShrink: 0 }} />
+                  <Wifi size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
                   <span>WiFi: <strong>{store.wifiName || "Mặc định"}</strong></span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <CreditCard size={15} style={{ color: "#7E2930", flexShrink: 0 }} />
+                  <CreditCard size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
                   <span>VietQR: <strong>{store.bankId}</strong> - <code>{store.bankAccount || "Chưa thiết lập"}</code> ({store.accountName})</span>
                 </div>
               </div>
@@ -428,35 +420,35 @@ export default function StoresManagementPage() {
                   gridTemplateColumns: "1fr 1fr 1fr",
                   gap: "10px",
                   padding: "12px",
-                  background: "#F8F4EE",
+                  background: "var(--bg)",
                   borderRadius: "10px",
                   marginBottom: "18px",
                   textAlign: "center",
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "11px", color: "#5D5B63", fontWeight: "600" }}>SỐ BÀN</div>
-                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#1C1A2D", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--subtext)", fontWeight: "600" }}>SỐ BÀN</div>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text)", marginTop: "2px" }}>
                     {store.totalTables || 0}
-                    {store.inUseTables ? <span style={{ fontSize: "11px", color: "#D97706" }}> ({store.inUseTables} bận)</span> : null}
+                    {store.inUseTables ? <span style={{ fontSize: "11px", color: "var(--warning)" }}> ({store.inUseTables} bận)</span> : null}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "11px", color: "#5D5B63", fontWeight: "600" }}>HÓA ĐƠN</div>
-                  <div style={{ fontSize: "16px", fontWeight: "800", color: "#1C1A2D", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--subtext)", fontWeight: "600" }}>HÓA ĐƠN</div>
+                  <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text)", marginTop: "2px" }}>
                     {store.totalOrders || 0}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "11px", color: "#5D5B63", fontWeight: "600" }}>DOANH THU</div>
-                  <div style={{ fontSize: "15px", fontWeight: "800", color: "#146A65", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--subtext)", fontWeight: "600" }}>DOANH THU</div>
+                  <div style={{ fontSize: "15px", fontWeight: "800", color: "var(--success)", marginTop: "2px" }}>
                     {formatVnd(store.totalRevenue || 0)}
                   </div>
                 </div>
               </div>
 
               {/* Actions Footer */}
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", justifyContent: "space-between" }}>
                 <button
                   className="btn-primary"
                   onClick={() => setCurrentStoreCode(store.storeCode)}
@@ -465,7 +457,7 @@ export default function StoresManagementPage() {
                     justifyContent: "center",
                     padding: "8px 14px",
                     fontSize: "13px",
-                    background: isSelected ? "#146A65" : undefined,
+                    background: isSelected ? "var(--success)" : undefined,
                   }}
                 >
                   {isSelected ? "✓ Đang xem chi nhánh này" : "Chuyển sang chi nhánh này"}
@@ -477,7 +469,7 @@ export default function StoresManagementPage() {
                   style={{
                     padding: "8px 12px",
                     fontSize: "13px",
-                    color: isActive ? "#DC2626" : "#146A65",
+                    color: isActive ? "var(--danger)" : "var(--success)",
                   }}
                   title={isActive ? "Tạm dừng hoạt động" : "Kích hoạt lại chi nhánh"}
                 >
@@ -512,31 +504,31 @@ export default function StoresManagementPage() {
               maxWidth: "580px",
               maxHeight: "90vh",
               overflowY: "auto",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--surface)",
               borderRadius: "16px",
               boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
               padding: "26px",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "19px", fontWeight: "800", color: "#1C1A2D", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
-                <Store size={22} style={{ color: "#7E2930" }} />
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "19px", fontWeight: "800", color: "var(--text)", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                <Store size={22} style={{ color: "var(--primary)" }} />
                 Mở Chi Nhánh Mới Trong Hệ Sinh Thái
               </h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#8B8FA8" }}>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}>
                 <X size={20} />
               </button>
             </div>
 
             {actionError && (
-              <div style={{ background: "#FEE2E2", color: "#DC2626", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
+              <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
                 ⚠️ {actionError}
               </div>
             )}
 
             <form onSubmit={handleCreateSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
+              <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", marginBottom: "4px" }}>
                     Mã chi nhánh *
@@ -576,7 +568,7 @@ export default function StoresManagementPage() {
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", marginBottom: "4px" }}>
                     Số điện thoại
@@ -602,11 +594,11 @@ export default function StoresManagementPage() {
               </div>
 
               {/* VietQR section */}
-              <div style={{ background: "#F8F4EE", padding: "14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "12px", fontWeight: "800", color: "#7E2930", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ background: "var(--bg)", padding: "14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "12px", fontWeight: "800", color: "var(--primary)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <CreditCard size={15} /> THÔNG TIN THANH TOÁN VIETQR TẠI QUẦY
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "600", marginBottom: "3px" }}>Ngân hàng</label>
                     <select
@@ -644,8 +636,8 @@ export default function StoresManagementPage() {
               </div>
 
               {/* Ecosystem Seed Option */}
-              <div style={{ background: "#E6F4F2", padding: "12px 14px", borderRadius: "10px", border: "1px solid #A3D9D2" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "700", color: "#146A65", cursor: "pointer" }}>
+              <div style={{ background: "var(--success-bg)", padding: "12px 14px", borderRadius: "10px", border: "1px solid #A3D9D2" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "700", color: "var(--success)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={Boolean(copyMenuFrom)}
@@ -653,7 +645,7 @@ export default function StoresManagementPage() {
                   />
                   <span>Tự động sao chép toàn bộ thực đơn & danh mục món từ Trụ sở TRAM01</span>
                 </label>
-                <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "4px", marginLeft: "22px" }}>
+                <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "4px", marginLeft: "22px" }}>
                   Chi nhánh mới sẽ có sẵn 37 món, 10 danh mục và 6 bàn phân bổ theo Tầng 1, Tầng 2, Sân Vườn.
                 </div>
               </div>
@@ -703,25 +695,25 @@ export default function StoresManagementPage() {
               maxWidth: "580px",
               maxHeight: "90vh",
               overflowY: "auto",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--surface)",
               borderRadius: "16px",
               boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
               padding: "26px",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "19px", fontWeight: "800", color: "#1C1A2D", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
-                <Edit2 size={20} style={{ color: "#7E2930" }} />
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "19px", fontWeight: "800", color: "var(--text)", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                <Edit2 size={20} style={{ color: "var(--primary)" }} />
                 Chỉnh Sửa Chi Nhánh: {editingStore.storeCode}
               </h2>
-              <button onClick={() => setEditingStore(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#8B8FA8" }}>
+              <button onClick={() => setEditingStore(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}>
                 <X size={20} />
               </button>
             </div>
 
             {actionError && (
-              <div style={{ background: "#FEE2E2", color: "#DC2626", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
+              <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
                 ⚠️ {actionError}
               </div>
             )}
@@ -750,7 +742,7 @@ export default function StoresManagementPage() {
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", fontWeight: "700", marginBottom: "4px" }}>
                     Số điện thoại
@@ -774,11 +766,11 @@ export default function StoresManagementPage() {
               </div>
 
               {/* VietQR section */}
-              <div style={{ background: "#F8F4EE", padding: "14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "12px", fontWeight: "800", color: "#7E2930", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ background: "var(--bg)", padding: "14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "12px", fontWeight: "800", color: "var(--primary)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <CreditCard size={15} /> THÔNG TIN THANH TOÁN VIETQR
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "11px", fontWeight: "600", marginBottom: "3px" }}>Ngân hàng</label>
                     <select

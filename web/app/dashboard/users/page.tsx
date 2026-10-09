@@ -561,7 +561,7 @@ export default function UsersPage() {
           className="badge"
           style={{
             background: "rgba(245,158,11,0.15)",
-            color: "#D97706",
+            color: "var(--warning)",
             borderColor: "rgba(245,158,11,0.3)",
             display: "inline-flex",
             alignItems: "center",
@@ -671,9 +671,9 @@ export default function UsersPage() {
               cursor: "pointer",
               transition: "all 0.15s ease",
               border: "1px solid",
-              borderColor: currentStoreCode === "ALL" ? "#7E2930" : "#E6DEC8",
-              background: currentStoreCode === "ALL" ? "#7E2930" : "#FFFFFF",
-              color: currentStoreCode === "ALL" ? "#FFFFFF" : "#5D5B63",
+              borderColor: currentStoreCode === "ALL" ? "var(--primary)" : "var(--border)",
+              background: currentStoreCode === "ALL" ? "var(--primary)" : "var(--surface)",
+              color: currentStoreCode === "ALL" ? "#FFFFFF" : "var(--subtext)",
             }}
           >
             🌐 Tất cả chi nhánh ({Object.values(usersMap).reduce((acc, l) => acc + l.length, 0)} NV)
@@ -693,9 +693,9 @@ export default function UsersPage() {
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   border: "1px solid",
-                  borderColor: isSelected ? "#7E2930" : "#E6DEC8",
-                  background: isSelected ? "#7E2930" : "#FFFFFF",
-                  color: isSelected ? "#FFFFFF" : "#5D5B63",
+                  borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                  background: isSelected ? "var(--primary)" : "var(--surface)",
+                  color: isSelected ? "#FFFFFF" : "var(--subtext)",
                 }}
               >
                 🏪 {s.storeName} ({count} NV)
@@ -706,12 +706,12 @@ export default function UsersPage() {
       )}
 
       {/* Stat Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "16px" }}>
         <div className="stat-card">
           <div
             style={{
               fontSize: "13px",
-              color: "#8B8FA8",
+              color: "var(--muted)",
               fontWeight: "600",
               display: "flex",
               alignItems: "center",
@@ -720,7 +720,7 @@ export default function UsersPage() {
           >
             <Users size={16} color="#7E2930" /> Tổng nhân viên
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
             {stats.totalStaff}
           </div>
           <div style={{ fontSize: "12px", color: "#10B981", marginTop: "4px", fontWeight: "600" }}>
@@ -732,7 +732,7 @@ export default function UsersPage() {
           <div
             style={{
               fontSize: "13px",
-              color: "#8B8FA8",
+              color: "var(--muted)",
               fontWeight: "600",
               display: "flex",
               alignItems: "center",
@@ -741,10 +741,10 @@ export default function UsersPage() {
           >
             <ShieldCheck size={16} color="#F59E0B" /> Quản lý &amp; Chủ quán
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#D97706", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--warning)", marginTop: "8px" }}>
             {stats.managers}
           </div>
-          <div style={{ fontSize: "12px", color: "#8B8FA8", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
             Quyền điều hành &amp; kiểm soát
           </div>
         </div>
@@ -753,7 +753,7 @@ export default function UsersPage() {
           <div
             style={{
               fontSize: "13px",
-              color: "#8B8FA8",
+              color: "var(--muted)",
               fontWeight: "600",
               display: "flex",
               alignItems: "center",
@@ -765,7 +765,7 @@ export default function UsersPage() {
           <div style={{ fontSize: "24px", fontWeight: "800", color: "#3B82F6", marginTop: "8px" }}>
             {stats.totalStaff - stats.managers}
           </div>
-          <div style={{ fontSize: "12px", color: "#8B8FA8", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
             Thu ngân, phục vụ, bếp/bar
           </div>
         </div>
@@ -790,7 +790,7 @@ export default function UsersPage() {
                 left: "12px",
                 top: "50%",
                 transform: "translateY(-50%)",
-                color: "#8B8FA8",
+                color: "var(--muted)",
               }}
             />
             <input
@@ -803,7 +803,7 @@ export default function UsersPage() {
           </div>
 
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#8B8FA8" }}>Vai trò:</span>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--muted)" }}>Vai trò:</span>
             <select
               className="input-field"
               style={{ width: "auto", minWidth: "180px" }}
@@ -845,7 +845,7 @@ export default function UsersPage() {
               </tr>
             ) : filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}>
                   Không tìm thấy nhân viên nào phù hợp
                 </td>
               </tr>
@@ -853,12 +853,12 @@ export default function UsersPage() {
               filteredUsers.map((u) => (
                 <tr key={`${u.storeCode}_${u.username}_${u.id}`}>
                   <td>
-                    <div style={{ fontWeight: "700", color: "#1C1A2D" }}>{u.fullName}</div>
+                    <div style={{ fontWeight: "700", color: "var(--text)" }}>{u.fullName}</div>
                     {u.phone && (
                       <div
                         style={{
                           fontSize: "12px",
-                          color: "#8B8FA8",
+                          color: "var(--muted)",
                           display: "flex",
                           alignItems: "center",
                           gap: "4px",
@@ -873,7 +873,7 @@ export default function UsersPage() {
                     <span
                       style={{
                         fontFamily: "monospace",
-                        color: "#7E2930",
+                        color: "var(--primary)",
                         fontWeight: "700",
                         fontSize: "13px",
                         background: "rgba(126,41,48,0.06)",
@@ -884,7 +884,7 @@ export default function UsersPage() {
                       @{u.username}
                     </span>
                     {u.mustChangePassword && (
-                      <div style={{ fontSize: "10px", color: "#D97706", fontWeight: "600", marginTop: "2px" }}>
+                      <div style={{ fontSize: "10px", color: "var(--warning)", fontWeight: "600", marginTop: "2px" }}>
                         ⚡ Cần đổi MK lần đầu
                       </div>
                     )}
@@ -894,9 +894,9 @@ export default function UsersPage() {
                       className="badge"
                       style={{
                         fontSize: "12px",
-                        background: "#F4EFE6",
-                        color: "#5D5B63",
-                        borderColor: "#E6DEC8",
+                        background: "var(--surface-muted)",
+                        color: "var(--subtext)",
+                        borderColor: "var(--border)",
                       }}
                     >
                       🏪 {u.storeName || u.storeCode}
@@ -914,7 +914,7 @@ export default function UsersPage() {
                               padding: "2px 6px",
                               borderRadius: "4px",
                               background: "rgba(126,41,48,0.08)",
-                              color: "#7E2930",
+                              color: "var(--primary)",
                               fontWeight: "600",
                             }}
                           >
@@ -923,7 +923,7 @@ export default function UsersPage() {
                         ))}
                       </div>
                     ) : (
-                      <span style={{ fontSize: "12px", color: "#8B8FA8" }}>Mặc định vai trò</span>
+                      <span style={{ fontSize: "12px", color: "var(--muted)" }}>Mặc định vai trò</span>
                     )}
                   </td>
                   <td>
@@ -956,7 +956,7 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td>
-                    <div style={{ fontSize: "12px", color: "#5D5B63", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: "12px", color: "var(--subtext)", display: "flex", alignItems: "center", gap: "4px" }}>
                       <Clock size={12} color="#8B8FA8" />
                       {formatDateTime(u.lastLoginAt)}
                     </div>
@@ -975,7 +975,7 @@ export default function UsersPage() {
                             border: `1px solid ${
                               u.isActive !== false ? "rgba(245,158,11,0.3)" : "rgba(16,185,129,0.3)"
                             }`,
-                            color: u.isActive !== false ? "#D97706" : "#10B981",
+                            color: u.isActive !== false ? "var(--warning)" : "#10B981",
                             cursor: "pointer",
                           }}
                         >
@@ -1054,23 +1054,23 @@ export default function UsersPage() {
             <div
               style={{
                 padding: "20px 24px 0",
-                display: "flex",
+                display: "flex", flexWrap: "wrap", rowGap: "8px",
                 alignItems: "center",
                 justifyContent: "space-between",
                 marginBottom: "16px",
               }}
             >
               <div>
-                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D" }}>
+                <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)" }}>
                   {editUser ? "Chỉnh sửa thông tin nhân viên" : "Thêm nhân viên mới"}
                 </h2>
-                <p style={{ fontSize: "12px", color: "#8B8FA8", marginTop: "2px" }}>
+                <p style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
                   Xác thực danh tính an toàn qua Firebase Auth &bull; Không lưu mật khẩu thô
                 </p>
               </div>
               <button
                 onClick={closeModal}
-                style={{ background: "none", border: "none", color: "#8B8FA8", cursor: "pointer" }}
+                style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}
               >
                 <X size={20} />
               </button>
@@ -1080,7 +1080,7 @@ export default function UsersPage() {
               {/* Họ & Tên */}
               <div>
                 <label
-                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#1C1A2D", marginBottom: "6px" }}
+                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--text)", marginBottom: "6px" }}
                 >
                   Họ và tên nhân viên *
                 </label>
@@ -1093,14 +1093,14 @@ export default function UsersPage() {
               </div>
 
               {/* Username & Phone */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label
                     style={{
                       display: "block",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#1C1A2D",
+                      color: "var(--text)",
                       marginBottom: "6px",
                     }}
                   >
@@ -1117,12 +1117,12 @@ export default function UsersPage() {
                         username: e.target.value.toLowerCase().trim(),
                       }))
                     }
-                    style={{ background: editUser ? "#F4EFE6" : undefined, cursor: editUser ? "not-allowed" : undefined }}
+                    style={{ background: editUser ? "var(--surface-muted)" : undefined, cursor: editUser ? "not-allowed" : undefined }}
                   />
                   {editUser ? (
-                    <span style={{ fontSize: "11px", color: "#8B8FA8" }}>Không thể đổi tên đăng nhập</span>
+                    <span style={{ fontSize: "11px", color: "var(--muted)" }}>Không thể đổi tên đăng nhập</span>
                   ) : (
-                    <span style={{ fontSize: "11px", color: "#8B8FA8" }}>3-30 ký tự (a-z, 0-9, _, -)</span>
+                    <span style={{ fontSize: "11px", color: "var(--muted)" }}>3-30 ký tự (a-z, 0-9, _, -)</span>
                   )}
                 </div>
 
@@ -1132,7 +1132,7 @@ export default function UsersPage() {
                       display: "block",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#1C1A2D",
+                      color: "var(--text)",
                       marginBottom: "6px",
                     }}
                   >
@@ -1155,7 +1155,7 @@ export default function UsersPage() {
                       display: "block",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#1C1A2D",
+                      color: "var(--text)",
                       marginBottom: "6px",
                     }}
                   >
@@ -1180,7 +1180,7 @@ export default function UsersPage() {
                         transform: "translateY(-50%)",
                         background: "none",
                         border: "none",
-                        color: "#8B8FA8",
+                        color: "var(--muted)",
                         cursor: "pointer",
                       }}
                     >
@@ -1193,7 +1193,7 @@ export default function UsersPage() {
               {/* Chi nhánh */}
               <div>
                 <label
-                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#1C1A2D", marginBottom: "6px" }}
+                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--text)", marginBottom: "6px" }}
                 >
                   Chi nhánh làm việc *
                 </label>
@@ -1202,7 +1202,7 @@ export default function UsersPage() {
                   value={form.storeCode}
                   disabled={!!editUser}
                   onChange={(e) => setForm((f) => ({ ...f, storeCode: e.target.value }))}
-                  style={{ background: editUser ? "#F4EFE6" : undefined }}
+                  style={{ background: editUser ? "var(--surface-muted)" : undefined }}
                 >
                   {storesList.map((s) => (
                     <option key={s.storeCode} value={s.storeCode}>
@@ -1215,7 +1215,7 @@ export default function UsersPage() {
               {/* Vai trò chuẩn */}
               <div>
                 <label
-                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#1C1A2D", marginBottom: "6px" }}
+                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--text)", marginBottom: "6px" }}
                 >
                   Vai trò &amp; Phân quyền chuẩn *
                 </label>
@@ -1233,9 +1233,9 @@ export default function UsersPage() {
                           padding: "10px 14px",
                           borderRadius: "10px",
                           border: `1.5px solid ${isSelected ? "#7E2930" : "#E6DEC8"}`,
-                          background: isSelected ? "rgba(126,41,48,0.04)" : "#FFFFFF",
+                          background: isSelected ? "rgba(126,41,48,0.04)" : "var(--surface)",
                           cursor: isRoot ? "not-allowed" : "pointer",
-                          display: "flex",
+                          display: "flex", flexWrap: "wrap", rowGap: "8px",
                           alignItems: "center",
                           justifyContent: "space-between",
                           transition: "all 0.15s ease",
@@ -1246,7 +1246,7 @@ export default function UsersPage() {
                           <div
                             style={{
                               fontWeight: "700",
-                              color: isSelected ? "#7E2930" : "#1C1A2D",
+                              color: isSelected ? "var(--primary)" : "var(--text)",
                               fontSize: "13px",
                               display: "flex",
                               alignItems: "center",
@@ -1255,7 +1255,7 @@ export default function UsersPage() {
                           >
                             <span>{r.icon}</span> {r.name}
                           </div>
-                          <div style={{ fontSize: "11px", color: "#8B8FA8", marginTop: "2px" }}>{r.desc}</div>
+                          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{r.desc}</div>
                         </div>
                         <input
                           type="radio"
@@ -1276,7 +1276,7 @@ export default function UsersPage() {
               {/* Quyền riêng biệt bổ sung (customPermissions) */}
               <div>
                 <label
-                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#1C1A2D", marginBottom: "6px" }}
+                  style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--text)", marginBottom: "6px" }}
                 >
                   Quyền bổ sung riêng lẻ (Custom Permissions)
                 </label>
@@ -1285,10 +1285,10 @@ export default function UsersPage() {
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
                     gap: "8px",
-                    background: "#FAF7F2",
+                    background: "var(--surface-muted)",
                     padding: "12px",
                     borderRadius: "10px",
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                   }}
                 >
                   {AVAILABLE_CUSTOM_PERMISSIONS.map((perm) => {
@@ -1311,8 +1311,8 @@ export default function UsersPage() {
                           style={{ marginTop: "2px", accentColor: "#7E2930" }}
                         />
                         <div>
-                          <div style={{ fontWeight: "600", color: "#1C1A2D" }}>{perm.label}</div>
-                          <div style={{ fontSize: "10px", color: "#8B8FA8" }}>{perm.desc}</div>
+                          <div style={{ fontWeight: "600", color: "var(--text)" }}>{perm.label}</div>
+                          <div style={{ fontSize: "10px", color: "var(--muted)" }}>{perm.desc}</div>
                         </div>
                       </label>
                     );
@@ -1332,7 +1332,7 @@ export default function UsersPage() {
                 />
                 <label
                   htmlFor="user_is_active_form"
-                  style={{ fontSize: "13px", fontWeight: "600", color: "#1C1A2D", cursor: "pointer" }}
+                  style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)", cursor: "pointer" }}
                 >
                   Kích hoạt tài khoản (cho phép đăng nhập hệ thống)
                 </label>
@@ -1395,13 +1395,13 @@ export default function UsersPage() {
               <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
                 <ShieldAlert size={48} color="#EF4444" />
               </div>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
                 Xác nhận xóa nhân viên
               </h2>
-              <p style={{ color: "#8B8FA8", fontSize: "14px", lineHeight: "1.5", marginBottom: "20px" }}>
+              <p style={{ color: "var(--muted)", fontSize: "14px", lineHeight: "1.5", marginBottom: "20px" }}>
                 Bạn có chắc chắn muốn xóa nhân viên{" "}
-                <strong style={{ color: "#1C1A2D" }}>{deleteTarget.fullName}</strong> (@{deleteTarget.username}) thuộc
-                chi nhánh <strong style={{ color: "#1C1A2D" }}>{deleteTarget.storeCode}</strong> khỏi hệ thống?
+                <strong style={{ color: "var(--text)" }}>{deleteTarget.fullName}</strong> (@{deleteTarget.username}) thuộc
+                chi nhánh <strong style={{ color: "var(--text)" }}>{deleteTarget.storeCode}</strong> khỏi hệ thống?
               </p>
               <div style={{ display: "flex", gap: "10px" }}>
                 <button
@@ -1426,29 +1426,29 @@ export default function UsersPage() {
         <div className="modal-overlay" onClick={closeResetPassword}>
           <div className="modal-content" style={{ maxWidth: "440px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(139, 92, 246, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <KeyRound size={20} color="#8B5CF6" />
                   </div>
-                  <h2 style={{ fontSize: "17px", fontWeight: "700", color: "#1C1A2D" }}>
+                  <h2 style={{ fontSize: "17px", fontWeight: "700", color: "var(--text)" }}>
                     Đặt lại mật khẩu
                   </h2>
                 </div>
                 <button
                   onClick={closeResetPassword}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#8B8FA8" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div style={{ background: "#F8FAFC", padding: "12px 14px", borderRadius: "8px", marginBottom: "16px", border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: "13px", color: "#64748B" }}>Tài khoản nhân viên:</div>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1E293B", marginTop: "2px" }}>
-                  {resetPasswordTarget.fullName} <span style={{ color: "#64748B", fontWeight: "500" }}>@{resetPasswordTarget.username}</span>
+              <div style={{ background: "var(--surface-muted)", padding: "12px 14px", borderRadius: "8px", marginBottom: "16px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "13px", color: "var(--muted)" }}>Tài khoản nhân viên:</div>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginTop: "2px" }}>
+                  {resetPasswordTarget.fullName} <span style={{ color: "var(--muted)", fontWeight: "500" }}>@{resetPasswordTarget.username}</span>
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
                   Chi nhánh: <strong style={{ color: "#0F172A" }}>{resetPasswordTarget.storeCode || activeStoreCode}</strong>
                 </div>
               </div>
@@ -1467,7 +1467,7 @@ export default function UsersPage() {
                       width: "100%",
                       padding: "10px 40px 10px 12px",
                       borderRadius: "8px",
-                      border: "1px solid #CBD5E1",
+                      border: "1px solid var(--border)",
                       fontSize: "14px",
                       outline: "none",
                     }}
@@ -1483,19 +1483,19 @@ export default function UsersPage() {
                       background: "none",
                       border: "none",
                       cursor: "pointer",
-                      color: "#94A3B8",
+                      color: "var(--muted)",
                     }}
                   >
                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                <p style={{ fontSize: "12px", color: "#64748B", marginTop: "6px" }}>
+                <p style={{ fontSize: "12px", color: "var(--muted)", marginTop: "6px" }}>
                   * Nhân viên sẽ bắt buộc phải đổi mật khẩu ở lần đăng nhập tiếp theo.
                 </p>
               </div>
 
               {resetPasswordError && (
-                <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "8px", padding: "10px 12px", color: "#B91C1C", fontSize: "13px", marginBottom: "16px" }}>
+                <div style={{ background: "var(--danger-bg)", border: "1px solid #FCA5A5", borderRadius: "8px", padding: "10px 12px", color: "var(--danger)", fontSize: "13px", marginBottom: "16px" }}>
                   {resetPasswordError}
                 </div>
               )}

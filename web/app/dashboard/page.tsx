@@ -1,15 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase";
-import { ref, onValue } from "firebase/database";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
-  DollarSign, ShoppingBag, LayoutGrid, Clock,
-  TrendingUp, Users, Utensils,
+  DollarSign,
+  ShoppingBag,
+  LayoutGrid,
+  TrendingUp,
+  Utensils,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -41,15 +41,15 @@ const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     return (
       <div
         style={{
-          background: "#FFFFFF",
-          border: "1px solid #E6DEC8",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           borderRadius: "10px",
           padding: "10px 16px",
           boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
         }}
       >
-        <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
-        <p style={{ color: "#7E2930", fontWeight: "800", fontSize: "15px" }}>
+        <p style={{ color: "var(--subtext)", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: "var(--primary)", fontWeight: "800", fontSize: "15px" }}>
           {formatVND(Number(payload[0].value || 0))}
         </p>
       </div>
@@ -127,40 +127,48 @@ export default function DashboardPage() {
       value: formatVND(todayRevenue + todayServingTotal),
       subtitle: `${formatVND(todayRevenue)} đã thu + ${formatVND(todayServingTotal)} phục vụ`,
       icon: <TrendingUp size={22} />,
-      color: "#059669",
-      bgColor: "#ECFDF5",
+      color: "var(--success)",
+      bgColor: "var(--success-bg)",
     },
     {
       title: "Doanh thu hôm nay",
       value: formatVND(todayRevenue),
       subtitle: `${todayOrders} đơn hoàn tất`,
       icon: <DollarSign size={22} />,
-      color: "#7E2930",
-      bgColor: "#FBECEE",
+      color: "var(--primary)",
+      bgColor: "var(--primary-light)",
     },
     {
       title: "Số hóa đơn",
       value: todayOrders.toString(),
       subtitle: "Hôm nay",
       icon: <ShoppingBag size={22} />,
-      color: "#D97706",
-      bgColor: "#FBEFD4",
+      color: "var(--warning)",
+      bgColor: "var(--warning-bg)",
     },
     {
       title: "Bàn đang dùng",
       value: `${tablesInUse}/${tablesData.length}`,
       subtitle: `${tablesInUse} bàn có khách`,
       icon: <LayoutGrid size={22} />,
-      color: "#7E2930",
-      bgColor: "#FFF0F2",
+      color: "var(--primary)",
+      bgColor: "var(--primary-light)",
     },
     {
       title: "Bàn sẵn sàng",
       value: `${tablesData.length - tablesInUse}`,
       subtitle: "Bàn trống đón khách",
       icon: <Utensils size={22} />,
-      color: "#146A65",
-      bgColor: "#E6F4F2",
+      color: "var(--success)",
+      bgColor: "var(--success-bg)",
+    },
+    {
+      title: "Đơn online chờ xử lý",
+      value: `${pendingOnline}`,
+      subtitle: pendingOnline > 0 ? "Cần xác nhận trên POS" : "Không có đơn chờ",
+      icon: <ShoppingBag size={22} />,
+      color: pendingOnline > 0 ? "var(--danger)" : "var(--info)",
+      bgColor: pendingOnline > 0 ? "var(--danger-bg)" : "var(--info-bg)",
     },
   ];
 
@@ -168,7 +176,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-        <div className="spinner" />
+        <div className="spinner" role="status" aria-label="Đang tải dữ liệu" />
       </div>
     );
   }
@@ -186,10 +194,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "16px" }}>
         {statCards.map((card, i) => (
           <div key={i} className="stat-card">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
               <div
                 style={{
                   width: "44px",
@@ -204,12 +212,11 @@ export default function DashboardPage() {
               >
                 {card.icon}
               </div>
-              <TrendingUp size={16} style={{ color: "#146A65" }} />
             </div>
-            <div style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", marginBottom: "4px" }}>
+            <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", marginBottom: "4px", overflowWrap: "anywhere" }}>
               {card.value}
             </div>
-            <div style={{ fontSize: "12px", color: "#5D5B63" }}>
+            <div style={{ fontSize: "12px", color: "var(--subtext)" }}>
               <span style={{ fontWeight: "700", color: card.color }}>{card.title}</span> • {card.subtitle}
             </div>
           </div>
@@ -217,22 +224,22 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts & Top items */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+      <div className="grid-stack-md" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
         {/* Revenue chart */}
         <div className="card" style={{ padding: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
             <div>
-              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D" }}>
+              <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)" }}>
                 Doanh thu 7 ngày gần nhất
               </h2>
-              <p style={{ fontSize: "12px", color: "#5D5B63" }}>Biểu đồ tăng trưởng doanh số</p>
+              <p style={{ fontSize: "12px", color: "var(--subtext)" }}>Biểu đồ tăng trưởng doanh số</p>
             </div>
             <div
               style={{
                 fontSize: "12px",
                 fontWeight: "700",
-                color: "#7E2930",
-                background: "#FBECEE",
+                color: "var(--primary)",
+                background: "var(--primary-light)",
                 border: "1px solid rgba(126, 41, 48, 0.2)",
                 borderRadius: "6px",
                 padding: "4px 10px",
@@ -268,13 +275,13 @@ export default function DashboardPage() {
         {/* Top Products */}
         <div className="card" style={{ padding: "20px" }}>
           <div style={{ marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)" }}>
               Món bán chạy 🔥
             </h2>
-            <p style={{ fontSize: "12px", color: "#5D5B63" }}>Theo số lượng bán ra</p>
+            <p style={{ fontSize: "12px", color: "var(--subtext)" }}>Theo số lượng bán ra</p>
           </div>
           {topProducts.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#5D5B63", padding: "40px 0", fontSize: "13px" }}>
+            <div style={{ textAlign: "center", color: "var(--subtext)", padding: "40px 0", fontSize: "13px" }}>
               Chưa có dữ liệu giao dịch
             </div>
           ) : (
@@ -283,13 +290,13 @@ export default function DashboardPage() {
                 <div
                   key={i}
                   style={{
-                    display: "flex",
+                    display: "flex", flexWrap: "wrap", rowGap: "8px",
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "10px 12px",
-                    background: "#FAF7F2",
+                    background: "var(--surface-muted)",
                     borderRadius: "10px",
-                    border: "1px solid #ECE5D8",
+                    border: "1px solid var(--border-light)",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -298,8 +305,8 @@ export default function DashboardPage() {
                         width: "24px",
                         height: "24px",
                         borderRadius: "6px",
-                        background: i === 0 ? "#7E2930" : i === 1 ? "#D97706" : "#E6DEC8",
-                        color: i < 2 ? "white" : "#1C1A2D",
+                        background: i === 0 ? "var(--primary)" : i === 1 ? "var(--warning)" : "var(--border)",
+                        color: i < 2 ? "white" : "var(--text)",
                         fontSize: "12px",
                         fontWeight: "700",
                         display: "flex",
@@ -310,15 +317,15 @@ export default function DashboardPage() {
                       {i + 1}
                     </div>
                     <div>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#1C1A2D" }}>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>
                         {p.name}
                       </div>
-                      <div style={{ fontSize: "11px", color: "#5D5B63" }}>
+                      <div style={{ fontSize: "11px", color: "var(--subtext)" }}>
                         {p.count} lượt gọi
                       </div>
                     </div>
                   </div>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#7E2930" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--primary)" }}>
                     {formatVND(p.total)}
                   </div>
                 </div>
@@ -330,10 +337,10 @@ export default function DashboardPage() {
 
       {/* Live tables overview */}
       <div className="card" style={{ padding: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <LayoutGrid size={18} style={{ color: "#7E2930" }} />
-            <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D" }}>
+            <LayoutGrid size={18} style={{ color: "var(--primary)" }} />
+            <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)" }}>
               Trạng thái Phòng / Bàn trực tiếp (Live Sync)
             </h2>
             <div
@@ -341,7 +348,7 @@ export default function DashboardPage() {
                 width: "8px",
                 height: "8px",
                 borderRadius: "50%",
-                background: "#146A65",
+                background: "var(--success)",
                 boxShadow: "0 0 8px rgba(20,106,101,0.6)",
                 marginLeft: "4px",
               }}
@@ -352,7 +359,7 @@ export default function DashboardPage() {
             style={{
               fontSize: "13px",
               fontWeight: "700",
-              color: "#7E2930",
+              color: "var(--primary)",
               textDecoration: "none",
             }}
           >
@@ -360,12 +367,12 @@ export default function DashboardPage() {
           </Link>
         </div>
         {tablesData.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#5D5B63", padding: "32px" }}>Không có dữ liệu bàn</div>
+          <div style={{ textAlign: "center", color: "var(--subtext)", padding: "32px" }}>Không có dữ liệu bàn</div>
         ) : (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(130px, 100%), 1fr))",
               gap: "12px",
             }}
           >
@@ -377,19 +384,19 @@ export default function DashboardPage() {
                   textDecoration: "none",
                   borderRadius: "12px",
                   padding: "12px 10px",
-                  border: table.inUse ? "2px solid #7E2930" : "1px solid #E6DEC8",
-                  background: table.inUse ? "#FFF0F2" : "#FFFFFF",
+                  border: table.inUse ? "2px solid var(--primary)" : "1px solid var(--border)",
+                  background: table.inUse ? "var(--primary-light)" : "var(--surface)",
                   textAlign: "center",
                   boxShadow: table.inUse ? "0 4px 12px rgba(126, 41, 48, 0.15)" : "none",
                   display: "block",
                   transition: "transform 0.15s",
                 }}
               >
-                <div style={{ fontSize: "14px", fontWeight: "800", color: table.inUse ? "#7E2930" : "#1C1A2D", marginBottom: "2px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "800", color: table.inUse ? "var(--primary)" : "var(--text)", marginBottom: "2px" }}>
                   {table.name || table.id}
                 </div>
                 {table.zone && (
-                  <div style={{ fontSize: "11px", color: "#5D5B63", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--subtext)", marginBottom: "6px" }}>
                     {table.zone}
                   </div>
                 )}

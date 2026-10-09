@@ -26,6 +26,7 @@ class QRCodeScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         leading: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(6),

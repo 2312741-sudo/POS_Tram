@@ -337,3 +337,36 @@ class PaymentErrorBox extends StatelessWidget {
     );
   }
 }
+
+/// Hộp trạng thái "Trạm Payment Bot đang dò tiền vào..." dưới mã QR.
+class PaymentBotWatchingBox extends StatelessWidget {
+  const PaymentBotWatchingBox({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.successLight,
+        borderRadius: AppRadius.brMd,
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.success),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

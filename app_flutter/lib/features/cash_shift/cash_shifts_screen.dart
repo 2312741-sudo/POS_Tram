@@ -110,9 +110,10 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
 
     for (final b in bills) {
       for (final it in b.items) {
-        if (it.discountAmount > 0) {
-          discountedItemsCount += it.quantity;
-          discountedItemsTotal += it.discountAmount;
+        if (it.lineDiscountTotal > 0) {
+          // Chỉ đếm số phần được giảm; tổng giảm là tổng CẢ DÒNG đã lưu
+          discountedItemsCount += it.discountedQuantity;
+          discountedItemsTotal += it.lineDiscountTotal;
         }
       }
       for (final d in b.discounts) {
@@ -175,7 +176,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     final rows = <List<dynamic>>[];
     for (int i = 0; i < paidBills.length; i++) {
       final b = paidBills[i];
-      final itemD = b.items.fold(0, (s, it) => s + it.discountAmount);
+      final itemD = b.items.fold(0, (s, it) => s + it.lineDiscountTotal);
       final voucherD = b.discounts.fold(0, (s, d) => s + d.amount);
       final pUsed = b.pointsUsed;
       final pDisc = b.pointsDiscount;

@@ -6,6 +6,8 @@ import {
   formatVND,
   formatNumber,
   extractBillItems,
+  itemLineDiscount,
+  itemDiscountedQuantity,
   CashShiftAuditItem,
 } from "@/lib/reports";
 import { exportCashShiftReport, exportShiftPromotionsExcel } from "@/lib/export";
@@ -140,11 +142,11 @@ export default function ShiftsPage() {
     for (const b of paidBills) {
       const items = extractBillItems(b);
       for (const it of items) {
-        const d = Number(it.discountAmount || 0);
+        // Giảm giá dòng = tổng CẢ DÒNG (lineDiscountTotal / discountAmount cũ), chỉ tính số phần được giảm
+        const d = itemLineDiscount(it);
         if (d > 0) {
-          const q = Number(it.quantity || 1);
-          discountedItemsCount += q;
-          discountedItemsTotal += d * q;
+          discountedItemsCount += itemDiscountedQuantity(it);
+          discountedItemsTotal += d;
         }
       }
       if (Array.isArray(b.discounts)) {
@@ -188,9 +190,9 @@ export default function ShiftsPage() {
       {/* Top Header Card */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px 24px",
           marginBottom: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
@@ -199,13 +201,13 @@ export default function ShiftsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Phiếu bàn giao ca & Két tiền
               </h1>
               <span
                 style={{
-                  background: "#FBECEE",
-                  color: "#7E2930",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "12px",
@@ -215,7 +217,7 @@ export default function ShiftsPage() {
                 KiotViet Shift Handover
               </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
               Quản lý các phiên giao két của nhân viên, đối soát chênh lệch kiểm đếm và in phiếu bàn giao ca
             </p>
           </div>
@@ -226,8 +228,8 @@ export default function ShiftsPage() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "#F8F4EE",
-              border: "1px solid #E6DEC8",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
               borderRadius: "10px",
               padding: "6px 12px",
             }}
@@ -242,7 +244,7 @@ export default function ShiftsPage() {
                 outline: "none",
                 fontSize: "13px",
                 fontWeight: "600",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 cursor: "pointer",
               }}
             >
@@ -261,7 +263,7 @@ export default function ShiftsPage() {
           style={{
             marginTop: "16px",
             padding: "14px 18px",
-            background: allowDifference ? "#F2F9F7" : "#FFF8ED",
+            background: allowDifference ? "#F2F9F7" : "var(--warning-bg)",
             border: `1px solid ${allowDifference ? "#B8E3D8" : "#F7E1B5"}`,
             borderRadius: "12px",
             display: "flex",
@@ -277,7 +279,7 @@ export default function ShiftsPage() {
                 width: "36px",
                 height: "36px",
                 borderRadius: "10px",
-                background: allowDifference ? "#146A65" : "#C47820",
+                background: allowDifference ? "var(--success)" : "#C47820",
                 color: "#FFFFFF",
                 display: "flex",
                 alignItems: "center",
@@ -287,13 +289,13 @@ export default function ShiftsPage() {
               {allowDifference ? <Eye size={18} /> : <EyeOff size={18} />}
             </div>
             <div>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: "#1C1A2D" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)" }}>
                 Chế độ hiển thị chênh lệch tiền két khi nhân viên kết ca:{" "}
-                <span style={{ color: allowDifference ? "#146A65" : "#C47820" }}>
+                <span style={{ color: allowDifference ? "var(--success)" : "#C47820" }}>
                   {allowDifference ? "Đang BẬT (Công khai)" : "Đang TẮT (Kiểm đếm mù)"}
                 </span>
               </div>
-              <div style={{ fontSize: "12px", color: "#666", marginTop: "2px" }}>
+              <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
                 {allowDifference
                   ? "Nhân viên thu ngân được xem số dư lý thuyết và chênh lệch thừa/thiếu ngay trên app khi chốt ca."
                   : "Chế độ kiểm đếm mù: Nhân viên chỉ khai báo tiền mặt đếm được trong két, không biết trước số dư dự kiến. Quản lý kiểm tra đối soát trên Web."}
@@ -306,7 +308,7 @@ export default function ShiftsPage() {
             disabled={updatingSetting}
             style={{
               padding: "8px 16px",
-              background: allowDifference ? "#C93B2B" : "#146A65",
+              background: allowDifference ? "#C93B2B" : "var(--success)",
               color: "#FFFFFF",
               border: "none",
               borderRadius: "8px",
@@ -325,52 +327,52 @@ export default function ShiftsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
           gap: "16px",
           marginBottom: "20px",
         }}
       >
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Tổng số ca giao két</span>
             <History size={18} color="#7E2930" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
             {formatNumber(summaryKpi.totalShifts)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             {summaryKpi.openShifts} ca đang mở
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Doanh số tiền mặt ca</span>
             <Coins size={18} color="#146A65" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#146A65", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--success)", marginTop: "8px" }}>
             {formatVND(summaryKpi.totalCashSales)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Tổng tiền mặt thu qua đơn
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Tiền kiểm đếm thực tế</span>
             <Wallet size={18} color="#1877F2" />
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
             {formatVND(summaryKpi.totalActualCash)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Khai báo két khi chốt ca
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "14px", padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#666", fontSize: "13px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "16px 20px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", color: "var(--subtext)", fontSize: "13px" }}>
             <span>Chênh lệch két ròng</span>
             <ArrowUpDown
               size={18}
@@ -381,14 +383,14 @@ export default function ShiftsPage() {
             style={{
               fontSize: "24px",
               fontWeight: "800",
-              color: summaryKpi.totalDiff === 0 ? "#146A65" : summaryKpi.totalDiff > 0 ? "#1877F2" : "#C93B2B",
+              color: summaryKpi.totalDiff === 0 ? "var(--success)" : summaryKpi.totalDiff > 0 ? "#1877F2" : "#C93B2B",
               marginTop: "8px",
             }}
           >
             {summaryKpi.totalDiff >= 0 ? "+" : ""}
             {formatVND(summaryKpi.totalDiff)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             {summaryKpi.totalDiff === 0 ? "Khớp chuẩn 100%" : summaryKpi.totalDiff > 0 ? "Thừa tiền két" : "Thiếu hụt két"}
           </div>
         </div>
@@ -397,9 +399,9 @@ export default function ShiftsPage() {
       {/* Shifts Filter & Table */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
         }}
@@ -411,8 +413,8 @@ export default function ShiftsPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
                 width: "100%",
@@ -436,7 +438,7 @@ export default function ShiftsPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", border: "1px solid #E6DEC8", borderRadius: "10px", overflow: "hidden" }}>
+            <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
               {[
                 { id: "ALL", label: "Tất cả" },
                 { id: "OPEN", label: "Đang mở" },
@@ -447,8 +449,8 @@ export default function ShiftsPage() {
                   onClick={() => setStatusFilter(item.id as "ALL" | "OPEN" | "CLOSED")}
                   style={{
                     padding: "6px 12px",
-                    background: statusFilter === item.id ? "#7E2930" : "#FFFFFF",
-                    color: statusFilter === item.id ? "#FFFFFF" : "#666",
+                    background: statusFilter === item.id ? "var(--primary)" : "var(--surface)",
+                    color: statusFilter === item.id ? "#FFFFFF" : "var(--subtext)",
                     border: "none",
                     fontSize: "12px",
                     fontWeight: "600",
@@ -486,7 +488,7 @@ export default function ShiftsPage() {
                 alignItems: "center",
                 gap: "6px",
                 padding: "7px 14px",
-                background: "#7E2930",
+                background: "var(--primary)",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "8px",
@@ -504,7 +506,7 @@ export default function ShiftsPage() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666" }}>
+              <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
                 <th style={{ padding: "10px 12px" }}>Mã ca</th>
                 <th style={{ padding: "10px 12px" }}>Chi nhánh</th>
                 <th style={{ padding: "10px 12px" }}>Thu ngân</th>
@@ -520,7 +522,7 @@ export default function ShiftsPage() {
             <tbody>
               {filteredShifts.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "#999" }}>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
                     Không tìm thấy phiên giao két nào
                   </td>
                 </tr>
@@ -531,19 +533,19 @@ export default function ShiftsPage() {
 
                   return (
                     <tr key={shift.shiftId || shift.shiftCode} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#7E2930" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--primary)" }}>
                         {shift.shiftCode}
                       </td>
                       <td style={{ padding: "10px 12px" }}>
-                        <span style={{ padding: "2px 8px", background: "#F8F4EE", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
+                        <span style={{ padding: "2px 8px", background: "var(--bg)", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
                           {shift.storeCode || "TRAM01"}
                         </span>
                       </td>
                       <td style={{ padding: "10px 12px" }}>
-                        <div style={{ fontWeight: "600", color: "#1C1A2D" }}>{shift.staffFullName}</div>
-                        <div style={{ fontSize: "11px", color: "#888" }}>@{shift.staffUsername}</div>
+                        <div style={{ fontWeight: "600", color: "var(--text)" }}>{shift.staffFullName}</div>
+                        <div style={{ fontSize: "11px", color: "var(--muted)" }}>@{shift.staffUsername}</div>
                       </td>
-                      <td style={{ padding: "10px 12px", fontSize: "12px", color: "#666" }}>
+                      <td style={{ padding: "10px 12px", fontSize: "12px", color: "var(--subtext)" }}>
                         <div>Mở: {fmtDate(shift.openedAt)}</div>
                         <div>Đóng: {fmtDate(shift.closedAt)}</div>
                       </td>
@@ -554,13 +556,13 @@ export default function ShiftsPage() {
                         {formatVND(shift.totalSales || 0)}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>
-                        {isOpen ? <span style={{ color: "#999" }}>Đang mở</span> : formatVND(shift.actualCash || 0)}
+                        {isOpen ? <span style={{ color: "var(--muted)" }}>Đang mở</span> : formatVND(shift.actualCash || 0)}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>
                         {isOpen ? (
-                          <span style={{ color: "#999" }}>—</span>
+                          <span style={{ color: "var(--muted)" }}>—</span>
                         ) : (
-                          <span style={{ color: diff === 0 ? "#146A65" : diff > 0 ? "#1877F2" : "#C93B2B" }}>
+                          <span style={{ color: diff === 0 ? "var(--success)" : diff > 0 ? "#1877F2" : "#C93B2B" }}>
                             {diff >= 0 ? "+" : ""}
                             {formatVND(diff)}
                           </span>
@@ -573,7 +575,7 @@ export default function ShiftsPage() {
                             borderRadius: "12px",
                             fontSize: "11px",
                             fontWeight: "700",
-                            background: isOpen ? "#E6F4EA" : "#F1F3F4",
+                            background: isOpen ? "var(--success-bg)" : "#F1F3F4",
                             color: isOpen ? "#137333" : "#5F6368",
                           }}
                         >
@@ -585,12 +587,12 @@ export default function ShiftsPage() {
                           onClick={() => setSelectedShift(shift)}
                           style={{
                             padding: "5px 12px",
-                            background: "#F8F4EE",
-                            border: "1px solid #E6DEC8",
+                            background: "var(--bg)",
+                            border: "1px solid var(--border)",
                             borderRadius: "8px",
                             fontSize: "12px",
                             fontWeight: "600",
-                            color: "#7E2930",
+                            color: "var(--primary)",
                             cursor: "pointer",
                           }}
                         >
@@ -623,7 +625,7 @@ export default function ShiftsPage() {
         >
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
               padding: "28px",
               maxWidth: "520px",
@@ -636,22 +638,22 @@ export default function ShiftsPage() {
           >
             {/* Slip Paper Header */}
             <div style={{ textAlign: "center", borderBottom: "1px dashed #CCC", paddingBottom: "16px", marginBottom: "16px" }}>
-              <div style={{ fontSize: "16px", fontWeight: "800", color: "#1C1A2D", letterSpacing: "0.5px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text)", letterSpacing: "0.5px" }}>
                 POS TRẠM F&B - CHI NHÁNH {selectedShift.storeCode || "TRAM01"}
               </div>
-              <div style={{ fontSize: "18px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--primary)", marginTop: "4px" }}>
                 PHIẾU BÀN GIAO CA BÁN HÀNG
               </div>
-              <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+              <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
                 Mã ca: <strong>{selectedShift.shiftCode}</strong>
               </div>
-              <div style={{ fontSize: "12px", color: "#666" }}>
+              <div style={{ fontSize: "12px", color: "var(--subtext)" }}>
                 Thu ngân: <strong>{selectedShift.staffFullName}</strong> (@{selectedShift.staffUsername})
               </div>
-              <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+              <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
                 Mở ca: {fmtDate(selectedShift.openedAt)}
               </div>
-              <div style={{ fontSize: "11px", color: "#888" }}>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>
                 Kết ca: {fmtDate(selectedShift.closedAt)}
               </div>
             </div>
@@ -681,8 +683,8 @@ export default function ShiftsPage() {
             </div>
 
             {/* Promotional Breakdown for Shift (Module 4) */}
-            <div style={{ marginTop: "14px", padding: "12px", background: "#FDF5F6", borderRadius: "10px", border: "1px solid #F5D5D8" }}>
-              <div style={{ fontSize: "12px", fontWeight: "800", color: "#7E2930", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ marginTop: "14px", padding: "12px", background: "var(--primary-light)", borderRadius: "10px", border: "1px solid #F5D5D8" }}>
+              <div style={{ fontSize: "12px", fontWeight: "800", color: "var(--primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
                 <span>🏷️ KHUYẾN MÃI & GIẢM GIÁ TRONG CA</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
@@ -712,13 +714,13 @@ export default function ShiftsPage() {
             </div>
 
             {selectedShift.notes && (
-              <div style={{ marginTop: "14px", padding: "10px", background: "#FFF8ED", borderRadius: "8px", fontSize: "12px", color: "#8A5B00" }}>
+              <div style={{ marginTop: "14px", padding: "10px", background: "var(--warning-bg)", borderRadius: "8px", fontSize: "12px", color: "#8A5B00" }}>
                 <strong>Ghi chú:</strong> {selectedShift.notes}
               </div>
             )}
 
             {/* Signature Area */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "30px", textAlign: "center", fontSize: "12px", color: "#666" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", marginTop: "30px", textAlign: "center", fontSize: "12px", color: "var(--subtext)" }}>
               <div>
                 <strong>Người giao ca</strong>
                 <div style={{ height: "45px" }} />
@@ -737,7 +739,7 @@ export default function ShiftsPage() {
                 onClick={() => setSelectedShift(null)}
                 style={{
                   padding: "8px 16px",
-                  background: "#F0ECE1",
+                  background: "var(--surface-muted)",
                   border: "none",
                   borderRadius: "8px",
                   fontSize: "13px",
@@ -772,7 +774,7 @@ export default function ShiftsPage() {
                   alignItems: "center",
                   gap: "6px",
                   padding: "8px 18px",
-                  background: "#7E2930",
+                  background: "var(--primary)",
                   color: "#FFFFFF",
                   border: "none",
                   borderRadius: "8px",
@@ -803,8 +805,8 @@ function SlipLine({
   color?: string;
 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
-      <span style={{ fontWeight: isBold ? "700" : "400", color: isBold ? "#1C1A2D" : "#555" }}>{label}</span>
+    <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+      <span style={{ fontWeight: isBold ? "700" : "400", color: isBold ? "var(--text)" : "var(--subtext)" }}>{label}</span>
       <span style={{ fontWeight: isBold ? "800" : "600", color }}>{value}</span>
     </div>
   );

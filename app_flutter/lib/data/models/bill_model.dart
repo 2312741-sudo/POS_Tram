@@ -242,7 +242,7 @@ class BillModel {
 
   void recalculateTotals() {
     final rawSubTotal = items.fold(0, (s, i) => s + (i.unitPrice * i.quantity));
-    final itemDiscountTotal = items.fold(0, (s, i) => s + i.discountAmount);
+    final itemDiscountTotal = items.fold(0, (s, i) => s + i.lineDiscountTotal);
     subTotal = rawSubTotal;
     final voucherDiscount = discounts.fold(0, (s, d) => s + d.amount);
     totalDiscount = itemDiscountTotal + voucherDiscount + pointsDiscount;

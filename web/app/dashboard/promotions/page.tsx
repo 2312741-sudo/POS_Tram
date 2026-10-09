@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, Plus, Tag, Ticket, ChevronRight, Settings } from "lucide-react";
-import { ref, onValue, set, push, remove, update } from "firebase/database";
+import { Search, Plus, Tag, Ticket } from "lucide-react";
+import { ref, onValue, set, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
@@ -562,19 +562,19 @@ export default function PromotionsPage() {
   // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
   if (!targetStoreCode) {
     return (
-      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+      <div style={{ padding: "24px", color: "var(--subtext)" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
     );
   }
 
   return (
     <div style={{ padding: "24px" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e", margin: 0 }}>
+          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
             🎉 Quản lý Khuyến mãi
           </h1>
-          <p style={{ fontSize: "14px", color: "#666", margin: "4px 0 0" }}>
+          <p style={{ fontSize: "14px", color: "var(--subtext)", margin: "4px 0 0" }}>
             Tạo và quản lý các chương trình khuyến mãi, voucher
           </p>
         </div>
@@ -594,9 +594,9 @@ export default function PromotionsPage() {
             <button key={s.storeCode} onClick={() => setCurrentStoreCode(s.storeCode)}
               style={{
                 padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer",
-                border: targetStoreCode === s.storeCode ? "2px solid #7E2930" : "1px solid #ddd",
-                background: targetStoreCode === s.storeCode ? "#7E2930" : "#fff",
-                color: targetStoreCode === s.storeCode ? "#fff" : "#333",
+                border: targetStoreCode === s.storeCode ? "2px solid var(--primary)" : "1px solid #ddd",
+                background: targetStoreCode === s.storeCode ? "var(--primary)" : "var(--surface)",
+                color: targetStoreCode === s.storeCode ? "#fff" : "var(--text)",
               }}>
               {s.storeName || s.storeCode}
             </button>
@@ -605,7 +605,7 @@ export default function PromotionsPage() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "20px", borderBottom: "2px solid #f0f0f0", paddingBottom: "0" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "20px", borderBottom: "2px solid var(--border-light)", paddingBottom: "0" }}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -614,14 +614,14 @@ export default function PromotionsPage() {
               style={{
                 display: "flex", alignItems: "center", gap: "6px", padding: "10px 16px",
                 fontSize: "13px", fontWeight: isActive ? "700" : "500", cursor: "pointer",
-                border: "none", borderBottom: isActive ? "3px solid #7E2930" : "3px solid transparent",
-                background: "transparent", color: isActive ? "#7E2930" : "#666", marginBottom: "-2px",
+                border: "none", borderBottom: isActive ? "3px solid var(--primary)" : "3px solid transparent",
+                background: "transparent", color: isActive ? "var(--primary)" : "var(--subtext)", marginBottom: "-2px",
               }}>
               <Icon size={16} />
               {tab.label}
               {tab.key === "campaigns" && (
                 <span style={{
-                  background: isActive ? "#7E2930" : "#e5e7eb", color: isActive ? "#fff" : "#666",
+                  background: isActive ? "var(--primary)" : "var(--border)", color: isActive ? "#fff" : "var(--subtext)",
                   fontSize: "11px", fontWeight: "700", padding: "1px 6px", borderRadius: "10px",
                 }}>
                   {tab.count}
@@ -634,7 +634,7 @@ export default function PromotionsPage() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px", color: "#999" }}>⏳ Đang tải dữ liệu...</div>
+        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>⏳ Đang tải dữ liệu...</div>
       ) : (
         <>
           {activeTab === "campaigns" && (
@@ -645,14 +645,14 @@ export default function PromotionsPage() {
                   {["ALL", "Đang chạy", "Sắp tới", "Đã kết thúc", "Tạm dừng", "Ngoài khung giờ"].map(st => (
                     <button key={st} onClick={() => setFilterStatus(st)} style={{
                       padding: "6px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: "600", cursor: "pointer", border: "none",
-                      background: filterStatus === st ? "#7E2930" : "#f1f1f1", color: filterStatus === st ? "#fff" : "#333", whiteSpace: "nowrap"
+                      background: filterStatus === st ? "var(--primary)" : "#f1f1f1", color: filterStatus === st ? "#fff" : "var(--text)", whiteSpace: "nowrap"
                     }}>
                       {st === "ALL" ? "Tất cả" : st}
                     </button>
                   ))}
                 </div>
                 <div style={{ flex: 1, position: "relative", minWidth: "200px" }}>
-                  <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#999" }} />
+                  <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
                   <input value={search} onChange={(e) => setSearch(e.target.value)}
                     placeholder="Tìm theo tên, mã KM..."
                     style={{ width: "100%", padding: "10px 12px 10px 36px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px" }} />
@@ -667,10 +667,10 @@ export default function PromotionsPage() {
               {filteredCampaigns.length === 0 ? (
                 <EmptyState icon="🎁" text="Chưa có chương trình khuyến mãi" sub="Bấm 'Thêm KM' để tạo mới." />
               ) : (
-                <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ background: "#f9fafb" }}>
+                      <tr style={{ background: "var(--surface-muted)" }}>
                         {["Mã KM", "Tên chương trình", "Loại & Giảm giá", "Thời gian & Khung giờ", "Ngân sách", "Lượt dùng", "Trạng thái", "Thao tác"].map((h) => (
                           <th key={h} style={thStyle}>{h}</th>
                         ))}
@@ -688,12 +688,12 @@ export default function PromotionsPage() {
                         const displayVal = isPercent ? (tierVal > 100 ? tierVal / 100 : tierVal) : tierVal;
 
                         return (
-                          <tr key={cam.campaignId} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                          <tr key={cam.campaignId} style={{ borderBottom: "1px solid var(--border-light)" }}>
                             <td style={tdStyle} onClick={() => openEditCampaign(cam)}>
-                              <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930", fontWeight: "600", cursor: "pointer" }}>{cam.programCode}</span>
+                              <span style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--primary)", fontWeight: "600", cursor: "pointer" }}>{cam.programCode}</span>
                             </td>
                             <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => openEditCampaign(cam)}>
-                              <div style={{ fontWeight: "600", fontSize: "14px", color: "#111827", marginBottom: "4px" }}>{cam.name}</div>
+                              <div style={{ fontWeight: "600", fontSize: "14px", color: "var(--text)", marginBottom: "4px" }}>{cam.name}</div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                                 {cam.requireStaffNote && (
                                   <span style={badgeStyle("#d97706")}>📝 Ghi chú NV</span>
@@ -710,7 +710,7 @@ export default function PromotionsPage() {
                               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                                 <span style={badgeStyle("#8b5cf6")}>{typeLabels[cam.campaignType] || cam.campaignType}</span>
                                 {displayVal > 0 && (
-                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#b91c1c" }}>
+                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--danger)" }}>
                                     {isPercent ? `Giảm ${displayVal}%` : `Giảm ${formatVND(displayVal)}`}
                                   </span>
                                 )}
@@ -722,7 +722,7 @@ export default function PromotionsPage() {
                                   <div>
                                     {formatDate(cam.schedule.absoluteStart)} - {formatDate(cam.schedule.absoluteEnd)}
                                   </div>
-                                ) : <div style={{ color: "#6b7280" }}>Không giới hạn ngày</div>}
+                                ) : <div style={{ color: "var(--muted)" }}>Không giới hạn ngày</div>}
 
                                 {cam.schedule.daysOfWeek && cam.schedule.daysOfWeek.length > 0 && (
                                   <div style={{ color: "#15803d", fontWeight: "600" }}>
@@ -741,7 +741,7 @@ export default function PromotionsPage() {
                               {cam.budgetMoney ? (
                                 <div>
                                   <div style={{ fontSize: "12px", marginBottom: "4px" }}>{formatVND(counters.spentMoney)} / {formatVND(cam.budgetMoney)}</div>
-                                  <div style={{ width: "100%", height: "4px", background: "#e5e7eb", borderRadius: "2px", overflow: "hidden" }}>
+                                  <div style={{ width: "100%", height: "4px", background: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
                                     <div style={{ width: `${Math.min(budgetProgress, 100)}%`, height: "100%", background: budgetProgress > 90 ? "#ef4444" : "#10b981" }} />
                                   </div>
                                 </div>
@@ -753,8 +753,8 @@ export default function PromotionsPage() {
                               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                 <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }} title="Bật/Tắt chương trình">
                                   <input type="checkbox" checked={cam.active} onChange={() => toggleCampaignActive(cam)} style={{ display: "none" }} />
-                                  <div style={{ width: "36px", height: "20px", background: cam.active ? "#10b981" : "#d1d5db", borderRadius: "10px", position: "relative", transition: "0.2s" }}>
-                                    <div style={{ width: "16px", height: "16px", background: "#fff", borderRadius: "50%", position: "absolute", top: "2px", left: cam.active ? "18px" : "2px", transition: "0.2s" }} />
+                                  <div style={{ width: "36px", height: "20px", background: cam.active ? "#10b981" : "var(--border)", borderRadius: "10px", position: "relative", transition: "0.2s" }}>
+                                    <div style={{ width: "16px", height: "16px", background: "var(--surface)", borderRadius: "50%", position: "absolute", top: "2px", left: cam.active ? "18px" : "2px", transition: "0.2s" }} />
                                   </div>
                                 </label>
                                 <button
@@ -771,9 +771,9 @@ export default function PromotionsPage() {
                                     borderRadius: "6px",
                                     fontSize: "12px",
                                     fontWeight: "600",
-                                    background: "#f3f4f6",
-                                    color: "#374151",
-                                    border: "1px solid #d1d5db",
+                                    background: "var(--surface-muted)",
+                                    color: "var(--subtext)",
+                                    border: "1px solid var(--border)",
                                     cursor: "pointer",
                                   }}
                                   title="Quản lý mã Voucher"
@@ -812,29 +812,29 @@ export default function PromotionsPage() {
 
               {selectedVoucherCampaign ? (
                 <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "20px" }}>
-                    <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                      <div style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>Tổng mã</div>
+                  <div className="grid-2-sm" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "20px" }}>
+                    <div style={{ background: "var(--surface-muted)", padding: "16px", borderRadius: "12px", border: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: "13px", color: "var(--muted)", fontWeight: "600" }}>Tổng mã</div>
                       <div style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a" }}>{voucherStats.total}</div>
                     </div>
-                    <div style={{ background: "#f0fdf4", padding: "16px", borderRadius: "12px", border: "1px solid #bbf7d0" }}>
+                    <div style={{ background: "var(--success-bg)", padding: "16px", borderRadius: "12px", border: "1px solid #bbf7d0" }}>
                       <div style={{ fontSize: "13px", color: "#166534", fontWeight: "600" }}>Đã phát hành</div>
                       <div style={{ fontSize: "24px", fontWeight: "800", color: "#15803d" }}>{voucherStats.issued}</div>
                     </div>
-                    <div style={{ background: "#fffbeb", padding: "16px", borderRadius: "12px", border: "1px solid #fef08a" }}>
+                    <div style={{ background: "var(--warning-bg)", padding: "16px", borderRadius: "12px", border: "1px solid #fef08a" }}>
                       <div style={{ fontSize: "13px", color: "#854d0e", fontWeight: "600" }}>Đã dùng</div>
                       <div style={{ fontSize: "24px", fontWeight: "800", color: "#a16207" }}>{voucherStats.used}</div>
                     </div>
-                    <div style={{ background: "#fef2f2", padding: "16px", borderRadius: "12px", border: "1px solid #fecaca" }}>
+                    <div style={{ background: "var(--danger-bg)", padding: "16px", borderRadius: "12px", border: "1px solid #fecaca" }}>
                       <div style={{ fontSize: "13px", color: "#991b1b", fontWeight: "600" }}>Đã hủy</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#b91c1c" }}>{voucherStats.cancelled}</div>
+                      <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--danger)" }}>{voucherStats.cancelled}</div>
                     </div>
                   </div>
 
-                  <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                  <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
-                        <tr style={{ background: "#f9fafb" }}>
+                        <tr style={{ background: "var(--surface-muted)" }}>
                           {["Mã Voucher", "Trạng thái", "Người dùng", "Ngày dùng", "Thao tác"].map((h) => (
                             <th key={h} style={thStyle}>{h}</th>
                           ))}
@@ -842,8 +842,8 @@ export default function PromotionsPage() {
                       </thead>
                       <tbody>
                         {vouchers.map(v => (
-                          <tr key={v.voucherId} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                            <td style={tdStyle}><span style={{ fontFamily: "monospace", fontSize: "14px", fontWeight: "700", letterSpacing: "1px", color: "#7E2930" }}>{v.code}</span></td>
+                          <tr key={v.voucherId} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                            <td style={tdStyle}><span style={{ fontFamily: "monospace", fontSize: "14px", fontWeight: "700", letterSpacing: "1px", color: "var(--primary)" }}>{v.code}</span></td>
                             <td style={tdStyle}>
                               <span style={badgeStyle(v.status === "ISSUED" ? "#10b981" : v.status === "USED" ? "#f59e0b" : "#94a3b8")}>
                                 {v.status === "ISSUED" ? "Đã phát hành" : v.status === "USED" ? "Đã dùng" : "Đã hủy"}
@@ -855,13 +855,13 @@ export default function PromotionsPage() {
                               {v.status === "ISSUED" && (
                                 <button onClick={async () => {
                                   await update(ref(db, `stores/${targetStoreCode}/vouchers/${selectedVoucherCampaign}/${v.voucherId}`), { status: "CANCELLED" });
-                                }} style={{ padding: "4px 8px", fontSize: "12px", borderRadius: "4px", background: "#fee2e2", color: "#ef4444", border: "none", cursor: "pointer" }}>Hủy</button>
+                                }} style={{ padding: "4px 8px", fontSize: "12px", borderRadius: "4px", background: "var(--danger-bg)", color: "#ef4444", border: "none", cursor: "pointer" }}>Hủy</button>
                               )}
                             </td>
                           </tr>
                         ))}
                         {vouchers.length === 0 && (
-                          <tr><td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "#999" }}>Chưa có mã voucher nào.</td></tr>
+                          <tr><td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "var(--muted)" }}>Chưa có mã voucher nào.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -878,7 +878,7 @@ export default function PromotionsPage() {
       {/* Add/Edit Campaign Modal */}
       {showCampaignModal && (
         <Modal title={editingCampaign ? "Sửa chương trình khuyến mãi" : "Thêm chương trình KM"} onClose={() => setShowCampaignModal(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxHeight: "72vh", overflowY: "auto", paddingRight: "8px" }}>
+          <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxHeight: "72vh", overflowY: "auto", paddingRight: "8px" }}>
             <div style={{ gridColumn: "1 / -1" }}>
               <FormField label="Tên chương trình *" value={campaignForm.name} onChange={(v) => setCampaignForm({ ...campaignForm, name: v })} placeholder="VD: Khuyến mãi Trà Sữa Giờ Vàng" />
             </div>
@@ -892,9 +892,9 @@ export default function PromotionsPage() {
             
             {/* 1. Cấu hình Ưu đãi & Giảm giá */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#7E2930" }}>🎁 Cấu hình Ưu đãi & Giảm giá</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "var(--primary)" }}>🎁 Cấu hình Ưu đãi & Giảm giá</div>
               {campaignForm.campaignType === "BILLDISCOUNT" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "#fcf8f8", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
+                <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "var(--surface-muted)", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
                   <div>
                     <label style={labelStyle}>Hình thức giảm *</label>
                     <select value={campaignForm.discountType} onChange={(e) => setCampaignForm({ ...campaignForm, discountType: e.target.value as "PERCENT" | "AMOUNT" })} style={inputStyle}>
@@ -928,7 +928,7 @@ export default function PromotionsPage() {
                 </div>
               )}
               {campaignForm.campaignType === "ITEMPRICERULE" && (
-                <div style={{ background: "#fcf8f8", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
+                <div style={{ background: "var(--surface-muted)", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
                   <FormField label="Giá đồng giá (VND) *" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" placeholder="VD: 25000" />
                 </div>
               )}
@@ -937,12 +937,12 @@ export default function PromotionsPage() {
             {/* 2. Phạm vi áp dụng món & nhóm hàng */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
               <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1e3a8a" }}>📦 Phạm vi áp dụng món / nhóm hàng</div>
-              <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "8px" }}>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>
                 Nếu để trống cả 2 mục, ưu đãi sẽ được áp dụng cho toàn bộ menu.
               </div>
 
               {/* Nhóm hàng */}
-              <div style={{ marginBottom: "12px", background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <div style={{ marginBottom: "12px", background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
                 <label style={{ ...labelStyle, color: "#1e40af" }}>📁 Nhóm hàng áp dụng ({campaignForm.includedGroupIds.length})</label>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
                   <select
@@ -963,7 +963,7 @@ export default function PromotionsPage() {
                     <button
                       type="button"
                       onClick={() => setCampaignForm(prev => ({ ...prev, includedGroupIds: [] }))}
-                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "6px", background: "var(--surface)", cursor: "pointer", color: "var(--muted)" }}
                     >
                       Bỏ chọn tất cả
                     </button>
@@ -972,7 +972,7 @@ export default function PromotionsPage() {
                 {campaignForm.includedGroupIds.length > 0 ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                     {campaignForm.includedGroupIds.map(g => (
-                      <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "#dbeafe", color: "#1e40af", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+                      <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--info-bg)", color: "#1e40af", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
                         📁 {g}
                         <button
                           type="button"
@@ -983,12 +983,12 @@ export default function PromotionsPage() {
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>Tất cả nhóm hàng (mặc định)</div>
+                  <div style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>Tất cả nhóm hàng (mặc định)</div>
                 )}
               </div>
 
               {/* Món hàng */}
-              <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <div style={{ background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
                 <label style={{ ...labelStyle, color: "#b45309" }}>📦 Món hàng áp dụng ({campaignForm.includedItemIds.length})</label>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
                   <select
@@ -1009,7 +1009,7 @@ export default function PromotionsPage() {
                     <button
                       type="button"
                       onClick={() => setCampaignForm(prev => ({ ...prev, includedItemIds: [] }))}
-                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "6px", background: "var(--surface)", cursor: "pointer", color: "var(--muted)" }}
                     >
                       Bỏ chọn tất cả
                     </button>
@@ -1021,7 +1021,7 @@ export default function PromotionsPage() {
                       const prod = products.find(p => String(p.id) === String(id));
                       const name = prod ? prod.name : id;
                       return (
-                        <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "#fef3c7", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+                        <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--warning-bg)", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
                           📦 {name}
                           <button
                             type="button"
@@ -1033,7 +1033,7 @@ export default function PromotionsPage() {
                     })}
                   </div>
                 ) : (
-                  <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>Tất cả món hàng (mặc định)</div>
+                  <div style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>Tất cả món hàng (mặc định)</div>
                 )}
               </div>
             </div>
@@ -1046,7 +1046,7 @@ export default function PromotionsPage() {
             <FormField label="Ngày kết thúc" value={campaignForm.endDate} onChange={(v) => setCampaignForm({ ...campaignForm, endDate: v })} type="datetime-local" />
 
             {/* Ngày trong tuần */}
-            <div style={{ gridColumn: "1 / -1", background: "#f0fdf4", padding: "12px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+            <div style={{ gridColumn: "1 / -1", background: "var(--success-bg)", padding: "12px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
                 <label style={{ ...labelStyle, color: "#166534", margin: 0 }}>
                   📅 Ngày áp dụng trong tuần: {campaignForm.daysOfWeek.length === 0 || campaignForm.daysOfWeek.length === 7 ? "Tất cả các ngày (T2 - CN)" : `${campaignForm.daysOfWeek.length} ngày đã chọn`}
@@ -1055,28 +1055,28 @@ export default function PromotionsPage() {
                   <button
                     type="button"
                     onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [1, 2, 3, 4, 5, 6, 7] }))}
-                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "var(--surface)", cursor: "pointer", color: "#15803d" }}
                   >
                     Tất cả (T2-CN)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [1, 2, 3, 4, 5] }))}
-                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "var(--surface)", cursor: "pointer", color: "#15803d" }}
                   >
                     T2 - T6
                   </button>
                   <button
                     type="button"
                     onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [6, 7] }))}
-                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "#fff", cursor: "pointer", color: "#15803d" }}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #86efac", background: "var(--surface)", cursor: "pointer", color: "#15803d" }}
                   >
                     Cuối tuần (T7, CN)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCampaignForm(prev => ({ ...prev, daysOfWeek: [] }))}
-                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", color: "#64748b" }}
+                    style={{ padding: "3px 8px", fontSize: "11px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", color: "var(--muted)" }}
                   >
                     Xóa
                   </button>
@@ -1112,8 +1112,8 @@ export default function PromotionsPage() {
                         fontSize: "13px",
                         fontWeight: "700",
                         cursor: "pointer",
-                        border: isSelected ? "2px solid #16a34a" : "1px solid #cbd5e1",
-                        background: isSelected ? "#16a34a" : "#fff",
+                        border: isSelected ? "2px solid #16a34a" : "1px solid var(--border)",
+                        background: isSelected ? "#16a34a" : "var(--surface)",
                         color: isSelected ? "#fff" : "#334155",
                       }}
                     >
@@ -1125,8 +1125,8 @@ export default function PromotionsPage() {
             </div>
 
             {/* Happy Hours slots */}
-            <div style={{ gridColumn: "1 / -1", background: "#f5f3ff", padding: "12px", borderRadius: "8px", border: "1px solid #ddd6fe" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ gridColumn: "1 / -1", background: "var(--info-bg)", padding: "12px", borderRadius: "8px", border: "1px solid #ddd6fe" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <div>
                   <label style={{ ...labelStyle, color: "#6b21a8", margin: 0 }}>
                     ⏰ Khung giờ Happy Hours ({campaignForm.timeSlots.length})
@@ -1165,10 +1165,10 @@ export default function PromotionsPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {campaignForm.timeSlots.map((slot, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px", background: "#fff", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e9d5ff" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: "10px", background: "var(--surface)", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e9d5ff" }}>
                       <span style={{ fontSize: "13px", fontWeight: "600", color: "#6b21a8", minWidth: "60px" }}>Ca #{idx + 1}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "12px", color: "#555" }}>Từ:</span>
+                        <span style={{ fontSize: "12px", color: "var(--subtext)" }}>Từ:</span>
                         <input
                           type="time"
                           value={slot.startTime}
@@ -1184,7 +1184,7 @@ export default function PromotionsPage() {
                         />
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "12px", color: "#555" }}>Đến:</span>
+                        <span style={{ fontSize: "12px", color: "var(--subtext)" }}>Đến:</span>
                         <input
                           type="time"
                           value={slot.endTime}
@@ -1207,7 +1207,7 @@ export default function PromotionsPage() {
                             timeSlots: prev.timeSlots.filter((_, i) => i !== idx)
                           }));
                         }}
-                        style={{ marginLeft: "auto", padding: "4px 8px", background: "#fee2e2", color: "#ef4444", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
+                        style={{ marginLeft: "auto", padding: "4px 8px", background: "var(--danger-bg)", color: "#ef4444", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}
                       >
                         Xóa
                       </button>
@@ -1225,7 +1225,7 @@ export default function PromotionsPage() {
             <FormField label="Giới hạn lượt dùng" value={campaignForm.maxUses} onChange={(v) => setCampaignForm({ ...campaignForm, maxUses: v })} type="number" />
 
             {/* 5. Bắt buộc nhân viên nhập ghi chú (Mục 2 của Module 1) */}
-            <div style={{ gridColumn: "1 / -1", background: "#fffbeb", border: "1px solid #fef08a", borderRadius: "8px", padding: "12px 14px", marginTop: "4px" }}>
+            <div style={{ gridColumn: "1 / -1", background: "var(--warning-bg)", border: "1px solid #fef08a", borderRadius: "8px", padding: "12px 14px", marginTop: "4px" }}>
               <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
                 <input
                   type="checkbox"
@@ -1286,9 +1286,9 @@ export default function PromotionsPage() {
                 flex: 1,
                 padding: "8px 12px",
                 borderRadius: "8px",
-                border: !voucherForm.isCustom ? "2px solid #7E2930" : "1px solid #ddd",
-                background: !voucherForm.isCustom ? "#fdf2f2" : "#fff",
-                color: !voucherForm.isCustom ? "#7E2930" : "#555",
+                border: !voucherForm.isCustom ? "2px solid var(--primary)" : "1px solid #ddd",
+                background: !voucherForm.isCustom ? "#fdf2f2" : "var(--surface)",
+                color: !voucherForm.isCustom ? "var(--primary)" : "var(--subtext)",
                 fontWeight: !voucherForm.isCustom ? "700" : "500",
                 fontSize: "13px",
                 cursor: "pointer",
@@ -1303,9 +1303,9 @@ export default function PromotionsPage() {
                 flex: 1,
                 padding: "8px 12px",
                 borderRadius: "8px",
-                border: voucherForm.isCustom ? "2px solid #7E2930" : "1px solid #ddd",
-                background: voucherForm.isCustom ? "#fdf2f2" : "#fff",
-                color: voucherForm.isCustom ? "#7E2930" : "#555",
+                border: voucherForm.isCustom ? "2px solid var(--primary)" : "1px solid #ddd",
+                background: voucherForm.isCustom ? "#fdf2f2" : "var(--surface)",
+                color: voucherForm.isCustom ? "var(--primary)" : "var(--subtext)",
                 fontWeight: voucherForm.isCustom ? "700" : "500",
                 fontSize: "13px",
                 cursor: "pointer",
@@ -1324,7 +1324,7 @@ export default function PromotionsPage() {
                   onChange={(v) => setVoucherForm({ ...voucherForm, customCode: v.toUpperCase() })}
                   placeholder="VD: CHAOBAN20, GIAM10K, TRAMVIP"
                 />
-                <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
                   Mã sẽ được kích hoạt ngay lập tức và áp dụng tại máy POS.
                 </div>
               </div>
@@ -1332,7 +1332,7 @@ export default function PromotionsPage() {
               <>
                 <FormField label="Số lượng mã *" value={voucherForm.quantity} onChange={(v) => setVoucherForm({ ...voucherForm, quantity: v })} type="number" />
                 <FormField label="Tiền tố mã (VD: TRAM)" value={voucherForm.prefix} onChange={(v) => setVoucherForm({ ...voucherForm, prefix: v })} />
-                <div style={{ fontSize: "12px", color: "#666" }}>Mã sẽ được tạo ngẫu nhiên theo định dạng: <b>{voucherForm.prefix.toUpperCase()}XXXXXX</b></div>
+                <div style={{ fontSize: "12px", color: "var(--subtext)" }}>Mã sẽ được tạo ngẫu nhiên theo định dạng: <b>{voucherForm.prefix.toUpperCase()}XXXXXX</b></div>
               </>
             )}
           </div>
@@ -1352,8 +1352,8 @@ function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: stri
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
       <div style={{ fontSize: "48px", marginBottom: "12px" }}>{icon}</div>
-      <div style={{ fontSize: "16px", fontWeight: "600", color: "#333" }}>{text}</div>
-      <div style={{ fontSize: "13px", color: "#999", marginTop: "6px" }}>{sub}</div>
+      <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text)" }}>{text}</div>
+      <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>{sub}</div>
     </div>
   );
 }
@@ -1361,8 +1361,8 @@ function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: stri
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", width: "90%", maxWidth: "780px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "16px", color: "#1a1a2e" }}>{title}</h3>
+      <div style={{ background: "var(--surface)", borderRadius: "16px", padding: "24px", width: "90%", maxWidth: "780px", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "16px", color: "var(--text)" }}>{title}</h3>
         {children}
       </div>
     </div>

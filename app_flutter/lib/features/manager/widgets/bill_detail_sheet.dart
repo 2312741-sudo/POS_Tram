@@ -404,6 +404,18 @@ class BillDetailSheet extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (item.hasDiscount)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '${item.discountDescription(FormatUtils.vnd)}: -${FormatUtils.vnd(item.lineDiscountTotal)}'
+                          '${item.discountReason.isNotEmpty ? ' (${item.discountReason})' : ''}',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            color: TramColors.danger,
+                          ),
+                        ),
+                      ),
                     if (item.orderedByName.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),

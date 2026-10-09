@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { escapeHtml } from "./html";
 import {
   OverviewReportResult,
   PeriodRevenueItem,
@@ -17,6 +18,7 @@ import {
   HistoryOrder,
   OrderItem,
   extractBillItems,
+  itemLineDiscount,
   formatVND,
   formatNumber,
 } from "./reports";
@@ -134,10 +136,10 @@ export function exportStandardReportExcel(opts: ExportReportOptions) {
 }
 
 /**
- * In / Xuất PDF từ trình duyệt với bố cục chuẩn, font Be Vietnam Pro, màu Trạm #7E2930
+ * Dựng HTML báo cáo chuẩn (thuần, không đụng window). Mọi giá trị nội suy đều được escape.
  */
-export function printStandardReportPDF(opts: ExportReportOptions) {
-  if (typeof window === "undefined") return;
+export function buildStandardReportHtml(opts: ExportReportOptions): string {
+  const e = escapeHtml;
 
   const storeTitle = (opts.storeName || "POS TRẠM").toUpperCase();
   const address = opts.storeAddress || "Đà Lạt, Lâm Đồng";
@@ -146,7 +148,7 @@ export function printStandardReportPDF(opts: ExportReportOptions) {
   const exportTimeText = `Ngày giờ xuất: ${format(new Date(), "dd/MM/yyyy HH:mm:ss", { locale: vi })} (UTC+7)`;
 
   const tableHeaderHtml = opts.headers
-    .map((h) => `<th style="padding: 10px 12px; border: 1px solid #D8CFBD; background: #FAF7F2; color: #1C1A2D; font-weight: 700; text-align: center; font-size: 13px;">${h}</th>`)
+    .map((h) => `<th style="padding: 10px 12px; border: 1px solid #D8CFBD; background: #FAF7F2; color: #1C1A2D; font-weight: 700; text-align: center; font-size: 13px;">${e(h)}</th>`)
     .join("");
 
   const tableRowsHtml = opts.rows
@@ -157,7 +159,7 @@ export function printStandardReportPDF(opts: ExportReportOptions) {
           const isNum = typeof cell === "number" || (!isNaN(Number(cell)) && String(cell).trim() !== "" && cIdx > 1);
           const align = cIdx === 0 ? "center" : (isNum ? "right" : "left");
           const valDisplay = typeof cell === "number" ? formatNumber(cell) : String(cell);
-          return `<td style="padding: 8px 12px; border: 1px solid #E6DEC8; text-align: ${align}; font-size: 13px; color: #1C1A2D;">${valDisplay}</td>`;
+          return `<td style="padding: 8px 12px; border: 1px solid #E6DEC8; text-align: ${align}; font-size: 13px; color: #1C1A2D;">${e(valDisplay)}</td>`;
         })
         .join("");
       return `<tr style="background: ${bg};">${cells}</tr>`;
@@ -170,24 +172,18 @@ export function printStandardReportPDF(opts: ExportReportOptions) {
           .map((cell, cIdx) => {
             const align = cIdx === 0 ? "center" : (typeof cell === "number" ? "right" : "left");
             const valDisplay = typeof cell === "number" ? formatNumber(cell) : String(cell);
-            return `<td style="padding: 10px 12px; border: 1px solid #D8CFBD; text-align: ${align}; font-size: 13px; color: #7E2930;">${valDisplay}</td>`;
+            return `<td style="padding: 10px 12px; border: 1px solid #D8CFBD; text-align: ${align}; font-size: 13px; color: #7E2930;">${e(valDisplay)}</td>`;
           })
           .join("")}
       </tr>`
     : "";
 
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    alert("Vui lòng cho phép mở popup để in / xuất PDF!");
-    return;
-  }
-
-  const html = `
+  return `
 <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>${opts.reportTitle}</title>
+  <title>${e(opts.reportTitle)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
     @page { size: A4 portrait; margin: 12mm; }
@@ -242,21 +238,21 @@ export function printStandardReportPDF(opts: ExportReportOptions) {
   <table class="header-table">
     <tr>
       <td style="vertical-align: top;">
-        <div class="store-name">${storeTitle}</div>
-        <div class="store-sub">Địa chỉ: ${address}</div>
-        <div class="store-sub">Hotline: ${phone}</div>
+        <div class="store-name">${e(storeTitle)}</div>
+        <div class="store-sub">Địa chỉ: ${e(address)}</div>
+        <div class="store-sub">Hotline: ${e(phone)}</div>
       </td>
       <td style="text-align: right; vertical-align: top;">
         <div style="font-size: 11px; color: #8B8FA8; font-weight: 600;">HỆ THỐNG POS TRẠM F&B</div>
-        <div style="font-size: 11px; color: #8B8FA8;">Mã BC: <strong>${opts.reportCode}</strong></div>
+        <div style="font-size: 11px; color: #8B8FA8;">Mã BC: <strong>${e(opts.reportCode)}</strong></div>
       </td>
     </tr>
   </table>
 
-  <div class="report-title">${opts.reportTitle}</div>
+  <div class="report-title">${e(opts.reportTitle)}</div>
   <div class="report-meta">
-    <div>${rangeText}</div>
-    <div style="margin-top: 2px;">${exportTimeText}</div>
+    <div>${e(rangeText)}</div>
+    <div style="margin-top: 2px;">${e(exportTimeText)}</div>
   </div>
 
   <table class="data-table">
@@ -305,7 +301,21 @@ export function printStandardReportPDF(opts: ExportReportOptions) {
 </body>
 </html>
   `;
+}
 
+/**
+ * In / Xuất PDF từ trình duyệt với bố cục chuẩn, font Be Vietnam Pro, màu Trạm #7E2930
+ */
+export function printStandardReportPDF(opts: ExportReportOptions) {
+  if (typeof window === "undefined") return;
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("Vui lòng cho phép mở popup để in / xuất PDF!");
+    return;
+  }
+
+  const html = buildStandardReportHtml(opts);
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
@@ -912,7 +922,7 @@ export function exportShiftPromotionsExcel(
 
   const rows = paidBills.map((b, idx) => {
     const items = extractBillItems(b);
-    const itemDisc = items.reduce((s, it) => s + (Number(it.discountAmount || 0) * Number(it.quantity || 1)), 0);
+    const itemDisc = items.reduce((s, it) => s + itemLineDiscount(it), 0);
     const voucherDisc = Array.isArray(b.discounts)
       ? b.discounts.reduce((s, d) => s + Number(d.amount || 0), 0)
       : Number(b.billDiscounts || 0);

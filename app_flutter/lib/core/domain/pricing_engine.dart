@@ -1,5 +1,6 @@
 import '../../data/models/campaign_models.dart';
 import 'dart:math';
+import '../../data/models/order_item_model.dart';
 
 /// Đầu vào cho Pricing Engine
 class PricingInput {
@@ -33,6 +34,12 @@ class PricingLineItem {
   final int unitPrice;
   final bool isGift;
 
+  /// Giảm giá thủ công theo dòng, áp cho [discountedQuantity] phần trong dòng:
+  /// [discountPercent] %/phần hoặc [discountUnitAmount] đ/phần.
+  final int discountedQuantity;
+  final int discountPercent;
+  final int discountUnitAmount;
+
   PricingLineItem({
     required this.lineId,
     required this.itemId,
@@ -41,7 +48,33 @@ class PricingLineItem {
     required this.quantity,
     required this.unitPrice,
     this.isGift = false,
+    this.discountedQuantity = 0,
+    this.discountPercent = 0,
+    this.discountUnitAmount = 0,
   });
+
+  /// Dựng từ dòng món của giỏ hàng (giữ cấu hình giảm giá theo phần)
+  factory PricingLineItem.fromOrderItem(OrderItemModel item, {required String lineId, String? groupId}) => PricingLineItem(
+        lineId: lineId,
+        itemId: item.productId.toString(),
+        groupId: groupId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountedQuantity: item.discountedQuantity,
+        discountPercent: item.discountPercent,
+        discountUnitAmount: item.discountUnitAmount,
+      );
+
+  /// Tổng giảm thủ công của dòng = giảm mỗi phần × số phần được giảm (chặn theo tiền dòng)
+  int get manualLineDiscount => isGift
+      ? 0
+      : OrderItemModel.computeLineDiscount(
+          unitPrice: unitPrice,
+          quantity: quantity,
+          discountedQuantity: discountedQuantity,
+          percent: discountPercent,
+          unitAmount: discountUnitAmount,
+        );
 }
 
 /// Pricing Engine - Pure function
@@ -69,10 +102,14 @@ PriceQuoteModel calculatePrice({
 
   Map<String, int> lineFinalPrices = {};
   Map<String, int> lineDiscounts = {};
+  int manualLineDiscountTotal = 0;
   for (var line in input.lines) {
     if (!line.isGift) {
-      lineFinalPrices[line.lineId] = line.unitPrice * line.quantity;
-      lineDiscounts[line.lineId] = 0;
+      // Giảm giá thủ công theo số phần được chọn của dòng
+      final manual = line.manualLineDiscount;
+      manualLineDiscountTotal += manual;
+      lineFinalPrices[line.lineId] = line.unitPrice * line.quantity - manual;
+      lineDiscounts[line.lineId] = manual;
     }
   }
 
@@ -275,7 +312,8 @@ PriceQuoteModel calculatePrice({
     }
   }
 
-  int finalDiscount = totalDiscount + input.manualDiscountMoney;
+  final manualDiscount = input.manualDiscountMoney + manualLineDiscountTotal;
+  int finalDiscount = totalDiscount + manualDiscount;
   int netMoney = grossMoney - finalDiscount;
   if (netMoney < 0) netMoney = 0;
 
@@ -303,7 +341,7 @@ PriceQuoteModel calculatePrice({
     grossMoney: grossMoney,
     eligibleBaseMoney: grossMoney,
     totalPromotionDiscount: totalDiscount,
-    manualDiscount: input.manualDiscountMoney,
+    manualDiscount: manualDiscount,
     totalDiscountMoney: finalDiscount,
     netMoney: netMoney,
     lineBenefits: lineBenefits,

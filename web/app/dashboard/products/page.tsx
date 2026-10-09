@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useState, useMemo, useEffect } from "react";
 import {
   Search,
@@ -6,10 +7,8 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Filter,
   X,
   Check,
-  Store,
   FolderPlus,
   Folder,
   Layers,
@@ -20,7 +19,7 @@ import {
   FileText,
   Sparkles,
 } from "lucide-react";
-import { ref, onValue, set, remove, push } from "firebase/database";
+import { ref, onValue, set, remove } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
@@ -487,10 +486,10 @@ export default function ProductsPage() {
       <div
         style={{
           display: "flex",
-          borderBottom: "1px solid #E6DEC8",
+          borderBottom: "1px solid var(--border)",
           gap: "8px",
           alignItems: "center",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: "var(--surface)",
           padding: "6px 12px 0",
           borderRadius: "14px 14px 0 0",
         }}
@@ -507,8 +506,8 @@ export default function ProductsPage() {
             cursor: "pointer",
             background: "none",
             border: "none",
-            borderBottom: activeTab === "products" ? "3px solid #7E2930" : "3px solid transparent",
-            color: activeTab === "products" ? "#7E2930" : "#5D5B63",
+            borderBottom: activeTab === "products" ? "3px solid var(--primary)" : "3px solid transparent",
+            color: activeTab === "products" ? "var(--primary)" : "var(--subtext)",
             transition: "all 0.15s ease",
           }}
         >
@@ -519,8 +518,8 @@ export default function ProductsPage() {
               padding: "2px 8px",
               borderRadius: "12px",
               fontSize: "12px",
-              background: activeTab === "products" ? "rgba(126,41,48,0.12)" : "#F4EFE6",
-              color: activeTab === "products" ? "#7E2930" : "#8B8FA8",
+              background: activeTab === "products" ? "rgba(126,41,48,0.12)" : "var(--surface-muted)",
+              color: activeTab === "products" ? "var(--primary)" : "var(--muted)",
               fontWeight: "700",
             }}
           >
@@ -540,8 +539,8 @@ export default function ProductsPage() {
             cursor: "pointer",
             background: "none",
             border: "none",
-            borderBottom: activeTab === "categories" ? "3px solid #7E2930" : "3px solid transparent",
-            color: activeTab === "categories" ? "#7E2930" : "#5D5B63",
+            borderBottom: activeTab === "categories" ? "3px solid var(--primary)" : "3px solid transparent",
+            color: activeTab === "categories" ? "var(--primary)" : "var(--subtext)",
             transition: "all 0.15s ease",
           }}
         >
@@ -552,8 +551,8 @@ export default function ProductsPage() {
               padding: "2px 8px",
               borderRadius: "12px",
               fontSize: "12px",
-              background: activeTab === "categories" ? "rgba(126,41,48,0.12)" : "#F4EFE6",
-              color: activeTab === "categories" ? "#7E2930" : "#8B8FA8",
+              background: activeTab === "categories" ? "rgba(126,41,48,0.12)" : "var(--surface-muted)",
+              color: activeTab === "categories" ? "var(--primary)" : "var(--muted)",
               fontWeight: "700",
             }}
           >
@@ -573,8 +572,8 @@ export default function ProductsPage() {
             cursor: "pointer",
             background: "none",
             border: "none",
-            borderBottom: activeTab === "notes" ? "3px solid #7E2930" : "3px solid transparent",
-            color: activeTab === "notes" ? "#7E2930" : "#5D5B63",
+            borderBottom: activeTab === "notes" ? "3px solid var(--primary)" : "3px solid transparent",
+            color: activeTab === "notes" ? "var(--primary)" : "var(--subtext)",
             transition: "all 0.15s ease",
           }}
         >
@@ -585,8 +584,8 @@ export default function ProductsPage() {
               padding: "2px 8px",
               borderRadius: "12px",
               fontSize: "12px",
-              background: activeTab === "notes" ? "rgba(126,41,48,0.12)" : "#F4EFE6",
-              color: activeTab === "notes" ? "#7E2930" : "#8B8FA8",
+              background: activeTab === "notes" ? "rgba(126,41,48,0.12)" : "var(--surface-muted)",
+              color: activeTab === "notes" ? "var(--primary)" : "var(--muted)",
               fontWeight: "700",
             }}
           >
@@ -608,9 +607,9 @@ export default function ProductsPage() {
               cursor: "pointer",
               transition: "all 0.15s ease",
               border: "1px solid",
-              borderColor: currentStoreCode === "ALL" ? "#7E2930" : "#E6DEC8",
-              background: currentStoreCode === "ALL" ? "#7E2930" : "#FFFFFF",
-              color: currentStoreCode === "ALL" ? "#FFFFFF" : "#5D5B63",
+              borderColor: currentStoreCode === "ALL" ? "var(--primary)" : "var(--border)",
+              background: currentStoreCode === "ALL" ? "var(--primary)" : "var(--surface)",
+              color: currentStoreCode === "ALL" ? "#FFFFFF" : "var(--subtext)",
             }}
           >
             🌐 Tất cả chi nhánh ({allProducts.length} món)
@@ -631,9 +630,9 @@ export default function ProductsPage() {
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   border: "1px solid",
-                  borderColor: isSelected ? "#7E2930" : "#E6DEC8",
-                  background: isSelected ? "#7E2930" : "#FFFFFF",
-                  color: isSelected ? "#FFFFFF" : "#5D5B63",
+                  borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                  background: isSelected ? "var(--primary)" : "var(--surface)",
+                  color: isSelected ? "#FFFFFF" : "var(--subtext)",
                 }}
               >
                 🏪 {s.storeName} ({count} món • {catCount} nhóm)
@@ -657,7 +656,7 @@ export default function ProductsPage() {
                 alignItems: "center",
               }}
             >
-              <span style={{ fontSize: "12px", fontWeight: "700", color: "#8B8FA8", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--muted)", whiteSpace: "nowrap" }}>
                 Nhóm món:
               </span>
               <button
@@ -669,9 +668,9 @@ export default function ProductsPage() {
                   fontWeight: "600",
                   cursor: "pointer",
                   border: "1px solid",
-                  borderColor: filterCategory === "" ? "#7E2930" : "#E6DEC8",
-                  background: filterCategory === "" ? "rgba(126,41,48,0.1)" : "#FFFFFF",
-                  color: filterCategory === "" ? "#7E2930" : "#5D5B63",
+                  borderColor: filterCategory === "" ? "var(--primary)" : "var(--border)",
+                  background: filterCategory === "" ? "rgba(126,41,48,0.1)" : "var(--surface)",
+                  color: filterCategory === "" ? "var(--primary)" : "var(--subtext)",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -691,9 +690,9 @@ export default function ProductsPage() {
                       fontWeight: "600",
                       cursor: "pointer",
                       border: "1px solid",
-                      borderColor: isSelected ? "#7E2930" : "#E6DEC8",
-                      background: isSelected ? "rgba(126,41,48,0.1)" : "#FFFFFF",
-                      color: isSelected ? "#7E2930" : "#5D5B63",
+                      borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                      background: isSelected ? "rgba(126,41,48,0.1)" : "var(--surface)",
+                      color: isSelected ? "var(--primary)" : "var(--subtext)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -711,9 +710,9 @@ export default function ProductsPage() {
                     fontWeight: "600",
                     cursor: "pointer",
                     border: "1px solid",
-                    borderColor: filterCategory === "Chưa phân loại" ? "#DC2626" : "#FCA5A5",
-                    background: filterCategory === "Chưa phân loại" ? "rgba(220,38,38,0.1)" : "#FEF2F2",
-                    color: "#DC2626",
+                    borderColor: filterCategory === "Chưa phân loại" ? "var(--danger)" : "#FCA5A5",
+                    background: filterCategory === "Chưa phân loại" ? "rgba(220,38,38,0.1)" : "var(--danger-bg)",
+                    color: "var(--danger)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -734,7 +733,7 @@ export default function ProductsPage() {
                     left: "12px",
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "#8B8FA8",
+                    color: "var(--muted)",
                   }}
                 />
                 <input
@@ -772,10 +771,10 @@ export default function ProductsPage() {
                     gap: "4px",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    background: "#F3F4F6",
+                    background: "var(--surface-muted)",
                     border: "none",
                     fontSize: "12px",
-                    color: "#5D5B63",
+                    color: "var(--subtext)",
                     cursor: "pointer",
                   }}
                 >
@@ -806,7 +805,7 @@ export default function ProductsPage() {
                   <tr>
                     <td
                       colSpan={currentStoreCode === "ALL" ? 9 : 8}
-                      style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}
+                      style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}
                     >
                       <div style={{ fontSize: "36px", marginBottom: "8px" }}>🍽️</div>
                       Không có sản phẩm nào phù hợp
@@ -815,14 +814,14 @@ export default function ProductsPage() {
                 ) : (
                   filteredProducts.map((p, i) => (
                     <tr key={`prod_row_${p.storeCode || "TRAM01"}_${p.id || p.name}_${i}`}>
-                      <td style={{ color: "#8B8FA8" }}>{i + 1}</td>
+                      <td style={{ color: "var(--muted)" }}>{i + 1}</td>
                       <td>
                         <span
                           style={{
                             fontFamily: "monospace",
                             fontSize: "12px",
                             fontWeight: "700",
-                            color: "#7E2930",
+                            color: "var(--primary)",
                             background: "rgba(126,41,48,0.06)",
                             padding: "3px 8px",
                             borderRadius: "6px",
@@ -834,9 +833,12 @@ export default function ProductsPage() {
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           {p.imageBase64 ? (
-                            <img
+                            <Image
                               src={p.imageBase64}
                               alt={p.name}
+                              width={38}
+                              height={38}
+                              unoptimized
                               style={{ width: "38px", height: "38px", borderRadius: "8px", objectFit: "cover" }}
                             />
                           ) : (
@@ -845,7 +847,7 @@ export default function ProductsPage() {
                                 width: "38px",
                                 height: "38px",
                                 borderRadius: "8px",
-                                background: "#FAF7F2",
+                                background: "var(--surface-muted)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -857,7 +859,7 @@ export default function ProductsPage() {
                           )}
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontWeight: "700", color: "#1C1A2D" }}>{p.name}</span>
+                              <span style={{ fontWeight: "700", color: "var(--text)" }}>{p.name}</span>
                               {(p.isTopping || p.category?.toLowerCase() === "topping") && (
                                 <span
                                   style={{
@@ -865,8 +867,8 @@ export default function ProductsPage() {
                                     borderRadius: "4px",
                                     fontSize: "10px",
                                     fontWeight: "700",
-                                    background: "#FEF3C7",
-                                    color: "#D97706",
+                                    background: "var(--warning-bg)",
+                                    color: "var(--warning)",
                                     border: "1px solid #FCD34D",
                                   }}
                                 >
@@ -875,7 +877,7 @@ export default function ProductsPage() {
                               )}
                             </div>
                             {p.id && (
-                              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>ID: {p.id.slice(0, 10)}</div>
+                              <div style={{ fontSize: "11px", color: "var(--muted)" }}>ID: {p.id.slice(0, 10)}</div>
                             )}
                           </div>
                         </div>
@@ -886,11 +888,11 @@ export default function ProductsPage() {
                             style={{
                               padding: "3px 8px",
                               borderRadius: "6px",
-                              background: "#FAF7F2",
-                              border: "1px solid #E6DEC8",
+                              background: "var(--surface-muted)",
+                              border: "1px solid var(--border)",
                               fontSize: "12px",
                               fontWeight: "600",
-                              color: "#7E2930",
+                              color: "var(--primary)",
                             }}
                           >
                             🏪 {p.storeCode || "TRAM01"}
@@ -904,7 +906,7 @@ export default function ProductsPage() {
                               padding: "4px 10px",
                               borderRadius: "8px",
                               background: "rgba(126,41,48,0.08)",
-                              color: "#7E2930",
+                              color: "var(--primary)",
                               fontSize: "12px",
                               fontWeight: "600",
                               display: "inline-flex",
@@ -920,8 +922,8 @@ export default function ProductsPage() {
                             style={{
                               padding: "4px 10px",
                               borderRadius: "8px",
-                              background: "#FEE2E2",
-                              color: "#DC2626",
+                              background: "var(--danger-bg)",
+                              color: "var(--danger)",
                               fontSize: "11px",
                               fontWeight: "600",
                             }}
@@ -930,11 +932,11 @@ export default function ProductsPage() {
                           </span>
                         )}
                       </td>
-                      <td style={{ fontWeight: "700", color: "#1C1A2D" }}>{formatVND(p.price)}</td>
-                      <td style={{ fontWeight: "600", color: "#146A65" }}>
-                        {p.costPrice != null && p.costPrice > 0 ? formatVND(p.costPrice) : <span style={{ color: "#8B8FA8" }}>—</span>}
+                      <td style={{ fontWeight: "700", color: "var(--text)" }}>{formatVND(p.price)}</td>
+                      <td style={{ fontWeight: "600", color: "var(--success)" }}>
+                        {p.costPrice != null && p.costPrice > 0 ? formatVND(p.costPrice) : <span style={{ color: "var(--muted)" }}>—</span>}
                       </td>
-                      <td style={{ color: "#5D5B63" }}>{p.unit || "Phần"}</td>
+                      <td style={{ color: "var(--subtext)" }}>{p.unit || "Phần"}</td>
                       <td>
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button
@@ -983,44 +985,44 @@ export default function ProductsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
               gap: "16px",
             }}
           >
             <div className="card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "13px", color: "#8B8FA8", fontWeight: "600" }}>Tổng danh mục</span>
-                <span style={{ padding: "6px", borderRadius: "8px", background: "rgba(126,41,48,0.1)", color: "#7E2930" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", color: "var(--muted)", fontWeight: "600" }}>Tổng danh mục</span>
+                <span style={{ padding: "6px", borderRadius: "8px", background: "rgba(126,41,48,0.1)", color: "var(--primary)" }}>
                   <Layers size={18} />
                 </span>
               </div>
-              <div style={{ fontSize: "26px", fontWeight: "800", color: "#1C1A2D" }}>
-                {categories.length} <span style={{ fontSize: "14px", fontWeight: "500", color: "#8B8FA8" }}>nhóm</span>
+              <div style={{ fontSize: "26px", fontWeight: "800", color: "var(--text)" }}>
+                {categories.length} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--muted)" }}>nhóm</span>
               </div>
             </div>
 
             <div className="card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "13px", color: "#8B8FA8", fontWeight: "600" }}>Món đã phân nhóm</span>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", color: "var(--muted)", fontWeight: "600" }}>Món đã phân nhóm</span>
                 <span style={{ padding: "6px", borderRadius: "8px", background: "rgba(16,185,129,0.1)", color: "#10B981" }}>
                   <Check size={18} />
                 </span>
               </div>
               <div style={{ fontSize: "26px", fontWeight: "800", color: "#10B981" }}>
                 {products.length - uncategorizedCount}{" "}
-                <span style={{ fontSize: "14px", fontWeight: "500", color: "#8B8FA8" }}>/ {products.length} món</span>
+                <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--muted)" }}>/ {products.length} món</span>
               </div>
             </div>
 
             <div className="card" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "13px", color: "#8B8FA8", fontWeight: "600" }}>Món chưa có danh mục</span>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", color: "var(--muted)", fontWeight: "600" }}>Món chưa có danh mục</span>
                 <span style={{ padding: "6px", borderRadius: "8px", background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>
                   <AlertCircle size={18} />
                 </span>
               </div>
-              <div style={{ fontSize: "26px", fontWeight: "800", color: uncategorizedCount > 0 ? "#EF4444" : "#1C1A2D" }}>
-                {uncategorizedCount} <span style={{ fontSize: "14px", fontWeight: "500", color: "#8B8FA8" }}>món</span>
+              <div style={{ fontSize: "26px", fontWeight: "800", color: uncategorizedCount > 0 ? "#EF4444" : "var(--text)" }}>
+                {uncategorizedCount} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--muted)" }}>món</span>
               </div>
             </div>
           </div>
@@ -1036,7 +1038,7 @@ export default function ProductsPage() {
                     left: "12px",
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "#8B8FA8",
+                    color: "var(--muted)",
                   }}
                 />
                 <input
@@ -1079,7 +1081,7 @@ export default function ProductsPage() {
                   <tr>
                     <td
                       colSpan={currentStoreCode === "ALL" ? 6 : 5}
-                      style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}
+                      style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}
                     >
                       <div style={{ fontSize: "36px", marginBottom: "8px" }}>📂</div>
                       {categorySearch ? "Không tìm thấy danh mục phù hợp" : "Chưa có danh mục nào được tạo"}
@@ -1096,7 +1098,7 @@ export default function ProductsPage() {
                     const samples = categoryStats.sampleItems[c.name] || [];
                     return (
                       <tr key={`${c.storeCode || "TRAM01"}_${c.id || c.name}_${i}`}>
-                        <td style={{ color: "#8B8FA8" }}>{i + 1}</td>
+                        <td style={{ color: "var(--muted)" }}>{i + 1}</td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                             <div
@@ -1108,12 +1110,12 @@ export default function ProductsPage() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                color: "#7E2930",
+                                color: "var(--primary)",
                               }}
                             >
                               <Folder size={18} />
                             </div>
-                            <span style={{ fontWeight: "700", color: "#1C1A2D", fontSize: "14px" }}>
+                            <span style={{ fontWeight: "700", color: "var(--text)", fontSize: "14px" }}>
                               {c.name}
                             </span>
                           </div>
@@ -1124,11 +1126,11 @@ export default function ProductsPage() {
                               style={{
                                 padding: "3px 8px",
                                 borderRadius: "6px",
-                                background: "#FAF7F2",
-                                border: "1px solid #E6DEC8",
+                                background: "var(--surface-muted)",
+                                border: "1px solid var(--border)",
                                 fontSize: "12px",
                                 fontWeight: "600",
-                                color: "#7E2930",
+                                color: "var(--primary)",
                               }}
                             >
                               🏪 {c.storeCode || "Tất cả"}
@@ -1140,8 +1142,8 @@ export default function ProductsPage() {
                             style={{
                               padding: "4px 10px",
                               borderRadius: "12px",
-                              background: count > 0 ? "rgba(16,185,129,0.1)" : "#F3F4F6",
-                              color: count > 0 ? "#059669" : "#8B8FA8",
+                              background: count > 0 ? "rgba(16,185,129,0.1)" : "var(--surface-muted)",
+                              color: count > 0 ? "#059669" : "var(--muted)",
                               fontWeight: "700",
                               fontSize: "13px",
                             }}
@@ -1158,23 +1160,23 @@ export default function ProductsPage() {
                                   style={{
                                     fontSize: "11px",
                                     padding: "2px 8px",
-                                    background: "#F9FAFB",
-                                    border: "1px solid #E5E7EB",
+                                    background: "var(--surface-muted)",
+                                    border: "1px solid var(--border)",
                                     borderRadius: "6px",
-                                    color: "#4B5563",
+                                    color: "var(--subtext)",
                                   }}
                                 >
                                   {item.name}
                                 </span>
                               ))}
                               {count > 3 && (
-                                <span style={{ fontSize: "11px", color: "#8B8FA8", alignSelf: "center" }}>
+                                <span style={{ fontSize: "11px", color: "var(--muted)", alignSelf: "center" }}>
                                   +{count - 3} món khác
                                 </span>
                               )}
                             </div>
                           ) : (
-                            <span style={{ fontSize: "12px", color: "#9CA3AF", fontStyle: "italic" }}>
+                            <span style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>
                               Chưa có món
                             </span>
                           )}
@@ -1195,7 +1197,7 @@ export default function ProductsPage() {
                                 borderRadius: "8px",
                                 background: "rgba(126,41,48,0.08)",
                                 border: "1px solid rgba(126,41,48,0.2)",
-                                color: "#7E2930",
+                                color: "var(--primary)",
                                 fontSize: "12px",
                                 fontWeight: "600",
                                 cursor: "pointer",
@@ -1249,10 +1251,10 @@ export default function ProductsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Card Thêm ghi chú mới */}
           <div className="card" style={{ padding: "20px" }}>
-            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
               📝 Thêm ghi chú mẫu cho món ăn & thức uống
             </h3>
-            <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "14px", lineHeight: "1.5" }}>
+            <p style={{ fontSize: "13px", color: "var(--muted)", marginBottom: "14px", lineHeight: "1.5" }}>
               Các ghi chú mẫu sẽ xuất hiện dưới dạng chip chọn nhanh trên giao diện POS khi nhân viên order món (ví dụ: <em>Ít ngọt, Không đá, Uống nóng, Mang về, Để riêng đá...</em>).
             </p>
             <div style={{ display: "flex", gap: "10px", maxWidth: "600px", marginBottom: "14px" }}>
@@ -1279,7 +1281,7 @@ export default function ProductsPage() {
 
             {/* Quick Suggestion Chips */}
             <div>
-              <span style={{ fontSize: "12px", fontWeight: "600", color: "#8B8FA8", marginRight: "8px" }}>
+              <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--muted)", marginRight: "8px" }}>
                 Gợi ý thêm nhanh:
               </span>
               <div style={{ display: "inline-flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
@@ -1310,9 +1312,9 @@ export default function ProductsPage() {
                         fontWeight: "600",
                         cursor: alreadyExists ? "default" : "pointer",
                         border: "1px dashed",
-                        borderColor: alreadyExists ? "#D1D5DB" : "#7E2930",
-                        background: alreadyExists ? "#F3F4F6" : "rgba(126,41,48,0.06)",
-                        color: alreadyExists ? "#9CA3AF" : "#7E2930",
+                        borderColor: alreadyExists ? "var(--border)" : "var(--primary)",
+                        background: alreadyExists ? "var(--surface-muted)" : "rgba(126,41,48,0.06)",
+                        color: alreadyExists ? "var(--muted)" : "var(--primary)",
                         transition: "all 0.15s ease",
                       }}
                     >
@@ -1326,20 +1328,20 @@ export default function ProductsPage() {
 
           {/* Danh sách ghi chú hiện có */}
           <div className="card" style={{ padding: "20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 Danh sách ghi chú mẫu ({notes.length})
               </h3>
-              <span style={{ fontSize: "12px", color: "#8B8FA8" }}>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>
                 Áp dụng cho chi nhánh: <strong>{targetStoreCode}</strong>
               </span>
             </div>
 
             {notes.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "48px 20px", color: "#8B8FA8" }}>
+              <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted)" }}>
                 <div style={{ fontSize: "36px", marginBottom: "8px" }}>💬</div>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#5D5B63" }}>Chưa có ghi chú mẫu nào</div>
-                <div style={{ fontSize: "12px", color: "#8B8FA8", marginTop: "4px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--subtext)" }}>Chưa có ghi chú mẫu nào</div>
+                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
                   Hãy nhập ghi chú vào ô trên và bấm &quot;Thêm ghi chú&quot; để nhân viên sử dụng nhanh trên POS.
                 </div>
               </div>
@@ -1353,12 +1355,12 @@ export default function ProductsPage() {
                       alignItems: "center",
                       gap: "8px",
                       padding: "8px 14px",
-                      background: "#FAF7F2",
-                      border: "1px solid #E6DEC8",
+                      background: "var(--surface-muted)",
+                      border: "1px solid var(--border)",
                       borderRadius: "12px",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#1C1A2D",
+                      color: "var(--text)",
                     }}
                   >
                     {editingNoteId === n.id ? (
@@ -1366,7 +1368,7 @@ export default function ProductsPage() {
                         <input
                           value={editingNoteText}
                           onChange={(e) => setEditingNoteText(e.target.value)}
-                          style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #7E2930", fontSize: "13px" }}
+                          style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--primary)", fontSize: "13px" }}
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleUpdateNote(n.id, editingNoteText);
@@ -1374,13 +1376,13 @@ export default function ProductsPage() {
                         />
                         <button
                           onClick={() => handleUpdateNote(n.id, editingNoteText)}
-                          style={{ background: "#7E2930", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}
+                          style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}
                         >
                           Lưu
                         </button>
                         <button
                           onClick={() => setEditingNoteId(null)}
-                          style={{ background: "#E5E7EB", color: "#374151", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
+                          style={{ background: "var(--border)", color: "var(--subtext)", border: "none", borderRadius: "6px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
                         >
                           Hủy
                         </button>
@@ -1419,11 +1421,11 @@ export default function ProductsPage() {
       {showProductModal && (
         <div className="modal-overlay" onClick={closeProductModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D" }}>
+            <div style={{ padding: "24px 24px 0", display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)" }}>
                 {editProductId ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}
               </h2>
-              <button onClick={closeProductModal} style={{ background: "none", border: "none", color: "#5D5B63", cursor: "pointer" }}>
+              <button onClick={closeProductModal} style={{ background: "none", border: "none", color: "var(--subtext)", cursor: "pointer" }}>
                 <X size={20} />
               </button>
             </div>
@@ -1431,7 +1433,7 @@ export default function ProductsPage() {
               {/* Store Selection */}
               {stores.length > 0 && (
                 <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "6px" }}>
                     Chi nhánh áp dụng *
                   </label>
                   <select
@@ -1456,8 +1458,8 @@ export default function ProductsPage() {
                     width: "100px",
                     height: "100px",
                     borderRadius: "16px",
-                    background: "#FAF7F2",
-                    border: "1px dashed #D8CFBD",
+                    background: "var(--surface-muted)",
+                    border: "1px dashed var(--border)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1467,7 +1469,7 @@ export default function ProductsPage() {
                   }}
                 >
                   {productForm.imageBase64 ? (
-                    <img src={productForm.imageBase64} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <Image src={productForm.imageBase64} alt="Ảnh xem trước" fill unoptimized style={{ objectFit: "cover" }} />
                   ) : (
                     <div style={{ fontSize: "32px" }}>🍽️</div>
                   )}
@@ -1512,8 +1514,8 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#8B8FA8" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--muted)" }}>
                     Mã món (SKU) *
                   </label>
                   <button
@@ -1550,7 +1552,7 @@ export default function ProductsPage() {
                 { label: "Đơn vị tính", key: "unit" as const, placeholder: "Ví dụ: Ly, Cốc, Phần, Đĩa..." },
               ].map((field) => (
                 <div key={field.key}>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "6px" }}>
                     {field.label}
                   </label>
                   <input
@@ -1563,7 +1565,7 @@ export default function ProductsPage() {
                 </div>
               ))}
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#FEF3C7", borderRadius: "10px", border: "1px solid #FCD34D" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "var(--warning-bg)", borderRadius: "10px", border: "1px solid #FCD34D" }}>
                 <input
                   type="checkbox"
                   id="isToppingCheckbox"
@@ -1578,8 +1580,8 @@ export default function ProductsPage() {
 
               {/* Category Dropdown + Quick Add */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#8B8FA8" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--muted)" }}>
                     Danh mục sản phẩm
                   </label>
                   <button
@@ -1588,7 +1590,7 @@ export default function ProductsPage() {
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#7E2930",
+                      color: "var(--primary)",
                       fontSize: "12px",
                       fontWeight: "700",
                       cursor: "pointer",
@@ -1688,18 +1690,18 @@ export default function ProductsPage() {
       {showCategoryModal && (
         <div className="modal-overlay" onClick={closeCategoryModal}>
           <div className="modal-content" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D" }}>
+            <div style={{ padding: "24px 24px 0", display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)" }}>
                 {editCategoryOriginalName ? "Chỉnh sửa danh mục" : "Thêm danh mục mới"}
               </h2>
-              <button onClick={closeCategoryModal} style={{ background: "none", border: "none", color: "#5D5B63", cursor: "pointer" }}>
+              <button onClick={closeCategoryModal} style={{ background: "none", border: "none", color: "var(--subtext)", cursor: "pointer" }}>
                 <X size={20} />
               </button>
             </div>
 
             <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "6px" }}>
                   Tên danh mục *
                 </label>
                 <input
@@ -1712,7 +1714,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "6px" }}>
                   Chi nhánh áp dụng
                 </label>
                 <select
@@ -1730,13 +1732,13 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "4px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "4px" }}>
                   Topping được phép áp dụng cho nhóm này
                 </label>
-                <p style={{ fontSize: "12px", color: "#6B7280", margin: "0 0 8px" }}>
+                <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 8px" }}>
                   Khi gọi món thuộc nhóm này trên POS, chỉ những topping được tích chọn dưới đây mới hiển thị cho nhân viên.
                 </p>
-                <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #E6DEC8", borderRadius: "8px", padding: "8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid var(--border)", borderRadius: "8px", padding: "8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
                   {products
                     .filter((p) => p.isTopping || p.category?.toLowerCase() === "topping")
                     .map((top) => {
@@ -1756,9 +1758,9 @@ export default function ProductsPage() {
                             fontSize: "12px",
                             fontWeight: "600",
                             cursor: "pointer",
-                            border: isChecked ? "2px solid #7E2930" : "1px solid #D1D5DB",
-                            background: isChecked ? "rgba(126,41,48,0.12)" : "#FFFFFF",
-                            color: isChecked ? "#7E2930" : "#374151",
+                            border: isChecked ? "2px solid var(--primary)" : "1px solid var(--border)",
+                            background: isChecked ? "rgba(126,41,48,0.12)" : "var(--surface)",
+                            color: isChecked ? "var(--primary)" : "var(--subtext)",
                             display: "flex",
                             alignItems: "center",
                             gap: "4px",
@@ -1771,7 +1773,7 @@ export default function ProductsPage() {
                       );
                     })}
                   {products.filter((p) => p.isTopping || p.category?.toLowerCase() === "topping").length === 0 && (
-                    <div style={{ fontSize: "12px", color: "#9CA3AF", padding: "6px" }}>
+                    <div style={{ fontSize: "12px", color: "var(--muted)", padding: "6px" }}>
                       Chưa có món nào được đánh dấu là Topping. Vui lòng tạo sản phẩm Topping trước.
                     </div>
                   )}
@@ -1846,10 +1848,10 @@ export default function ProductsPage() {
           <div className="modal-content" style={{ maxWidth: "420px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "28px", textAlign: "center" }}>
               <div style={{ fontSize: "48px", marginBottom: "16px" }}>🗑️</div>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
                 Xác nhận xóa món
               </h2>
-              <p style={{ color: "#8B8FA8", fontSize: "14px", marginBottom: "24px" }}>
+              <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "24px" }}>
                 Bạn có chắc muốn xóa món <strong>&ldquo;{deleteProductTarget.name}&rdquo;</strong>
                 {deleteProductTarget.storeCode ? ` thuộc chi nhánh ${deleteProductTarget.storeCode}` : ""}? Hành động này không thể hoàn tác.
               </p>
@@ -1873,10 +1875,10 @@ export default function ProductsPage() {
           <div className="modal-content" style={{ maxWidth: "440px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "28px", textAlign: "center" }}>
               <div style={{ fontSize: "48px", marginBottom: "16px" }}>📁</div>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
                 Xác nhận xóa danh mục
               </h2>
-              <p style={{ color: "#8B8FA8", fontSize: "14px", marginBottom: "14px" }}>
+              <p style={{ color: "var(--muted)", fontSize: "14px", marginBottom: "14px" }}>
                 Bạn có chắc muốn xóa danh mục <strong>&ldquo;{deleteCategoryTarget.name}&rdquo;</strong>
                 {deleteCategoryTarget.storeCode ? ` khỏi chi nhánh ${deleteCategoryTarget.storeCode}` : ""}?
               </p>
@@ -1915,18 +1917,18 @@ export default function ProductsPage() {
       {showNoteModal && (
         <div className="modal-overlay" onClick={() => setShowNoteModal(false)}>
           <div className="modal-content" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D" }}>
+            <div style={{ padding: "24px 24px 0", display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)" }}>
                 📝 Thêm ghi chú mẫu mới
               </h2>
-              <button onClick={() => setShowNoteModal(false)} style={{ background: "none", border: "none", color: "#5D5B63", cursor: "pointer" }}>
+              <button onClick={() => setShowNoteModal(false)} style={{ background: "none", border: "none", color: "var(--subtext)", cursor: "pointer" }}>
                 <X size={20} />
               </button>
             </div>
 
             <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#8B8FA8", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "var(--muted)", marginBottom: "6px" }}>
                   Nội dung ghi chú *
                 </label>
                 <input
@@ -1942,7 +1944,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <span style={{ fontSize: "12px", fontWeight: "600", color: "#8B8FA8", display: "block", marginBottom: "8px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--muted)", display: "block", marginBottom: "8px" }}>
                   Hoặc chọn nhanh từ danh sách mẫu:
                 </span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
@@ -1972,9 +1974,9 @@ export default function ProductsPage() {
                           fontWeight: "600",
                           cursor: "pointer",
                           border: "1px solid",
-                          borderColor: isSelected ? "#7E2930" : "#E6DEC8",
-                          background: isSelected ? "#7E2930" : "#FAF7F2",
-                          color: isSelected ? "#FFFFFF" : "#5D5B63",
+                          borderColor: isSelected ? "var(--primary)" : "var(--border)",
+                          background: isSelected ? "var(--primary)" : "var(--surface-muted)",
+                          color: isSelected ? "#FFFFFF" : "var(--subtext)",
                           transition: "all 0.15s ease",
                         }}
                       >

@@ -76,7 +76,7 @@ export default function ChangePasswordPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #F8F4EE 0%, #F6EFDF 50%, #F8F4EE 100%)",
+        background: "linear-gradient(135deg, var(--bg) 0%, var(--surface-muted) 50%, var(--bg) 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -91,8 +91,8 @@ export default function ChangePasswordPage() {
           maxWidth: "440px",
           borderRadius: "22px",
           padding: "36px 32px",
-          background: "#FFFFFF",
-          border: "1.5px solid #E6DEC8",
+          background: "var(--surface)",
+          border: "1.5px solid var(--border)",
           boxShadow: "0 16px 40px rgba(126, 41, 48, 0.08)",
           position: "relative",
           zIndex: 1,
@@ -118,14 +118,14 @@ export default function ChangePasswordPage() {
             style={{
               fontSize: "22px",
               fontWeight: "800",
-              color: "#7E2930",
+              color: "var(--primary)",
               marginBottom: "4px",
             }}
           >
             Đổi Mật Khẩu Bắt Buộc
           </h1>
-          <p style={{ color: "#5D5B63", fontSize: "13px", lineHeight: "1.5" }}>
-            Tài khoản <strong style={{ color: "#1C1A2D" }}>@{user?.username}</strong> đăng nhập lần đầu
+          <p style={{ color: "var(--subtext)", fontSize: "13px", lineHeight: "1.5" }}>
+            Tài khoản <strong style={{ color: "var(--text)" }}>@{user?.username}</strong> đăng nhập lần đầu
             hoặc vừa được đặt lại mật khẩu. Vui lòng thiết lập mật khẩu mới an toàn để tiếp tục.
           </p>
         </div>
@@ -138,7 +138,7 @@ export default function ChangePasswordPage() {
                 display: "block",
                 fontSize: "13px",
                 fontWeight: "700",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 marginBottom: "6px",
               }}
             >
@@ -164,7 +164,7 @@ export default function ChangePasswordPage() {
                   transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
-                  color: "#5D5B63",
+                  color: "var(--subtext)",
                   cursor: "pointer",
                   padding: "4px",
                 }}
@@ -181,7 +181,7 @@ export default function ChangePasswordPage() {
                 display: "block",
                 fontSize: "13px",
                 fontWeight: "700",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 marginBottom: "6px",
               }}
             >
@@ -207,7 +207,7 @@ export default function ChangePasswordPage() {
                   transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
-                  color: "#5D5B63",
+                  color: "var(--subtext)",
                   cursor: "pointer",
                   padding: "4px",
                 }}
@@ -221,11 +221,11 @@ export default function ChangePasswordPage() {
           <div
             style={{
               padding: "10px 12px",
-              background: "#FAF7F2",
-              border: "1px solid #E6DEC8",
+              background: "var(--surface-muted)",
+              border: "1px solid var(--border)",
               borderRadius: "10px",
               fontSize: "12px",
-              color: "#5D5B63",
+              color: "var(--subtext)",
               display: "flex",
               flexDirection: "column",
               gap: "4px",
@@ -265,7 +265,7 @@ export default function ChangePasswordPage() {
                 border: "1px solid rgba(180, 35, 44, 0.25)",
                 borderRadius: "10px",
                 padding: "12px",
-                color: "#B4232C",
+                color: "var(--danger)",
                 fontSize: "13px",
               }}
             >
@@ -306,7 +306,7 @@ export default function ChangePasswordPage() {
             style={{
               background: "none",
               border: "none",
-              color: "#5D5B63",
+              color: "var(--subtext)",
               fontSize: "13px",
               cursor: "pointer",
               display: "inline-flex",

@@ -1,13 +1,11 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
   Download,
   Search,
-  Filter,
   AlertTriangle,
-  Shield,
   Eye,
   PlusCircle,
   ChefHat,
@@ -20,8 +18,6 @@ import {
   LogIn,
   LogOut,
   Utensils,
-  Clock,
-  User,
   Info,
   X,
   CheckCircle2,
@@ -376,7 +372,7 @@ export default function AuditPage() {
               </button>
               <button
                 className="btn-primary"
-                style={{ background: "#7E2930" }}
+                style={{ background: "var(--primary)" }}
                 onClick={handleExportCancellationPDF}
               >
                 <Printer size={16} /> In / PDF Kiểm toán Thất thoát
@@ -392,19 +388,19 @@ export default function AuditPage() {
       </div>
 
       {/* Quick Category Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", gap: "12px" }}>
         <div
           onClick={() => { setCategoryFilter("ALL"); setPage(1); }}
           className="card"
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "ALL" ? "2px solid #7E2930" : "1px solid #E6DEC8",
-            background: categoryFilter === "ALL" ? "#FBECEE" : "#FFFFFF",
+            border: categoryFilter === "ALL" ? "2px solid var(--primary)" : "1px solid var(--border)",
+            background: categoryFilter === "ALL" ? "var(--primary-light)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#5D5B63", fontWeight: "600" }}>Tất cả thao tác</div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>{logs.length}</div>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: "600" }}>Tất cả thao tác</div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--primary)", marginTop: "4px" }}>{logs.length}</div>
         </div>
 
         <div
@@ -413,14 +409,14 @@ export default function AuditPage() {
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "ORDER" ? "2px solid #146A65" : "1px solid #E6DEC8",
-            background: categoryFilter === "ORDER" ? "#E6F4F2" : "#FFFFFF",
+            border: categoryFilter === "ORDER" ? "2px solid var(--success)" : "1px solid var(--border)",
+            background: categoryFilter === "ORDER" ? "var(--success-bg)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#146A65", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--success)", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
             <PlusCircle size={14} /> Nhập món & Bếp
           </div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#146A65", marginTop: "4px" }}>{stats.orderCount}</div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--success)", marginTop: "4px" }}>{stats.orderCount}</div>
         </div>
 
         <div
@@ -429,14 +425,14 @@ export default function AuditPage() {
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "PAYMENT" ? "2px solid #7E2930" : "1px solid #E6DEC8",
-            background: categoryFilter === "PAYMENT" ? "#FBECEE" : "#FFFFFF",
+            border: categoryFilter === "PAYMENT" ? "2px solid var(--primary)" : "1px solid var(--border)",
+            background: categoryFilter === "PAYMENT" ? "var(--primary-light)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#7E2930", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--primary)", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
             <CreditCard size={14} /> Thanh toán bàn
           </div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>{stats.paymentCount}</div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--primary)", marginTop: "4px" }}>{stats.paymentCount}</div>
         </div>
 
         <div
@@ -445,14 +441,14 @@ export default function AuditPage() {
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "TABLE_MGMT" ? "2px solid #D97706" : "1px solid #E6DEC8",
-            background: categoryFilter === "TABLE_MGMT" ? "#FEF3C7" : "#FFFFFF",
+            border: categoryFilter === "TABLE_MGMT" ? "2px solid var(--warning)" : "1px solid var(--border)",
+            background: categoryFilter === "TABLE_MGMT" ? "var(--warning-bg)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#D97706", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--warning)", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
             <GitMerge size={14} /> Ghép / Chuyển / Tách
           </div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#D97706", marginTop: "4px" }}>{stats.tableMgmtCount}</div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--warning)", marginTop: "4px" }}>{stats.tableMgmtCount}</div>
         </div>
 
         <div
@@ -461,8 +457,8 @@ export default function AuditPage() {
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "CANCEL" ? "2px solid #E11D48" : "1px solid #E6DEC8",
-            background: categoryFilter === "CANCEL" ? "#FFE4E6" : "#FFFFFF",
+            border: categoryFilter === "CANCEL" ? "2px solid #E11D48" : "1px solid var(--border)",
+            background: categoryFilter === "CANCEL" ? "#FFE4E6" : "var(--surface)",
           }}
         >
           <div style={{ fontSize: "12px", color: "#E11D48", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -477,14 +473,14 @@ export default function AuditPage() {
           style={{
             padding: "14px 16px",
             cursor: "pointer",
-            border: categoryFilter === "SUSPICIOUS" ? "2px solid #DC2626" : "1px solid #E6DEC8",
-            background: categoryFilter === "SUSPICIOUS" ? "#FEE2E2" : "#FFFFFF",
+            border: categoryFilter === "SUSPICIOUS" ? "2px solid var(--danger)" : "1px solid var(--border)",
+            background: categoryFilter === "SUSPICIOUS" ? "var(--danger-bg)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "12px", color: "#DC2626", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--danger)", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
             <AlertTriangle size={14} /> Cảnh báo đáng ngờ
           </div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#DC2626", marginTop: "4px" }}>{stats.suspiciousCount}</div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--danger)", marginTop: "4px" }}>{stats.suspiciousCount}</div>
         </div>
       </div>
 
@@ -493,7 +489,7 @@ export default function AuditPage() {
         <div
           style={{
             padding: "16px 20px",
-            background: "#FFF1F2",
+            background: "var(--danger-bg)",
             border: "1px solid #FECDD3",
             borderRadius: "12px",
             display: "flex",
@@ -509,7 +505,7 @@ export default function AuditPage() {
               <div style={{ fontWeight: "700", color: "#991B1B", fontSize: "14px" }}>
                 Kiểm toán Thất thoát: {cancellationReport.cancelledBillsCount} hóa đơn bị hủy
               </div>
-              <div style={{ fontSize: "12px", color: "#B91C1C" }}>
+              <div style={{ fontSize: "12px", color: "var(--danger)" }}>
                 Tổng giá trị thất thoát tài chính từ các đơn hủy: <strong>{formatVND(cancellationReport.totalLossValue)}</strong>
               </div>
             </div>
@@ -522,7 +518,7 @@ export default function AuditPage() {
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
           {/* Search bar */}
           <div style={{ position: "relative", flex: "1", minWidth: "240px" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
+            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               className="input-field"
               placeholder="Tìm theo món, tên bàn, nhân viên, mã đơn..."
@@ -596,7 +592,7 @@ export default function AuditPage() {
           <tbody>
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "64px", color: "#8B8FA8" }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: "64px", color: "var(--muted)" }}>
                   <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "6px" }}>Không tìm thấy nhật ký phù hợp</div>
                   <div style={{ fontSize: "13px" }}>Thử điều chỉnh lại từ khóa tìm kiếm hoặc bỏ bớt các bộ lọc</div>
                 </td>
@@ -616,11 +612,11 @@ export default function AuditPage() {
                     style={{
                       cursor: "pointer",
                       background: isSuspicious ? "rgba(220, 38, 38, 0.04)" : undefined,
-                      borderLeft: isSuspicious ? "4px solid #DC2626" : undefined,
+                      borderLeft: isSuspicious ? "4px solid var(--danger)" : undefined,
                     }}
                   >
                     {/* Index */}
-                    <td style={{ color: "#8B8FA8", fontSize: "12px", fontWeight: "500" }}>
+                    <td style={{ color: "var(--muted)", fontSize: "12px", fontWeight: "500" }}>
                       {(page - 1) * PAGE_SIZE + i + 1}
                     </td>
 
@@ -655,7 +651,7 @@ export default function AuditPage() {
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "4px",
-                              background: "#FEF3C7",
+                              background: "var(--warning-bg)",
                               color: "#B45309",
                               border: "1px solid #FDE68A",
                               padding: "3px 8px",
@@ -673,8 +669,8 @@ export default function AuditPage() {
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "4px",
-                              background: "#F3F4F6",
-                              color: "#374151",
+                              background: "var(--surface-muted)",
+                              color: "var(--subtext)",
                               padding: "3px 8px",
                               borderRadius: "6px",
                               fontSize: "12px",
@@ -690,12 +686,12 @@ export default function AuditPage() {
                     {/* User / Role */}
                     <td>
                       <div>
-                        <div style={{ fontWeight: "700", fontSize: "13px", color: "#1C1A2D" }}>
+                        <div style={{ fontWeight: "700", fontSize: "13px", color: "var(--text)" }}>
                           {log.userFullName || log.username || "—"}
                         </div>
-                        <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "2px" }}>
+                        <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
                           {log.username && log.userFullName && (
-                            <span style={{ fontFamily: "monospace", color: "#8B8FA8" }}>@{log.username} • </span>
+                            <span style={{ fontFamily: "monospace", color: "var(--muted)" }}>@{log.username} • </span>
                           )}
                           <span>{getRoleName(log.userRole)}</span>
                         </div>
@@ -704,10 +700,10 @@ export default function AuditPage() {
 
                     {/* Timestamp */}
                     <td>
-                      <div style={{ fontSize: "12px", fontWeight: "600", color: "#1C1A2D" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text)" }}>
                         {ts ? format(new Date(ts), "HH:mm:ss", { locale: vi }) : "—"}
                       </div>
-                      <div style={{ fontSize: "11px", color: "#8B8FA8", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
                         {ts ? format(new Date(ts), "dd/MM/yyyy", { locale: vi }) : "—"}
                       </div>
                     </td>
@@ -718,7 +714,7 @@ export default function AuditPage() {
                         style={{
                           fontSize: "13px",
                           lineHeight: "1.45",
-                          color: isSuspicious ? "#B91C1C" : "#2E2C34",
+                          color: isSuspicious ? "var(--danger)" : "#2E2C34",
                           fontWeight: isSuspicious ? "600" : "400",
                           wordBreak: "break-word",
                         }}
@@ -734,8 +730,8 @@ export default function AuditPage() {
                         style={{
                           padding: "6px 8px",
                           borderRadius: "8px",
-                          color: "#7E2930",
-                          borderColor: "#E6DEC8",
+                          color: "var(--primary)",
+                          borderColor: "var(--border)",
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -756,8 +752,8 @@ export default function AuditPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "8px" }}>
-          <div style={{ fontSize: "13px", color: "#5D5B63" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginTop: "8px" }}>
+          <div style={{ fontSize: "13px", color: "var(--subtext)" }}>
             Hiển thị <strong>{paginated.length}</strong> / <strong>{filtered.length}</strong> bản ghi
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -769,7 +765,7 @@ export default function AuditPage() {
             >
               ‹ Trang trước
             </button>
-            <span style={{ fontSize: "13px", fontWeight: "600", color: "#1C1A2D" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
               Trang {page} / {totalPages}
             </span>
             <button
@@ -807,7 +803,7 @@ export default function AuditPage() {
               maxWidth: "600px",
               maxHeight: "90vh",
               overflowY: "auto",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--surface)",
               borderRadius: "16px",
               boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
               padding: "24px",
@@ -815,7 +811,7 @@ export default function AuditPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {(() => {
                   const meta = getActionMeta(selectedLog.action);
@@ -839,11 +835,11 @@ export default function AuditPage() {
                   );
                 })()}
                 <div>
-                  <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+                  <h3 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                     {getActionMeta(selectedLog.action).label}
                   </h3>
-                  <div style={{ fontSize: "12px", color: "#5D5B63", marginTop: "2px" }}>
-                    Mã hành động: <code style={{ backgroundColor: "#F3F4F6", padding: "2px 6px", borderRadius: "4px" }}>{selectedLog.action}</code>
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                    Mã hành động: <code style={{ backgroundColor: "var(--surface-muted)", padding: "2px 6px", borderRadius: "4px" }}>{selectedLog.action}</code>
                   </div>
                 </div>
               </div>
@@ -854,7 +850,7 @@ export default function AuditPage() {
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  color: "#8B8FA8",
+                  color: "var(--muted)",
                   padding: "4px",
                 }}
               >
@@ -863,70 +859,70 @@ export default function AuditPage() {
             </div>
 
             {/* Grid properties */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "20px" }}>
+            <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "20px" }}>
               {/* Bàn / Đối tượng */}
-              <div style={{ background: "#F8F4EE", padding: "12px 14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "11px", fontWeight: "600", color: "#5D5B63", textTransform: "uppercase" }}>
+              <div style={{ background: "var(--bg)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--subtext)", textTransform: "uppercase" }}>
                   Bàn / Đối tượng
                 </div>
-                <div style={{ fontSize: "15px", fontWeight: "700", color: "#7E2930", marginTop: "4px" }}>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--primary)", marginTop: "4px" }}>
                   {extractTarget(selectedLog).label}
                 </div>
                 {selectedLog.targetType && (
-                  <div style={{ fontSize: "11px", color: "#8B8FA8", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
                     Loại: {selectedLog.targetType}
                   </div>
                 )}
               </div>
 
               {/* Thời gian */}
-              <div style={{ background: "#F8F4EE", padding: "12px 14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "11px", fontWeight: "600", color: "#5D5B63", textTransform: "uppercase" }}>
+              <div style={{ background: "var(--bg)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--subtext)", textTransform: "uppercase" }}>
                   Thời gian ghi nhận
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1C1A2D", marginTop: "4px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginTop: "4px" }}>
                   {selectedLog.timestamp
                     ? format(new Date(typeof selectedLog.timestamp === "number" ? selectedLog.timestamp : new Date(selectedLog.timestamp).getTime()), "HH:mm:ss dd/MM/yyyy", { locale: vi })
                     : "—"}
                 </div>
                 {selectedLog.timestamp && (
-                  <div style={{ fontSize: "11px", color: "#8B8FA8", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
                     {formatDistanceToNow(new Date(typeof selectedLog.timestamp === "number" ? selectedLog.timestamp : new Date(selectedLog.timestamp).getTime()), { addSuffix: true, locale: vi })}
                   </div>
                 )}
               </div>
 
               {/* Người thực hiện */}
-              <div style={{ background: "#F8F4EE", padding: "12px 14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "11px", fontWeight: "600", color: "#5D5B63", textTransform: "uppercase" }}>
+              <div style={{ background: "var(--bg)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--subtext)", textTransform: "uppercase" }}>
                   Người thực hiện
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1C1A2D", marginTop: "4px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginTop: "4px" }}>
                   {selectedLog.userFullName || selectedLog.username || "—"}
                 </div>
-                <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "2px" }}>
+                <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
                   {selectedLog.username && <span>@{selectedLog.username} • </span>}
                   {getRoleName(selectedLog.userRole)}
                 </div>
               </div>
 
               {/* Mức độ bảo mật */}
-              <div style={{ background: "#F8F4EE", padding: "12px 14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "11px", fontWeight: "600", color: "#5D5B63", textTransform: "uppercase" }}>
+              <div style={{ background: "var(--bg)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--subtext)", textTransform: "uppercase" }}>
                   Mức độ giám sát
                 </div>
                 <div style={{ marginTop: "4px" }}>
                   {selectedLog.isSuspicious || SUSPICIOUS_ACTIONS.includes(selectedLog.action) ? (
-                    <span style={{ color: "#DC2626", fontWeight: "700", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ color: "var(--danger)", fontWeight: "700", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>
                       <AlertTriangle size={14} /> Cảnh báo đáng ngờ
                     </span>
                   ) : (
-                    <span style={{ color: "#146A65", fontWeight: "600", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span style={{ color: "var(--success)", fontWeight: "600", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>
                       <CheckCircle2 size={14} /> Thao tác hợp lệ
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: "11px", color: "#8B8FA8", marginTop: "2px" }}>
+                <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
                   Log ID: {selectedLog.id}
                 </div>
               </div>
@@ -934,8 +930,8 @@ export default function AuditPage() {
 
             {/* Chi tiết đầy đủ */}
             <div style={{ marginBottom: "20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#1C1A2D" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>
                   Nội dung chi tiết thao tác:
                 </div>
                 <button
@@ -945,7 +941,7 @@ export default function AuditPage() {
                     border: "none",
                     cursor: "pointer",
                     fontSize: "12px",
-                    color: copied ? "#146A65" : "#7E2930",
+                    color: copied ? "var(--success)" : "var(--primary)",
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
@@ -959,13 +955,13 @@ export default function AuditPage() {
 
               <div
                 style={{
-                  background: "#F9FAFB",
-                  border: "1px solid #E5E7EB",
+                  background: "var(--surface-muted)",
+                  border: "1px solid var(--border)",
                   borderRadius: "12px",
                   padding: "16px",
                   fontSize: "14px",
                   lineHeight: "1.6",
-                  color: "#1F2937",
+                  color: "var(--text)",
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}

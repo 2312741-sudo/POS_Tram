@@ -145,6 +145,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
           backgroundColor: TramColors.background,
           appBar: AppBar(
             backgroundColor: Colors.white,
+            foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
             elevation: 0.5,
             scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,

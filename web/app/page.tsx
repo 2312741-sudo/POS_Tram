@@ -18,7 +18,7 @@ export default function Home() {
   }, [user, loading, router]);
 
   return (
-    <div style={{ background: "#F8F4EE", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "var(--bg)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="spinner" />
     </div>
   );

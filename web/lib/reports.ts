@@ -3,6 +3,7 @@
  * Tuân thủ chuẩn DOCS-REPORT-SPEC-2026-01 (REPORT SPEC v2.0.0)
  * Pure TypeScript functions, độc lập hoàn toàn với React, có thể kiểm thử 100%.
  */
+import { lineGross as rawLineGross, type RawOrderLine } from "./order-math";
 
 export interface OrderItem {
   id?: number | string;
@@ -22,7 +23,14 @@ export interface OrderItem {
   toppingPrice?: number;
   sizeExtraPrice?: number;
   unitPrice?: number;
+  /** Tổng giảm CẢ DÒNG (dữ liệu cũ: luôn là giảm cả dòng, không nhân quantity) */
   discountAmount?: number;
+  /** Tổng giảm của dòng lưu tường minh (dữ liệu mới) — ưu tiên hơn discountAmount */
+  lineDiscountTotal?: number;
+  /** Số phần trong dòng được giảm (0..quantity); thiếu = dữ liệu cũ, coi như tất cả */
+  discountedQuantity?: number;
+  discountPercent?: number;
+  discountUnitAmount?: number;
   lineGrossAmount?: number;
   lineTotal?: number;
   costPrice?: number;
@@ -529,6 +537,25 @@ export function formatNumber(amount: number): string {
 }
 
 /**
+ * Tổng giảm giá của MỘT dòng món dùng cho báo cáo (REPORT_SPEC §2.2):
+ * ưu tiên `lineDiscountTotal` đã lưu; dữ liệu cũ: `discountAmount` là giảm CẢ DÒNG
+ * (KHÔNG nhân quantity). Luôn chặn trong [0, tiền gốc dòng].
+ */
+export function itemLineDiscount(it: OrderItem): number {
+  const stored = Number(it.lineDiscountTotal != null ? it.lineDiscountTotal : (it.discountAmount || 0));
+  if (!Number.isFinite(stored) || stored <= 0) return 0;
+  const gross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : rawLineGross(it as unknown as RawOrderLine);
+  return Math.min(stored, Math.max(0, gross));
+}
+
+/** Số phần được giảm của dòng (dữ liệu cũ có giảm → tất cả các phần) */
+export function itemDiscountedQuantity(it: OrderItem): number {
+  const qty = Number(it.quantity || 1);
+  if (it.discountedQuantity != null) return Math.min(Math.max(0, Number(it.discountedQuantity) || 0), qty);
+  return itemLineDiscount(it) > 0 ? qty : 0;
+}
+
+/**
  * Trích xuất danh sách OrderItem từ HistoryOrder an toàn
  */
 export function extractBillItems(bill: HistoryOrder): OrderItem[] {
@@ -583,7 +610,7 @@ export function calculateOverviewReport(bills: HistoryOrder[], refundAmountParam
         bItemDisc = Number(b.itemDiscounts);
       } else {
         const items = extractBillItems(b);
-        bItemDisc = items.reduce((sum, it) => sum + (Number(it.discountAmount || 0) * Number(it.quantity || 1)), 0);
+        bItemDisc = items.reduce((sum, it) => sum + itemLineDiscount(it), 0);
       }
       itemDiscounts += bItemDisc;
 
@@ -825,7 +852,7 @@ export function calculateCategoryReport(
       const entry = catMap.get(category)!;
       const qty = Number(it.quantity || 1);
       const lineGross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : (Number(it.price || 0) * qty);
-      const itemDisc = Number(it.discountAmount || 0) * qty;
+      const itemDisc = itemLineDiscount(it);
 
       let lineCost = 0;
       if (it.lineCostPrice != null) {
@@ -936,7 +963,7 @@ export function calculateProductReport(
 
       const qty = Number(it.quantity || 1);
       const lineGross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : (basePrice * qty);
-      const itemDisc = Number(it.discountAmount || 0) * qty;
+      const itemDisc = itemLineDiscount(it);
 
       let lineCost = 0;
       if (it.lineCostPrice != null) {
@@ -1014,7 +1041,7 @@ export function calculateStaffPerformance(bills: HistoryOrder[]): StaffPerforman
       const e = orderStaffMap.get(key)!;
       const qty = Number(it.quantity || 1);
       const gross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : (Number(it.price || 0) * qty);
-      const net = it.lineTotal != null ? Number(it.lineTotal) : (gross - Number(it.discountAmount || 0) * qty);
+      const net = it.lineTotal != null ? Number(it.lineTotal) : (gross - itemLineDiscount(it));
 
       e.itemsCount += qty;
       e.grossRevenue += gross;
@@ -1211,10 +1238,9 @@ export function calculatePromotionsReport(
     // 3. Item Discounts
     const items = extractBillItems(b);
     for (const it of items) {
-      const itDisc = Number(it.discountAmount || 0);
-      if (itDisc > 0) {
-        const qty = Number(it.quantity || 1);
-        const totalItDisc = itDisc * qty;
+      const totalItDisc = itemLineDiscount(it);
+      if (totalItDisc > 0) {
+        const qty = itemDiscountedQuantity(it);
         itemDiscountAppliedCount++;
         itemDiscountAmount += totalItDisc;
         totalDiscountAmount += totalItDisc;

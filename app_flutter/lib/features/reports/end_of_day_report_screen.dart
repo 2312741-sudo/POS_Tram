@@ -210,7 +210,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     int sum = 0;
     for (final b in _paidBills) {
       for (final it in b.items) {
-        sum += (it.discountAmount * it.quantity);
+        // Giảm giá dòng là tổng CẢ DÒNG đã lưu (không nhân số lượng)
+        sum += it.lineDiscountTotal;
       }
     }
     return sum;
@@ -803,6 +804,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
         backgroundColor: Colors.white,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(

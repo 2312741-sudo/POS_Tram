@@ -17,6 +17,17 @@ class CartItemCard extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
+  /// Nội dung nhãn giảm giá của dòng món, gồm số phần được giảm
+  /// (VD: "🏷️ Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
+  static String discountLabel(OrderItemModel item) {
+    final reason = item.discountReason.isNotEmpty ? ': ${item.discountReason}' : '';
+    final desc = item.discountDescription(FormatUtils.vnd);
+    if (item.discountMode == 'FIXED') {
+      return '🏷️ Giảm -${FormatUtils.vnd(item.lineDiscountTotal)}$reason';
+    }
+    return '🏷️ $desc (-${FormatUtils.vnd(item.lineDiscountTotal)})$reason';
+  }
+
   const CartItemCard({
     super.key,
     required this.item,
@@ -33,7 +44,7 @@ class CartItemCard extends StatelessWidget {
     final hasSugar = item.selectedSugar.trim().isNotEmpty;
     final hasIce = item.selectedIce.trim().isNotEmpty;
     final hasToppings = item.selectedToppings.isNotEmpty;
-    final hasDiscount = item.discountAmount > 0;
+    final hasDiscount = item.hasDiscount;
 
     return Card(
       child: Padding(
@@ -169,9 +180,7 @@ class CartItemCard extends StatelessWidget {
                         color: AppColors.danger.withValues(alpha: 0.3)),
                   ),
                   child: Text(
-                    item.discountPercent > 0
-                        ? '🏷️ Giảm ${item.discountPercent}% (-${FormatUtils.vnd(item.discountAmount)})${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}'
-                        : '🏷️ Giảm -${FormatUtils.vnd(item.discountAmount)}${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}',
+                    discountLabel(item),
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 12,
                         color: AppColors.danger,

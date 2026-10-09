@@ -76,6 +76,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Quản lý khu vực', style: GoogleFonts.beVietnamPro(
           color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       ),

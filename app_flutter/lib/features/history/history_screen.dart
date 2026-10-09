@@ -339,7 +339,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('${i.name} x${i.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    Flexible(
+                      child: Text(
+                        '${i.name} x${i.quantity}${i.hasDiscount ? ' • ${i.discountDescription(FormatUtils.vnd)}' : ''}',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ),
                     Text(FormatUtils.vnd(i.itemTotal), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                   ],
                 ),

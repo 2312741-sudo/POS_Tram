@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../widgets/common_widgets.dart';
 
 class KitchenScreen extends StatefulWidget {
   const KitchenScreen({super.key});
@@ -22,7 +23,11 @@ class _KitchenScreenState extends State<KitchenScreen> {
   final _fb = FirebaseService();
   List<KitchenOrderModel> _orders = [];
   bool _loading = true;
+  Object? _error;
   Timer? _timer;
+  StreamSubscription<List<KitchenOrderModel>>? _sub;
+  // Đơn vừa vuốt "Xong" – ẩn ngay để Dismissible không còn trong cây widget
+  final Set<String> _pendingDone = {};
 
   @override
   void initState() {
@@ -37,33 +42,58 @@ class _KitchenScreenState extends State<KitchenScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
   void _setupStream() {
-    _fb.kitchenOrdersStream().listen((orders) {
-      final wasEmpty = _orders.isEmpty;
+    _sub?.cancel();
+    _sub = _fb.kitchenOrdersStream().listen((orders) {
+      final wasLoading = _loading;
       final hadOrders = _orders.length;
       if (mounted) {
-        setState(() { _orders = orders; _loading = false; });
-        // Vibrate when new order arrives
-        if (!wasEmpty && orders.length > hadOrders) {
+        setState(() {
+          _orders = orders;
+          _loading = false;
+          _error = null;
+          _pendingDone.removeWhere((k) => !orders.any((o) => o.firebaseKey == k));
+        });
+        // Rung khi có đơn mới (kể cả đơn đầu tiên lúc bếp đang trống)
+        if (!wasLoading && orders.length > hadOrders) {
           HapticFeedback.heavyImpact();
         }
       }
+    }, onError: (Object e) {
+      if (mounted) setState(() { _error = e; _loading = false; });
     });
   }
 
+  List<KitchenOrderModel> get _visibleOrders =>
+      _orders.where((o) => o.firebaseKey == null || !_pendingDone.contains(o.firebaseKey)).toList();
+
   Future<void> _markDone(KitchenOrderModel order) async {
-    if (order.firebaseKey == null) return;
-    await _fb.markKitchenOrderDone(order.firebaseKey!);
-    HapticFeedback.mediumImpact();
+    final key = order.firebaseKey;
+    if (key == null || _pendingDone.contains(key)) return; // chặn bấm đúp
+    setState(() => _pendingDone.add(key));
+    try {
+      await _fb.markKitchenOrderDone(key);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pendingDone.remove(key));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không cập nhật được đơn: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0D14),
+    final visible = _visibleOrders;
+    return Theme(
+      data: AppTheme.darkTheme,
+      child: Scaffold(
+      backgroundColor: AppColors.kitchenBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -71,13 +101,24 @@ class _KitchenScreenState extends State<KitchenScreen> {
             Expanded(
               child: _loading
                 ? const Center(child: CircularProgressIndicator(color: AppColors.kitchenAccent))
-                : _orders.isEmpty
-                  ? _buildEmptyState()
-                  : _buildOrderList(),
+                : _error != null
+                  ? ErrorState(
+                      title: 'Không tải được đơn bếp',
+                      message: '$_error',
+                      foreground: AppColors.darkTextPrimary,
+                      onRetry: () {
+                        setState(() { _loading = true; _error = null; });
+                        _setupStream();
+                      },
+                    )
+                  : visible.isEmpty
+                    ? _buildEmptyState()
+                    : _buildOrderList(visible),
             ),
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -86,7 +127,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.kitchenCard,
-        border: const Border(bottom: BorderSide(color: AppColors.border)),
+        border: const Border(bottom: BorderSide(color: AppColors.kitchenCardBorder)),
       ),
       child: Row(
         children: [
@@ -109,13 +150,13 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 Text('Màn bếp', style: GoogleFonts.beVietnamPro(
                   color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700,
                 )),
-                Text('${_orders.length} đơn đang chờ', style: GoogleFonts.beVietnamPro(
+                Text('${_visibleOrders.length} đơn đang chờ', style: GoogleFonts.beVietnamPro(
                   color: AppColors.kitchenAccent, fontSize: 13,
                 )),
               ],
             ),
           ),
-          if (_orders.isNotEmpty)
+          if (_visibleOrders.isNotEmpty)
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
@@ -124,7 +165,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 boxShadow: [BoxShadow(color: AppColors.danger.withValues(alpha: 0.5), blurRadius: 12)],
               ),
               child: Center(
-                child: Text('${_orders.length}', style: GoogleFonts.beVietnamPro(
+                child: Text('${_visibleOrders.length}', style: GoogleFonts.beVietnamPro(
                   color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16,
                 )),
               ),
@@ -132,7 +173,8 @@ class _KitchenScreenState extends State<KitchenScreen> {
               .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1.seconds),
           const SizedBox(width: 8),
           PopupMenuButton(
-            icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+            tooltip: 'Tùy chọn',
+            icon: const Icon(Icons.more_vert, color: AppColors.darkTextSecondary),
             color: AppColors.surface,
             itemBuilder: (_) => [
               PopupMenuItem(
@@ -175,22 +217,54 @@ class _KitchenScreenState extends State<KitchenScreen> {
           )),
           const SizedBox(height: 8),
           Text('Đang chờ đơn mới...', style: GoogleFonts.beVietnamPro(
-            color: AppColors.textSecondary, fontSize: 14,
+            color: AppColors.darkTextSecondary, fontSize: 14,
           )),
         ],
       ),
     );
   }
 
-  Widget _buildOrderList() {
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _orders.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _KitchenOrderCard(
-        order: _orders[i],
-        onDone: () => _markDone(_orders[i]),
-      ).animate(delay: (i * 50).ms).fadeIn(duration: 300.ms).slideX(begin: 0.1, end: 0),
+  Widget _buildOrderList(List<KitchenOrderModel> orders) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Tablet/màn hình bếp lớn: chia nhiều cột để thấy được nhiều đơn cùng lúc
+        final cols = (constraints.maxWidth / 380).floor().clamp(1, 4);
+        Widget card(int i) => _KitchenOrderCard(
+              key: ValueKey(orders[i].firebaseKey ?? '${orders[i].tableName}_${orders[i].timestamp}'),
+              order: orders[i],
+              onDone: () => _markDone(orders[i]),
+            ).animate(delay: (i * 50).ms).fadeIn(duration: 300.ms).slideX(begin: 0.1, end: 0);
+
+        if (cols == 1) {
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: orders.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (_, i) => card(i),
+          );
+        }
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int c = 0; c < cols; c++) ...[
+                if (c > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    children: [
+                      for (int i = c; i < orders.length; i += cols) ...[
+                        card(i),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -199,7 +273,7 @@ class _KitchenOrderCard extends StatelessWidget {
   final KitchenOrderModel order;
   final VoidCallback onDone;
 
-  const _KitchenOrderCard({required this.order, required this.onDone});
+  const _KitchenOrderCard({super.key, required this.order, required this.onDone});
 
   Color _timerColor(Duration d) {
     if (d.inMinutes < 5) return AppColors.success;
@@ -247,7 +321,7 @@ class _KitchenOrderCard extends StatelessWidget {
           border: Border.all(
             color: waiting.inMinutes >= 10
               ? AppColors.danger.withValues(alpha: 0.5)
-              : AppColors.border,
+              : AppColors.kitchenCardBorder,
             width: waiting.inMinutes >= 10 ? 2 : 1,
           ),
           boxShadow: waiting.inMinutes >= 10
@@ -298,7 +372,7 @@ class _KitchenOrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              const Divider(color: AppColors.border, height: 1),
+              const Divider(color: AppColors.kitchenCardBorder, height: 1),
               const SizedBox(height: 12),
 
               // Items list
@@ -306,7 +380,8 @@ class _KitchenOrderCard extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.cardElevated.withValues(alpha: 0.5),
+                  // Trước đây nền kem nhạt + chữ trắng => gần như không đọc được
+                  color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white10),
                 ),

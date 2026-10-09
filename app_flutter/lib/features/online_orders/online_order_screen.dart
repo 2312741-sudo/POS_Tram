@@ -60,6 +60,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Row(
           children: [
             Text('Đơn hàng online', style: GoogleFonts.beVietnamPro(

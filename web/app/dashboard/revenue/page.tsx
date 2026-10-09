@@ -47,9 +47,9 @@ interface ChartTooltipProps {
 const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div style={{ background: "#FFFFFF", border: "1px solid #E6DEC8", borderRadius: "10px", padding: "10px 16px", boxShadow: "0 6px 20px rgba(0,0,0,0.08)" }}>
-        <p style={{ color: "#5D5B63", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
-        <p style={{ color: "#7E2930", fontWeight: "700", fontSize: "14px" }}>{formatVND(Number(payload[0].value || 0))}</p>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 16px", boxShadow: "0 6px 20px rgba(0,0,0,0.08)" }}>
+        <p style={{ color: "var(--subtext)", fontSize: "12px", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: "var(--primary)", fontWeight: "700", fontSize: "14px" }}>{formatVND(Number(payload[0].value || 0))}</p>
       </div>
     );
   }
@@ -198,8 +198,8 @@ export default function RevenuePage() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "#F8F4EE",
-              border: "1px solid #E6DEC8",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
               borderRadius: "10px",
               padding: "6px 12px",
             }}
@@ -214,7 +214,7 @@ export default function RevenuePage() {
                 outline: "none",
                 fontSize: "13px",
                 fontWeight: "600",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 cursor: "pointer",
               }}
             >
@@ -256,36 +256,36 @@ export default function RevenuePage() {
             ))}
           </div>
 
-          <div style={{ fontSize: "13px", color: "#5D5B63", fontWeight: "600" }}>
+          <div style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>
             Ghi nhận: <strong>{summaryTotals.totalBills} hóa đơn hoàn tất</strong> • Đóng góp: <strong>{formatVND(summaryTotals.totalNet)}</strong>
           </div>
         </div>
       </div>
 
       {/* Summary KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "16px" }}>
         <div className="stat-card">
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#7E293018", display: "flex", alignItems: "center", justifyContent: "center", color: "#7E2930", flexShrink: 0 }}>
+            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#7E293018", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
               <DollarSign size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(summaryTotals.totalNet)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Doanh thu thuần</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>{summaryTotals.totalBills} đơn đã thu</div>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(summaryTotals.totalNet)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Doanh thu thuần</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{summaryTotals.totalBills} đơn đã thu</div>
             </div>
           </div>
         </div>
 
         <div className="stat-card">
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#146A6518", display: "flex", alignItems: "center", justifyContent: "center", color: "#146A65", flexShrink: 0 }}>
+            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#146A6518", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--success)", flexShrink: 0 }}>
               <Banknote size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(summaryTotals.totalCash)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Tiền mặt (CASH)</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(summaryTotals.totalCash)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Tiền mặt (CASH)</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>
                 {paymentMethods.CASH?.billCount || 0} đơn ({paymentMethods.CASH?.proportion || 0}%)
               </div>
             </div>
@@ -298,9 +298,9 @@ export default function RevenuePage() {
               <CreditCard size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(summaryTotals.totalQr)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Chuyển khoản (VietQR)</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(summaryTotals.totalQr)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Chuyển khoản (VietQR)</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>
                 {paymentMethods.TRANSFER_QR?.billCount || 0} đơn ({paymentMethods.TRANSFER_QR?.proportion || 0}%)
               </div>
             </div>
@@ -309,13 +309,13 @@ export default function RevenuePage() {
 
         <div className="stat-card">
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#D9770618", display: "flex", alignItems: "center", justifyContent: "center", color: "#D97706", flexShrink: 0 }}>
+            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#D9770618", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--warning)", flexShrink: 0 }}>
               <CreditCard size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(summaryTotals.totalCard)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Thẻ POS / Ví điện tử</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(summaryTotals.totalCard)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Thẻ POS / Ví điện tử</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>
                 {paymentMethods.CARD?.billCount || 0} đơn ({paymentMethods.CARD?.proportion || 0}%)
               </div>
             </div>
@@ -325,9 +325,9 @@ export default function RevenuePage() {
 
       {/* Serving tables notification */}
       {servingCount > 0 && (
-        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "12px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ background: "var(--info-bg)", border: "1px solid #BFDBFE", borderRadius: "12px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "#DBEAFE", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "var(--info-bg)", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Utensils size={18} />
             </div>
             <div>
@@ -341,7 +341,7 @@ export default function RevenuePage() {
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
             {servingTables.slice(0, 4).map((st) => (
-              <span key={st.id || st.name} style={{ background: "#FFFFFF", border: "1px solid #93C5FD", borderRadius: "8px", padding: "4px 10px", fontSize: "12px", color: "#1E40AF" }}>
+              <span key={st.id || st.name} style={{ background: "var(--surface)", border: "1px solid #93C5FD", borderRadius: "8px", padding: "4px 10px", fontSize: "12px", color: "#1E40AF" }}>
                 {st.name} ({st.zone}): <strong>{formatVND(getTableServingTotal(st))}</strong>
               </span>
             ))}
@@ -351,11 +351,11 @@ export default function RevenuePage() {
 
       {/* Bar Chart */}
       <div className="card" style={{ padding: "20px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", marginBottom: "20px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", marginBottom: "20px" }}>
           Biểu đồ Doanh thu theo {period === "DAY" ? "Ngày" : period === "WEEK" ? "Tuần" : period === "MONTH" ? "Tháng" : "Năm"}
         </h2>
         {chartData.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#8B8FA8" }}>
+          <div style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
             Chưa có dữ liệu doanh thu cho kỳ này
           </div>
         ) : (
@@ -373,17 +373,17 @@ export default function RevenuePage() {
 
       {/* Detail Table */}
       <div className="card" style={{ padding: "20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
             Chi tiết Doanh thu theo Kỳ ({periodItems.length} mốc)
           </h2>
-          <span style={{ fontSize: "12px", color: "#8B8FA8" }}>Múi giờ chuẩn: UTC+7</span>
+          <span style={{ fontSize: "12px", color: "var(--muted)" }}>Múi giờ chuẩn: UTC+7</span>
         </div>
 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+              <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)", background: "var(--surface-muted)" }}>
                 <th style={{ padding: "10px 12px" }}>Thời gian</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Số đơn</th>
                 <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu gộp</th>
@@ -399,35 +399,35 @@ export default function RevenuePage() {
             <tbody>
               {periodItems.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "#8B8FA8" }}>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
                     Không có bản ghi doanh thu nào trong kỳ này
                   </td>
                 </tr>
               ) : (
                 periodItems.map((item) => (
                   <tr key={item.periodKey} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>
+                    <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--text)" }}>
                       {item.periodLabel}
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatNumber(item.billCount)}</td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(item.grossRevenue)}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: item.discountAmount > 0 ? "#C93B2B" : "#8B8FA8" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: item.discountAmount > 0 ? "#C93B2B" : "var(--muted)" }}>
                       {formatVND(item.discountAmount)}
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(item.vatAmount)}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "#7E2930", background: "#FFF5F6" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "var(--primary)", background: "var(--primary-light)" }}>
                       {formatVND(item.netRevenue)}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65", fontWeight: "600" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--success)", fontWeight: "600" }}>
                       {formatVND(item.cashRevenue)}
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "right", color: "#1877F2", fontWeight: "600" }}>
                       {formatVND(item.qrRevenue)}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#D97706", fontWeight: "600" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--warning)", fontWeight: "600" }}>
                       {formatVND(item.cardRevenue)}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#5D5B63", fontWeight: "600" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--subtext)", fontWeight: "600" }}>
                       {item.proportion}%
                     </td>
                   </tr>
@@ -436,16 +436,16 @@ export default function RevenuePage() {
             </tbody>
             {periodItems.length > 0 && (
               <tfoot>
-                <tr style={{ background: "#F8F4EE", fontWeight: "800", borderTop: "2px solid #7E2930" }}>
-                  <td style={{ padding: "12px", color: "#7E2930" }}>TỔNG CỘNG</td>
+                <tr style={{ background: "var(--bg)", fontWeight: "800", borderTop: "2px solid var(--primary)" }}>
+                  <td style={{ padding: "12px", color: "var(--primary)" }}>TỔNG CỘNG</td>
                   <td style={{ padding: "12px", textAlign: "right" }}>{formatNumber(summaryTotals.totalBills)}</td>
                   <td style={{ padding: "12px", textAlign: "right" }}>{formatVND(summaryTotals.totalGross)}</td>
                   <td style={{ padding: "12px", textAlign: "right", color: "#C93B2B" }}>{formatVND(summaryTotals.totalDiscount)}</td>
                   <td style={{ padding: "12px", textAlign: "right" }}>{formatVND(summaryTotals.totalVat)}</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#7E2930" }}>{formatVND(summaryTotals.totalNet)}</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#146A65" }}>{formatVND(summaryTotals.totalCash)}</td>
+                  <td style={{ padding: "12px", textAlign: "right", color: "var(--primary)" }}>{formatVND(summaryTotals.totalNet)}</td>
+                  <td style={{ padding: "12px", textAlign: "right", color: "var(--success)" }}>{formatVND(summaryTotals.totalCash)}</td>
                   <td style={{ padding: "12px", textAlign: "right", color: "#1877F2" }}>{formatVND(summaryTotals.totalQr)}</td>
-                  <td style={{ padding: "12px", textAlign: "right", color: "#D97706" }}>{formatVND(summaryTotals.totalCard)}</td>
+                  <td style={{ padding: "12px", textAlign: "right", color: "var(--warning)" }}>{formatVND(summaryTotals.totalCard)}</td>
                   <td style={{ padding: "12px", textAlign: "right" }}>100%</td>
                 </tr>
               </tfoot>

@@ -212,9 +212,9 @@ export default function ProductSalesReportPage() {
       {/* Top Header Card */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px 24px",
           marginBottom: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
@@ -223,13 +223,13 @@ export default function ProductSalesReportPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Báo cáo hàng hoá & Hiệu suất món ăn 🍹
               </h1>
               <span
                 style={{
-                  background: "#FBECEE",
-                  color: "#7E2930",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "12px",
@@ -239,7 +239,7 @@ export default function ProductSalesReportPage() {
                 KiotViet Dual Parity
               </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
               Thống kê sản lượng tiêu thụ, doanh số nhóm hàng và biên lợi nhuận gộp theo giá vốn (COGS)
             </p>
           </div>
@@ -252,7 +252,7 @@ export default function ProductSalesReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
-                background: "#7E2930",
+                background: "var(--primary)",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
@@ -271,7 +271,7 @@ export default function ProductSalesReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
-                background: "#146A65",
+                background: "var(--success)",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
@@ -290,8 +290,8 @@ export default function ProductSalesReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
               }}
@@ -306,7 +306,7 @@ export default function ProductSalesReportPage() {
                   outline: "none",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#1C1A2D",
+                  color: "var(--text)",
                   cursor: "pointer",
                 }}
               >
@@ -328,11 +328,11 @@ export default function ProductSalesReportPage() {
                   style={{
                     padding: "6px 10px",
                     borderRadius: "8px",
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                     fontSize: "12px",
                   }}
                 />
-                <span style={{ fontSize: "12px", color: "#666" }}>đến</span>
+                <span style={{ fontSize: "12px", color: "var(--subtext)" }}>đến</span>
                 <input
                   type="date"
                   value={customEnd}
@@ -340,7 +340,7 @@ export default function ProductSalesReportPage() {
                   style={{
                     padding: "6px 10px",
                     borderRadius: "8px",
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                     fontSize: "12px",
                   }}
                 />
@@ -353,8 +353,8 @@ export default function ProductSalesReportPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "10px",
                 padding: "6px 12px",
               }}
@@ -369,7 +369,7 @@ export default function ProductSalesReportPage() {
                   outline: "none",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#1C1A2D",
+                  color: "var(--text)",
                   cursor: "pointer",
                 }}
               >
@@ -385,7 +385,7 @@ export default function ProductSalesReportPage() {
         </div>
 
         {/* 3 Tabs Bar */}
-        <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid #E6DEC8", paddingBottom: "1px" }}>
+        <div style={{ display: "flex", gap: "8px", marginTop: "20px", borderBottom: "1px solid var(--border)", paddingBottom: "1px" }}>
           {[
             { id: "product", label: "Món ăn / Hàng hóa (BC 4)", icon: <Package size={16} /> },
             { id: "category", label: "Nhóm hàng / Danh mục (BC 3)", icon: <Layers size={16} /> },
@@ -403,8 +403,8 @@ export default function ProductSalesReportPage() {
                   padding: "10px 18px",
                   fontSize: "14px",
                   fontWeight: active ? "700" : "500",
-                  color: active ? "#7E2930" : "#666",
-                  borderBottom: active ? "3px solid #7E2930" : "3px solid transparent",
+                  color: active ? "var(--primary)" : "var(--subtext)",
+                  borderBottom: active ? "3px solid var(--primary)" : "3px solid transparent",
                   background: "transparent",
                   borderTop: "none",
                   borderLeft: "none",
@@ -422,44 +422,44 @@ export default function ProductSalesReportPage() {
       </div>
 
       {/* KPI Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px", marginBottom: "20px" }}>
-        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Tổng sản lượng bán</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", marginTop: "4px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "14px", marginBottom: "20px" }}>
+        <div style={{ padding: "16px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: "600" }}>Tổng sản lượng bán</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", marginTop: "4px" }}>
             {formatNumber(totalQuantity)} phần/ly
           </div>
-          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
             {productReports.length} mặt hàng phát sinh
           </div>
         </div>
 
-        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Doanh thu thực tế</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#7E2930", marginTop: "4px" }}>
+        <div style={{ padding: "16px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: "600" }}>Doanh thu thực tế</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--primary)", marginTop: "4px" }}>
             {formatVND(totalNetRevenue)}
           </div>
-          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
             Đã trừ giảm giá dòng món
           </div>
         </div>
 
-        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Tổng giá vốn (COGS)</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#146A65", marginTop: "4px" }}>
+        <div style={{ padding: "16px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: "600" }}>Tổng giá vốn (COGS)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--success)", marginTop: "4px" }}>
             {formatVND(totalCOGS)}
           </div>
-          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
             Dựa trên costPrice của món
           </div>
         </div>
 
-        <div style={{ padding: "16px", background: "#FFFFFF", borderRadius: "14px", border: "1px solid #E6DEC8", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
-          <div style={{ fontSize: "12px", color: "#666", fontWeight: "600" }}>Lợi nhuận gộp & Tỷ suất</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#D97706", marginTop: "4px" }}>
+        <div style={{ padding: "16px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: "600" }}>Lợi nhuận gộp & Tỷ suất</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--warning)", marginTop: "4px" }}>
             {formatVND(totalGrossProfit)}
           </div>
-          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-            Biên lợi nhuận: <strong style={{ color: "#D97706" }}>{grossProfitMargin}%</strong>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+            Biên lợi nhuận: <strong style={{ color: "var(--warning)" }}>{grossProfitMargin}%</strong>
           </div>
         </div>
       </div>
@@ -468,9 +468,9 @@ export default function ProductSalesReportPage() {
       {activeTab === "product" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
           }}
         >
@@ -482,8 +482,8 @@ export default function ProductSalesReportPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  background: "#F8F4EE",
-                  border: "1px solid #E6DEC8",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
                   borderRadius: "10px",
                   padding: "6px 12px",
                   width: "100%",
@@ -514,10 +514,10 @@ export default function ProductSalesReportPage() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   fontSize: "13px",
                   fontWeight: "600",
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   cursor: "pointer",
                 }}
               >
@@ -536,10 +536,10 @@ export default function ProductSalesReportPage() {
                 style={{
                   padding: "6px 12px",
                   borderRadius: "10px",
-                  border: "1px solid #E6DEC8",
+                  border: "1px solid var(--border)",
                   fontSize: "13px",
                   fontWeight: "600",
-                  background: "#FFFFFF",
+                  background: "var(--surface)",
                   cursor: "pointer",
                 }}
               >
@@ -554,7 +554,7 @@ export default function ProductSalesReportPage() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)", background: "var(--surface-muted)" }}>
                   <th style={{ padding: "10px 12px" }}>Mã món</th>
                   <th style={{ padding: "10px 12px" }}>Tên món ăn / Đồ uống</th>
                   <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
@@ -572,37 +572,37 @@ export default function ProductSalesReportPage() {
               <tbody>
                 {productReports.length === 0 ? (
                   <tr>
-                    <td colSpan={12} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                    <td colSpan={12} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
                       Không có sản phẩm nào bán ra trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
                   productReports.map((p, idx) => (
                     <tr key={String(p.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                      <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#8B8FA8" }}>
+                      <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "var(--muted)" }}>
                         {p.productCode || "—"}
                       </td>
-                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{p.productName}</td>
-                      <td style={{ padding: "10px 12px", color: "#666" }}>{p.category}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--text)" }}>{p.productName}</td>
+                      <td style={{ padding: "10px 12px", color: "var(--subtext)" }}>{p.category}</td>
                       <td style={{ padding: "10px 12px", textAlign: "center" }}>{p.unit}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.basePrice)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#1C1A2D" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--text)" }}>
                         {p.quantity}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.grossRevenue)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: p.itemDiscount > 0 ? "#C93B2B" : "#8B8FA8" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: p.itemDiscount > 0 ? "#C93B2B" : "var(--muted)" }}>
                         {formatVND(p.itemDiscount)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "#7E2930", background: "#FFF5F6" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "var(--primary)", background: "var(--primary-light)" }}>
                         {formatVND(p.netRevenue)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--success)" }}>
                         {formatVND(p.quantity > 0 ? Math.round(p.costPrice / p.quantity) : 0)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: p.grossProfit >= 0 ? "#146A65" : "#C93B2B" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: p.grossProfit >= 0 ? "var(--success)" : "#C93B2B" }}>
                         {formatVND(p.grossProfit)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--subtext)" }}>
                         {p.grossProfitMarginPercent}%
                       </td>
                     </tr>
@@ -618,20 +618,20 @@ export default function ProductSalesReportPage() {
       {activeTab === "category" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
           }}
         >
-          <div style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", marginBottom: "16px" }}>
+          <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text)", marginBottom: "16px" }}>
             Báo cáo Doanh thu theo Nhóm hàng / Danh mục ({categoryReports.length} nhóm)
           </div>
 
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)", background: "var(--surface-muted)" }}>
                   <th style={{ padding: "10px 12px" }}>STT</th>
                   <th style={{ padding: "10px 12px" }}>Nhóm hàng / Danh mục</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượng bán</th>
@@ -647,29 +647,29 @@ export default function ProductSalesReportPage() {
               <tbody>
                 {categoryReports.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                    <td colSpan={10} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
                       Không có dữ liệu nhóm hàng trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
                   categoryReports.map((cat, idx) => (
                     <tr key={cat.category} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                      <td style={{ padding: "10px 12px", color: "#8B8FA8" }}>{idx + 1}</td>
-                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{cat.category}</td>
+                      <td style={{ padding: "10px 12px", color: "var(--muted)" }}>{idx + 1}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--text)" }}>{cat.category}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{cat.quantity}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(cat.grossRevenue)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: cat.itemDiscount > 0 ? "#C93B2B" : "#8B8FA8" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: cat.itemDiscount > 0 ? "#C93B2B" : "var(--muted)" }}>
                         {formatVND(cat.itemDiscount)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "#7E2930", background: "#FFF5F6" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "var(--primary)", background: "var(--primary-light)" }}>
                         {formatVND(cat.netRevenue)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(cat.costPrice)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: cat.grossProfit >= 0 ? "#146A65" : "#C93B2B" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--success)" }}>{formatVND(cat.costPrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: cat.grossProfit >= 0 ? "var(--success)" : "#C93B2B" }}>
                         {formatVND(cat.grossProfit)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#666" }}>{cat.grossProfitMarginPercent}%</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600", color: "#5D5B63" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--subtext)" }}>{cat.grossProfitMarginPercent}%</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600", color: "var(--subtext)" }}>
                         {cat.proportion}%
                       </td>
                     </tr>
@@ -685,20 +685,20 @@ export default function ProductSalesReportPage() {
       {activeTab === "profit" && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface)",
             borderRadius: "16px",
-            border: "1px solid #E6DEC8",
+            border: "1px solid var(--border)",
             padding: "20px",
           }}
         >
-          <div style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", marginBottom: "16px" }}>
+          <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text)", marginBottom: "16px" }}>
             Báo cáo Phân tích Lợi nhuận gộp & Giá vốn hàng bán (COGS)
           </div>
 
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
-                <tr style={{ borderBottom: "2px solid #E6DEC8", color: "#666", background: "#FAF7F2" }}>
+                <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)", background: "var(--surface-muted)" }}>
                   <th style={{ padding: "10px 12px" }}>Tên món ăn / Đồ uống</th>
                   <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượng bán</th>
@@ -713,26 +713,26 @@ export default function ProductSalesReportPage() {
               <tbody>
                 {grossProfitReport.items.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", padding: "36px", color: "#8B8FA8" }}>
+                    <td colSpan={9} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
                       Không có dữ liệu lợi nhuận trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
                   grossProfitReport.items.map((it, idx) => (
                     <tr key={String(it.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
-                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "#1C1A2D" }}>{it.productName}</td>
-                      <td style={{ padding: "10px 12px", color: "#666" }}>{it.category}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--text)" }}>{it.productName}</td>
+                      <td style={{ padding: "10px 12px", color: "var(--subtext)" }}>{it.category}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{it.quantity}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(it.avgSellingPrice)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(it.avgCostPrice)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#7E2930" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--success)" }}>{formatVND(it.avgCostPrice)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--primary)" }}>
                         {formatVND(it.netRevenue)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#146A65" }}>{formatVND(it.cogs)}</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: it.grossProfit >= 0 ? "#146A65" : "#C93B2B", background: "#FFF5F6" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--success)" }}>{formatVND(it.cogs)}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: it.grossProfit >= 0 ? "var(--success)" : "#C93B2B", background: "var(--primary-light)" }}>
                         {formatVND(it.grossProfit)}
                       </td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "#D97706" }}>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--warning)" }}>
                         {it.grossProfitMarginPercent}%
                       </td>
                     </tr>
@@ -741,22 +741,22 @@ export default function ProductSalesReportPage() {
               </tbody>
               {grossProfitReport.items.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: "#F8F4EE", fontWeight: "800", borderTop: "2px solid #7E2930" }}>
-                    <td style={{ padding: "12px", color: "#7E2930" }}>TỔNG CỘNG</td>
+                  <tr style={{ background: "var(--bg)", fontWeight: "800", borderTop: "2px solid var(--primary)" }}>
+                    <td style={{ padding: "12px", color: "var(--primary)" }}>TỔNG CỘNG</td>
                     <td style={{ padding: "12px" }}>—</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>{formatNumber(grossProfitReport.summary.totalQuantity)}</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>—</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>—</td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#7E2930" }}>
+                    <td style={{ padding: "12px", textAlign: "right", color: "var(--primary)" }}>
                       {formatVND(grossProfitReport.summary.netRevenue)}
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#146A65" }}>
+                    <td style={{ padding: "12px", textAlign: "right", color: "var(--success)" }}>
                       {formatVND(grossProfitReport.summary.totalCOGS)}
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#146A65" }}>
+                    <td style={{ padding: "12px", textAlign: "right", color: "var(--success)" }}>
                       {formatVND(grossProfitReport.summary.grossProfit)}
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#D97706" }}>
+                    <td style={{ padding: "12px", textAlign: "right", color: "var(--warning)" }}>
                       {grossProfitReport.summary.grossProfitMarginPercent}%
                     </td>
                   </tr>

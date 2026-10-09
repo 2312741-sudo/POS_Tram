@@ -65,11 +65,11 @@ export default function LoginPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #F8F4EE 0%, #F6EFDF 50%, #F8F4EE 100%)",
+        background: "linear-gradient(135deg, var(--bg) 0%, var(--surface-muted) 50%, var(--bg) 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "24px",
+        padding: "24px 16px",
         position: "relative",
         overflow: "hidden",
       }}
@@ -105,9 +105,9 @@ export default function LoginPage() {
           width: "100%",
           maxWidth: "440px",
           borderRadius: "22px",
-          padding: "40px",
-          background: "#FFFFFF",
-          border: "1.5px solid #E6DEC8",
+          padding: "clamp(24px, 6vw, 40px)",
+          background: "var(--surface)",
+          border: "1.5px solid var(--border)",
           boxShadow: "0 16px 40px rgba(126, 41, 48, 0.08)",
           position: "relative",
           zIndex: 1,
@@ -120,8 +120,8 @@ export default function LoginPage() {
               width: "68px",
               height: "68px",
               borderRadius: "18px",
-              background: "#FFFFFF",
-              border: "1.5px solid #E6DEC8",
+              background: "var(--surface)",
+              border: "1.5px solid var(--border)",
               padding: "4px",
               display: "flex",
               alignItems: "center",
@@ -145,36 +145,38 @@ export default function LoginPage() {
             style={{
               fontSize: "24px",
               fontWeight: "800",
-              color: "#7E2930",
+              color: "var(--primary)",
               letterSpacing: "0.02em",
               marginBottom: "4px",
             }}
           >
             POS TRẠM
           </h1>
-          <p style={{ color: "#5D5B63", fontSize: "14px", fontWeight: "500" }}>
+          <p style={{ color: "var(--subtext)", fontSize: "14px", fontWeight: "500" }}>
             Hệ thống Quản lý Vận hành & Bán hàng
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <form onSubmit={handleSubmit} noValidate aria-busy={submitting} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Store Code Field */}
           <div>
             <label
+              htmlFor="login-store"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "13px",
                 fontWeight: "700",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 marginBottom: "6px",
               }}
             >
-              <Store size={15} color="#7E2930" />
+              <Store size={15} style={{ color: "var(--primary)" }} aria-hidden="true" />
               Mã cửa hàng / Chi nhánh
             </label>
             <input
+              id="login-store"
               type="text"
               className="input-field"
               placeholder="Ví dụ: TRAM01"
@@ -189,23 +191,27 @@ export default function LoginPage() {
           {/* Username Field */}
           <div>
             <label
+              htmlFor="login-username"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "13px",
                 fontWeight: "700",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 marginBottom: "6px",
               }}
             >
-              <UserIcon size={15} color="#7E2930" />
+              <UserIcon size={15} style={{ color: "var(--primary)" }} aria-hidden="true" />
               Tên tài khoản
             </label>
             <input
+              id="login-username"
               type="text"
               className="input-field"
-              placeholder="Nhập tên đăng nhập (ví dụ: thungan1, quanly)"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="VD: thungan1, quanly"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={submitting}
@@ -216,21 +222,23 @@ export default function LoginPage() {
           {/* Password Field */}
           <div>
             <label
+              htmlFor="login-password"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "13px",
                 fontWeight: "700",
-                color: "#1C1A2D",
+                color: "var(--text)",
                 marginBottom: "6px",
               }}
             >
-              <Lock size={15} color="#7E2930" />
+              <Lock size={15} style={{ color: "var(--primary)" }} aria-hidden="true" />
               Mật khẩu
             </label>
             <div style={{ position: "relative" }}>
               <input
+                id="login-password"
                 type={showPassword ? "text" : "password"}
                 className="input-field"
                 placeholder="Nhập mật khẩu"
@@ -243,6 +251,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                aria-pressed={showPassword}
                 style={{
                   position: "absolute",
                   right: "12px",
@@ -250,9 +260,10 @@ export default function LoginPage() {
                   transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
-                  color: "#5D5B63",
+                  color: "var(--subtext)",
                   cursor: "pointer",
-                  padding: "4px",
+                  padding: "6px",
+                  borderRadius: "8px",
                   display: "flex",
                   alignItems: "center",
                 }}
@@ -265,15 +276,16 @@ export default function LoginPage() {
           {/* Error Banner */}
           {error && (
             <div
+              role="alert"
               style={{
                 display: "flex",
                 alignItems: "flex-start",
                 gap: "10px",
-                background: "rgba(180, 35, 44, 0.08)",
-                border: "1px solid rgba(180, 35, 44, 0.25)",
+                background: "var(--danger-bg)",
+                border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                 borderRadius: "10px",
                 padding: "12px",
-                color: "#B4232C",
+                color: "var(--danger)",
                 fontSize: "13px",
                 lineHeight: "1.4",
               }}
@@ -294,12 +306,17 @@ export default function LoginPage() {
               padding: "13px",
               fontSize: "15px",
               marginTop: "8px",
+              minHeight: "48px",
               opacity: submitting ? 0.7 : 1,
             }}
           >
             {submitting ? (
               <>
-                <div className="spinner" style={{ width: "16px", height: "16px" }} />
+                <div
+                  className="spinner"
+                  aria-hidden="true"
+                  style={{ width: "16px", height: "16px", borderWidth: "2px", borderColor: "rgba(255,255,255,0.35)", borderTopColor: "var(--surface)" }}
+                />
                 Đang xác thực...
               </>
             ) : (
@@ -316,7 +333,7 @@ export default function LoginPage() {
             marginTop: "24px",
             textAlign: "center",
             fontSize: "12px",
-            color: "#8B8FA8",
+            color: "var(--muted)",
           }}
         >
           Hệ thống bảo vệ đa tầng &bull; Khóa tạm sau 5 lần nhập sai liên tiếp

@@ -62,8 +62,8 @@ class CheckoutValidator {
     // 5. Validate discount integrity
     int sumLineDiscounts = 0;
     for (final item in bill.items) {
-      sumLineDiscounts += item.discountAmount;
-      if (item.discountAmount > (item.quantity * item.price)) {
+      sumLineDiscounts += item.lineDiscountTotal;
+      if (item.discountAmount > item.lineGross || item.discountedQuantity > item.quantity) {
         errors.add(CheckoutError('LINE_DISCOUNT_EXCEEDS_TOTAL', 'Giảm giá dòng ${item.name} vượt quá thành tiền'));
       }
     }

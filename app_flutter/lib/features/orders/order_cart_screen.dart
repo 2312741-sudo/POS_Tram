@@ -18,6 +18,10 @@ import '../../data/services/firebase_service.dart';
 import '../../data/services/campaign_service.dart';
 import '../../core/domain/promotion_migration.dart';
 import '../cash_shift/cash_shift_dialog.dart';
+import 'widgets/cart_item_card.dart';
+import 'widgets/cart_panels.dart';
+import 'widgets/payment_widgets.dart';
+import '../../widgets/common_widgets.dart';
 
 class OrderCartScreen extends StatefulWidget {
   final TableModel table;
@@ -53,6 +57,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   int _pointsUsed = 0;
   late int _guestCount;
 
+  // Huỷ các listener Firebase khi rời màn hình (trước đây bị rò rỉ listener)
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+
+  @override
+  void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -65,13 +80,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     _loadAutoPrintSetting();
 
     final storeCode = _fb.currentStoreCode;
-    _fb.productsStream(storeCode: storeCode).listen((products) {
+    _subscriptions.add(_fb.productsStream(storeCode: storeCode).listen((products) {
       if (mounted) setState(() => _products = products);
-    });
-    _fb.categoriesStream(storeCode: storeCode).listen((cats) {
+    }));
+    _subscriptions.add(_fb.categoriesStream(storeCode: storeCode).listen((cats) {
       if (mounted) setState(() => _categories = cats);
-    });
-    _fb.productNotesStream(storeCode: storeCode).listen((notes) {
+    }));
+    _subscriptions.add(_fb.productNotesStream(storeCode: storeCode).listen((notes) {
       if (mounted) {
         final list = notes
             .map((n) => n['text']?.toString() ?? n['name']?.toString() ?? '')
@@ -79,14 +94,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             .toList();
         if (mounted) setState(() => _backendNotePresets = list);
       }
-    });
+    }));
 
-    _fb.cashShiftsStream().listen((shifts) {
+    _subscriptions.add(_fb.cashShiftsStream().listen((shifts) {
       final openOne = shifts.where((s) => s.isOpen).firstOrNull;
       if (mounted) {
         setState(() => _isShiftOpen = openOne != null);
       }
-    });
+    }));
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final shift = _fb.activeShiftCache ?? await _fb.getCurrentOpenShift();
@@ -151,7 +166,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   int get _rawSubTotal => _cart.fold(0, (s, p) => s + (p.unitPrice * p.quantity));
 
-  int get _itemDiscountTotal => _cart.fold(0, (s, p) => s + p.discountAmount);
+  int get _itemDiscountTotal => _cart.fold(0, (s, p) => s + p.lineDiscountTotal);
 
   int get _voucherDiscountTotal => _appliedDiscounts.fold(0, (s, d) => s + d.amount);
 
@@ -421,7 +436,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF0F1),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -683,12 +698,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                   for (final item in _cart) {
                     final sQty = splitQty[item.productId] ?? 0;
-                    if (sQty > 0) {
-                      splitItems.add(item.copyWith(quantity: sQty));
-                    }
-                    if (item.quantity - sQty > 0) {
-                      remainingItems.add(item.copyWith(quantity: item.quantity - sQty));
-                    }
+                    // Chia số phần được giảm & tổng giảm giữa 2 phần (không nhân đôi giảm giá)
+                    final (taken, rest) = item.splitQuantity(sQty);
+                    if (taken != null) splitItems.add(taken);
+                    if (rest != null) remainingItems.add(rest);
                   }
 
                   if (splitItems.isEmpty) return;
@@ -1107,12 +1120,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (!approved) return;
 
     final item = _cart[index];
-    final lineGross = item.unitPrice * item.quantity;
+    final lineGross = item.lineGross;
+    // Giảm giá áp cho TỪNG PHẦN được chọn: % hoặc số tiền mỗi phần × số phần được giảm.
     String discountMode = item.discountPercent > 0 ? 'PERCENT' : 'AMOUNT';
+    // Mặc định giảm tất cả các phần; dòng đã có giảm giá → giữ số phần đã chọn.
+    int discountedQty = item.hasDiscount && item.discountedQuantity > 0 ? item.discountedQuantity : item.quantity;
     final valCtrl = TextEditingController(
       text: item.discountPercent > 0
           ? '${item.discountPercent}'
-          : (item.discountAmount > 0 ? '${item.discountAmount}' : '10'),
+          : item.discountUnitAmount > 0
+              ? '${item.discountUnitAmount}'
+              // Dữ liệu cũ (số tiền cố định cả dòng): quy đổi gần đúng ra đ/phần
+              : (item.discountMode == 'FIXED' && item.quantity > 0
+                  ? '${(item.lineDiscountTotal / item.quantity).round()}'
+                  : '10'),
     );
     final reasonCtrl = TextEditingController(text: item.discountReason);
 
@@ -1130,13 +1151,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) {
           final inputNum = int.tryParse(valCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-          int calcDiscount = 0;
-          if (discountMode == 'PERCENT') {
-            final pct = inputNum.clamp(0, 100);
-            calcDiscount = ((lineGross * pct) / 100).round();
-          } else {
-            calcDiscount = inputNum.clamp(0, lineGross);
-          }
+          final calcDiscount = OrderItemModel.computeLineDiscount(
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            discountedQuantity: discountedQty,
+            percent: discountMode == 'PERCENT' ? inputNum.clamp(0, 100) : 0,
+            unitAmount: discountMode == 'AMOUNT' ? inputNum : 0,
+          );
           final calcAfter = lineGross - calcDiscount;
 
           return AlertDialog(
@@ -1218,7 +1239,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     controller: valCtrl,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: discountMode == 'PERCENT' ? 'Tỷ lệ giảm (%)' : 'Số tiền giảm (VND)',
+                      labelText: discountMode == 'PERCENT' ? 'Tỷ lệ giảm mỗi phần (%)' : 'Số tiền giảm mỗi phần (VND)',
                       suffixText: discountMode == 'PERCENT' ? '%' : 'đ',
                     ),
                     onChanged: (_) => setDlgState(() {}),
@@ -1244,6 +1265,34 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           )).toList(),
                   ),
                   const SizedBox(height: 12),
+                  // Chọn số phần được giảm (VD: 5 ly, chỉ giảm 2 ly)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('Số phần được giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      IconButton(
+                        tooltip: 'Bớt 1 phần',
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: discountedQty > 1 ? () => setDlgState(() => discountedQty -= 1) : null,
+                      ),
+                      Text('$discountedQty / ${item.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        tooltip: 'Thêm 1 phần',
+                        icon: const Icon(Icons.add_circle_outline),
+                        onPressed: discountedQty < item.quantity ? () => setDlgState(() => discountedQty += 1) : null,
+                      ),
+                    ],
+                  ),
+                  if (item.quantity > 1)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: discountedQty == item.quantity ? null : () => setDlgState(() => discountedQty = item.quantity),
+                        child: const Text('Giảm tất cả các phần'),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
                   Text('Lý do giảm giá:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   Wrap(
@@ -1276,7 +1325,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Số tiền giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.orange.shade900)),
+                            Expanded(
+                              child: Text(
+                                'Số tiền giảm (${discountMode == 'PERCENT' ? '${inputNum.clamp(0, 100)}%' : FormatUtils.vnd(inputNum)} × $discountedQty/${item.quantity} món):',
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.orange.shade900),
+                              ),
+                            ),
                             Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
                           ],
                         ),
@@ -1295,13 +1349,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               ),
             ),
             actions: [
-              if (item.discountAmount > 0)
+              if (item.hasDiscount)
                 TextButton(
                   onPressed: () {
                     setState(() {
-                      _cart[index].discountAmount = 0;
-                      _cart[index].discountPercent = 0;
-                      _cart[index].discountReason = '';
+                      _cart[index] = _cart[index].withoutLineDiscount();
                       _recalculateDiscounts();
                     });
                     Navigator.pop(ctx);
@@ -1315,19 +1367,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               ElevatedButton(
                 onPressed: () {
                   final input = int.tryParse(valCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-                  int dAmt = 0;
-                  int dPct = 0;
-                  if (discountMode == 'PERCENT') {
-                    dPct = input.clamp(0, 100);
-                    dAmt = ((lineGross * dPct) / 100).round();
-                  } else {
-                    dAmt = input.clamp(0, lineGross);
-                  }
-
                   setState(() {
-                    _cart[index].discountAmount = dAmt;
-                    _cart[index].discountPercent = dPct;
-                    _cart[index].discountReason = reasonCtrl.text.trim();
+                    _cart[index] = _cart[index].withLineDiscount(
+                      percent: discountMode == 'PERCENT' ? input.clamp(0, 100) : 0,
+                      unitAmount: discountMode == 'AMOUNT' ? input : 0,
+                      discountedQuantity: discountedQty,
+                      reason: reasonCtrl.text.trim(),
+                    );
                     _recalculateDiscounts();
                   });
                   Navigator.pop(ctx);
@@ -2128,6 +2174,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     final cashSplitCtrl = TextEditingController(text: '${(_finalTotal ~/ 2)}');
     int changeAmount = 0;
     bool isProcessingPayment = false;
+    String? paymentError; // Lỗi hiển thị ngay trong sheet
 
     final sheetOpenedTime = DateTime.now().millisecondsSinceEpoch;
     StreamSubscription<DatabaseEvent>? paymentSubscription;
@@ -2143,7 +2190,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       String? matchedNote,
     }) async {
       if (isProcessingPayment) return;
-      setSheetState(() => isProcessingPayment = true);
+      setSheetState(() {
+        isProcessingPayment = true;
+        paymentError = null;
+      });
       if (!await _ensureShiftOpen()) {
         setSheetState(() => isProcessingPayment = false);
         return;
@@ -2184,7 +2234,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         _fireBackgroundPaymentTasks(bill, paymentMethod, shouldPrint: _autoPrintBill);
       } catch (e) {
         if (ctx.mounted) {
-          setSheetState(() => isProcessingPayment = false);
+          setSheetState(() {
+            isProcessingPayment = false;
+            paymentError = 'Lỗi thanh toán: $e';
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Lỗi thanh toán: $e'), backgroundColor: AppColors.danger),
           );
@@ -2197,6 +2250,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
+      // Tablet: không kéo giãn bảng thanh toán hết chiều ngang
+      constraints: const BoxConstraints(maxWidth: 640),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
@@ -2270,251 +2325,150 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
           updatePaymentListener();
 
+          final cashShortBy = cashGiven < _finalTotal ? _finalTotal - cashGiven : 0;
+          final splitShortBy = cashGivenForSplit < splitCashAmount ? splitCashAmount - cashGivenForSplit : 0;
+          final moneyInputStyle = GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary);
+
           return Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
             child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Thanh Toán - ${widget.table.name}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 18)),
-                      Text(FormatUtils.vnd(_finalTotal), style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
-                    ],
-                  ),
-                  if (_selectedCustomer != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Khách hàng: ${_selectedCustomer!.fullName} (${_selectedCustomer!.phone})',
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.green.shade800, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-
-                  // Payment Method Tabs (CASH, VIETQR, SPLIT)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          avatar: const Icon(Icons.money, size: 16),
-                          label: const Text('Tiền Mặt', style: TextStyle(fontSize: 12)),
-                          selected: paymentMethod == 'CASH',
-                          onSelected: (val) => setSheetState(() => paymentMethod = 'CASH'),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: ChoiceChip(
-                          avatar: const Icon(Icons.qr_code_2, size: 16),
-                          label: const Text('VietQR', style: TextStyle(fontSize: 12)),
-                          selected: paymentMethod == 'TRANSFER_QR',
-                          onSelected: (val) => setSheetState(() => paymentMethod = 'TRANSFER_QR'),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: ChoiceChip(
-                          avatar: const Icon(Icons.call_split, size: 16),
-                          label: const Text('Hỗn Hợp', style: TextStyle(fontSize: 12)),
-                          selected: paymentMethod == 'SPLIT',
-                          onSelected: (val) => setSheetState(() {
-                            paymentMethod = 'SPLIT';
-                            if (cashSplitCtrl.text.isEmpty || cashSplitCtrl.text == '0') {
-                              cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
-                            }
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // CASH CALCULATOR
-                  if (paymentMethod == 'CASH') ...[
-                    TextField(
-                      controller: cashGivenCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Khách đưa (VND)', suffixText: 'đ'),
-                      onChanged: (v) => setSheetState(() {}),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Tiền thừa trả khách:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                        Text(FormatUtils.vnd(changeAmount), style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
-                      ],
+                    PaymentTotalHeader(
+                      tableName: widget.table.name,
+                      total: _finalTotal,
+                      customerLine: _selectedCustomer != null
+                          ? 'Khách hàng: ${_selectedCustomer!.fullName} (${_selectedCustomer!.phone})'
+                          : null,
                     ),
-                  ],
+                    const SizedBox(height: 16),
 
-                  // VIETQR DISPLAY
-                  if (paymentMethod == 'TRANSFER_QR') ...[
-                    Center(
-                      child: Column(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              qrUrl,
-                              height: 220,
-                              fit: BoxFit.contain,
-                              loadingBuilder: (_, child, progress) => progress == null ? child : const CircularProgressIndicator(),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text('${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0FDF4),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF86EFAC)),
-                            ),
-                            child: Row(
-                              children: [
-                                const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF16A34A)),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF166534), fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    // Payment Method Tabs (CASH, VIETQR, SPLIT)
+                    PaymentMethodSelector(
+                      selected: paymentMethod,
+                      onChanged: (m) => setSheetState(() {
+                        paymentMethod = m;
+                        if (m == 'SPLIT' && (cashSplitCtrl.text.isEmpty || cashSplitCtrl.text == '0')) {
+                          cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                        }
+                      }),
                     ),
-                  ],
+                    const SizedBox(height: 16),
 
-                  // SPLIT PAYMENT DISPLAY (TIỀN MẶT + VIETQR)
-                  if (paymentMethod == 'SPLIT') ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.shade200),
+                    // CASH CALCULATOR
+                    if (paymentMethod == 'CASH') ...[
+                      TextField(
+                        controller: cashGivenCtrl,
+                        keyboardType: TextInputType.number,
+                        style: moneyInputStyle,
+                        decoration: const InputDecoration(
+                          labelText: 'Khách đưa (VND)',
+                          suffixText: 'đ',
+                          prefixIcon: Icon(Icons.payments_outlined),
+                        ),
+                        onTap: () => cashGivenCtrl.selection = TextSelection(baseOffset: 0, extentOffset: cashGivenCtrl.text.length),
+                        onChanged: (v) => setSheetState(() {}),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Phân bổ thanh toán hỗn hợp:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
-                              Text('Tổng: ${FormatUtils.vnd(_finalTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: cashSplitCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: '1. Phần Tiền Mặt (VND)',
-                              suffixText: 'đ',
-                              prefixIcon: Icon(Icons.money),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            onChanged: (v) => setSheetState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                                  onPressed: () {
-                                    cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
-                                    setSheetState(() {});
-                                  },
-                                  child: const Text('50% Tiền mặt', style: TextStyle(fontSize: 11)),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                                  onPressed: () {
-                                    cashSplitCtrl.text = '$_finalTotal';
-                                    setSheetState(() {});
-                                  },
-                                  child: const Text('100% Tiền mặt', style: TextStyle(fontSize: 11)),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('2. Phần Chuyển khoản QR:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                                Text(
-                                  FormatUtils.vnd(splitQrAmount),
-                                  style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (splitQrAmount > 0) ...[
                       const SizedBox(height: 10),
+                      QuickCashAmounts(
+                        amountDue: _finalTotal,
+                        onPick: (v) => setSheetState(() => cashGivenCtrl.text = '$v'),
+                      ),
+                      const SizedBox(height: 12),
+                      ChangeDueRow(change: changeAmount, shortBy: cashShortBy),
+                    ],
+
+                    // VIETQR DISPLAY
+                    if (paymentMethod == 'TRANSFER_QR') ...[
                       Center(
                         child: Column(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                qrUrl,
-                                height: 180,
-                                fit: BoxFit.contain,
-                                loadingBuilder: (_, child, progress) => progress == null ? child : const CircularProgressIndicator(),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
+                            VietQrImage(url: qrUrl, height: 220),
+                            const SizedBox(height: 8),
                             Text(
-                              'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
-                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                              '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            ),
+                            const SizedBox(height: 10),
+                            const PaymentBotWatchingBox(),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // SPLIT PAYMENT DISPLAY (TIỀN MẶT + VIETQR)
+                    if (paymentMethod == 'SPLIT') ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.infoLight,
+                          borderRadius: AppRadius.brMd,
+                          border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Phân bổ thanh toán hỗn hợp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.info)),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: cashSplitCtrl,
+                              keyboardType: TextInputType.number,
+                              style: moneyInputStyle.copyWith(fontSize: 18),
+                              decoration: const InputDecoration(
+                                labelText: '1. Phần tiền mặt (VND)',
+                                suffixText: 'đ',
+                                prefixIcon: Icon(Icons.payments_outlined),
+                              ),
+                              onChanged: (v) => setSheetState(() {}),
                             ),
                             const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                                    onPressed: () {
+                                      cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                                      setSheetState(() {});
+                                    },
+                                    child: const Text('50% tiền mặt', style: TextStyle(fontSize: 13)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                                    onPressed: () {
+                                      cashSplitCtrl.text = '$_finalTotal';
+                                      setSheetState(() {});
+                                    },
+                                    child: const Text('100% tiền mặt', style: TextStyle(fontSize: 13)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF0FDF4),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF86EFAC)),
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: const BoxDecoration(color: Colors.white, borderRadius: AppRadius.brSm),
                               child: Row(
                                 children: [
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF16A34A)),
-                                  ),
-                                  const SizedBox(width: 10),
                                   Expanded(
-                                    child: Text(
-                                      'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF166534), fontWeight: FontWeight.w600),
-                                    ),
+                                    child: Text('2. Phần chuyển khoản QR:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  ),
+                                  Text(
+                                    FormatUtils.vnd(splitQrAmount),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.info),
                                   ),
                                 ],
                               ),
@@ -2522,149 +2476,136 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: cashGivenCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Khách đưa tiền mặt (VND)',
-                        hintText: '$splitCashAmount',
-                        suffixText: 'đ',
-                      ),
-                      onChanged: (v) => setSheetState(() {}),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Tiền thừa trả khách:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                        Text(FormatUtils.vnd(splitChangeAmount), style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success)),
-                      ],
-                    ),
-                  ],
-
-                  const SizedBox(height: 16),
-
-                  // Bật/tắt in hóa đơn khi thanh toán
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _autoPrintBill ? TramColors.primaryLight.withOpacity(0.35) : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _autoPrintBill ? AppColors.primary.withOpacity(0.4) : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _autoPrintBill ? AppColors.primary : Colors.grey.shade400,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.print, size: 18, color: Colors.white),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
+                      if (splitQrAmount > 0) ...[
+                        const SizedBox(height: 10),
+                        Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              VietQrImage(url: qrUrl, height: 180),
+                              const SizedBox(height: 4),
                               Text(
-                                'In hóa đơn khi thanh toán',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: _autoPrintBill ? AppColors.textPrimary : Colors.grey.shade700,
-                                ),
+                                'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.info),
                               ),
-                              Text(
-                                _autoPrintBill ? 'Tự động gửi lệnh in bill ra máy in nhiệt' : 'Tắt in bill (chỉ chốt đơn, không in giấy)',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
-                                  color: _autoPrintBill ? AppColors.primary : Colors.grey.shade600,
-                                ),
-                              ),
+                              const SizedBox(height: 8),
+                              const PaymentBotWatchingBox(),
                             ],
                           ),
                         ),
-                        Switch(
-                          value: _autoPrintBill,
-                          activeColor: AppColors.primary,
-                          onChanged: (val) {
-                            setSheetState(() => _autoPrintBill = val);
-                            setState(() => _autoPrintBill = val);
-                            _saveAutoPrintSetting(val);
-                          },
+                      ],
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: cashGivenCtrl,
+                        keyboardType: TextInputType.number,
+                        style: moneyInputStyle.copyWith(fontSize: 18),
+                        decoration: InputDecoration(
+                          labelText: 'Khách đưa tiền mặt (VND)',
+                          hintText: '$splitCashAmount',
+                          suffixText: 'đ',
+                        ),
+                        onChanged: (v) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      ChangeDueRow(change: splitChangeAmount, shortBy: splitShortBy),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // Lỗi thanh toán hiển thị ngay trong sheet (SnackBar nằm sau sheet nên dễ bị che)
+                    if (paymentError != null) ...[
+                      PaymentErrorBox(
+                        message: paymentError!,
+                        onClose: () => setSheetState(() => paymentError = null),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Bật/tắt in hóa đơn khi thanh toán
+                    AutoPrintToggleTile(
+                      value: _autoPrintBill,
+                      onChanged: (val) {
+                        setSheetState(() => _autoPrintBill = val);
+                        setState(() => _autoPrintBill = val);
+                        _saveAutoPrintSetting(val);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Action Buttons: In tạm tính & Thanh toán
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            icon: const Icon(Icons.print_outlined),
+                            label: const Text('Tạm tính', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
+                              );
+                              _buildCurrentBillAsync(status: 'OPEN', method: paymentMethod).then((bill) {
+                                final bytes = ReceiptPrinter.buildBillReceiptBytes(
+                                  store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+                                  bill: bill,
+                                  isPrePrint: true,
+                                );
+                                ReceiptPrinter.printViaLan(
+                                  printerIp: _storeInfo?.billPrinterIp ?? '',
+                                  data: bytes,
+                                ).catchError((_) => false);
+                              }).catchError((_) {});
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 3,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              minimumSize: const Size(0, 56),
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            onPressed: isProcessingPayment
+                                ? null
+                                : () => executeCheckout(
+                                      ctx,
+                                      setSheetState,
+                                      overrideCashAmount: splitCashAmount,
+                                      overrideQrAmount: splitQrAmount,
+                                    ),
+                            child: isProcessingPayment
+                                ? const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                                      SizedBox(width: 8),
+                                      Flexible(child: Text('Đang xử lý...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                                    ],
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
+                                      SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          'XÁC NHẬN THU TIỀN',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-
-                  // Action Buttons: In tạm tính & Thanh toán
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.print_outlined),
-                          label: const Text('In Tạm Tính'),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
-                            );
-                            _buildCurrentBillAsync(status: 'OPEN', method: paymentMethod).then((bill) {
-                              final bytes = ReceiptPrinter.buildBillReceiptBytes(
-                                store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
-                                bill: bill,
-                                isPrePrint: true,
-                              );
-                              ReceiptPrinter.printViaLan(
-                                printerIp: _storeInfo?.billPrinterIp ?? '',
-                                data: bytes,
-                              ).catchError((_) => false);
-                            }).catchError((_) {});
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          onPressed: isProcessingPayment
-                              ? null
-                              : () => executeCheckout(
-                                    ctx,
-                                    setSheetState,
-                                    overrideCashAmount: splitCashAmount,
-                                    overrideQrAmount: splitQrAmount,
-                                  ),
-                          child: isProcessingPayment
-                              ? const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                                    SizedBox(width: 8),
-                                    Text('Đang xử lý...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ],
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                                    SizedBox(width: 6),
-                                    Text('Xác Nhận Thu Tiền', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -2861,7 +2802,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               runSpacing: 8,
               children: [1, 2, 4, 6, 8, 10, 15].map((num) {
                 return ActionChip(
-                  backgroundColor: AppColors.primaryLight.withOpacity(0.4),
+                  backgroundColor: AppColors.primaryLight.withValues(alpha: 0.4),
                   label: Text('$num khách', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                   onPressed: () {
                     ctrl.text = '$num';
@@ -3049,732 +2990,145 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (!_isShiftOpen)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    color: Colors.amber.shade900,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.lock, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Đang khóa order & thanh toán do chưa nhập két đầu ca.',
-                            style: GoogleFonts.beVietnamPro(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ? const LoadingState(message: 'Đang tải đơn hàng...')
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                // Tablet ngang (≥ 900dp): danh sách món bên trái, tổng tiền & nút thao tác cố định bên phải
+                final wide = constraints.maxWidth >= 900;
+                final unsentCount = _cart.where((i) => !i.isSentKitchen).fold(0, (sum, i) => sum + i.quantity);
+
+                final summary = CartSummaryPanel(
+                  sidePanel: wide,
+                  subTotal: _subTotal,
+                  itemDiscountTotal: _itemDiscountTotal,
+                  appliedDiscounts: _appliedDiscounts,
+                  pointsUsed: _pointsUsed,
+                  pointsDiscount: _pointsDiscount,
+                  vatRate: _vatRate,
+                  vatAmount: _vatAmount,
+                  finalTotal: _finalTotal,
+                  unsentCount: unsentCount,
+                  cartEmpty: _cart.isEmpty,
+                  onDiscount: _showDiscountDialog,
+                  onPrePrint: _cart.isEmpty ? null : _printPreBill,
+                  onCancel: _showCancelBillDialog,
+                  onSendKitchen: _sendToKitchen,
+                  onPay: _showPaymentSheet,
+                );
+
+                final customerBar = CartCustomerBar(
+                  customer: _selectedCustomer,
+                  pointsUsed: _pointsUsed,
+                  onLookup: _showCustomerLookupDialog,
+                  onUsePoints: _showUsePointsDialog,
+                  onClear: () => setState(() {
+                    _selectedCustomer = null;
+                    _pointsUsed = 0;
+                  }),
+                );
+
+                final cartList = _cart.isEmpty
+                    ? EmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'Chưa có món nào trong order',
+                        subtitle: 'Bấm "Thêm món" để chọn món cho bàn này.',
+                        action: SizedBox(
+                          width: 220,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: const Text('Thêm món vào đơn'),
+                            onPressed: _goToAddItems,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => CashShiftDialog.show(context),
-                          style: TextButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.amber.shade900,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text('Mở két ngay', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                        itemCount: _cart.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => CartItemCard(
+                          item: _cart[index],
+                          onRemove: () => _confirmRemoveItem(index),
+                          onEditNote: () => _showEditItemNoteAndToppingDialog(index),
+                          onDiscount: () => _showItemDiscountDialog(index),
+                          onIncrement: () => _incrementItem(index),
+                          onDecrement: () => _decrementItem(index),
                         ),
-                      ],
+                      );
+
+                final leftColumn = Column(
+                  children: [
+                    CartHeaderBar(
+                      tableName: widget.table.name,
+                      zone: widget.table.zone,
+                      guestCount: _guestCount,
+                      onEditGuests: _showEditGuestCountDialog,
+                      onDecrementGuests: _guestCount > 1 ? () => _updateGuestCount(_guestCount - 1) : null,
+                      onIncrementGuests: () => _updateGuestCount(_guestCount + 1),
+                      onAddItems: _goToAddItems,
                     ),
-                  ),
-                // Top Header: Table info + Guest count editor + Add items (+) button
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.6))),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                    Expanded(child: cartList),
+                    if (!wide) customerBar,
+                    if (!wide) summary,
+                  ],
+                );
+
+                return Column(
+                  children: [
+                    if (!_isShiftOpen)
+                      InfoBanner(
+                        solid: true,
+                        tone: BannerTone.warning,
+                        icon: Icons.lock,
+                        title: 'Đang khóa order & thanh toán do chưa nhập két đầu ca.',
+                        actionLabel: 'Mở két ngay',
+                        actionIcon: Icons.point_of_sale,
+                        onAction: () => CashShiftDialog.show(context),
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Table badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.table_restaurant, size: 16, color: AppColors.primaryDark),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${widget.table.name} • ${widget.table.zone}',
-                              style: GoogleFonts.beVietnamPro(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Guest Count Stepper with tap to edit
-                      InkWell(
-                        onTap: _showEditGuestCountDialog,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.grey.shade50,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              InkWell(
-                                onTap: _guestCount > 1 ? () => _updateGuestCount(_guestCount - 1) : null,
-                                borderRadius: BorderRadius.circular(4),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(2.0),
-                                  child: Icon(
-                                    Icons.remove_circle_outline,
-                                    size: 18,
-                                    color: _guestCount > 1 ? AppColors.textPrimary : Colors.grey.shade300,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.people, size: 14, color: AppColors.primary),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$_guestCount khách',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              InkWell(
-                                onTap: () => _updateGuestCount(_guestCount + 1),
-                                borderRadius: BorderRadius.circular(4),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(2.0),
-                                  child: Icon(
-                                    Icons.add_circle_outline,
-                                    size: 18,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // "+ Thêm món" Button
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Thêm món', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: _goToAddItems,
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Cart Item List
-                Expanded(
-                  child: _cart.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade400),
-                              const SizedBox(height: 12),
-                              Text('Chưa có món nào trong order', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.add),
-                                label: const Text('Thêm Món Vào Đơn'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                onPressed: _goToAddItems,
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _cart.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final item = _cart[index];
-                            final hasSize = item.selectedSize != null && item.selectedSize!.trim().isNotEmpty;
-                            final hasSugar = item.selectedSugar != null && item.selectedSugar!.trim().isNotEmpty;
-                            final hasIce = item.selectedIce != null && item.selectedIce!.trim().isNotEmpty;
-                            final hasToppings = item.selectedToppings.isNotEmpty;
-
-                            return Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // 1. Tên món + Badge gửi bếp + Nút xóa món
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: wide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: leftColumn),
+                                SizedBox(
+                                  width: 400,
+                                  child: ColoredBox(
+                                    color: Colors.white,
+                                    child: Column(
                                       children: [
-                                        Expanded(
-                                          child: Wrap(
-                                            crossAxisAlignment: WrapCrossAlignment.center,
-                                            spacing: 6,
-                                            runSpacing: 4,
-                                            children: [
-                                              Text(
-                                                item.name,
-                                                style: GoogleFonts.beVietnamPro(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14,
-                                                  color: AppColors.textPrimary,
-                                                ),
-                                              ),
-                                              if (item.isSentKitchen)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors.successLight,
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    'Đã gửi bếp',
-                                                    style: GoogleFonts.beVietnamPro(
-                                                      fontSize: 10,
-                                                      color: AppColors.success,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        // Nút xóa món gọn gàng
-                                        InkWell(
-                                          onTap: () => _confirmRemoveItem(index),
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(4),
-                                            child: Icon(
-                                              Icons.delete_outline,
-                                              size: 20,
-                                              color: Colors.grey.shade400,
-                                            ),
-                                          ),
-                                        ),
+                                        customerBar,
+                                        const Spacer(),
+                                        summary,
                                       ],
                                     ),
-
-                                    // 2. KiotViet Size, Sugar, Ice, Toppings detail badges
-                                    if (hasSize || hasSugar || hasIce || hasToppings) ...[
-                                      const SizedBox(height: 6),
-                                      InkWell(
-                                        onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Wrap(
-                                          spacing: 4,
-                                          runSpacing: 3,
-                                          children: [
-                                            if (hasSize)
-                                              _buildAttrChip('Size ${item.selectedSize.trim()}', Colors.blue.shade800, Colors.blue.shade50),
-                                            if (hasSugar)
-                                              _buildAttrChip(item.selectedSugar.trim(), Colors.green.shade800, Colors.green.shade50),
-                                            if (hasIce)
-                                              _buildAttrChip(item.selectedIce.trim(), Colors.teal.shade800, Colors.teal.shade50),
-                                            if (hasToppings)
-                                              _buildAttrChip('+${item.selectedToppings.join(', ')}', Colors.orange.shade900, Colors.orange.shade50),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-
-                                    // 3. Ghi chú món (nếu có)
-                                    if (item.note.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      InkWell(
-                                        onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.amber.shade50,
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: Colors.amber.shade300),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.edit_note, size: 15, color: Colors.amber.shade900),
-                                              const SizedBox(width: 4),
-                                              Flexible(
-                                                child: Text(
-                                                  'Ghi chú: ${item.note}',
-                                                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Icon(Icons.edit, size: 11, color: Colors.amber.shade800),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-
-                                    // 4. Giảm giá món (nếu có)
-                                    if (item.discountAmount > 0) ...[
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.shade50,
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: Colors.red.shade200),
-                                        ),
-                                        child: Text(
-                                          item.discountPercent > 0
-                                              ? '🏷️ Giảm ${item.discountPercent}% (-${FormatUtils.vnd(item.discountAmount)})${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}'
-                                              : '🏷️ Giảm -${FormatUtils.vnd(item.discountAmount)}${item.discountReason.isNotEmpty ? ": ${item.discountReason}" : ""}',
-                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.danger, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-
-                                    const SizedBox(height: 8),
-
-                                    // 5. Chân thẻ: Giá tiền & Thao tác (Ghi chú, Giảm giá) & Stepper tăng giảm
-                                    Row(
-                                      children: [
-                                        // Đơn giá & Thành tiền
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                '${FormatUtils.vnd(item.unitPrice)} x ${item.quantity}',
-                                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary),
-                                              ),
-                                              Text(
-                                                FormatUtils.vnd(item.itemTotal),
-                                                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-
-                                        // Nút Ghi chú / Topping
-                                        InkWell(
-                                          onTap: () => _showEditItemNoteAndToppingDialog(index),
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF7F5F0),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: const Color(0xFFE2DDD3)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.edit_note, size: 15, color: AppColors.textPrimary),
-                                                const SizedBox(width: 3),
-                                                Text(
-                                                  item.note.isEmpty ? '+ Ghi chú' : 'Ghi chú',
-                                                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(width: 6),
-
-                                        // Nút Giảm giá món
-                                        InkWell(
-                                          onTap: () => _showItemDiscountDialog(index),
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: item.discountAmount > 0 ? Colors.red.shade50 : const Color(0xFFF7F5F0),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: item.discountAmount > 0 ? Colors.red.shade300 : const Color(0xFFE2DDD3)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  item.discountAmount > 0 ? Icons.discount : Icons.discount_outlined,
-                                                  size: 13,
-                                                  color: item.discountAmount > 0 ? AppColors.danger : AppColors.textPrimary,
-                                                ),
-                                                const SizedBox(width: 3),
-                                                Text(
-                                                  item.discountAmount > 0 ? 'Đã giảm' : 'Giảm món',
-                                                  style: GoogleFonts.beVietnamPro(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: item.discountAmount > 0 ? AppColors.danger : AppColors.textPrimary,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(width: 8),
-
-                                        // Stepper Tăng / Giảm số lượng
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF7F5F0),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: const Color(0xFFE2DDD3)),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              InkWell(
-                                                onTap: () => _decrementItem(index),
-                                                borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
-                                                child: const Padding(
-                                                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                                                  child: Icon(Icons.remove, size: 15, color: AppColors.danger),
-                                                ),
-                                              ),
-                                              Container(
-                                                constraints: const BoxConstraints(minWidth: 24),
-                                                alignment: Alignment.center,
-                                                child: Text(
-                                                  '${item.quantity}',
-                                                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                                                ),
-                                              ),
-                                              InkWell(
-                                                onTap: () => _incrementItem(index),
-                                                borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
-                                                child: const Padding(
-                                                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                                                  child: Icon(Icons.add, size: 15, color: AppColors.primary),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-
-                // ==================== KIOTVIET CUSTOMER CRM BAR ====================
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: Colors.amber.shade50,
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_pin, color: Colors.amber.shade900, size: 22),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _selectedCustomer == null
-                            ? InkWell(
-                                onTap: _showCustomerLookupDialog,
-                                child: Text(
-                                  'Chạm để tích điểm khách hàng (KiotViet CRM)',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade900),
-                                ),
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${_selectedCustomer!.fullName} • ${_selectedCustomer!.phone}',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    'Điểm hiện có: ${_selectedCustomer!.currentPoints} điểm ${_pointsUsed > 0 ? "(-${_pointsUsed} điểm đã dùng)" : ""}',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.green.shade800, fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                      ),
-                      if (_selectedCustomer != null) ...[
-                        TextButton(
-                          onPressed: _showUsePointsDialog,
-                          child: Text(
-                            _pointsUsed > 0 ? 'Đổi điểm' : 'Dùng điểm',
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setState(() {
-                            _selectedCustomer = null;
-                            _pointsUsed = 0;
-                          }),
-                        ),
-                      ] else ...[
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber.shade800,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            minimumSize: Size.zero,
-                          ),
-                          onPressed: _showCustomerLookupDialog,
-                          child: const Text('Tìm Khách', style: TextStyle(fontSize: 11, color: Colors.white)),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                // Breakdown Summary (KiotViet Style)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
-                  ),
-                  child: Column(
-                    children: [
-                      // Subtotal
-                      _summaryRow('Tổng tiền hàng:', FormatUtils.vnd(_subTotal)),
-
-                      // Item discount
-                      if (_itemDiscountTotal > 0) ...[
-                        const SizedBox(height: 4),
-                        _summaryRow(' - Giảm giá món:', '-${FormatUtils.vnd(_itemDiscountTotal)}', isDiscount: true),
-                      ],
-
-                      // Discounts applied
-                      if (_appliedDiscounts.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        ..._appliedDiscounts.map((d) => _summaryRow(
-                              ' - ${d.promoCode ?? d.description}:',
-                              '-${FormatUtils.vnd(d.amount)}',
-                              isDiscount: true,
-                            )),
-                      ],
-
-                      // Points discount
-                      if (_pointsDiscount > 0) ...[
-                        const SizedBox(height: 4),
-                        _summaryRow(' - Điểm tích lũy ($_pointsUsed điểm):', '-${FormatUtils.vnd(_pointsDiscount)}', isDiscount: true),
-                      ],
-
-                      // VAT
-                      if (_vatRate > 0) ...[
-                        const SizedBox(height: 4),
-                        _summaryRow('VAT (${_vatRate.toStringAsFixed(0)}%):', '+${FormatUtils.vnd(_vatAmount)}'),
-                      ],
-
-                      const Divider(height: 16),
-
-                      // Final Total
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('TỔNG THANH TOÁN:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text(
-                            FormatUtils.vnd(_finalTotal),
-                            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Bottom Action Toolbar (KiotViet Style 2-tier ergonomic toolbar)
-                      Builder(
-                        builder: (context) {
-                          final unsentCount = _cart.where((i) => !i.isSentKitchen).fold(0, (sum, i) => sum + i.quantity);
-                          final bool hasUnsent = unsentCount > 0;
-
-                          return Column(
-                            children: [
-                              // Row 1: Khuyến Mãi, In Tạm Tính & Hủy Đơn
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.discount_outlined, size: 15),
-                                      label: Text(
-                                        _appliedDiscounts.isEmpty ? 'Khuyến Mãi' : 'KM (${_appliedDiscounts.length})',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                        foregroundColor: AppColors.primary,
-                                        side: const BorderSide(color: AppColors.primary),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: _showDiscountDialog,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.receipt_long_outlined, size: 15),
-                                      label: Text(
-                                        'In Tạm Tính',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                        foregroundColor: AppColors.textPrimary,
-                                        side: BorderSide(color: Colors.grey.shade400),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: _cart.isEmpty
-                                          ? null
-                                          : () {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
-                                              );
-                                              _buildCurrentBillAsync(status: 'PRE_PRINT', method: 'PRE_PRINT').then((bill) {
-                                                final bytes = ReceiptPrinter.buildBillReceiptBytes(
-                                                  store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
-                                                  bill: bill,
-                                                  isPrePrint: true,
-                                                );
-                                                ReceiptPrinter.printViaLan(
-                                                  printerIp: _storeInfo?.billPrinterIp ?? '',
-                                                  data: bytes,
-                                                ).catchError((_) => false);
-                                              }).catchError((_) {});
-                                            },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      icon: const Icon(Icons.cancel_outlined, size: 15, color: AppColors.danger),
-                                      label: Text(
-                                        'Hủy Đơn',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.danger),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                        foregroundColor: AppColors.danger,
-                                        side: BorderSide(color: AppColors.danger.withOpacity(0.5)),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: _showCancelBillDialog,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Row 2: Gửi Bếp & Thanh Toán
-                              Row(
-                                children: [
-                                  Expanded(
-                                    flex: 4,
-                                    child: ElevatedButton.icon(
-                                      icon: const Icon(Icons.soup_kitchen_outlined, size: 18),
-                                      label: Text(
-                                        hasUnsent ? 'Gửi Bếp ($unsentCount)' : 'Đã Gửi Bếp',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
-                                        maxLines: 1,
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: hasUnsent ? AppColors.accent : Colors.grey.shade400,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 13),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: hasUnsent ? _sendToKitchen : null,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    flex: 5,
-                                    child: ElevatedButton.icon(
-                                      icon: const Icon(Icons.payments_outlined, size: 18),
-                                      label: Text(
-                                        'Thanh Toán',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
-                                        maxLines: 1,
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 13),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: _cart.isEmpty ? null : _showPaymentSheet,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                              ],
+                            )
+                          : leftColumn,
+                    ),
+                  ],
+                );
+              },
             ),
     );
   }
 
-  Widget _buildAttrChip(String label, Color textColor, Color bgColor) {
-    if (label.trim().isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(4)),
-      child: Text(label.trim(), style: TextStyle(fontSize: 10, color: textColor, fontWeight: FontWeight.bold)),
+  /// In phiếu tạm tính (giữ nguyên luồng cũ: gửi lệnh in LAN, bỏ qua lỗi máy in).
+  void _printPreBill() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
     );
-  }
-
-  Widget _summaryRow(String label, String value, {bool isDiscount = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: isDiscount ? AppColors.success : AppColors.textSecondary)),
-        Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: isDiscount ? AppColors.success : AppColors.textPrimary)),
-      ],
-    );
+    _buildCurrentBillAsync(status: 'PRE_PRINT', method: 'PRE_PRINT').then((bill) {
+      final bytes = ReceiptPrinter.buildBillReceiptBytes(
+        store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
+        bill: bill,
+        isPrePrint: true,
+      );
+      ReceiptPrinter.printViaLan(
+        printerIp: _storeInfo?.billPrinterIp ?? '',
+        data: bytes,
+      ).catchError((_) => false);
+    }).catchError((_) {});
   }
 }

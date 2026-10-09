@@ -137,6 +137,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Quản lý danh mục', style: GoogleFonts.beVietnamPro(
           color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       ),

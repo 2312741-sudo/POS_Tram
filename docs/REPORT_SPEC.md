@@ -35,8 +35,14 @@ Hệ thống POS Trạm phục vụ quản lý chuỗi F&B với yêu cầu kh�
 
 ### 2.2. Giảm giá & Chiết khấu (Discounts)
 Hệ thống phân tách chiết khấu thành 4 tầng rõ rệt:
-1. **Giảm giá theo món (Item Discount):** Giảm giá trực tiếp trên từng dòng món (chương trình khuyến mãi theo món hoặc món tặng).
-   $$\text{ItemDiscounts} = \sum_{i=1}^{n} (\text{item.discountAmount} \times \text{item.quantity})$$
+1. **Giảm giá theo món (Item Discount):** Giảm giá trực tiếp trên từng dòng món, áp dụng cho **số phần được chọn** trong dòng (VD: dòng 5 ly A, chỉ giảm 2 ly).
+   - Mỗi dòng có `discountedQuantity` ($0 \le dq \le quantity$) và cấu hình giảm **mỗi phần**: `discountPercent` (% trên đơn giá đã gồm size + topping) **hoặc** `discountUnitAmount` (đ/phần).
+   - Tổng giảm của dòng (lưu tường minh trên dòng ở cả `lineDiscountTotal` và `discountAmount`):
+     $$\text{LineDiscount} = \min\Big(\text{unitPrice} \times \text{quantity},\ \begin{cases} \text{round}\big(\text{unitPrice} \times \text{percent} \times dq / 100\big) & \text{(PERCENT)} \\ \min(\text{discountUnitAmount}, \text{unitPrice}) \times dq & \text{(AMOUNT)} \end{cases}\Big)$$
+   - Báo cáo **không tính lại** mà đọc giá trị đã lưu:
+     $$\text{ItemDiscounts} = \sum_{i=1}^{n} \min\big(\text{item.lineDiscountTotal} \ ?? \ \text{item.discountAmount},\ \text{unitPrice} \times \text{quantity}\big)$$
+   - **Dữ liệu cũ** (dòng không có `discountedQuantity`/`lineDiscountTotal`): `discountAmount` luôn là giảm giá **CẢ DÒNG** (app Flutter và web cũ đều tính tiền như vậy), **không nhân với quantity**; coi $dq = quantity$. Nhờ đó tổng tiền đã thu của hóa đơn cũ không thay đổi khi đọc lại.
+   - Nếu hóa đơn có `itemDiscounts` ở cấp hóa đơn (web tạo), báo cáo tổng quan dùng giá trị đó.
 2. **Giảm giá hóa đơn (Bill Discount / Promo Discount):** Áp dụng mã Voucher, Coupon hoặc chiến dịch giảm % theo tổng đơn (`b.discounts`).
    $$\text{BillDiscounts} = \sum_{d \in b.\text{discounts}} d.\text{amount}$$
 3. **Giảm giá tích điểm (Points Discount):** Khách hàng thân thiết quy đổi điểm thưởng trừ tiền trực tiếp trên hóa đơn (`b.pointsDiscount`).

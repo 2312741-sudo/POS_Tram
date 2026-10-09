@@ -19,6 +19,7 @@ class CashShiftDialog extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
+      constraints: const BoxConstraints(maxWidth: 640),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => const CashShiftDialog(),
     );
@@ -80,9 +81,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
 
     for (final b in bills) {
       for (final it in b.items) {
-        if (it.discountAmount > 0) {
-          discountedItemsCount += it.quantity;
-          discountedItemsTotal += it.discountAmount;
+        if (it.lineDiscountTotal > 0) {
+          // Chỉ đếm số phần được giảm; tổng giảm là tổng CẢ DÒNG đã lưu
+          discountedItemsCount += it.discountedQuantity;
+          discountedItemsTotal += it.lineDiscountTotal;
         }
       }
       for (final d in b.discounts) {
@@ -388,7 +390,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: TramColors.border, borderRadius: BorderRadius.circular(2))),
         ),
         const SizedBox(height: 16),
         Row(
@@ -472,8 +474,9 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         Center(
           child: TextButton.icon(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
+              final navigator = Navigator.of(context);
+              navigator.pop();
+              navigator.push(MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
             },
             icon: const Icon(Icons.history, size: 16, color: TramColors.brandPrimary),
             label: Text(
@@ -493,7 +496,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: TramColors.border, borderRadius: BorderRadius.circular(2))),
         ),
         const SizedBox(height: 12),
         Row(
@@ -556,8 +559,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           children: [
             InkWell(
               onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
+                // Lấy navigator TRƯỚC khi đóng sheet: context của sheet bị huỷ sau pop
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push(MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
               },
               child: Row(
                 children: [
@@ -800,7 +805,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Expanded(
+            child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          ),
+          const SizedBox(width: 8),
           Text(value, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? TramColors.textPrimary)),
         ],
       ),

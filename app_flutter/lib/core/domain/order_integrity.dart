@@ -66,6 +66,8 @@ class BillCodeGenerator {
 
 class OrderLineMerger {
   /// Khóa cấu hình dòng món: chỉ các dòng có khóa giống nhau mới được cộng dồn số lượng.
+  /// Cấu hình giảm giá dòng (chế độ, %/đơn giá giảm mỗi phần, lý do) là một phần của khóa:
+  /// dòng có giảm giá khác nhau (kể cả có/không giảm) luôn là các dòng khác nhau.
   static String lineKey(OrderItemModel i) {
     final toppings = [...i.selectedToppings]..sort();
     return jsonEncode([
@@ -78,7 +80,9 @@ class OrderLineMerger {
       toppings,
       i.toppingPrice,
       i.note.trim(),
+      i.discountMode,
       i.discountPercent,
+      i.discountUnitAmount,
       i.discountReason,
       i.isSentKitchen,
     ]);
@@ -96,9 +100,12 @@ class OrderLineMerger {
       final idx = index[key];
       if (idx != null) {
         final existing = result[idx];
+        // Cộng dồn số phần được giảm và tổng giảm đã lưu (không tính lại) để
+        // tổng tiền sau gộp đúng bằng tổng 2 dòng trước gộp.
         result[idx] = existing.copyWith(
           quantity: existing.quantity + item.quantity,
-          discountAmount: existing.discountAmount + item.discountAmount,
+          discountedQuantity: existing.discountedQuantity + item.discountedQuantity,
+          discountAmount: existing.lineDiscountTotal + item.lineDiscountTotal,
         );
       } else {
         result.add(item.copyWith());

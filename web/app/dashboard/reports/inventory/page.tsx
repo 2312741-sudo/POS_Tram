@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from "react";
 import { ref, onValue } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
-import { AlertTriangle, TrendingDown, TrendingUp, Package, Box } from "lucide-react";
+import { AlertTriangle, TrendingDown, Package, Box } from "lucide-react";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -177,60 +177,60 @@ export default function InventoryReportPage() {
   }, [stockBalances, catalogMap]);
 
   if (loading) {
-    return <div style={{ padding: "60px", textAlign: "center", color: "#999" }}>⏳ Đang tải báo cáo...</div>;
+    return <div style={{ padding: "60px", textAlign: "center", color: "var(--muted)" }}>⏳ Đang tải báo cáo...</div>;
   }
 
   // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
   if (!targetStoreCode) {
     return (
-      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+      <div style={{ padding: "24px", color: "var(--subtext)" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
     );
   }
 
   return (
     <div style={{ padding: "24px" }}>
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e", margin: 0 }}>Báo cáo Kho hàng</h1>
-        <p style={{ fontSize: "14px", color: "#666", margin: "4px 0 0" }}>Tổng quan và cảnh báo tồn kho chi nhánh {targetStoreCode}</p>
+        <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", margin: 0 }}>Báo cáo Kho hàng</h1>
+        <p style={{ fontSize: "14px", color: "var(--subtext)", margin: "4px 0 0" }}>Tổng quan và cảnh báo tồn kho chi nhánh {targetStoreCode}</p>
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "32px" }}>
-        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "16px", marginBottom: "32px" }}>
+        <div style={{ background: "var(--surface)", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-            <div style={{ padding: "8px", background: "#7E293015", borderRadius: "8px", color: "#7E2930" }}><Box size={20} /></div>
-            <div style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Tổng giá trị tồn</div>
+            <div style={{ padding: "8px", background: "#7E293015", borderRadius: "8px", color: "var(--primary)" }}><Box size={20} /></div>
+            <div style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Tổng giá trị tồn</div>
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e" }}>{formatVND(totalValue)}</div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)" }}>{formatVND(totalValue)}</div>
         </div>
-        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+        <div style={{ background: "var(--surface)", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
             <div style={{ padding: "8px", background: "#3b82f615", borderRadius: "8px", color: "#3b82f6" }}><Package size={20} /></div>
-            <div style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Số SKU theo dõi</div>
+            <div style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Số SKU theo dõi</div>
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e" }}>{trackedCount}</div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)" }}>{trackedCount}</div>
         </div>
-        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+        <div style={{ background: "var(--surface)", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
             <div style={{ padding: "8px", background: "#f59e0b15", borderRadius: "8px", color: "#f59e0b" }}><TrendingDown size={20} /></div>
-            <div style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Dưới định mức</div>
+            <div style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Dưới định mức</div>
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e" }}>{lowStockCount}</div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)" }}>{lowStockCount}</div>
         </div>
-        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+        <div style={{ background: "var(--surface)", padding: "20px", borderRadius: "12px", border: "1px solid #eee", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
             <div style={{ padding: "8px", background: "#ef444415", borderRadius: "8px", color: "#ef4444" }}><AlertTriangle size={20} /></div>
-            <div style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Hết hàng</div>
+            <div style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Hết hàng</div>
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e" }}>{outOfStockCount}</div>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)" }}>{outOfStockCount}</div>
         </div>
       </div>
 
       {/* Low Stock Alerts */}
-      <h2 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "16px", color: "#1a1a2e" }}>Cảnh báo tồn kho</h2>
-      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #eee", overflow: "hidden", marginBottom: "32px" }}>
+      <h2 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "16px", color: "var(--text)" }}>Cảnh báo tồn kho</h2>
+      <div style={{ background: "var(--surface)", borderRadius: "12px", border: "1px solid #eee", overflowX: "auto", marginBottom: "32px" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#fafafa", borderBottom: "2px solid #eee" }}>
+          <thead style={{ background: "var(--surface-muted)", borderBottom: "2px solid #eee" }}>
             <tr>
               <th style={thStyle}>SKU</th>
               <th style={thStyle}>Tên hàng</th>
@@ -242,7 +242,7 @@ export default function InventoryReportPage() {
           </thead>
           <tbody>
             {alerts.length === 0 ? (
-              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#999", padding: "24px" }}>Không có cảnh báo tồn kho.</td></tr>
+              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "var(--muted)", padding: "24px" }}>Không có cảnh báo tồn kho.</td></tr>
             ) : alerts.map((alert, idx) => {
               const isOut = alert.balance.onHandQty <= 0;
               return (
@@ -265,10 +265,10 @@ export default function InventoryReportPage() {
       </div>
 
       {/* Recent Events */}
-      <h2 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "16px", color: "#1a1a2e" }}>Biến động kho gần đây (50 giao dịch)</h2>
-      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #eee", overflow: "hidden" }}>
+      <h2 style={{ fontSize: "16px", fontWeight: "700", marginBottom: "16px", color: "var(--text)" }}>Biến động kho gần đây (50 giao dịch)</h2>
+      <div style={{ background: "var(--surface)", borderRadius: "12px", border: "1px solid #eee", overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#fafafa", borderBottom: "2px solid #eee" }}>
+          <thead style={{ background: "var(--surface-muted)", borderBottom: "2px solid #eee" }}>
             <tr>
               <th style={thStyle}>Thời gian</th>
               <th style={thStyle}>Loại phiếu</th>
@@ -279,7 +279,7 @@ export default function InventoryReportPage() {
           </thead>
           <tbody>
             {stockEvents.length === 0 ? (
-              <tr><td colSpan={5} style={{ ...tdStyle, textAlign: "center", color: "#999", padding: "24px" }}>Chưa có giao dịch kho.</td></tr>
+              <tr><td colSpan={5} style={{ ...tdStyle, textAlign: "center", color: "var(--muted)", padding: "24px" }}>Chưa có giao dịch kho.</td></tr>
             ) : stockEvents.map((evt) => {
               const item = catalogMap[evt.itemId];
               const isPos = evt.qtyDeltaBase > 0;

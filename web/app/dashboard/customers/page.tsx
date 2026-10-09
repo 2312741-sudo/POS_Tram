@@ -9,16 +9,13 @@ import {
   Phone,
   CreditCard,
   Coins,
-  Award,
   RefreshCw,
-  Plus,
   Check,
-  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
 import { db, firestore } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { ref, get, update } from "firebase/database";
 import { exportCustomersList, CustomerExportItem } from "@/lib/export";
 import { formatVND, formatNumber } from "@/lib/reports";
@@ -254,9 +251,9 @@ export default function CustomersPage() {
       {/* Header */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "16px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "20px 24px",
           marginBottom: "20px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
@@ -265,13 +262,13 @@ export default function CustomersPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Quản lý Khách hàng & Tích điểm CRM
               </h1>
               <span
                 style={{
-                  background: "#FBECEE",
-                  color: "#7E2930",
+                  background: "var(--primary-light)",
+                  color: "var(--primary)",
                   padding: "4px 10px",
                   borderRadius: "20px",
                   fontSize: "12px",
@@ -281,7 +278,7 @@ export default function CustomersPage() {
                 Khuyến Mãi Trạm (KMT)
               </span>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginTop: "4px", margin: 0 }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
               Đồng bộ dữ liệu khách hàng đa nền tảng với ứng dụng Khuyến Mãi Trạm • Điểm đổi voucher khấu trừ doanh thu
             </p>
           </div>
@@ -301,12 +298,12 @@ export default function CustomersPage() {
                 alignItems: "center",
                 gap: "6px",
                 padding: "8px 14px",
-                background: "#F8F4EE",
-                border: "1px solid #E6DEC8",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: "8px",
                 fontSize: "13px",
                 fontWeight: "600",
-                color: "#7E2930",
+                color: "var(--primary)",
                 cursor: "pointer",
               }}
             >
@@ -320,7 +317,7 @@ export default function CustomersPage() {
                   alignItems: "center",
                   gap: "6px",
                   padding: "8px 14px",
-                  background: "#7E2930",
+                  background: "var(--primary)",
                   color: "#FFFFFF",
                   border: "none",
                   borderRadius: "8px",
@@ -355,15 +352,15 @@ export default function CustomersPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-        <div style={{ background: "#FFFFFF", borderRadius: "14px", padding: "18px 20px", border: "1px solid #E6DEC8" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Tổng Khách Hàng CRM</span>
-            <div style={{ padding: "8px", background: "#F5F0E6", borderRadius: "10px", color: "#7E2930" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: "16px", marginBottom: "20px" }}>
+        <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "18px 20px", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Tổng Khách Hàng CRM</span>
+            <div style={{ padding: "8px", background: "var(--surface-muted)", borderRadius: "10px", color: "var(--primary)" }}>
               <Users size={18} />
             </div>
           </div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "#1C1A2D", marginTop: "8px" }}>
+          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", marginTop: "8px" }}>
             {formatNumber(kpiStats.totalCustomers)}
           </div>
           <div style={{ fontSize: "12px", color: "#8A5B00", marginTop: "4px" }}>
@@ -371,25 +368,25 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", borderRadius: "14px", padding: "18px 20px", border: "1px solid #E6DEC8" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Tổng Điểm Lưu Hành</span>
-            <div style={{ padding: "8px", background: "#E8F0FE", borderRadius: "10px", color: "#1877F2" }}>
+        <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "18px 20px", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Tổng Điểm Lưu Hành</span>
+            <div style={{ padding: "8px", background: "var(--info-bg)", borderRadius: "10px", color: "#1877F2" }}>
               <Coins size={18} />
             </div>
           </div>
           <div style={{ fontSize: "24px", fontWeight: "800", color: "#1877F2", marginTop: "8px" }}>
             {formatNumber(kpiStats.totalPoints)} <span style={{ fontSize: "14px" }}>điểm</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Tích lũy từ doanh số F&B
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", borderRadius: "14px", padding: "18px 20px", border: "1px solid #E6DEC8" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Giá Trị Quy Đổi Điểm</span>
-            <div style={{ padding: "8px", background: "#E6F4EA", borderRadius: "10px", color: "#137333" }}>
+        <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "18px 20px", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Giá Trị Quy Đổi Điểm</span>
+            <div style={{ padding: "8px", background: "var(--success-bg)", borderRadius: "10px", color: "#137333" }}>
               <CreditCard size={18} />
             </div>
           </div>
@@ -401,17 +398,17 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", borderRadius: "14px", padding: "18px 20px", border: "1px solid #E6DEC8" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "#666", fontWeight: "600" }}>Tỷ Lệ Đổi Điểm Hiện Tại</span>
-            <div style={{ padding: "8px", background: "#FDF5F6", borderRadius: "10px", color: "#7E2930" }}>
+        <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "18px 20px", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", color: "var(--subtext)", fontWeight: "600" }}>Tỷ Lệ Đổi Điểm Hiện Tại</span>
+            <div style={{ padding: "8px", background: "var(--primary-light)", borderRadius: "10px", color: "var(--primary)" }}>
               <Sparkles size={18} />
             </div>
           </div>
-          <div style={{ fontSize: "20px", fontWeight: "800", color: "#7E2930", marginTop: "8px" }}>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--primary)", marginTop: "8px" }}>
             1 điểm = {formatVND(pointRedeemRate)}
           </div>
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Tích {pointEarnRate}% doanh số hóa đơn
           </div>
         </div>
@@ -420,9 +417,9 @@ export default function CustomersPage() {
       {/* Filter and Search Bar */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "14px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           padding: "16px 20px",
           marginBottom: "16px",
           display: "flex",
@@ -438,10 +435,10 @@ export default function CustomersPage() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "#F8F4EE",
+              background: "var(--bg)",
               padding: "8px 14px",
               borderRadius: "8px",
-              border: "1px solid #E6DEC8",
+              border: "1px solid var(--border)",
               width: "100%",
               maxWidth: "360px",
             }}
@@ -474,9 +471,9 @@ export default function CustomersPage() {
                 style={{
                   padding: "6px 14px",
                   borderRadius: "20px",
-                  border: active ? "1px solid #7E2930" : "1px solid #E6DEC8",
-                  background: active ? "#7E2930" : "#FFFFFF",
-                  color: active ? "#FFFFFF" : "#555",
+                  border: active ? "1px solid var(--primary)" : "1px solid var(--border)",
+                  background: active ? "var(--primary)" : "var(--surface)",
+                  color: active ? "#FFFFFF" : "var(--subtext)",
                   fontSize: "12px",
                   fontWeight: active ? "700" : "500",
                   cursor: "pointer",
@@ -492,9 +489,9 @@ export default function CustomersPage() {
       {/* Customers Table */}
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface)",
           borderRadius: "14px",
-          border: "1px solid #E6DEC8",
+          border: "1px solid var(--border)",
           overflow: "hidden",
           boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
         }}
@@ -502,7 +499,7 @@ export default function CustomersPage() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
-              <tr style={{ background: "#F8F4EE", borderBottom: "1px solid #E6DEC8", textAlign: "left", color: "#1C1A2D" }}>
+              <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)", textAlign: "left", color: "var(--text)" }}>
                 <th style={{ padding: "12px 14px", width: "50px", textAlign: "center" }}>STT</th>
                 <th style={{ padding: "12px 14px" }}>Khách hàng</th>
                 <th style={{ padding: "12px 14px" }}>Số điện thoại</th>
@@ -516,13 +513,13 @@ export default function CustomersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "#888" }}>
+                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
                     Đang tải danh sách khách hàng KMT...
                   </td>
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "#888" }}>
+                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
                     Không tìm thấy khách hàng nào phù hợp
                   </td>
                 </tr>
@@ -534,8 +531,8 @@ export default function CustomersPage() {
                       key={c.id || c.soDienThoai || idx}
                       style={{ borderBottom: "1px solid #F0ECE1" }}
                     >
-                      <td style={{ padding: "12px 14px", textAlign: "center", color: "#888" }}>{idx + 1}</td>
-                      <td style={{ padding: "12px 14px", fontWeight: "700", color: "#1C1A2D" }}>
+                      <td style={{ padding: "12px 14px", textAlign: "center", color: "var(--muted)" }}>{idx + 1}</td>
+                      <td style={{ padding: "12px 14px", fontWeight: "700", color: "var(--text)" }}>
                         {c.hoTen}
                       </td>
                       <td style={{ padding: "12px 14px" }}>
@@ -544,7 +541,7 @@ export default function CustomersPage() {
                           <strong>{c.soDienThoai || "—"}</strong>
                         </span>
                       </td>
-                      <td style={{ padding: "12px 14px", color: "#666", fontFamily: "monospace" }}>
+                      <td style={{ padding: "12px 14px", color: "var(--subtext)", fontFamily: "monospace" }}>
                         {c.maKhachHang || "—"}
                       </td>
                       <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "800", color: "#1877F2" }}>
@@ -562,12 +559,12 @@ export default function CustomersPage() {
                             fontWeight: "700",
                             background:
                               c.hangThanhVien === "Kim Cương"
-                                ? "#E8F0FE"
+                                ? "var(--info-bg)"
                                 : c.hangThanhVien === "Vàng"
                                 ? "#FEF7E0"
                                 : c.hangThanhVien === "Bạc"
                                 ? "#F1F3F4"
-                                : "#F8F4EE",
+                                : "var(--bg)",
                             color:
                               c.hangThanhVien === "Kim Cương"
                                 ? "#1877F2"
@@ -575,13 +572,13 @@ export default function CustomersPage() {
                                 ? "#B06000"
                                 : c.hangThanhVien === "Bạc"
                                 ? "#5F6368"
-                                : "#7E2930",
+                                : "var(--primary)",
                           }}
                         >
                           {c.hangThanhVien}
                         </span>
                       </td>
-                      <td style={{ padding: "12px 14px", textAlign: "center", color: "#888", fontSize: "12px" }}>
+                      <td style={{ padding: "12px 14px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
                         {c.ngayTao || "—"}
                       </td>
                     </tr>
@@ -610,7 +607,7 @@ export default function CustomersPage() {
         >
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
               padding: "24px 28px",
               maxWidth: "480px",
@@ -621,11 +618,11 @@ export default function CustomersPage() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <Settings size={20} color="#7E2930" />
-              <h2 style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+              <h2 style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                 Cấu hình Tỷ Lệ Đổi Điểm KMT CRM
               </h2>
             </div>
-            <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>
+            <p style={{ fontSize: "13px", color: "var(--subtext)", marginBottom: "16px" }}>
               Chủ quán thiết lập giá trị quy đổi 1 điểm sang VNĐ khi khách thanh toán bằng điểm tích luỹ. Điểm dùng sẽ được trừ trực tiếp vào hoá đơn dưới dạng chiết khấu/khuyến mãi (không tính vào doanh thu thuần).
             </p>
 
@@ -633,7 +630,7 @@ export default function CustomersPage() {
               <div
                 style={{
                   padding: "10px 14px",
-                  background: "#E6F4EA",
+                  background: "var(--success-bg)",
                   color: "#137333",
                   borderRadius: "8px",
                   fontSize: "13px",
@@ -650,7 +647,7 @@ export default function CustomersPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div>
-                <label style={{ fontSize: "13px", fontWeight: "700", color: "#1C1A2D", display: "block", marginBottom: "6px" }}>
+                <label style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", display: "block", marginBottom: "6px" }}>
                   Giá trị quy đổi: 1 Điểm = ? VNĐ (Mặc định 1.000đ)
                 </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -667,12 +664,12 @@ export default function CustomersPage() {
                       fontWeight: "700",
                     }}
                   />
-                  <span style={{ fontSize: "14px", fontWeight: "700", color: "#7E2930" }}>VNĐ / Điểm</span>
+                  <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--primary)" }}>VNĐ / Điểm</span>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: "13px", fontWeight: "700", color: "#1C1A2D", display: "block", marginBottom: "6px" }}>
+                <label style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", display: "block", marginBottom: "6px" }}>
                   Tỷ lệ tích điểm: % Doanh số hoá đơn (Mặc định 1.0%)
                 </label>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -690,7 +687,7 @@ export default function CustomersPage() {
                       fontWeight: "700",
                     }}
                   />
-                  <span style={{ fontSize: "14px", fontWeight: "700", color: "#7E2930" }}>% Hoá đơn</span>
+                  <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--primary)" }}>% Hoá đơn</span>
                 </div>
               </div>
             </div>
@@ -700,7 +697,7 @@ export default function CustomersPage() {
                 onClick={() => setShowConfigModal(false)}
                 style={{
                   padding: "8px 16px",
-                  background: "#F0ECE1",
+                  background: "var(--surface-muted)",
                   border: "none",
                   borderRadius: "8px",
                   fontSize: "13px",
@@ -715,7 +712,7 @@ export default function CustomersPage() {
                 disabled={isSavingConfig}
                 style={{
                   padding: "8px 18px",
-                  background: "#7E2930",
+                  background: "var(--primary)",
                   color: "#FFFFFF",
                   border: "none",
                   borderRadius: "8px",

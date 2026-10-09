@@ -338,7 +338,8 @@ describe("Modules 4, 5, 6 Specific Edge Cases & Calculations", () => {
           productName: "Cà phê",
           quantity: 2,
           price: 50000,
-          discountAmount: 5000,
+          // discountAmount là giảm CẢ DÒNG (Flutter: 10% × 100k = 10k), không nhân quantity
+          discountAmount: 10000,
           discountPercent: 10,
         },
       ],

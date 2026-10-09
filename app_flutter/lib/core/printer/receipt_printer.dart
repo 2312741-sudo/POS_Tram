@@ -142,6 +142,13 @@ class ReceiptPrinter {
         bytes.addAll(encodeText(normalize('  * ${item.note}')));
         bytes.add(0x0A);
       }
+
+      // Giảm giá dòng (VD: "Giam 10% x 2/5 mon -8.000d")
+      if (item.hasDiscount) {
+        final desc = item.discountDescription((v) => '${_currencyFormat.format(v)}d');
+        bytes.addAll(encodeText(normalize('  $desc: -${_currencyFormat.format(item.lineDiscountTotal)}d')));
+        bytes.add(0x0A);
+      }
     }
 
     bytes.addAll(encodeText(singleDivider));
@@ -471,6 +478,11 @@ class ReceiptPrinter {
 
       if (item.note.isNotEmpty) {
         lines.add(ReceiptRasterLine(text: '  * ${item.note}', fontSize: 14.0));
+      }
+
+      if (item.hasDiscount) {
+        final desc = item.discountDescription((v) => '${_currencyFormat.format(v)}đ');
+        lines.add(ReceiptRasterLine(text: '  $desc: -${_currencyFormat.format(item.lineDiscountTotal)}đ', fontSize: 14.0));
       }
     }
 

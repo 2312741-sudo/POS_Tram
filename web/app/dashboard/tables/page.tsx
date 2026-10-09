@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
+import { useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { ref, onValue, update, remove, set } from "firebase/database";
+import { ref, update } from "firebase/database";
 import {
   Search,
   Plus,
@@ -17,12 +18,9 @@ import {
   UtensilsCrossed,
   Printer,
   CheckCircle2,
-  AlertTriangle,
-  CreditCard,
   Banknote,
   QrCode,
   Bookmark,
-  Calendar,
   Phone,
   DollarSign,
   XCircle,
@@ -79,7 +77,8 @@ const emptyForm: TableFormData = {
 
 import { useDashboardData, resolveWriteStoreCode } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
-import { lineQuantity, lineUnitPrice, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
+import { buildTableBillHtml } from "@/lib/print-html";
+import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
 
 export default function TablesPage() {
   const {
@@ -371,81 +370,15 @@ export default function TablesPage() {
       return;
     }
 
-    const itemsHtml = items
-      .map(
-        (it) => `
-      <tr>
-        <td style="padding: 4px 0; text-align: left;">
-          <strong>${it.name}</strong>
-          ${it.selectedSize ? `<br/><small>Size: ${it.selectedSize}</small>` : ""}
-          ${
-            it.selectedToppings && it.selectedToppings.length > 0
-              ? `<br/><small>+ ${it.selectedToppings.map(toppingLabel).filter(Boolean).join(", ")}</small>`
-              : ""
-          }
-        </td>
-        <td style="padding: 4px 0; text-align: center;">${it.quantity || it.count || 1}</td>
-        <td style="padding: 4px 0; text-align: right;">${formatVND(it.price)}đ</td>
-        <td style="padding: 4px 0; text-align: right; font-weight: bold;">
-          ${formatVND(it.price * (it.quantity || it.count || 1))}đ
-        </td>
-      </tr>
-    `
-      )
-      .join("");
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Hóa đơn tạm tính - ${table.name}</title>
-        <style>
-          body { font-family: monospace, sans-serif; width: 300px; margin: 0 auto; padding: 10px; color: #000; }
-          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-          .title { font-size: 18px; font-weight: bold; }
-          table { width: 100%; border-collapse: collapse; font-size: 13px; }
-          th { border-bottom: 1px solid #000; padding: 4px 0; }
-          .total { border-top: 1px dashed #000; margin-top: 10px; padding-top: 8px; }
-          .total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: bold; }
-          .footer { text-align: center; margin-top: 15px; font-size: 12px; border-top: 1px dashed #000; padding-top: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="title">TRẠM FnB SYSTEM</div>
-          <div>PHIẾU TẠM TÍNH BÀN</div>
-          <div style="margin-top: 4px;"><strong>${table.zone} - ${table.name}</strong></div>
-          <div style="font-size: 11px;">Thời gian: ${new Date().toLocaleString("vi-VN")}</div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align: left;">Món</th>
-              <th style="text-align: center;">SL</th>
-              <th style="text-align: right;">Đơn giá</th>
-              <th style="text-align: right;">T.Tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-        <div class="total">
-          <div class="total-row">
-            <span>TỔNG CỘNG:</span>
-            <span>${formatVND(total)} VNĐ</span>
-          </div>
-        </div>
-        <div class="footer">
-          <div>Cảm ơn Quý khách! Hẹn gặp lại.</div>
-          <div style="font-size: 10px; margin-top: 4px;">Hệ thống Quản lý Vận hành POS Trạm</div>
-        </div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `);
+    printWindow.document.write(
+      buildTableBillHtml({
+        tableName: table.name,
+        zone: table.zone,
+        items,
+        total,
+        printedAt: new Date().toLocaleString("vi-VN"),
+      })
+    );
     printWindow.document.close();
   };
 
@@ -463,13 +396,13 @@ export default function TablesPage() {
       {checkoutToast && (
         <div
           style={{
-            background: "#ECFDF5",
+            background: "var(--success-bg)",
             border: "1.5px solid #10B981",
             borderRadius: "12px",
             padding: "14px 18px",
             color: "#065F46",
             fontWeight: "600",
-            display: "flex",
+            display: "flex", flexWrap: "wrap", rowGap: "8px",
             alignItems: "center",
             justifyContent: "space-between",
             boxShadow: "0 4px 12px rgba(16, 185, 129, 0.15)",
@@ -501,8 +434,8 @@ export default function TablesPage() {
           <div
             style={{
               display: "flex",
-              background: "#FFFFFF",
-              border: "1px solid #E6DEC8",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
               borderRadius: "10px",
               padding: "3px",
             }}
@@ -516,8 +449,8 @@ export default function TablesPage() {
                 padding: "6px 12px",
                 borderRadius: "8px",
                 border: "none",
-                background: viewMode === "grid" ? "#7E2930" : "transparent",
-                color: viewMode === "grid" ? "#FFFFFF" : "#5D5B63",
+                background: viewMode === "grid" ? "var(--primary)" : "transparent",
+                color: viewMode === "grid" ? "#FFFFFF" : "var(--subtext)",
                 fontWeight: "600",
                 fontSize: "13px",
                 cursor: "pointer",
@@ -536,8 +469,8 @@ export default function TablesPage() {
                 padding: "6px 12px",
                 borderRadius: "8px",
                 border: "none",
-                background: viewMode === "list" ? "#7E2930" : "transparent",
-                color: viewMode === "list" ? "#FFFFFF" : "#5D5B63",
+                background: viewMode === "list" ? "var(--primary)" : "transparent",
+                color: viewMode === "list" ? "#FFFFFF" : "var(--subtext)",
                 fontWeight: "600",
                 fontSize: "13px",
                 cursor: "pointer",
@@ -557,15 +490,15 @@ export default function TablesPage() {
       </div>
 
       {/* Statistics Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(210px, 100%), 1fr))", gap: "16px" }}>
         <div className="stat-card">
-          <div style={{ fontSize: "13px", fontWeight: "600", color: "#5D5B63", marginBottom: "8px" }}>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--subtext)", marginBottom: "8px" }}>
             TỔNG SỐ BÀN
           </div>
-          <div style={{ fontSize: "28px", fontWeight: "800", color: "#1C1A2D" }}>
-            {tables.length} <span style={{ fontSize: "14px", fontWeight: "500", color: "#5D5B63" }}>bàn</span>
+          <div style={{ fontSize: "28px", fontWeight: "800", color: "var(--text)" }}>
+            {tables.length} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--subtext)" }}>bàn</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#5D5B63", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             Toàn bộ các khu vực
           </div>
         </div>
@@ -573,17 +506,17 @@ export default function TablesPage() {
         <div
           className="stat-card"
           style={{
-            borderLeft: "4px solid #7E2930",
-            background: inUseCount > 0 ? "linear-gradient(135deg, #FFFFFF 0%, #FFF0F2 100%)" : "#FFFFFF",
+            borderLeft: "4px solid var(--primary)",
+            background: inUseCount > 0 ? "linear-gradient(135deg, var(--surface) 0%, var(--primary-light) 100%)" : "var(--surface)",
           }}
         >
-          <div style={{ fontSize: "13px", fontWeight: "700", color: "#7E2930", marginBottom: "8px" }}>
+          <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--primary)", marginBottom: "8px" }}>
             ĐANG CÓ KHÁCH (IN USE)
           </div>
-          <div style={{ fontSize: "28px", fontWeight: "800", color: "#7E2930" }}>
-            {inUseCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "#7E2930" }}>bàn</span>
+          <div style={{ fontSize: "28px", fontWeight: "800", color: "var(--primary)" }}>
+            {inUseCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--primary)" }}>bàn</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#7E2930", marginTop: "4px", fontWeight: "600" }}>
+          <div style={{ fontSize: "12px", color: "var(--primary)", marginTop: "4px", fontWeight: "600" }}>
             🔴 Đã gửi bếp & đang phục vụ
           </div>
         </div>
@@ -591,27 +524,27 @@ export default function TablesPage() {
         <div
           className="stat-card"
           style={{
-            borderLeft: "4px solid #146A65",
-            background: "linear-gradient(135deg, #FFFFFF 0%, #E6F4F2 100%)",
+            borderLeft: "4px solid var(--success)",
+            background: "linear-gradient(135deg, var(--surface) 0%, var(--success-bg) 100%)",
           }}
         >
-          <div style={{ fontSize: "13px", fontWeight: "700", color: "#146A65", marginBottom: "8px" }}>
+          <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--success)", marginBottom: "8px" }}>
             BÀN TRỐNG (AVAILABLE)
           </div>
-          <div style={{ fontSize: "28px", fontWeight: "800", color: "#146A65" }}>
-            {emptyCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "#146A65" }}>bàn</span>
+          <div style={{ fontSize: "28px", fontWeight: "800", color: "var(--success)" }}>
+            {emptyCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--success)" }}>bàn</span>
           </div>
-          <div style={{ fontSize: "12px", color: "#146A65", marginTop: "4px", fontWeight: "600" }}>
+          <div style={{ fontSize: "12px", color: "var(--success)", marginTop: "4px", fontWeight: "600" }}>
             🟢 Sẵn sàng nhận khách mới
           </div>
         </div>
 
-        <div className="stat-card" style={{ borderLeft: "4px solid #D97706" }}>
-          <div style={{ fontSize: "13px", fontWeight: "700", color: "#D97706", marginBottom: "8px" }}>
+        <div className="stat-card" style={{ borderLeft: "4px solid var(--warning)" }}>
+          <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--warning)", marginBottom: "8px" }}>
             TỔNG SỐ KHÁCH HIỆN TẠI
           </div>
-          <div style={{ fontSize: "28px", fontWeight: "800", color: "#D97706" }}>
-            {totalGuests} <span style={{ fontSize: "14px", fontWeight: "600", color: "#D97706" }}>khách</span>
+          <div style={{ fontSize: "28px", fontWeight: "800", color: "var(--warning)" }}>
+            {totalGuests} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--warning)" }}>khách</span>
           </div>
           <div style={{ fontSize: "12px", color: "#805214", marginTop: "4px" }}>
             Đang ngồi tại {inUseCount} bàn
@@ -622,7 +555,7 @@ export default function TablesPage() {
           className="stat-card"
           style={{
             borderLeft: "4px solid #B45309",
-            background: reservedCount > 0 ? "linear-gradient(135deg, #FFFFFF 0%, #FEF3C7 100%)" : "#FFFFFF",
+            background: reservedCount > 0 ? "linear-gradient(135deg, var(--surface) 0%, var(--warning-bg) 100%)" : "var(--surface)",
           }}
         >
           <div style={{ fontSize: "13px", fontWeight: "700", color: "#B45309", marginBottom: "8px" }}>
@@ -700,7 +633,7 @@ export default function TablesPage() {
                 left: "14px",
                 top: "50%",
                 transform: "translateY(-50%)",
-                color: "#8B8FA8",
+                color: "var(--muted)",
               }}
             />
             <input
@@ -714,19 +647,22 @@ export default function TablesPage() {
         </div>
 
         {/* Status Filter Chips */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", borderTop: "1px dashed #ECE5D8", paddingTop: "12px" }}>
-          <span style={{ fontSize: "12px", fontWeight: "700", color: "#5D5B63", marginRight: "4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", borderTop: "1px dashed var(--border-light)", paddingTop: "12px" }}>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--subtext)", marginRight: "4px" }}>
             Trạng thái bàn:
           </span>
           <button
+            type="button"
+            aria-pressed={statusFilter === "ALL"}
             onClick={() => setStatusFilter("ALL")}
             style={{
-              padding: "4px 10px",
+              minHeight: "32px",
+              padding: "6px 12px",
               borderRadius: "14px",
               fontSize: "12px",
               fontWeight: statusFilter === "ALL" ? "700" : "500",
-              background: statusFilter === "ALL" ? "#1C1A2D" : "#F3F0EB",
-              color: statusFilter === "ALL" ? "#FFFFFF" : "#5D5B63",
+              background: statusFilter === "ALL" ? "var(--text)" : "var(--surface-muted)",
+              color: statusFilter === "ALL" ? "var(--surface)" : "var(--subtext)",
               border: "none",
               cursor: "pointer",
             }}
@@ -734,14 +670,17 @@ export default function TablesPage() {
             Tất cả ({tables.length})
           </button>
           <button
+            type="button"
+            aria-pressed={statusFilter === "IN_USE"}
             onClick={() => setStatusFilter("IN_USE")}
             style={{
-              padding: "4px 10px",
+              minHeight: "32px",
+              padding: "6px 12px",
               borderRadius: "14px",
               fontSize: "12px",
               fontWeight: statusFilter === "IN_USE" ? "700" : "500",
-              background: statusFilter === "IN_USE" ? "#7E2930" : "#FFF0F2",
-              color: statusFilter === "IN_USE" ? "#FFFFFF" : "#7E2930",
+              background: statusFilter === "IN_USE" ? "var(--primary)" : "var(--primary-light)",
+              color: statusFilter === "IN_USE" ? "#FFFFFF" : "var(--primary)",
               border: "1px solid rgba(126, 41, 48, 0.2)",
               cursor: "pointer",
             }}
@@ -749,14 +688,17 @@ export default function TablesPage() {
             🔴 Đang có khách ({inUseCount})
           </button>
           <button
+            type="button"
+            aria-pressed={statusFilter === "EMPTY"}
             onClick={() => setStatusFilter("EMPTY")}
             style={{
-              padding: "4px 10px",
+              minHeight: "32px",
+              padding: "6px 12px",
               borderRadius: "14px",
               fontSize: "12px",
               fontWeight: statusFilter === "EMPTY" ? "700" : "500",
-              background: statusFilter === "EMPTY" ? "#146A65" : "#E6F4F2",
-              color: statusFilter === "EMPTY" ? "#FFFFFF" : "#146A65",
+              background: statusFilter === "EMPTY" ? "var(--success)" : "var(--success-bg)",
+              color: statusFilter === "EMPTY" ? "#FFFFFF" : "var(--success)",
               border: "1px solid rgba(20, 106, 101, 0.2)",
               cursor: "pointer",
             }}
@@ -764,14 +706,17 @@ export default function TablesPage() {
             🟢 Bàn trống ({emptyCount})
           </button>
           <button
+            type="button"
+            aria-pressed={statusFilter === "RESERVED"}
             onClick={() => setStatusFilter("RESERVED")}
             style={{
-              padding: "4px 10px",
+              minHeight: "32px",
+              padding: "6px 12px",
               borderRadius: "14px",
               fontSize: "12px",
               fontWeight: statusFilter === "RESERVED" ? "700" : "500",
-              background: statusFilter === "RESERVED" ? "#B45309" : "#FEF3C7",
-              color: statusFilter === "RESERVED" ? "#FFFFFF" : "#B45309",
+              background: statusFilter === "RESERVED" ? "var(--warning)" : "var(--warning-bg)",
+              color: statusFilter === "RESERVED" ? "#FFFFFF" : "var(--warning)",
               border: "1px solid rgba(180, 83, 9, 0.2)",
               cursor: "pointer",
             }}
@@ -789,11 +734,11 @@ export default function TablesPage() {
             style={{
               textAlign: "center",
               padding: "60px 20px",
-              color: "#5D5B63",
+              color: "var(--subtext)",
             }}
           >
             <div style={{ fontSize: "48px", marginBottom: "12px" }}>🪑</div>
-            <div style={{ fontSize: "16px", fontWeight: "700", color: "#1C1A2D", marginBottom: "6px" }}>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
               Không tìm thấy bàn nào
             </div>
             <p style={{ fontSize: "14px" }}>
@@ -804,7 +749,7 @@ export default function TablesPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
               gap: "20px",
             }}
           >
@@ -820,9 +765,9 @@ export default function TablesPage() {
                     key={t.id}
                     onClick={() => setSelectedTableForOrder(t)}
                     style={{
-                      background: "#FFFFFF",
+                      background: "var(--surface)",
                       borderRadius: "16px",
-                      border: "2px solid #7E2930",
+                      border: "2px solid var(--primary)",
                       boxShadow: "0 6px 18px rgba(126, 41, 48, 0.15)",
                       overflow: "hidden",
                       cursor: "pointer",
@@ -843,9 +788,9 @@ export default function TablesPage() {
                     {/* Header bàn */}
                     <div
                       style={{
-                        background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+                        background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
                         padding: "14px 16px",
-                        display: "flex",
+                        display: "flex", flexWrap: "wrap", rowGap: "8px",
                         alignItems: "center",
                         justifyContent: "space-between",
                         color: "#FFFFFF",
@@ -883,12 +828,12 @@ export default function TablesPage() {
                     {/* Thân thẻ bàn */}
                     <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
                       {/* Trạng thái & Thời gian */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="badge badge-danger">
                           <CheckCircle2 size={13} />
                           Đang có khách
                         </span>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "#5D5B63" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--subtext)" }}>
                           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                             <Users size={14} color="#7E2930" />
                             <strong>{t.guestCount || 1} khách</strong>
@@ -908,8 +853,8 @@ export default function TablesPage() {
                               style={{
                                 fontSize: "11px",
                                 fontWeight: "700",
-                                color: "#7E2930",
-                                background: "#FFF0F2",
+                                color: "var(--primary)",
+                                background: "var(--primary-light)",
                                 padding: "2px 8px",
                                 borderRadius: "4px",
                                 border: "1px solid rgba(126, 41, 48, 0.2)",
@@ -924,8 +869,8 @@ export default function TablesPage() {
                               style={{
                                 fontSize: "11px",
                                 fontWeight: "700",
-                                color: "#146A65",
-                                background: "#E8F5F3",
+                                color: "var(--success)",
+                                background: "var(--success-bg)",
                                 padding: "2px 8px",
                                 borderRadius: "4px",
                                 border: "1px solid rgba(20, 106, 101, 0.2)",
@@ -941,7 +886,7 @@ export default function TablesPage() {
                       {/* Danh sách món tóm tắt */}
                       <div
                         style={{
-                          background: "#FFF0F2",
+                          background: "var(--primary-light)",
                           borderRadius: "10px",
                           padding: "10px 12px",
                           border: "1px dashed rgba(126, 41, 48, 0.25)",
@@ -953,29 +898,29 @@ export default function TablesPage() {
                       >
                         {orderItems.length > 0 ? (
                           <>
-                            <div style={{ fontSize: "12px", fontWeight: "700", color: "#7E2930", marginBottom: "4px" }}>
+                            <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--primary)", marginBottom: "4px" }}>
                               {orderItems.length} món đã gửi bếp:
                             </div>
-                            <div style={{ fontSize: "13px", color: "#1C1A2D", lineHeight: 1.4 }}>
+                            <div style={{ fontSize: "13px", color: "var(--text)", lineHeight: 1.4 }}>
                               {orderItems.slice(0, 2).map((item, idx) => (
-                                <div key={idx} style={{ display: "flex", justifyContent: "space-between" }}>
+                                <div key={idx} style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between" }}>
                                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
                                     • {item.name}
                                   </span>
-                                  <span style={{ fontWeight: "600", color: "#7E2930" }}>
+                                  <span style={{ fontWeight: "600", color: "var(--primary)" }}>
                                     x{item.quantity || item.count || 1}
                                   </span>
                                 </div>
                               ))}
                               {orderItems.length > 2 && (
-                                <span style={{ fontSize: "11px", color: "#7E2930", fontWeight: "600" }}>
+                                <span style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "600" }}>
                                   + {orderItems.length - 2} món khác...
                                 </span>
                               )}
                             </div>
                           </>
                         ) : (
-                          <div style={{ textAlign: "center", fontSize: "12px", color: "#7E2930", fontStyle: "italic" }}>
+                          <div style={{ textAlign: "center", fontSize: "12px", color: "var(--primary)", fontStyle: "italic" }}>
                             Bàn đang mở • Chưa có món
                           </div>
                         )}
@@ -986,17 +931,17 @@ export default function TablesPage() {
                         style={{
                           marginTop: "auto",
                           paddingTop: "10px",
-                          borderTop: "1px solid #ECE5D8",
-                          display: "flex",
+                          borderTop: "1px solid var(--border-light)",
+                          display: "flex", flexWrap: "wrap", rowGap: "8px",
                           alignItems: "center",
                           justifyContent: "space-between",
                         }}
                       >
                         <div>
-                          <div style={{ fontSize: "11px", color: "#5D5B63", textTransform: "uppercase" }}>
+                          <div style={{ fontSize: "11px", color: "var(--subtext)", textTransform: "uppercase" }}>
                             Tạm tính
                           </div>
-                          <div style={{ fontSize: "17px", fontWeight: "800", color: "#7E2930" }}>
+                          <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--primary)" }}>
                             {formatVND(orderTotal)} <span style={{ fontSize: "12px" }}>đ</span>
                           </div>
                         </div>
@@ -1022,9 +967,9 @@ export default function TablesPage() {
                   <div
                     key={t.id}
                     style={{
-                      background: "#FFFFFF",
+                      background: "var(--surface)",
                       borderRadius: "16px",
-                      border: "2px solid #D97706",
+                      border: "2px solid var(--warning)",
                       boxShadow: "0 6px 18px rgba(217, 119, 6, 0.15)",
                       overflow: "hidden",
                       display: "flex",
@@ -1044,9 +989,9 @@ export default function TablesPage() {
                     {/* Header bàn đặt trước */}
                     <div
                       style={{
-                        background: "linear-gradient(135deg, #D97706 0%, #B45309 100%)",
+                        background: "linear-gradient(135deg, var(--warning) 0%, #B45309 100%)",
                         padding: "14px 16px",
-                        display: "flex",
+                        display: "flex", flexWrap: "wrap", rowGap: "8px",
                         alignItems: "center",
                         justifyContent: "space-between",
                         color: "#FFFFFF",
@@ -1074,8 +1019,8 @@ export default function TablesPage() {
 
                     {/* Thân thẻ bàn đặt trước */}
                     <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span className="badge badge-warning" style={{ background: "#FEF3C7", color: "#B45309", border: "1px solid #FDE68A" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between" }}>
+                        <span className="badge badge-warning" style={{ background: "var(--warning-bg)", color: "#B45309", border: "1px solid #FDE68A" }}>
                           <Clock size={13} />
                           Đặt trước
                         </span>
@@ -1088,7 +1033,7 @@ export default function TablesPage() {
 
                       <div
                         style={{
-                          background: "#FFFBEB",
+                          background: "var(--warning-bg)",
                           borderRadius: "10px",
                           padding: "12px",
                           border: "1px dashed rgba(217, 119, 6, 0.35)",
@@ -1098,12 +1043,12 @@ export default function TablesPage() {
                           fontSize: "13px",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#1C1A2D" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text)" }}>
                           <Users size={14} color="#D97706" />
                           <span>Khách: <strong>{t.reservationCustomer || "Khách hẹn"}</strong></span>
                         </div>
                         {t.reservationPhone && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#5D5B63", fontSize: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--subtext)", fontSize: "12px" }}>
                             <Phone size={13} color="#D97706" />
                             <span>SĐT: <strong>{t.reservationPhone}</strong></span>
                           </div>
@@ -1121,8 +1066,8 @@ export default function TablesPage() {
                         style={{
                           marginTop: "auto",
                           paddingTop: "10px",
-                          borderTop: "1px solid #ECE5D8",
-                          display: "flex",
+                          borderTop: "1px solid var(--border-light)",
+                          display: "flex", flexWrap: "wrap",
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "8px",
@@ -1135,7 +1080,7 @@ export default function TablesPage() {
                             borderRadius: "8px",
                             background: "rgba(180, 35, 44, 0.08)",
                             border: "1px solid rgba(180, 35, 44, 0.2)",
-                            color: "#B4232C",
+                            color: "var(--danger)",
                             fontSize: "12px",
                             fontWeight: "600",
                             cursor: "pointer",
@@ -1145,7 +1090,7 @@ export default function TablesPage() {
                         </button>
                         <button
                           className="btn-primary"
-                          style={{ padding: "6px 14px", fontSize: "12px", background: "#D97706", borderColor: "#B45309" }}
+                          style={{ padding: "6px 14px", fontSize: "12px", background: "var(--warning)", borderColor: "#B45309" }}
                           onClick={() => handleCheckInReservation(t)}
                         >
                           <Check size={14} />
@@ -1161,9 +1106,9 @@ export default function TablesPage() {
                   <div
                     key={t.id}
                     style={{
-                      background: "#FFFFFF",
+                      background: "var(--surface)",
                       borderRadius: "16px",
-                      border: "1.5px solid #E6DEC8",
+                      border: "1.5px solid var(--border)",
                       boxShadow: "0 2px 8px rgba(28, 26, 45, 0.04)",
                       overflow: "hidden",
                       display: "flex",
@@ -1184,12 +1129,12 @@ export default function TablesPage() {
                     {/* Header bàn trống */}
                     <div
                       style={{
-                        background: "#F6EFDF",
+                        background: "var(--surface-muted)",
                         padding: "14px 16px",
-                        display: "flex",
+                        display: "flex", flexWrap: "wrap", rowGap: "8px",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        borderBottom: "1px solid #E6DEC8",
+                        borderBottom: "1px solid var(--border)",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1198,10 +1143,10 @@ export default function TablesPage() {
                             width: "9px",
                             height: "9px",
                             borderRadius: "50%",
-                            background: "#146A65",
+                            background: "var(--success)",
                           }}
                         />
-                        <span style={{ fontSize: "18px", fontWeight: "800", color: "#1C1A2D" }}>
+                        <span style={{ fontSize: "18px", fontWeight: "800", color: "var(--text)" }}>
                           {t.name}
                         </span>
                       </div>
@@ -1211,9 +1156,9 @@ export default function TablesPage() {
                           fontWeight: "600",
                           padding: "3px 8px",
                           borderRadius: "6px",
-                          background: "#FFFFFF",
-                          border: "1px solid #D8CFBD",
-                          color: "#5D5B63",
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          color: "var(--subtext)",
                         }}
                       >
                         {t.zone}
@@ -1222,26 +1167,26 @@ export default function TablesPage() {
 
                     {/* Thân bàn trống */}
                     <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between" }}>
                         <span className="badge badge-success">
                           <CheckCircle2 size={13} />
                           Bàn trống
                         </span>
-                        <span style={{ fontSize: "12px", color: "#146A65", fontWeight: "600" }}>
+                        <span style={{ fontSize: "12px", color: "var(--success)", fontWeight: "600" }}>
                           Sẵn sàng
                         </span>
                       </div>
 
                       <div
                         style={{
-                          background: "#E6F4F2",
+                          background: "var(--success-bg)",
                           borderRadius: "10px",
                           padding: "12px",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           gap: "8px",
-                          color: "#146A65",
+                          color: "var(--success)",
                           fontSize: "13px",
                           fontWeight: "500",
                         }}
@@ -1255,7 +1200,7 @@ export default function TablesPage() {
                         style={{
                           marginTop: "auto",
                           paddingTop: "10px",
-                          borderTop: "1px solid #ECE5D8",
+                          borderTop: "1px solid var(--border-light)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "flex-end",
@@ -1288,7 +1233,7 @@ export default function TablesPage() {
                             borderRadius: "8px",
                             background: "rgba(180, 35, 44, 0.08)",
                             border: "1px solid rgba(180, 35, 44, 0.2)",
-                            color: "#B4232C",
+                            color: "var(--danger)",
                             fontSize: "12px",
                             fontWeight: "600",
                             cursor: "pointer",
@@ -1327,7 +1272,7 @@ export default function TablesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "48px", color: "#5D5B63" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: "48px", color: "var(--subtext)" }}>
                     Không có dữ liệu bàn
                   </td>
                 </tr>
@@ -1337,16 +1282,16 @@ export default function TablesPage() {
                   const orderTotal = calculateTableTotal(orderItems);
                   return (
                     <tr key={t.id}>
-                      <td style={{ color: "#5D5B63" }}>{i + 1}</td>
-                      <td style={{ fontWeight: "700", color: "#1C1A2D", fontSize: "15px" }}>
+                      <td style={{ color: "var(--subtext)" }}>{i + 1}</td>
+                      <td style={{ fontWeight: "700", color: "var(--text)", fontSize: "15px" }}>
                         <div>{t.name}</div>
                         {t.currentBillId && (
-                          <div style={{ fontSize: "11px", fontWeight: "600", color: "#7E2930", marginTop: "2px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--primary)", marginTop: "2px" }}>
                             HĐ: {t.currentBillId}
                           </div>
                         )}
                         {t.currentOrderCode && (
-                          <div style={{ fontSize: "11px", fontWeight: "600", color: "#146A65", marginTop: "1px" }}>
+                          <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--success)", marginTop: "1px" }}>
                             Đơn: {t.currentOrderCode}
                           </div>
                         )}
@@ -1355,9 +1300,9 @@ export default function TablesPage() {
                         <span
                           className="badge"
                           style={{
-                            background: "#F6EFDF",
-                            color: "#1C1A2D",
-                            border: "1px solid #D8CFBD",
+                            background: "var(--surface-muted)",
+                            color: "var(--text)",
+                            border: "1px solid var(--border)",
                           }}
                         >
                           {t.zone}
@@ -1372,7 +1317,7 @@ export default function TablesPage() {
                         {t.inUse ? (
                           <div style={{ fontSize: "13px" }}>
                             <div>👥 {t.guestCount || 1} khách</div>
-                            <div style={{ fontSize: "11px", color: "#5D5B63" }}>
+                            <div style={{ fontSize: "11px", color: "var(--subtext)" }}>
                               ⏱ {getElapsedMinutes(t.openedAt)} phút
                             </div>
                           </div>
@@ -1384,25 +1329,25 @@ export default function TablesPage() {
                             </div>
                           </div>
                         ) : (
-                          <span style={{ color: "#8B8FA8" }}>—</span>
+                          <span style={{ color: "var(--muted)" }}>—</span>
                         )}
                       </td>
                       <td>
                         {t.inUse && orderItems.length > 0 ? (
-                          <span style={{ fontWeight: "600", color: "#7E2930" }}>
+                          <span style={{ fontWeight: "600", color: "var(--primary)" }}>
                             {orderItems.length} món
                           </span>
                         ) : (
-                          <span style={{ color: "#8B8FA8" }}>—</span>
+                          <span style={{ color: "var(--muted)" }}>—</span>
                         )}
                       </td>
                       <td>
                         {t.inUse ? (
-                          <span style={{ fontWeight: "700", color: "#7E2930" }}>
+                          <span style={{ fontWeight: "700", color: "var(--primary)" }}>
                             {formatVND(orderTotal)} đ
                           </span>
                         ) : (
-                          <span style={{ color: "#8B8FA8" }}>—</span>
+                          <span style={{ color: "var(--muted)" }}>—</span>
                         )}
                       </td>
                       <td>
@@ -1413,9 +1358,9 @@ export default function TablesPage() {
                               style={{
                                 padding: "6px 10px",
                                 borderRadius: "8px",
-                                background: "#FFF0F2",
+                                background: "var(--primary-light)",
                                 border: "1px solid rgba(126, 41, 48, 0.3)",
-                                color: "#7E2930",
+                                color: "var(--primary)",
                                 cursor: "pointer",
                                 fontSize: "12px",
                                 fontWeight: "600",
@@ -1434,7 +1379,7 @@ export default function TablesPage() {
                               style={{
                                 padding: "6px 10px",
                                 borderRadius: "8px",
-                                background: "#FEF3C7",
+                                background: "var(--warning-bg)",
                                 border: "1px solid #FDE68A",
                                 color: "#B45309",
                                 cursor: "pointer",
@@ -1473,7 +1418,7 @@ export default function TablesPage() {
                               background: t.inUse ? "rgba(0,0,0,0.03)" : "rgba(180, 35, 44, 0.08)",
                               border: "1px solid",
                               borderColor: t.inUse ? "rgba(0,0,0,0.08)" : "rgba(180, 35, 44, 0.2)",
-                              color: t.inUse ? "#9E9CA3" : "#B4232C",
+                              color: t.inUse ? "#9E9CA3" : "var(--danger)",
                               cursor: t.inUse ? "not-allowed" : "pointer",
                             }}
                             title={t.inUse ? "Không thể xóa bàn đang có khách" : "Xóa bàn"}
@@ -1503,9 +1448,9 @@ export default function TablesPage() {
             <div
               style={{
                 padding: "20px 24px",
-                background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+                background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
                 color: "#FFFFFF",
-                display: "flex",
+                display: "flex", flexWrap: "wrap", rowGap: "8px",
                 alignItems: "center",
                 justifyContent: "space-between",
                 borderRadius: "19px 19px 0 0",
@@ -1531,7 +1476,7 @@ export default function TablesPage() {
                       fontSize: "12px",
                       padding: "2px 8px",
                       borderRadius: "6px",
-                      background: "#146A65",
+                      background: "var(--success)",
                     }}
                   >
                     Đang phục vụ
@@ -1587,7 +1532,7 @@ export default function TablesPage() {
 
             {/* Modal Body: Danh sách món */}
             <div style={{ padding: "20px 24px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: "#1C1A2D", marginBottom: "12px" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginBottom: "12px" }}>
                 Danh sách món đã gửi bếp từ POS:
               </div>
 
@@ -1596,26 +1541,26 @@ export default function TablesPage() {
                   style={{
                     padding: "36px",
                     textAlign: "center",
-                    color: "#5D5B63",
-                    background: "#F8F4EE",
+                    color: "var(--subtext)",
+                    background: "var(--bg)",
                     borderRadius: "12px",
                   }}
                 >
-                  <UtensilsCrossed size={32} style={{ margin: "0 auto 8px", color: "#7E2930" }} />
+                  <UtensilsCrossed size={32} style={{ margin: "0 auto 8px", color: "var(--primary)" }} />
                   <div>Chưa có dữ liệu món ăn được gửi bếp.</div>
                 </div>
               ) : (
                 <div
                   style={{
-                    border: "1px solid #E6DEC8",
+                    border: "1px solid var(--border)",
                     borderRadius: "12px",
-                    overflow: "hidden",
+                    overflowX: "auto",
                     marginBottom: "18px",
                   }}
                 >
                   <table style={{ width: "100%", fontSize: "13px" }}>
                     <thead>
-                      <tr style={{ background: "#F6EFDF" }}>
+                      <tr style={{ background: "var(--surface-muted)" }}>
                         <th style={{ padding: "10px 14px" }}>Món ăn / Đồ uống</th>
                         <th style={{ padding: "10px 14px", textAlign: "center" }}>SL</th>
                         <th style={{ padding: "10px 14px", textAlign: "right" }}>Đơn giá</th>
@@ -1627,36 +1572,43 @@ export default function TablesPage() {
                         const line = item as unknown as RawOrderLine;
                         const qty = lineQuantity(line);
                         const itemPriceWithTopping = lineUnitPrice(line);
-                        const lineTotal = Math.max(0, itemPriceWithTopping * qty - Number(item.discountAmount || 0));
+                        // Giảm giá dòng chỉ áp cho số phần được chọn (lineDiscountTotal; dữ liệu cũ: discountAmount cả dòng)
+                        const lineTotal = Math.max(0, itemPriceWithTopping * qty - lineDiscountTotal(line));
+                        const discountLabel = lineDiscountLabel(line, (n) => `${formatVND(n)}đ`);
 
                         return (
-                          <tr key={idx} style={{ borderBottom: "1px solid #ECE5D8" }}>
+                          <tr key={idx} style={{ borderBottom: "1px solid var(--border-light)" }}>
                             <td style={{ padding: "12px 14px" }}>
-                              <div style={{ fontWeight: "700", color: "#1C1A2D" }}>{item.name}</div>
+                              <div style={{ fontWeight: "700", color: "var(--text)" }}>{item.name}</div>
                               {item.selectedSize && (
-                                <div style={{ fontSize: "11px", color: "#5D5B63" }}>
+                                <div style={{ fontSize: "11px", color: "var(--subtext)" }}>
                                   Size: <span style={{ fontWeight: "600" }}>{item.selectedSize}</span>
                                 </div>
                               )}
                               {Array.isArray(item.selectedToppings) &&
                                 item.selectedToppings.length > 0 && (
-                                  <div style={{ fontSize: "11px", color: "#146A65" }}>
+                                  <div style={{ fontSize: "11px", color: "var(--success)" }}>
                                     + {item.selectedToppings.map(toppingLabel).filter(Boolean).join(", ")}
                                   </div>
                                 )}
                               {item.note && (
-                                <div style={{ fontSize: "11px", color: "#D97706", fontStyle: "italic" }}>
+                                <div style={{ fontSize: "11px", color: "var(--warning)", fontStyle: "italic" }}>
                                   Ghi chú: {item.note}
+                                </div>
+                              )}
+                              {discountLabel && (
+                                <div style={{ fontSize: "11px", color: "var(--danger)" }}>
+                                  {discountLabel} (-{formatVND(lineDiscountTotal(line))}đ)
                                 </div>
                               )}
                             </td>
                             <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: "700" }}>
                               {qty}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", color: "#5D5B63" }}>
+                            <td style={{ padding: "12px 14px", textAlign: "right", color: "var(--subtext)" }}>
                               {formatVND(itemPriceWithTopping)}đ
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "800", color: "#7E2930" }}>
+                            <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "800", color: "var(--primary)" }}>
                               {formatVND(lineTotal)}đ
                             </td>
                           </tr>
@@ -1670,25 +1622,25 @@ export default function TablesPage() {
               {/* Total Calculation */}
               <div
                 style={{
-                  background: "#FFF0F2",
+                  background: "var(--primary-light)",
                   borderRadius: "12px",
                   padding: "16px 20px",
                   border: "1.5px solid rgba(126, 41, 48, 0.2)",
-                  display: "flex",
+                  display: "flex", flexWrap: "wrap", rowGap: "8px",
                   alignItems: "center",
                   justifyContent: "space-between",
                   marginBottom: "16px",
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "12px", color: "#5D5B63", textTransform: "uppercase", fontWeight: "600" }}>
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", textTransform: "uppercase", fontWeight: "600" }}>
                     Tổng tiền tạm tính của bàn
                   </div>
-                  <div style={{ fontSize: "11px", color: "#7E2930", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--primary)", marginTop: "2px" }}>
                     Chưa bao gồm khuyến mãi / VAT (nếu có khi thanh toán)
                   </div>
                 </div>
-                <div style={{ fontSize: "24px", fontWeight: "800", color: "#7E2930" }}>
+                <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--primary)" }}>
                   {formatVND(
                     calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson))
                   )}{" "}
@@ -1698,19 +1650,19 @@ export default function TablesPage() {
 
               {/* Phương thức thanh toán */}
               <div style={{ marginBottom: "18px" }}>
-                <div style={{ fontSize: "12px", fontWeight: "700", color: "#1C1A2D", marginBottom: "8px" }}>
+                <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
                   Phương thức thanh toán:
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <button
                     type="button"
                     onClick={() => setPaymentMethod("CASH")}
                     style={{
                       padding: "10px 14px",
                       borderRadius: "10px",
-                      border: paymentMethod === "CASH" ? "2px solid #7E2930" : "1px solid #E6DEC8",
-                      background: paymentMethod === "CASH" ? "#FFF0F2" : "#FFFFFF",
-                      color: paymentMethod === "CASH" ? "#7E2930" : "#5D5B63",
+                      border: paymentMethod === "CASH" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                      background: paymentMethod === "CASH" ? "var(--primary-light)" : "var(--surface)",
+                      color: paymentMethod === "CASH" ? "var(--primary)" : "var(--subtext)",
                       fontWeight: paymentMethod === "CASH" ? "700" : "500",
                       fontSize: "13px",
                       display: "flex",
@@ -1730,9 +1682,9 @@ export default function TablesPage() {
                     style={{
                       padding: "10px 14px",
                       borderRadius: "10px",
-                      border: paymentMethod === "TRANSFER" ? "2px solid #146A65" : "1px solid #E6DEC8",
-                      background: paymentMethod === "TRANSFER" ? "#F0FDF4" : "#FFFFFF",
-                      color: paymentMethod === "TRANSFER" ? "#146A65" : "#5D5B63",
+                      border: paymentMethod === "TRANSFER" ? "2px solid var(--success)" : "1px solid var(--border)",
+                      background: paymentMethod === "TRANSFER" ? "var(--success-bg)" : "var(--surface)",
+                      color: paymentMethod === "TRANSFER" ? "var(--success)" : "var(--subtext)",
                       fontWeight: paymentMethod === "TRANSFER" ? "700" : "500",
                       fontSize: "13px",
                       display: "flex",
@@ -1770,27 +1722,30 @@ export default function TablesPage() {
                         marginTop: "12px",
                         padding: "12px 14px",
                         borderRadius: "12px",
-                        background: "#F8FAF8",
-                        border: "1.5px dashed #146A65",
+                        background: "var(--surface-muted)",
+                        border: "1.5px dashed var(--success)",
                         display: "flex",
                         alignItems: "center",
                         gap: "14px",
                       }}
                     >
-                      <img
+                      <Image
                         src={qrUrl}
-                        alt="VietQR Payment"
+                        alt="Mã VietQR thanh toán"
+                        width={90}
+                        height={90}
+                        unoptimized
                         style={{
                           width: "90px",
                           height: "90px",
                           borderRadius: "8px",
-                          border: "1px solid #E2E8F0",
+                          border: "1px solid var(--border)",
                           objectFit: "contain",
-                          background: "#FFFFFF",
+                          background: "#FFFFFF", // QR luôn cần nền trắng để quét được
                         }}
                       />
-                      <div style={{ fontSize: "12px", lineHeight: "1.6", color: "#1C1A2D", flex: 1 }}>
-                        <div style={{ fontWeight: "700", color: "#146A65", marginBottom: "2px" }}>
+                      <div style={{ fontSize: "12px", lineHeight: "1.6", color: "var(--text)", flex: 1 }}>
+                        <div style={{ fontWeight: "700", color: "var(--success)", marginBottom: "2px" }}>
                           Quét mã VietQR để thanh toán:
                         </div>
                         <div>
@@ -1799,7 +1754,7 @@ export default function TablesPage() {
                         <div>
                           Chủ TK: <strong>{accountName}</strong>
                         </div>
-                        <div style={{ color: "#7E2930", fontWeight: "700", marginTop: "2px" }}>
+                        <div style={{ color: "var(--primary)", fontWeight: "700", marginTop: "2px" }}>
                           Số tiền: {formatVND(orderTotal)} VNĐ
                         </div>
                       </div>
@@ -1828,7 +1783,7 @@ export default function TablesPage() {
                     justifyContent: "center",
                     color: "#ef4444",
                     borderColor: "#fca5a5",
-                    backgroundColor: "#fef2f2",
+                    backgroundColor: "var(--danger-bg)",
                   }}
                 >
                   <XCircle size={16} />
@@ -1856,25 +1811,25 @@ export default function TablesPage() {
             <div
               style={{
                 padding: "20px 24px 0",
-                display: "flex",
+                display: "flex", flexWrap: "wrap", rowGap: "8px",
                 alignItems: "center",
                 justifyContent: "space-between",
                 marginBottom: "20px",
               }}
             >
-              <h2 style={{ fontSize: "18px", fontWeight: "800", color: "#1C1A2D" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text)" }}>
                 {editId ? "Chỉnh sửa bàn" : "Thêm bàn mới"}
               </h2>
               <button
                 onClick={closeModal}
-                style={{ background: "none", border: "none", color: "#5D5B63", cursor: "pointer" }}
+                style={{ background: "none", border: "none", color: "var(--subtext)", cursor: "pointer" }}
               >
                 <X size={20} />
               </button>
             </div>
             <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#1C1A2D", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
                   Tên bàn *
                 </label>
                 <input
@@ -1887,7 +1842,7 @@ export default function TablesPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "#1C1A2D", marginBottom: "6px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
                   Khu vực
                 </label>
                 <input
@@ -1903,7 +1858,7 @@ export default function TablesPage() {
                     <option key={z + "-" + i} value={z} />
                   ))}
                 </datalist>
-                <p style={{ fontSize: "11px", color: "#5D5B63", marginTop: "4px" }}>
+                <p style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "4px" }}>
                   Chọn khu vực có sẵn hoặc nhập tên khu vực mới để hệ thống tự tạo nhóm.
                 </p>
               </div>
@@ -1915,7 +1870,7 @@ export default function TablesPage() {
                     border: "1px solid rgba(180, 35, 44, 0.3)",
                     borderRadius: "8px",
                     padding: "10px 14px",
-                    color: "#B4232C",
+                    color: "var(--danger)",
                     fontSize: "13px",
                   }}
                 >
@@ -1952,10 +1907,10 @@ export default function TablesPage() {
           <div className="modal-content" style={{ maxWidth: "380px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "28px", textAlign: "center" }}>
               <div style={{ fontSize: "44px", marginBottom: "14px" }}>🗑️</div>
-              <h2 style={{ fontSize: "18px", fontWeight: "800", color: "#1C1A2D", marginBottom: "8px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text)", marginBottom: "8px" }}>
                 Xác nhận xóa bàn
               </h2>
-              <p style={{ color: "#5D5B63", fontSize: "14px", marginBottom: "24px" }}>
+              <p style={{ color: "var(--subtext)", fontSize: "14px", marginBottom: "24px" }}>
                 Bạn có chắc chắn muốn xóa bàn này khỏi hệ thống? Thao tác này không thể hoàn tác.
               </p>
               <div style={{ display: "flex", gap: "10px" }}>

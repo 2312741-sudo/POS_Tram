@@ -20,6 +20,7 @@ class OnlineOrderDetailScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Chi tiết đơn online', style: GoogleFonts.beVietnamPro(
           color: AppColors.textPrimary, fontWeight: FontWeight.w700,
         )),

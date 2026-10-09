@@ -7,21 +7,15 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Calendar,
-  Filter,
   Eye,
-  FileText,
   User,
   CreditCard,
-  Clock,
   History,
   X,
   CheckCircle,
   Printer,
   Utensils,
-  Layers,
   ShoppingBag,
-  MapPin,
   DollarSign,
   Banknote,
   Trash2,
@@ -30,6 +24,8 @@ import {
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
 import { calculateCancellationReport, formatVND } from "@/lib/reports";
+import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
+import { buildOrderReceiptHtml } from "@/lib/print-html";
 
 const PAGE_SIZE = 20;
 
@@ -189,69 +185,7 @@ export default function OrdersPage() {
     const ts = typeof order.timestamp === "number" ? order.timestamp : new Date(order.timestamp || 0).getTime();
     const timeStr = format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: vi });
 
-    const itemsHtml = (order.items || []).map((it, idx) => `
-      <tr>
-        <td style="padding: 6px 4px; border-bottom: 1px dashed #ccc;">${idx + 1}. ${it.name} ${it.selectedSize ? `(Size ${it.selectedSize})` : ""}</td>
-        <td style="padding: 6px 4px; text-align: center; border-bottom: 1px dashed #ccc;">${it.quantity || 1}</td>
-        <td style="padding: 6px 4px; text-align: right; border-bottom: 1px dashed #ccc;">${formatVND(it.price)}</td>
-        <td style="padding: 6px 4px; text-align: right; border-bottom: 1px dashed #ccc; font-weight: bold;">${formatVND((it.price || 0) * (it.quantity || 1))}</td>
-      </tr>
-      ${it.orderedByName ? `<tr><td colspan="4" style="font-size: 11px; color: #666; padding-left: 16px;">Phục vụ: ${it.orderedByName}</td></tr>` : ""}
-    `).join("");
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Hóa đơn ${order.billCode || order.orderCode || order.id}</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; color: #333; }
-            .header { text-align: center; border-bottom: 2px dashed #7E2930; padding-bottom: 12px; margin-bottom: 12px; }
-            .title { font-size: 20px; font-weight: 800; color: #7E2930; margin: 0; }
-            .meta { font-size: 12px; color: #666; margin: 4px 0; }
-            table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
-            .total-row { font-size: 15px; font-weight: bold; border-top: 2px solid #333; padding-top: 8px; }
-            .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #777; border-top: 1px dashed #ccc; padding-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h2 class="title">TRẠM F&B SYSTEM</h2>
-            <div class="meta">HÓA ĐƠN THANH TOÁN</div>
-            <div class="meta">Số HĐ: <strong>${order.billCode || order.orderCode || order.id?.slice(0, 8)}</strong>${order.orderCode && order.billCode && order.orderCode !== order.billCode ? ` | Mã đơn: <strong>${order.orderCode}</strong>` : ''} | Bàn: <strong>${order.tableName || "—"}</strong></div>
-            <div class="meta">Giờ: ${timeStr}</div>
-            <div class="meta">Người nhận order: <strong>${order.orderStaff || "—"}</strong></div>
-            <div class="meta">Thu ngân: <strong>${order.cashierName || "—"}</strong></div>
-          </div>
-          <table>
-            <thead>
-              <tr style="border-bottom: 1px solid #333; font-weight: bold;">
-                <th style="text-align: left; padding-bottom: 4px;">Món</th>
-                <th style="text-align: center; padding-bottom: 4px;">SL</th>
-                <th style="text-align: right; padding-bottom: 4px;">Đơn giá</th>
-                <th style="text-align: right; padding-bottom: 4px;">T.Tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-          <div style="display: flex; justify-content: space-between; margin-top: 8px;" class="total-row">
-            <span>TỔNG CỘNG:</span>
-            <span style="color: #7E2930;">${formatVND(order.totalAmount || 0)}</span>
-          </div>
-          <div style="font-size: 12px; margin-top: 4px; text-align: right; color: #555;">
-            Phương thức: ${order.paymentMethod || "Tiền mặt"}
-          </div>
-          <div class="footer">
-            <p>Cảm ơn quý khách và hẹn gặp lại! ✨</p>
-          </div>
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
-        </body>
-      </html>
-    `);
+    printWindow.document.write(buildOrderReceiptHtml(order, timeStr));
     printWindow.document.close();
   };
 
@@ -296,7 +230,7 @@ export default function OrdersPage() {
               </button>
               <button
                 className="btn-primary"
-                style={{ background: "#7E2930" }}
+                style={{ background: "var(--primary)" }}
                 onClick={handleExportCancellationPDF}
               >
                 <Printer size={16} /> In / PDF Kiểm toán Thất thoát
@@ -316,7 +250,7 @@ export default function OrdersPage() {
         <div
           style={{
             padding: "16px 20px",
-            background: "#FFF1F2",
+            background: "var(--danger-bg)",
             border: "1px solid #FECDD3",
             borderRadius: "12px",
             display: "flex",
@@ -329,7 +263,7 @@ export default function OrdersPage() {
             <div style={{ fontWeight: "700", color: "#991B1B", fontSize: "14px" }}>
               Báo cáo Kiểm toán Thất thoát: {cancellationReport.cancelledBillsCount} hóa đơn bị hủy
             </div>
-            <div style={{ fontSize: "12px", color: "#B91C1C", marginTop: "2px" }}>
+            <div style={{ fontSize: "12px", color: "var(--danger)", marginTop: "2px" }}>
               Tổng giá trị thất thoát tài chính ghi nhận: <strong>{formatVND(cancellationReport.totalLossValue)}</strong>
             </div>
           </div>
@@ -337,16 +271,16 @@ export default function OrdersPage() {
       )}
 
       {/* Summary KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "16px" }}>
         <div className="stat-card">
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#7E293018", display: "flex", alignItems: "center", justifyContent: "center", color: "#7E2930", flexShrink: 0 }}>
+            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#7E293018", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", flexShrink: 0 }}>
               <DollarSign size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(totalAmount)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Tổng doanh thu lọc</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>{filtered.length} hóa đơn</div>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(totalAmount)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Tổng doanh thu lọc</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{filtered.length} hóa đơn</div>
             </div>
           </div>
         </div>
@@ -354,7 +288,7 @@ export default function OrdersPage() {
         <div
           className="stat-card"
           onClick={() => { setFilterZone(prev => prev === "Mang về" ? "" : "Mang về"); setFilterTable(""); setPage(1); }}
-          style={{ cursor: "pointer", border: filterZone === "Mang về" ? "2px solid #8B5CF6" : undefined, background: filterZone === "Mang về" ? "#F5F3FF" : undefined }}
+          style={{ cursor: "pointer", border: filterZone === "Mang về" ? "2px solid #8B5CF6" : undefined, background: filterZone === "Mang về" ? "var(--info-bg)" : undefined }}
           title="Bấm để lọc nhanh đơn mang về"
         >
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
@@ -362,24 +296,24 @@ export default function OrdersPage() {
               <ShoppingBag size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(takeawayRevenue)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(takeawayRevenue)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>
                 🥡 Mang về {filterZone === "Mang về" ? "(Đang lọc)" : ""}
               </div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>{takeawayCount} hóa đơn mang về</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{takeawayCount} hóa đơn mang về</div>
             </div>
           </div>
         </div>
 
         <div className="stat-card">
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#146A6518", display: "flex", alignItems: "center", justifyContent: "center", color: "#146A65", flexShrink: 0 }}>
+            <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#146A6518", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--success)", flexShrink: 0 }}>
               <Banknote size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(cashAmount)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Tiền mặt</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>{cashOrders.length} hóa đơn</div>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(cashAmount)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Tiền mặt</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{cashOrders.length} hóa đơn</div>
             </div>
           </div>
         </div>
@@ -390,9 +324,9 @@ export default function OrdersPage() {
               <CreditCard size={20} />
             </div>
             <div>
-              <div style={{ fontSize: "17px", fontWeight: "800", color: "#1C1A2D" }}>{formatVND(transferAmount)}</div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "#5D5B63" }}>Chuyển khoản (QR)</div>
-              <div style={{ fontSize: "11px", color: "#8B8FA8" }}>{transferOrders.length} hóa đơn</div>
+              <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(transferAmount)}</div>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Chuyển khoản (QR)</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{transferOrders.length} hóa đơn</div>
             </div>
           </div>
         </div>
@@ -402,7 +336,7 @@ export default function OrdersPage() {
       <div className="card" style={{ padding: "16px 20px" }}>
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ position: "relative", flex: "1", minWidth: "220px" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#8B8FA8" }} />
+            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               className="input-field"
               placeholder="Tìm mã đơn, tên bàn, người order, thu ngân..."
@@ -509,7 +443,7 @@ export default function OrdersPage() {
           <tbody>
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", padding: "48px", color: "#8B8FA8" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}>
                   Không tìm thấy hóa đơn nào
                 </td>
               </tr>
@@ -519,25 +453,25 @@ export default function OrdersPage() {
                 const itemCount = Array.isArray(h.items) ? h.items.reduce((s, it) => s + (it.quantity || 1), 0) : 0;
                 return (
                   <tr key={h.id + '-' + i} style={{ cursor: "pointer" }} onClick={() => setSelectedOrder(h)}>
-                    <td style={{ color: "#8B8FA8" }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
+                    <td style={{ color: "var(--muted)" }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
                     <td>
-                      <span style={{ fontFamily: "monospace", fontWeight: "700", color: "#7E2930", fontSize: "13px" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: "700", color: "var(--primary)", fontSize: "13px" }}>
                         {h.billCode || h.orderCode || h.id?.slice(0, 8) || "N/A"}
                       </span>
                       {h.orderCode && h.billCode && h.orderCode !== h.billCode && (
-                        <div style={{ fontSize: "11px", color: "#8B8FA8", fontFamily: "monospace" }}>
+                        <div style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "monospace" }}>
                           Đơn: {h.orderCode}
                         </div>
                       )}
                     </td>
-                    <td style={{ fontWeight: "700", color: "#1C1A2D" }}>
+                    <td style={{ fontWeight: "700", color: "var(--text)" }}>
                       {h.tableName || "—"}
-                      {h.zone ? <span style={{ fontSize: "11px", color: "#8B8FA8", marginLeft: "4px" }}>({h.zone})</span> : null}
+                      {h.zone ? <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "4px" }}>({h.zone})</span> : null}
                     </td>
-                    <td style={{ fontWeight: "800", color: "#146A65" }}>
+                    <td style={{ fontWeight: "800", color: "var(--success)" }}>
                       {formatVND(Number(h.totalAmount) || 0)}
                       {itemCount > 0 && (
-                        <div style={{ fontSize: "11px", color: "#8B8FA8", fontWeight: "normal" }}>
+                        <div style={{ fontSize: "11px", color: "var(--muted)", fontWeight: "normal" }}>
                           {itemCount} món
                         </div>
                       )}
@@ -549,13 +483,13 @@ export default function OrdersPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
-                          background: "#F8F4EE",
+                          background: "var(--bg)",
                           padding: "3px 8px",
                           borderRadius: "6px",
                           fontSize: "12px",
                           fontWeight: "600",
-                          color: "#7E2930",
-                          border: "1px solid #E6DEC8"
+                          color: "var(--primary)",
+                          border: "1px solid var(--border)"
                         }}
                       >
                         <User size={12} />
@@ -568,12 +502,12 @@ export default function OrdersPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
-                          background: "#E6F4F2",
+                          background: "var(--success-bg)",
                           padding: "3px 8px",
                           borderRadius: "6px",
                           fontSize: "12px",
                           fontWeight: "600",
-                          color: "#146A65",
+                          color: "var(--success)",
                           border: "1px solid #B8E2DC"
                         }}
                       >
@@ -586,7 +520,7 @@ export default function OrdersPage() {
                         {h.status === "CANCELLED" ? "Đã hủy" : (h.status || "Đã thanh toán")}
                       </span>
                     </td>
-                    <td style={{ color: "#8B8FA8", fontSize: "13px" }}>
+                    <td style={{ color: "var(--muted)", fontSize: "13px" }}>
                       {h.timestamp ? format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: vi }) : "—"}
                     </td>
                     <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
@@ -643,9 +577,9 @@ export default function OrdersPage() {
                   height: "36px",
                   borderRadius: "8px",
                   border: "1px solid",
-                  borderColor: page === p ? "#7E2930" : "#E6DEC8",
-                  background: page === p ? "#FBECEE" : "transparent",
-                  color: page === p ? "#7E2930" : "#5D5B63",
+                  borderColor: page === p ? "var(--primary)" : "var(--border)",
+                  background: page === p ? "var(--primary-light)" : "transparent",
+                  color: page === p ? "var(--primary)" : "var(--subtext)",
                   cursor: "pointer",
                   fontWeight: "600",
                   fontSize: "14px",
@@ -695,21 +629,21 @@ export default function OrdersPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #ECE5D8", paddingBottom: "16px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-light)", paddingBottom: "16px" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <h2 style={{ fontSize: "20px", fontWeight: "800", color: "#1C1A2D", margin: 0 }}>
+                  <h2 style={{ fontSize: "20px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
                     Chi tiết Hóa đơn #{selectedOrder.billCode || selectedOrder.orderCode || selectedOrder.id?.slice(0, 8)}
                   </h2>
                   <span className={`badge ${selectedOrder.status === "CANCELLED" ? "badge-danger" : "badge-success"}`}>
                     {selectedOrder.status === "CANCELLED" ? "Đã hủy" : (selectedOrder.status || "Đã thanh toán")}
                   </span>
                 </div>
-                <p style={{ fontSize: "13px", color: "#5D5B63", marginTop: "4px" }}>
-                  Bàn: <strong style={{ color: "#7E2930" }}>{selectedOrder.tableName || "—"}</strong>
+                <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px" }}>
+                  Bàn: <strong style={{ color: "var(--primary)" }}>{selectedOrder.tableName || "—"}</strong>
                   {selectedOrder.zone ? ` (${selectedOrder.zone})` : ""}
                   {selectedOrder.orderCode && selectedOrder.billCode && selectedOrder.orderCode !== selectedOrder.billCode && (
-                    <span> • Mã đặt món: <strong style={{ fontFamily: "monospace", color: "#146A65" }}>{selectedOrder.orderCode}</strong></span>
+                    <span> • Mã đặt món: <strong style={{ fontFamily: "monospace", color: "var(--success)" }}>{selectedOrder.orderCode}</strong></span>
                   )} •
                   Thời gian: {selectedOrder.timestamp ? format(new Date(typeof selectedOrder.timestamp === "number" ? selectedOrder.timestamp : new Date(selectedOrder.timestamp || 0).getTime()), "dd/MM/yyyy HH:mm:ss", { locale: vi }) : "—"}
                 </p>
@@ -718,14 +652,14 @@ export default function OrdersPage() {
                 onClick={() => setSelectedOrder(null)}
                 style={{
                   border: "none",
-                  background: "#FAF7F2",
+                  background: "var(--surface-muted)",
                   cursor: "pointer",
                   borderRadius: "8px",
                   padding: "8px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#5D5B63"
+                  color: "var(--subtext)"
                 }}
               >
                 <X size={20} />
@@ -733,44 +667,44 @@ export default function OrdersPage() {
             </div>
 
             {/* Top Info Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-              <div style={{ background: "#F8F4EE", padding: "14px", borderRadius: "10px", border: "1px solid #E6DEC8" }}>
-                <div style={{ fontSize: "11px", color: "#7E2930", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))", gap: "12px" }}>
+              <div style={{ background: "var(--bg)", padding: "14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
                   <User size={13} /> Người nhận order
                 </div>
-                <div style={{ fontSize: "15px", fontWeight: "800", color: "#1C1A2D" }}>
+                <div style={{ fontSize: "15px", fontWeight: "800", color: "var(--text)" }}>
                   {selectedOrder.orderStaff || "—"}
                 </div>
-                <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "2px" }}>
+                <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
                   Nhân viên nhận đơn
                 </div>
               </div>
 
-              <div style={{ background: "#E6F4F2", padding: "14px", borderRadius: "10px", border: "1px solid #B8E2DC" }}>
-                <div style={{ fontSize: "11px", color: "#146A65", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ background: "var(--success-bg)", padding: "14px", borderRadius: "10px", border: "1px solid #B8E2DC" }}>
+                <div style={{ fontSize: "11px", color: "var(--success)", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
                   <CreditCard size={13} /> Người thanh toán
                 </div>
-                <div style={{ fontSize: "15px", fontWeight: "800", color: "#1C1A2D" }}>
+                <div style={{ fontSize: "15px", fontWeight: "800", color: "var(--text)" }}>
                   {selectedOrder.cashierName || "Thu ngân"}
                 </div>
-                <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "2px" }}>
+                <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
                   {selectedOrder.paymentMethod || "Tiền mặt"}
                 </div>
               </div>
 
-              <div style={{ background: "#FFF0F2", padding: "14px", borderRadius: "10px", border: "1px solid #F3C9CE" }}>
-                <div style={{ fontSize: "11px", color: "#7E2930", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ background: "var(--primary-light)", padding: "14px", borderRadius: "10px", border: "1px solid #F3C9CE" }}>
+                <div style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
                   <CheckCircle size={13} /> Tổng tiền hóa đơn
                 </div>
-                <div style={{ fontSize: "18px", fontWeight: "800", color: "#7E2930" }}>
+                <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--primary)" }}>
                   {formatVND(Number(selectedOrder.totalAmount) || 0)}
                 </div>
                 {selectedOrder.discountAmount ? (
-                  <div style={{ fontSize: "11px", color: "#146A65", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--success)", marginTop: "2px" }}>
                     Đã giảm: {formatVND(selectedOrder.discountAmount)}
                   </div>
                 ) : (
-                  <div style={{ fontSize: "11px", color: "#5D5B63", marginTop: "2px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
                     Giá gốc: {formatVND(selectedOrder.subTotal || selectedOrder.totalAmount || 0)}
                   </div>
                 )}
@@ -780,15 +714,15 @@ export default function OrdersPage() {
             {/* Section 1: Item Breakdown */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <Utensils size={18} style={{ color: "#7E2930" }} />
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+                <Utensils size={18} style={{ color: "var(--primary)" }} />
+                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                   Chi tiết Món trong Đơn ({selectedOrder.items?.length || 0} món)
                 </h3>
               </div>
-              <div style={{ overflowX: "auto", border: "1px solid #ECE5D8", borderRadius: "10px" }}>
+              <div style={{ overflowX: "auto", border: "1px solid var(--border-light)", borderRadius: "10px" }}>
                 <table style={{ margin: 0 }}>
                   <thead>
-                    <tr style={{ background: "#FAF7F2" }}>
+                    <tr style={{ background: "var(--surface-muted)" }}>
                       <th>#</th>
                       <th>Tên món</th>
                       <th>Tùy chọn & Ghi chú</th>
@@ -801,36 +735,45 @@ export default function OrdersPage() {
                   <tbody>
                     {!selectedOrder.items || selectedOrder.items.length === 0 ? (
                       <tr>
-                        <td colSpan={7} style={{ textAlign: "center", padding: "20px", color: "#8B8FA8" }}>
+                        <td colSpan={7} style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
                           Không có thông tin chi tiết món
                         </td>
                       </tr>
                     ) : (
                       selectedOrder.items.map((it, idx) => {
-                        const unitPrice = Number(it.price) || 0;
-                        const qty = Number(it.quantity) || 1;
-                        const lineTotal = unitPrice * qty;
+                        const line = it as unknown as RawOrderLine;
+                        const unitPrice = lineUnitPrice(line);
+                        const qty = lineQuantity(line);
+                        // Thành tiền sau giảm giá dòng (chỉ các phần được chọn giảm)
+                        const lineDisc = lineDiscountTotal(line);
+                        const lineTotal = Math.max(0, unitPrice * qty - lineDisc);
+                        const discountLabel = lineDiscountLabel(line, formatVND);
                         return (
                           <tr key={idx}>
-                            <td style={{ color: "#8B8FA8" }}>{idx + 1}</td>
-                            <td style={{ fontWeight: "700", color: "#1C1A2D" }}>{it.name}</td>
+                            <td style={{ color: "var(--muted)" }}>{idx + 1}</td>
+                            <td style={{ fontWeight: "700", color: "var(--text)" }}>{it.name}</td>
                             <td>
                               {it.optionsSummary ? (
-                                <span style={{ fontSize: "12px", color: "#5D5B63" }}>{it.optionsSummary}</span>
+                                <span style={{ fontSize: "12px", color: "var(--subtext)" }}>{it.optionsSummary}</span>
                               ) : it.selectedSize ? (
-                                <span style={{ fontSize: "12px", color: "#5D5B63" }}>Size {it.selectedSize}</span>
+                                <span style={{ fontSize: "12px", color: "var(--subtext)" }}>Size {it.selectedSize}</span>
                               ) : (
-                                <span style={{ fontSize: "12px", color: "#8B8FA8" }}>Chuẩn</span>
+                                <span style={{ fontSize: "12px", color: "var(--muted)" }}>Chuẩn</span>
                               )}
                               {it.note ? (
-                                <div style={{ fontSize: "11px", color: "#D97706", fontStyle: "italic", marginTop: "2px" }}>
+                                <div style={{ fontSize: "11px", color: "var(--warning)", fontStyle: "italic", marginTop: "2px" }}>
                                   Ghi chú: {it.note}
+                                </div>
+                              ) : null}
+                              {discountLabel ? (
+                                <div style={{ fontSize: "11px", color: "var(--danger)", marginTop: "2px" }}>
+                                  {discountLabel} (-{formatVND(lineDisc)})
                                 </div>
                               ) : null}
                             </td>
                             <td style={{ textAlign: "center", fontWeight: "700" }}>{qty}</td>
-                            <td style={{ textAlign: "right", color: "#5D5B63" }}>{formatVND(unitPrice)}</td>
-                            <td style={{ textAlign: "right", fontWeight: "700", color: "#146A65" }}>
+                            <td style={{ textAlign: "right", color: "var(--subtext)" }}>{formatVND(unitPrice)}</td>
+                            <td style={{ textAlign: "right", fontWeight: "700", color: "var(--success)" }}>
                               {formatVND(lineTotal)}
                             </td>
                             <td>
@@ -839,20 +782,20 @@ export default function OrdersPage() {
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
-                                  background: "#F8F4EE",
+                                  background: "var(--bg)",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: "600",
-                                  color: "#7E2930",
-                                  border: "1px solid #E6DEC8"
+                                  color: "var(--primary)",
+                                  border: "1px solid var(--border)"
                                 }}
                               >
                                 <User size={10} />
                                 {it.orderedByName || selectedOrder.orderStaff || "—"}
                               </span>
                               {it.orderedAt ? (
-                                <div style={{ fontSize: "10px", color: "#8B8FA8", marginTop: "2px" }}>
+                                <div style={{ fontSize: "10px", color: "var(--muted)", marginTop: "2px" }}>
                                   {format(new Date(typeof it.orderedAt === "number" ? it.orderedAt : new Date(it.orderedAt).getTime()), "HH:mm dd/MM")}
                                 </div>
                               ) : null}
@@ -869,15 +812,15 @@ export default function OrdersPage() {
             {/* Section 2: Order Action Timeline */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                <History size={18} style={{ color: "#7E2930" }} />
-                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1C1A2D", margin: 0 }}>
+                <History size={18} style={{ color: "var(--primary)" }} />
+                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                   Lịch sử Thao tác Đơn Hàng (Action Audit Trail)
                 </h3>
               </div>
               <div
                 style={{
-                  background: "#FAF7F2",
-                  border: "1px solid #ECE5D8",
+                  background: "var(--surface-muted)",
+                  border: "1px solid var(--border-light)",
                   borderRadius: "10px",
                   padding: "16px 20px",
                   display: "flex",
@@ -886,7 +829,7 @@ export default function OrdersPage() {
                 }}
               >
                 {!selectedOrder.actionLogs || selectedOrder.actionLogs.length === 0 ? (
-                  <div style={{ color: "#8B8FA8", fontSize: "13px", textAlign: "center", padding: "12px" }}>
+                  <div style={{ color: "var(--muted)", fontSize: "13px", textAlign: "center", padding: "12px" }}>
                     Chưa có nhật ký thao tác
                   </div>
                 ) : (
@@ -911,7 +854,7 @@ export default function OrdersPage() {
                             width: "28px",
                             height: "28px",
                             borderRadius: "50%",
-                            background: isPay ? "#146A65" : isSendKitchen ? "#D97706" : "#7E2930",
+                            background: isPay ? "var(--success)" : isSendKitchen ? "var(--warning)" : "var(--primary)",
                             color: "white",
                             display: "flex",
                             alignItems: "center",
@@ -927,7 +870,7 @@ export default function OrdersPage() {
                         {/* Content */}
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: "700", fontSize: "13px", color: "#1C1A2D" }}>
+                            <span style={{ fontWeight: "700", fontSize: "13px", color: "var(--text)" }}>
                               {log.staffFullName || log.staffUsername || "Nhân viên"}
                             </span>
                             <span
@@ -936,17 +879,17 @@ export default function OrdersPage() {
                                 fontWeight: "700",
                                 padding: "1px 6px",
                                 borderRadius: "4px",
-                                background: isPay ? "#E6F4F2" : isSendKitchen ? "#FBEFD4" : "#FBECEE",
-                                color: isPay ? "#146A65" : isSendKitchen ? "#D97706" : "#7E2930",
+                                background: isPay ? "var(--success-bg)" : isSendKitchen ? "var(--warning-bg)" : "var(--primary-light)",
+                                color: isPay ? "var(--success)" : isSendKitchen ? "var(--warning)" : "var(--primary)",
                               }}
                             >
                               {log.action}
                             </span>
-                            <span style={{ fontSize: "12px", color: "#8B8FA8", marginLeft: "auto" }}>
+                            <span style={{ fontSize: "12px", color: "var(--muted)", marginLeft: "auto" }}>
                               {log.timestamp ? format(new Date(logTs), "dd/MM/yyyy HH:mm:ss", { locale: vi }) : "—"}
                             </span>
                           </div>
-                          <div style={{ fontSize: "13px", color: "#5D5B63", marginTop: "2px" }}>
+                          <div style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "2px" }}>
                             {log.details}
                           </div>
                         </div>
@@ -964,7 +907,7 @@ export default function OrdersPage() {
                 justifyContent: "flex-end",
                 alignItems: "center",
                 gap: "12px",
-                borderTop: "1px solid #ECE5D8",
+                borderTop: "1px solid var(--border-light)",
                 paddingTop: "16px",
                 flexWrap: "wrap",
               }}
@@ -989,7 +932,7 @@ export default function OrdersPage() {
                     gap: "6px",
                     color: "#D9383A",
                     borderColor: "rgba(217, 56, 58, 0.4)",
-                    background: "#FFF0F2"
+                    background: "var(--primary-light)"
                   }}
                 >
                   <XCircle size={16} />

@@ -230,6 +230,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: TramColors.surface,
+        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         elevation: 0.5,
         actions: [
           if (failedCount > 0)

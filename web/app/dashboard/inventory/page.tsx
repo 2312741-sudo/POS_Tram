@@ -6,20 +6,16 @@ import {
   Package,
   Truck,
   ClipboardList,
-  Filter,
-  ArrowUpDown,
   AlertTriangle,
   ChevronRight,
   Warehouse,
   Upload,
   Download,
   FileSpreadsheet,
-  CheckCircle2,
-  AlertCircle,
   X,
   ArrowLeft,
 } from "lucide-react";
-import { ref, onValue, set, push, remove, update, get } from "firebase/database";
+import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
 import { useAuth, hasPermission } from "@/lib/auth";
@@ -1191,7 +1187,7 @@ export default function InventoryPage() {
   // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác
   if (!targetStoreCode) {
     return (
-      <div style={{ padding: "24px", color: "#666" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
+      <div style={{ padding: "24px", color: "var(--subtext)" }}>Chưa xác định được chi nhánh. Vui lòng chọn một chi nhánh cụ thể.</div>
     );
   }
 
@@ -1200,10 +1196,10 @@ export default function InventoryPage() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#1a1a2e", margin: 0 }}>
+          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
             📦 Kho hàng & Nguyên vật liệu
           </h1>
-          <p style={{ fontSize: "14px", color: "#666", margin: "4px 0 0" }}>
+          <p style={{ fontSize: "14px", color: "var(--subtext)", margin: "4px 0 0" }}>
             Quản lý danh mục hàng hóa, tồn kho, nhập/xuất và nhà cung cấp
           </p>
         </div>
@@ -1247,7 +1243,7 @@ export default function InventoryPage() {
                 </button>
               )}
               {canWaste && (
-                <button onClick={() => openCreateDoc("WASTE")} style={{ ...btnPrimary, background: "#dc2626" }}>
+                <button onClick={() => openCreateDoc("WASTE")} style={{ ...btnPrimary, background: "var(--danger)" }}>
                   <Plus size={16} /> Huỷ kho
                 </button>
               )}
@@ -1274,9 +1270,9 @@ export default function InventoryPage() {
                 fontSize: "13px",
                 fontWeight: "600",
                 cursor: "pointer",
-                border: targetStoreCode === s.storeCode ? "2px solid #7E2930" : "1px solid #ddd",
-                background: targetStoreCode === s.storeCode ? "#7E2930" : "#fff",
-                color: targetStoreCode === s.storeCode ? "#fff" : "#333",
+                border: targetStoreCode === s.storeCode ? "2px solid var(--primary)" : "1px solid #ddd",
+                background: targetStoreCode === s.storeCode ? "var(--primary)" : "var(--surface)",
+                color: targetStoreCode === s.storeCode ? "#fff" : "var(--text)",
               }}
             >
               {s.storeName || s.storeCode}
@@ -1286,7 +1282,7 @@ export default function InventoryPage() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "20px", borderBottom: "2px solid #f0f0f0", paddingBottom: "0" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "20px", borderBottom: "2px solid var(--border-light)", paddingBottom: "0" }}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -1306,9 +1302,9 @@ export default function InventoryPage() {
                 fontWeight: isActive ? "700" : "500",
                 cursor: "pointer",
                 border: "none",
-                borderBottom: isActive ? "3px solid #7E2930" : "3px solid transparent",
+                borderBottom: isActive ? "3px solid var(--primary)" : "3px solid transparent",
                 background: "transparent",
-                color: isActive ? "#7E2930" : "#666",
+                color: isActive ? "var(--primary)" : "var(--subtext)",
                 marginBottom: "-2px",
               }}
             >
@@ -1316,8 +1312,8 @@ export default function InventoryPage() {
               {tab.label}
               <span
                 style={{
-                  background: isActive ? "#7E2930" : "#e5e7eb",
-                  color: isActive ? "#fff" : "#666",
+                  background: isActive ? "var(--primary)" : "var(--border)",
+                  color: isActive ? "#fff" : "var(--subtext)",
                   fontSize: "11px",
                   fontWeight: "700",
                   padding: "1px 6px",
@@ -1334,7 +1330,7 @@ export default function InventoryPage() {
       {/* Search & Filters */}
       <div style={{ display: "flex", gap: "12px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: "260px", position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#999" }} />
+          <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1392,7 +1388,7 @@ export default function InventoryPage() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px", color: "#999" }}>⏳ Đang tải dữ liệu...</div>
+        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>⏳ Đang tải dữ liệu...</div>
       ) : (
         <>
           {activeTab === "catalog" && <CatalogTable items={filteredCatalog} balanceMap={balanceMap} onEdit={openEditItem} />}
@@ -1405,7 +1401,7 @@ export default function InventoryPage() {
       {/* Add/Edit Item Modal */}
       {showItemModal && (
         <Modal title={editingItem ? "Sửa hàng hóa" : "Thêm hàng hóa"} onClose={() => setShowItemModal(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <FormField label="Tên hàng *" value={itemForm.name} onChange={(v) => setItemForm({ ...itemForm, name: v })} />
             <FormField label="Mã hàng (tự động)" value={itemForm.sku} onChange={(v) => setItemForm({ ...itemForm, sku: v })} disabled={!!editingItem} />
             <div>
@@ -1446,7 +1442,7 @@ export default function InventoryPage() {
       {/* Add/Edit Supplier Modal */}
       {showSupplierModal && (
         <Modal title={editingSupplier ? "Sửa nhà cung cấp" : "Thêm nhà cung cấp"} onClose={() => setShowSupplierModal(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <FormField label="Tên NCC *" value={supplierForm.name} onChange={(v) => setSupplierForm({ ...supplierForm, name: v })} />
             <FormField label="Số điện thoại" value={supplierForm.phone} onChange={(v) => setSupplierForm({ ...supplierForm, phone: v })} />
             <FormField label="Email" value={supplierForm.email} onChange={(v) => setSupplierForm({ ...supplierForm, email: v })} />
@@ -1481,12 +1477,12 @@ export default function InventoryPage() {
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {docError && (
-              <div style={{ padding: "10px 14px", background: "#FEE2E2", color: "#DC2626", borderRadius: "8px", fontSize: "13px" }}>
+              <div style={{ padding: "10px 14px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "8px", fontSize: "13px" }}>
                 ⚠️ {docError}
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               {docModalType === "PURCHASE_RECEIPT" && (
                 <div>
                   <label style={labelStyle}>Nhà cung cấp *</label>
@@ -1534,8 +1530,8 @@ export default function InventoryPage() {
 
             {/* Bảng danh sách hàng hóa trong phiếu */}
             <div style={{ marginTop: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ fontSize: "14px", fontWeight: "700", color: "#1f2937" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)" }}>
                   Danh sách hàng hóa ({docLines.length})
                 </span>
                 <button
@@ -1585,14 +1581,14 @@ export default function InventoryPage() {
               </div>
 
               {docLines.length === 0 ? (
-                <div style={{ padding: "24px", textAlign: "center", background: "#F9FAFB", borderRadius: "8px", border: "1px dashed #D1D5DB", color: "#6B7280", fontSize: "13px" }}>
+                <div style={{ padding: "24px", textAlign: "center", background: "var(--surface-muted)", borderRadius: "8px", border: "1px dashed var(--border)", color: "var(--muted)", fontSize: "13px" }}>
                   Chưa có mặt hàng nào. Bấm &quot;Thêm hàng&quot; để chọn hàng hóa cho phiếu.
                 </div>
               ) : (
-                <div style={{ maxHeight: "240px", overflowY: "auto", border: "1px solid #E5E7EB", borderRadius: "8px" }}>
+                <div style={{ maxHeight: "240px", overflowY: "auto", border: "1px solid var(--border)", borderRadius: "8px" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead>
-                      <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                      <tr style={{ background: "var(--surface-muted)", borderBottom: "1px solid var(--border)" }}>
                         <th style={{ ...thStyle, padding: "8px" }}>Mặt hàng</th>
                         <th style={{ ...thStyle, padding: "8px" }}>ĐVT</th>
                         <th style={{ ...thStyle, padding: "8px", width: "90px" }}>Số lượng</th>
@@ -1605,7 +1601,7 @@ export default function InventoryPage() {
                     </thead>
                     <tbody>
                       {docLines.map((line, idx) => (
-                        <tr key={line.lineId || idx} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                        <tr key={line.lineId || idx} style={{ borderBottom: "1px solid var(--border-light)" }}>
                           <td style={{ padding: "6px 8px" }}>
                             <select
                               value={line.itemId}
@@ -1629,7 +1625,7 @@ export default function InventoryPage() {
                                 };
                                 setDocLines(next);
                               }}
-                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px" }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px" }}
                             >
                               {catalogItems
                                 .filter((ci) => ci.trackStock)
@@ -1640,7 +1636,7 @@ export default function InventoryPage() {
                                 ))}
                             </select>
                           </td>
-                          <td style={{ padding: "6px 8px", color: "#6B7280" }}>{line.unitName}</td>
+                          <td style={{ padding: "6px 8px", color: "var(--muted)" }}>{line.unitName}</td>
                           <td style={{ padding: "6px 8px" }}>
                             <input
                               type="number"
@@ -1652,7 +1648,7 @@ export default function InventoryPage() {
                                 next[idx] = { ...line, quantity: q, lineNetMoney: q * line.unitPrice };
                                 setDocLines(next);
                               }}
-                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px", textAlign: "right" }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px", textAlign: "right" }}
                             />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
@@ -1667,10 +1663,10 @@ export default function InventoryPage() {
                                 next[idx] = { ...line, unitPrice: p, lineNetMoney: line.quantity * p };
                                 setDocLines(next);
                               }}
-                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "12px", textAlign: "right", opacity: docModalType !== "PURCHASE_RECEIPT" ? 0.7 : 1 }}
+                              style={{ width: "100%", padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px", textAlign: "right", opacity: docModalType !== "PURCHASE_RECEIPT" ? 0.7 : 1 }}
                             />
                           </td>
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: "600", color: "#111827" }}>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: "600", color: "var(--text)" }}>
                             {formatVND(line.lineNetMoney)}
                           </td>
                           <td style={{ padding: "6px 8px", textAlign: "center" }}>
@@ -1691,11 +1687,11 @@ export default function InventoryPage() {
             </div>
 
             {/* Tổng cộng */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#F3F4F6", borderRadius: "8px" }}>
-              <div style={{ fontSize: "13px", color: "#4B5563" }}>
-                Tổng số lượng: <strong style={{ color: "#111827" }}>{docLines.reduce((s, l) => s + l.quantity, 0)}</strong>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--surface-muted)", borderRadius: "8px" }}>
+              <div style={{ fontSize: "13px", color: "var(--subtext)" }}>
+                Tổng số lượng: <strong style={{ color: "var(--text)" }}>{docLines.reduce((s, l) => s + l.quantity, 0)}</strong>
               </div>
-              <div style={{ fontSize: "15px", fontWeight: "700", color: "#7E2930" }}>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--primary)" }}>
                 Tổng giá trị: {formatVND(docLines.reduce((s, l) => s + l.lineNetMoney, 0))}
               </div>
             </div>
@@ -1714,7 +1710,7 @@ export default function InventoryPage() {
                 type="button"
                 onClick={() => handleSaveDoc(false)}
                 disabled={docSaving}
-                style={{ ...btnSecondary, background: "#FEF3C7", borderColor: "#F59E0B", color: "#B45309" }}
+                style={{ ...btnSecondary, background: "var(--warning-bg)", borderColor: "#F59E0B", color: "#B45309" }}
               >
                 {docSaving ? "Đang lưu..." : "Lưu tạm (DRAFT)"}
               </button>
@@ -1741,50 +1737,50 @@ export default function InventoryPage() {
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Header thông tin phiếu */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "14px", background: "#F9FAFB", borderRadius: "10px", fontSize: "13px" }}>
+            <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "14px", background: "var(--surface-muted)", borderRadius: "10px", fontSize: "13px" }}>
               <div>
-                <span style={{ color: "#6B7280" }}>Loại phiếu: </span>
+                <span style={{ color: "var(--muted)" }}>Loại phiếu: </span>
                 <span style={badgeStyle("#3B82F6")}>{docTypeLabels[viewingDoc.docType] || viewingDoc.docType}</span>
               </div>
               <div>
-                <span style={{ color: "#6B7280" }}>Trạng thái: </span>
+                <span style={{ color: "var(--muted)" }}>Trạng thái: </span>
                 <span style={badgeStyle(statusColors[viewingDoc.status] || "#999")}>
                   {statusLabels[viewingDoc.status] || viewingDoc.status}
                 </span>
               </div>
               <div>
-                <span style={{ color: "#6B7280" }}>Chi nhánh: </span>
+                <span style={{ color: "var(--muted)" }}>Chi nhánh: </span>
                 <strong>{viewingDoc.branchId}</strong>
               </div>
               <div>
-                <span style={{ color: "#6B7280" }}>Ngày tạo: </span>
+                <span style={{ color: "var(--muted)" }}>Ngày tạo: </span>
                 <strong>{formatDate(viewingDoc.createdAt)}</strong>
               </div>
               <div>
-                <span style={{ color: "#6B7280" }}>Người tạo: </span>
+                <span style={{ color: "var(--muted)" }}>Người tạo: </span>
                 <strong>{viewingDoc.createdByName || viewingDoc.createdBy || "—"}</strong>
               </div>
               {viewingDoc.completedAt && (
                 <div>
-                  <span style={{ color: "#6B7280" }}>Người duyệt: </span>
+                  <span style={{ color: "var(--muted)" }}>Người duyệt: </span>
                   <strong>{viewingDoc.completedByName || viewingDoc.completedBy || "—"}</strong> ({formatDate(viewingDoc.completedAt)})
                 </div>
               )}
               {viewingDoc.supplierName && (
                 <div>
-                  <span style={{ color: "#6B7280" }}>Nhà cung cấp: </span>
+                  <span style={{ color: "var(--muted)" }}>Nhà cung cấp: </span>
                   <strong>{viewingDoc.supplierName}</strong>
                 </div>
               )}
               {viewingDoc.reason && (
                 <div>
-                  <span style={{ color: "#6B7280" }}>Lý do: </span>
+                  <span style={{ color: "var(--muted)" }}>Lý do: </span>
                   <strong>{viewingDoc.reason}</strong>
                 </div>
               )}
               {viewingDoc.note && (
                 <div style={{ gridColumn: "span 2" }}>
-                  <span style={{ color: "#6B7280" }}>Ghi chú: </span>
+                  <span style={{ color: "var(--muted)" }}>Ghi chú: </span>
                   <span>{viewingDoc.note}</span>
                 </div>
               )}
@@ -1792,13 +1788,13 @@ export default function InventoryPage() {
 
             {/* Bảng chi tiết mặt hàng */}
             <div>
-              <h4 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1F2937" }}>
+              <h4 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "var(--text)" }}>
                 Danh sách mặt hàng ({viewingDoc.lines?.length || 0})
               </h4>
-              <div style={{ border: "1px solid #E5E7EB", borderRadius: "8px", overflow: "hidden" }}>
+              <div style={{ border: "1px solid var(--border)", borderRadius: "8px", overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                   <thead>
-                    <tr style={{ background: "#F9FAFB" }}>
+                    <tr style={{ background: "var(--surface-muted)" }}>
                       <th style={thStyle}>Mã SKU</th>
                       <th style={thStyle}>Tên hàng hóa</th>
                       <th style={thStyle}>ĐVT</th>
@@ -1809,7 +1805,7 @@ export default function InventoryPage() {
                   </thead>
                   <tbody>
                     {(viewingDoc.lines || []).map((l, i) => (
-                      <tr key={l.lineId || i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                      <tr key={l.lineId || i} style={{ borderBottom: "1px solid var(--border-light)" }}>
                         <td style={tdStyle}>{l.itemSku || "—"}</td>
                         <td style={{ ...tdStyle, fontWeight: "600" }}>{l.itemName}</td>
                         <td style={tdStyle}>{l.unitName || "—"}</td>
@@ -1818,11 +1814,11 @@ export default function InventoryPage() {
                         <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>{formatVND(l.lineNetMoney)}</td>
                       </tr>
                     ))}
-                    <tr style={{ background: "#F9FAFB", fontWeight: "700" }}>
+                    <tr style={{ background: "var(--surface-muted)", fontWeight: "700" }}>
                       <td colSpan={3} style={{ ...tdStyle, textAlign: "right" }}>Tổng cộng:</td>
-                      <td style={{ ...tdStyle, textAlign: "right", color: "#111827" }}>{viewingDoc.totalQuantity}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "var(--text)" }}>{viewingDoc.totalQuantity}</td>
                       <td></td>
-                      <td style={{ ...tdStyle, textAlign: "right", color: "#7E2930", fontSize: "14px" }}>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "var(--primary)", fontSize: "14px" }}>
                         {formatVND(viewingDoc.totalNetMoney || viewingDoc.totalMoney)}
                       </td>
                     </tr>
@@ -1832,7 +1828,7 @@ export default function InventoryPage() {
             </div>
 
             {/* Footer Buttons */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
               <div>
                 {viewingDoc.status === "DRAFT" && (
                   <button
@@ -1885,7 +1881,7 @@ export default function InventoryPage() {
         >
           <div
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface)",
               borderRadius: "16px",
               padding: "24px 28px",
               width: "580px",
@@ -1897,13 +1893,13 @@ export default function InventoryPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h2 style={{ fontSize: "19px", fontWeight: "700", color: "#111827", margin: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "19px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
                 {importStep === 1 ? "Thêm hàng hóa từ file Excel" : "Tải lên file dữ liệu hàng hóa"}
               </h2>
               <button
                 onClick={() => setShowImportModal(false)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6B7280", padding: "4px" }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: "4px" }}
               >
                 <X size={20} />
               </button>
@@ -1912,17 +1908,17 @@ export default function InventoryPage() {
             {/* STEP 1: CÁCH XỬ LÝ THÔNG TIN (GIAO DIỆN CHÍNH XÁC NHƯ HÌNH) */}
             {importStep === 1 && (
               <div>
-                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1F2937", marginBottom: "16px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginBottom: "16px" }}>
                   Cách xử lý thông tin
                 </div>
 
                 {/* 1. Cập nhật giá trị tồn kho */}
                 <div style={{ marginBottom: "16px" }}>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "#111827", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text)", marginBottom: "8px" }}>
                     Cập nhật giá trị tồn kho?
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", paddingLeft: "2px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="updateStock"
@@ -1932,7 +1928,7 @@ export default function InventoryPage() {
                       />
                       Không
                     </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="updateStock"
@@ -1947,11 +1943,11 @@ export default function InventoryPage() {
 
                 {/* 2. Xử lý trùng mã hàng, khác tên hàng */}
                 <div style={{ marginBottom: "16px" }}>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "#111827", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text)", marginBottom: "8px" }}>
                     Xử lý trùng mã hàng, khác tên hàng?
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", paddingLeft: "2px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="duplicateSku"
@@ -1961,7 +1957,7 @@ export default function InventoryPage() {
                       />
                       Báo lỗi và dừng import
                     </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="duplicateSku"
@@ -1976,11 +1972,11 @@ export default function InventoryPage() {
 
                 {/* 3. Phạm vi áp dụng trạng thái kinh doanh */}
                 <div style={{ marginBottom: "18px" }}>
-                  <div style={{ fontSize: "14px", fontWeight: "500", color: "#111827", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text)", marginBottom: "8px" }}>
                     Phạm vi áp dụng trạng thái kinh doanh
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", paddingLeft: "2px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="scope"
@@ -1990,7 +1986,7 @@ export default function InventoryPage() {
                       />
                       Toàn hệ thống
                     </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#374151", cursor: "pointer" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "var(--subtext)", cursor: "pointer" }}>
                       <input
                         type="radio"
                         name="scope"
@@ -2006,14 +2002,14 @@ export default function InventoryPage() {
                 {/* Khung Lưu ý */}
                 <div
                   style={{
-                    background: "#F8FAFC",
+                    background: "var(--surface-muted)",
                     border: "1px solid #BFDBFE",
                     borderRadius: "12px",
                     padding: "14px 18px",
                     marginBottom: "24px",
                   }}
                 >
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#1E293B", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>
                     Lưu ý
                   </div>
                   <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#334155", lineHeight: 1.65 }}>
@@ -2025,8 +2021,8 @@ export default function InventoryPage() {
                 </div>
 
                 {/* Footer Modal Step 1 */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "13px", color: "#4B5563" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", paddingTop: "8px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--subtext)" }}>
                     Chưa có file mẫu?{" "}
                     <button
                       onClick={downloadSampleTemplate}
@@ -2050,7 +2046,7 @@ export default function InventoryPage() {
                         padding: "8px 20px",
                         background: "transparent",
                         border: "none",
-                        color: "#374151",
+                        color: "var(--subtext)",
                         fontSize: "14px",
                         fontWeight: "600",
                         cursor: "pointer",
@@ -2106,7 +2102,7 @@ export default function InventoryPage() {
                   onClick={() => fileInputRef.current?.click()}
                   style={{
                     border: "2px dashed #93C5FD",
-                    background: "#F8FAFC",
+                    background: "var(--surface-muted)",
                     borderRadius: "12px",
                     padding: "24px",
                     textAlign: "center",
@@ -2115,10 +2111,10 @@ export default function InventoryPage() {
                   }}
                 >
                   <FileSpreadsheet size={40} color="#0066FF" style={{ margin: "0 auto 10px" }} />
-                  <div style={{ fontSize: "14px", fontWeight: "600", color: "#1E293B" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text)" }}>
                     {importedFile ? importedFile.name : "Kéo thả hoặc bấm để chọn file Excel / CSV"}
                   </div>
-                  <div style={{ fontSize: "12px", color: "#64748B", marginTop: "4px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
                     Hỗ trợ định dạng .xlsx, .xls, .csv theo mẫu KiotViet / Trạm
                   </div>
                   <input
@@ -2134,24 +2130,24 @@ export default function InventoryPage() {
                 {parsedRows.length > 0 && (
                   <div style={{ marginBottom: "12px" }}>
                     <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
                         Tổng số: {parsedRows.length} mặt hàng
                       </span>
-                      <span style={{ fontSize: "12px", background: "#DCFCE7", color: "#15803D", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
+                      <span style={{ fontSize: "12px", background: "var(--success-bg)", color: "#15803D", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
                         ✓ {parsedRows.filter((r) => r.isValid).length} hợp lệ
                       </span>
                       {parsedRows.filter((r) => !r.isValid).length > 0 && (
-                        <span style={{ fontSize: "12px", background: "#FEE2E2", color: "#B91C1C", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
+                        <span style={{ fontSize: "12px", background: "var(--danger-bg)", color: "var(--danger)", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
                           ⚠ {parsedRows.filter((r) => !r.isValid).length} lỗi
                         </span>
                       )}
                     </div>
 
                     {/* Preview Table */}
-                    <div style={{ border: "1px solid #E5E7EB", borderRadius: "8px", maxHeight: "240px", overflow: "auto" }}>
+                    <div style={{ border: "1px solid var(--border)", borderRadius: "8px", maxHeight: "240px", overflow: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                         <thead>
-                          <tr style={{ background: "#F1F5F9", color: "#475569", borderBottom: "1px solid #CBD5E1" }}>
+                          <tr style={{ background: "var(--surface-muted)", color: "#475569", borderBottom: "1px solid var(--border)" }}>
                             <th style={{ padding: "8px", textAlign: "left" }}>Mã</th>
                             <th style={{ padding: "8px", textAlign: "left" }}>Tên hàng</th>
                             <th style={{ padding: "8px", textAlign: "left" }}>Loại</th>
@@ -2162,7 +2158,7 @@ export default function InventoryPage() {
                         </thead>
                         <tbody>
                           {parsedRows.map((r, idx) => (
-                            <tr key={idx} style={{ borderBottom: "1px solid #F1F5F9", background: r.isValid ? "#FFF" : "#FFF5F5" }}>
+                            <tr key={idx} style={{ borderBottom: "1px solid #F1F5F9", background: r.isValid ? "var(--surface)" : "#FFF5F5" }}>
                               <td style={{ padding: "6px 8px", fontFamily: "monospace", fontWeight: "600" }}>{r.sku}</td>
                               <td style={{ padding: "6px 8px", fontWeight: "500" }}>{r.name}</td>
                               <td style={{ padding: "6px 8px" }}>{r.kind === "TOOL" ? "Công cụ" : "NVL"}</td>
@@ -2172,7 +2168,7 @@ export default function InventoryPage() {
                                 <span
                                   style={{
                                     fontSize: "11px",
-                                    color: r.isValid ? "#15803D" : "#B91C1C",
+                                    color: r.isValid ? "#15803D" : "var(--danger)",
                                     fontWeight: "600",
                                   }}
                                 >
@@ -2188,14 +2184,14 @@ export default function InventoryPage() {
                 )}
 
                 {importSuccessMsg && (
-                  <div style={{ padding: "10px", background: "#DCFCE7", color: "#15803D", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "12px" }}>
+                  <div style={{ padding: "10px", background: "var(--success-bg)", color: "#15803D", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "12px" }}>
                     ✓ {importSuccessMsg}
                   </div>
                 )}
 
                 {/* Footer Modal Step 2 */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px" }}>
-                  <div style={{ fontSize: "13px", color: "#4B5563" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", paddingTop: "12px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--subtext)" }}>
                     Chưa có file mẫu?{" "}
                     <button
                       onClick={downloadSampleTemplate}
@@ -2218,7 +2214,7 @@ export default function InventoryPage() {
                         padding: "8px 20px",
                         background: "transparent",
                         border: "none",
-                        color: "#374151",
+                        color: "var(--subtext)",
                         fontSize: "14px",
                         fontWeight: "600",
                         cursor: "pointer",
@@ -2276,10 +2272,10 @@ function CatalogTable({
       />
     );
   return (
-    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+    <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: "#f9fafb" }}>
+          <tr style={{ background: "var(--surface-muted)" }}>
             {["Mã", "Tên hàng", "Nhóm hàng", "Loại", "ĐVT", "Giá vốn", "Tồn kho", "Trạng thái", ""].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
@@ -2295,19 +2291,19 @@ function CatalogTable({
             return (
               <tr
                 key={item.itemId}
-                style={{ borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
+                style={{ borderBottom: "1px solid var(--border-light)", cursor: "pointer" }}
                 onClick={() => onEdit(item)}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td style={tdStyle}>
-                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930", fontWeight: "600" }}>
+                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--primary)", fontWeight: "600" }}>
                     {item.sku}
                   </span>
                 </td>
                 <td style={{ ...tdStyle, fontWeight: "600" }}>{item.name}</td>
                 <td style={tdStyle}>
-                  <span style={{ fontSize: "12px", color: "#666" }}>{item.managementGroup || "—"}</span>
+                  <span style={{ fontSize: "12px", color: "var(--subtext)" }}>{item.managementGroup || "—"}</span>
                 </td>
                 <td style={tdStyle}>
                   <span style={badgeStyle(item.kind === "RAW_MATERIAL" ? "#3b82f6" : "#8b5cf6")}>
@@ -2325,7 +2321,7 @@ function CatalogTable({
                       {qty} {item.baseUnitId}
                     </span>
                   ) : (
-                    <span style={{ color: "#999" }}>Không theo dõi</span>
+                    <span style={{ color: "var(--muted)" }}>Không theo dõi</span>
                   )}
                 </td>
                 <td style={tdStyle}>
@@ -2355,10 +2351,10 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
       />
     );
   return (
-    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+    <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: "#f9fafb" }}>
+          <tr style={{ background: "var(--surface-muted)" }}>
             {["Mã", "Tên hàng", "ĐVT", "Tồn kho", "Đang giữ", "Có thể bán", "Giá vốn TB", "Giá trị tồn"].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
@@ -2374,9 +2370,9 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
             const available = onHand - reserved;
             const belowMin = item.minStock > 0 && onHand < item.minStock;
             return (
-              <tr key={item.itemId} style={{ borderBottom: "1px solid #f0f0f0" }}>
+              <tr key={item.itemId} style={{ borderBottom: "1px solid var(--border-light)" }}>
                 <td style={tdStyle}>
-                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930" }}>{item.sku}</span>
+                  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--primary)" }}>{item.sku}</span>
                 </td>
                 <td style={{ ...tdStyle, fontWeight: "600" }}>{item.name}</td>
                 <td style={tdStyle}>{item.baseUnitId}</td>
@@ -2391,7 +2387,7 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
                   {belowMin && "⚠️ "}
                   {onHand}
                 </td>
-                <td style={{ ...tdStyle, textAlign: "right", color: reserved > 0 ? "#f59e0b" : "#999" }}>{reserved}</td>
+                <td style={{ ...tdStyle, textAlign: "right", color: reserved > 0 ? "#f59e0b" : "var(--muted)" }}>{reserved}</td>
                 <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>{available}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>
                   {bal?.averageCostScaled ? formatVND(bal.averageCostScaled / 100) : "—"}
@@ -2418,10 +2414,10 @@ function DocumentsTable({
   if (docs.length === 0)
     return <EmptyState icon="📋" text="Chưa có phiếu kho nào" sub="Bấm nút Nhập kho / Xuất kho / Huỷ kho phía trên để tạo phiếu." />;
   return (
-    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+    <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: "#f9fafb" }}>
+          <tr style={{ background: "var(--surface-muted)" }}>
             {["Mã phiếu", "Loại", "NCC / Lý do", "Tổng SL", "Tổng tiền", "Trạng thái", "Người tạo", "Ngày tạo", ""].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
@@ -2433,13 +2429,13 @@ function DocumentsTable({
           {docs.map((doc) => (
             <tr
               key={doc.documentId}
-              style={{ borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
+              style={{ borderBottom: "1px solid var(--border-light)", cursor: "pointer" }}
               onClick={() => onSelectDoc?.(doc)}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <td style={tdStyle}>
-                <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: "700", color: "#7E2930" }}>
+                <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: "700", color: "var(--primary)" }}>
                   {doc.documentCode || doc.documentId.slice(0, 12)}
                 </span>
               </td>
@@ -2481,10 +2477,10 @@ function SuppliersTable({
   if (suppliers.length === 0)
     return <EmptyState icon="🏪" text="Chưa có nhà cung cấp" sub="Bấm 'Thêm NCC' để thêm nhà cung cấp đầu tiên." />;
   return (
-    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+    <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: "#f9fafb" }}>
+          <tr style={{ background: "var(--surface-muted)" }}>
             {["Mã NCC", "Tên nhà cung cấp", "SĐT", "Email", "MST", "Địa chỉ", "Trạng thái", ""].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
@@ -2496,13 +2492,13 @@ function SuppliersTable({
           {suppliers.map((sup) => (
             <tr
               key={sup.supplierId}
-              style={{ borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
+              style={{ borderBottom: "1px solid var(--border-light)", cursor: "pointer" }}
               onClick={() => onEdit(sup)}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#fafafa")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <td style={tdStyle}>
-                <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#7E2930", fontWeight: "600" }}>
+                <span style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--primary)", fontWeight: "600" }}>
                   {sup.supplierCode}
                 </span>
               </td>
@@ -2534,8 +2530,8 @@ function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: stri
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
       <div style={{ fontSize: "48px", marginBottom: "12px" }}>{icon}</div>
-      <div style={{ fontSize: "16px", fontWeight: "600", color: "#333" }}>{text}</div>
-      <div style={{ fontSize: "13px", color: "#999", marginTop: "6px" }}>{sub}</div>
+      <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text)" }}>{text}</div>
+      <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>{sub}</div>
     </div>
   );
 }
@@ -2556,7 +2552,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
     >
       <div
         style={{
-          background: "#fff",
+          background: "var(--surface)",
           borderRadius: "16px",
           padding: "24px",
           minWidth: "500px",
@@ -2567,7 +2563,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "16px", color: "#1a1a2e" }}>{title}</h3>
+        <h3 style={{ fontSize: "18px", fontWeight: "700", marginBottom: "16px", color: "var(--text)" }}>{title}</h3>
         {children}
       </div>
     </div>

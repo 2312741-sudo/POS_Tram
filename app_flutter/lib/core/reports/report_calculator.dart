@@ -115,7 +115,7 @@ class ReportCalculator {
       0,
       (sum, b) =>
           sum +
-          b.items.fold<int>(0, (iSum, it) => iSum + it.discountAmount),
+          b.items.fold<int>(0, (iSum, it) => iSum + it.lineDiscountTotal),
     );
 
     final billDiscounts = paidBills.fold<int>(
@@ -351,7 +351,7 @@ class ReportCalculator {
 
         acc.quantity += it.quantity;
         acc.grossRevenue += lineGross;
-        acc.itemDiscount += it.discountAmount;
+        acc.itemDiscount += it.lineDiscountTotal;
         acc.costPrice += lineCost;
       }
     }
@@ -411,7 +411,7 @@ class ReportCalculator {
 
         acc.quantity += it.quantity;
         acc.grossRevenue += lineGross;
-        acc.itemDiscount += it.discountAmount;
+        acc.itemDiscount += it.lineDiscountTotal;
         acc.costPrice += lineCost;
       }
     }
@@ -466,7 +466,7 @@ class ReportCalculator {
         final gross = it.unitPrice * it.quantity;
         oAcc.itemsCount += it.quantity;
         oAcc.grossRevenue += gross;
-        oAcc.netRevenue += (gross - it.discountAmount);
+        oAcc.netRevenue += (gross - it.lineDiscountTotal);
       }
     }
 
@@ -549,15 +549,15 @@ class ReportCalculator {
 
       // Item discounts
       for (final it in b.items) {
-        if (it.discountAmount > 0) {
+        if (it.lineDiscountTotal > 0) {
           itemDiscountAppliedCount += 1;
-          itemDiscountAmountTotal += it.discountAmount;
+          itemDiscountAmountTotal += it.lineDiscountTotal;
           itemDiscMap.putIfAbsent(it.productId, () => _ItemDiscountAccumulator(
             productId: it.productId,
             productName: it.name,
           ));
-          itemDiscMap[it.productId]!.discountAmount += it.discountAmount;
-          itemDiscMap[it.productId]!.quantity += it.quantity;
+          itemDiscMap[it.productId]!.discountAmount += it.lineDiscountTotal;
+          itemDiscMap[it.productId]!.quantity += it.discountedQuantity;
         }
       }
     }
