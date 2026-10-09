@@ -5,7 +5,7 @@ Nhân viên / chủ quán bấm **"Đăng nhập bằng Chấm Công Trạm"** t
 ```
 App POS ──(1) đăng nhập Firebase app phụ "chamcong" (project chamcongtram)──► lấy ID token chấm công
         ──(2) callable chamCongSignIn({ idToken, storeCode? })──► Cloud Functions (tramapp-36f53)
-               • verifyIdToken(idToken, checkRevoked=true) bằng Admin app phụ "chamcong"
+               • verifyIdToken(idToken, checkRevoked=false) bằng Admin app phụ "chamcong"
                • đọc Firestore chamcongtram: members (collectionGroup theo userId) + stores (ownerId)
                • đối chiếu chamcong_links (RTDB) → cấp/cập nhật stores/{storeCode}/users/cc_{uid}
                • trả về customToken
@@ -86,7 +86,7 @@ SA=866082811261-compute@developer.gserviceaccount.com
 gcloud projects add-iam-policy-binding chamcongtram \
   --member="serviceAccount:$SA" --role="roles/datastore.viewer"
 
-# 2. Kiểm tra token bị thu hồi / user bị vô hiệu (verifyIdToken(idToken, true) gọi getUser trên chamcongtram)
+# 2. (KHÔNG còn bắt buộc từ 2026-10-09: đã tắt checkRevoked; quyền thật kiểm tra qua trạng thái thành viên Firestore)
 gcloud projects add-iam-policy-binding chamcongtram \
   --member="serviceAccount:$SA" --role="roles/firebaseauth.viewer"
 ```
@@ -95,7 +95,7 @@ Nếu log Functions báo lỗi kiểu `USER_PROJECT_DENIED` / "Caller does not h
 
 Trên `tramapp-36f53` (đã có từ `staffSignIn`): SA trên cần **Service Account Token Creator** trên chính nó để `createCustomToken`.
 
-**Cách verifyIdToken cho project khác hoạt động:** Functions tạo Admin app phụ tên `"chamcong"` với `projectId = CHAMCONG_PROJECT_ID` (mặc định `chamcongtram`) và `applicationDefault()` (chính SA ở trên). Việc kiểm tra chữ ký ID token chỉ cần khóa công khai của Google và so `aud`/`iss` với `chamcongtram` — token của project khác (kể cả `tramapp-36f53`) đều bị từ chối. Tham số `checkRevoked=true` thêm một lệnh `getUser` tới Auth của `chamcongtram` → cần quyền ở bước 2. Đọc Firestore cần bước 1. Truy vấn `collectionGroup("members").where("userId","==",uid)` dùng index field override đã có sẵn trong `app_cham_cong/.../firestore.indexes.json`.
+**Cách verifyIdToken cho project khác hoạt động:** Functions tạo Admin app phụ tên `"chamcong"` với `projectId = CHAMCONG_PROJECT_ID` (mặc định `chamcongtram`) và `applicationDefault()` (chính SA ở trên). Việc kiểm tra chữ ký ID token chỉ cần khóa công khai của Google và so `aud`/`iss` với `chamcongtram` — token của project khác (kể cả `tramapp-36f53`) đều bị từ chối. `checkRevoked` đang tắt nên không cần quyền ở bước 2 (bật lại thì cần `roles/firebaseauth.viewer` và có thể cả `roles/serviceusage.serviceUsageConsumer`). Đọc Firestore cần bước 1. Truy vấn `collectionGroup("members").where("userId","==",uid)` dùng index field override đã có sẵn trong `app_cham_cong/.../firestore.indexes.json`.
 
 ## B. Đăng ký app POS trong Firebase project `chamcongtram`
 

@@ -69,12 +69,16 @@ async function writeAudit(
     .catch(() => undefined);
 }
 
-/** Xác minh ID token do project chấm công cấp (kiểm tra cả thu hồi / vô hiệu hóa). */
+/**
+ * Xác minh ID token do project chấm công cấp (chữ ký, aud/iss, hạn dùng).
+ * Không bật checkRevoked: bước đó gọi Firebase Auth của chamcongtram và cần thêm quyền IAM;
+ * quyền truy cập thật vẫn được kiểm tra lại mỗi lần qua trạng thái thành viên trong Firestore.
+ */
 async function verifyChamCongToken(idToken: unknown): Promise<DecodedIdToken> {
   if (typeof idToken !== "string" || idToken.length < 20 || idToken.length > 8192) fail("unauthenticated", "INVALID_TOKEN");
   let decoded: DecodedIdToken;
   try {
-    decoded = await getAuth(chamCongApp()).verifyIdToken(idToken, true);
+    decoded = await getAuth(chamCongApp()).verifyIdToken(idToken, false);
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code || "";
     if (code.startsWith("auth/") && code !== "auth/internal-error" && code !== "auth/insufficient-permission") {
