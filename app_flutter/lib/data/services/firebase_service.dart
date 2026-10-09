@@ -1,4 +1,7 @@
 // lib/data/services/firebase_service.dart
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/app_models.dart';
@@ -9,13 +12,16 @@ import '../repositories/report_repository.dart';
 import 'export_service.dart';
 import 'inventory_service.dart';
 import 'campaign_service.dart';
+import '../../core/domain/order_integrity.dart' show StockRetryPlanner;
 
 export '../repositories/seed_data.dart';
 export '../repositories/auth_repository.dart';
 export '../repositories/order_repository.dart';
 export '../repositories/report_repository.dart';
 export 'export_service.dart';
-export '../../core/domain/order_integrity.dart' show DataWriteException, PromotionLimitExceededException;
+export '../../core/domain/order_integrity.dart'
+    show DataWriteException, PromotionLimitExceededException, InsufficientPointsException, LoyaltyException;
+export 'inventory_service.dart' show StockRetrySummary, StockRetryEntry;
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -85,12 +91,18 @@ class FirebaseService {
       _root = FirebaseDatabase.instance.ref();
     }
     _initialized = true;
+    try {
+      _authSub ??= FirebaseAuth.instance.authStateChanges().listen((u) {
+        if (u != null) _scheduleStockRetry();
+      });
+    } catch (_) {}
   }
 
   void switchStore(String storeCode) {
     _currentStoreCode = storeCode.toUpperCase().trim();
     _reportRepo.clearShiftCache();
     _syncDependentServices();
+    _scheduleStockRetry();
   }
 
   /// Đồng bộ chi nhánh cho các service kho / khuyến mãi (trước đây luôn dùng TRAM01)
@@ -188,11 +200,72 @@ class FirebaseService {
   Future<void> saveBill(BillModel bill) => _orderRepo.saveBill(bill);
 
   /// Trả về true nếu server đã xác nhận, false nếu đang chờ đồng bộ (mất mạng).
-  /// Ném [DataWriteException] / [PromotionLimitExceededException] khi thất bại.
-  Future<bool> closeAndPayBill(BillModel bill, TableModel table) =>
-      _orderRepo.closeAndPayBill(bill, table);
+  /// Ném [DataWriteException] / [PromotionLimitExceededException] /
+  /// [InsufficientPointsException] khi thất bại (trước khi hóa đơn được ghi).
+  /// Đổi điểm (bill.pointsUsed) và tích điểm cho bill.customerId được xử lý bên trong
+  /// (transaction, idempotent theo hóa đơn).
+  Future<bool> closeAndPayBill(BillModel bill, TableModel table, {double? pointEarnRate, int? pointRedeemRate}) =>
+      _orderRepo.closeAndPayBill(bill, table, pointEarnRate: pointEarnRate, pointRedeemRate: pointRedeemRate);
 
   Future<void> applyStockForBill(BillModel bill) => _orderRepo.applyStockForBill(bill);
+
+  // ==================== HÀNG ĐỢI TRỪ KHO LẠI ====================
+  /// Hóa đơn đang chờ trừ kho lại (stock_retry_queue) - dùng cho màn hình quản lý.
+  Future<List<StockRetryEntry>> pendingStockRetries() =>
+      InventoryService().pendingStockRetries(storeCode: _currentStoreCode);
+
+  /// Chạy lại hàng đợi trừ kho cho chi nhánh hiện tại (người đăng nhập phải là Thu ngân trở lên).
+  Future<StockRetrySummary> retryPendingStockDeductions() async {
+    final user = await _currentStaffForRetry();
+    if (user == null) return StockRetrySummary();
+    return _orderRepo.retryPendingStock(
+      storeCode: _currentStoreCode,
+      username: user.username,
+      userFullName: user.fullName,
+      userRole: user.roleId,
+    );
+  }
+
+  Timer? _stockRetryTimer;
+  bool _stockRetryRunning = false;
+  StreamSubscription<User?>? _authSub;
+
+  /// Hẹn chạy hàng đợi trừ kho sau khi mở app / đăng nhập / đổi chi nhánh.
+  void _scheduleStockRetry() {
+    if (!_initialized) return;
+    _stockRetryTimer?.cancel();
+    _stockRetryTimer = Timer(const Duration(seconds: 8), () async {
+      if (_stockRetryRunning) return;
+      _stockRetryRunning = true;
+      try {
+        await retryPendingStockDeductions();
+      } catch (_) {
+        // Không chặn luồng chính; lần mở app sau sẽ thử lại
+      } finally {
+        _stockRetryRunning = false;
+      }
+    });
+  }
+
+  Future<({String username, String fullName, String roleId})?> _currentStaffForRetry() async {
+    try {
+      final fbUser = FirebaseAuth.instance.currentUser;
+      if (fbUser == null) return null;
+      final snap = await usersRef.child(fbUser.uid).get().timeout(const Duration(seconds: 5));
+      if (snap.value is! Map) return null;
+      final m = snap.value as Map;
+      if (m['isActive'] == false) return null;
+      final roleId = m['roleId']?.toString() ?? '';
+      if (!StockRetryPlanner.canRunRetry(roleId, isRootOwner: m['isRootOwner'] == true)) return null;
+      return (
+        username: m['username']?.toString() ?? fbUser.uid,
+        fullName: m['fullName']?.toString() ?? '',
+        roleId: roleId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   // ==================== CANCEL ACTIVE BILL ====================
   Future<void> cancelActiveBill(
@@ -310,8 +383,10 @@ class FirebaseService {
 
   Future<void> deleteZone(ZoneModel zone) => _orderRepo.deleteZone(zone);
 
-  // ==================== KITCHEN ORDERS & ONLINE ORDERS ====================
   Stream<List<KitchenOrderModel>> kitchenOrdersStream() => _orderRepo.kitchenOrdersStream();
+
+  Stream<List<KitchenOrderModel>> readyToServeKitchenOrdersStream({Duration maxAge = const Duration(hours: 2)}) =>
+      _orderRepo.readyToServeKitchenOrdersStream(maxAge: maxAge);
 
   Future<void> sendKitchenOrder(KitchenOrderModel order) => _orderRepo.sendKitchenOrder(order);
 
@@ -319,9 +394,20 @@ class FirebaseService {
     required TableModel table,
     required List<OrderItemModel> items,
     String? note,
-  }) => _orderRepo.sendOrderToKitchen(table: table, items: items, note: note);
+    String? orderedBy,
+    String? orderedByName,
+  }) => _orderRepo.sendOrderToKitchen(
+        table: table,
+        items: items,
+        note: note,
+        orderedBy: orderedBy,
+        orderedByName: orderedByName,
+      );
 
   Future<void> markKitchenOrderDone(String key) => _orderRepo.markKitchenOrderDone(key);
+
+  Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) =>
+      _orderRepo.markKitchenOrderPickedUp(key, pickedUpBy: pickedUpBy);
 
   Stream<List<OnlineOrderModel>> onlineOrdersStream() => _orderRepo.onlineOrdersStream();
 
@@ -331,12 +417,23 @@ class FirebaseService {
   // ==================== KIOTVIET CASH SHIFT ====================
   CashShiftModel? get activeShiftCache => _reportRepo.activeShiftCache;
 
+  List<CashShiftModel>? get cachedCashShiftsList => _reportRepo.cachedCashShiftsList;
+
   Stream<List<CashShiftModel>> cashShiftsStream() => _reportRepo.cashShiftsStream();
+
+  Future<List<CashShiftModel>> getRecentCashShifts({int limit = 50, bool forceRefresh = false}) =>
+      _reportRepo.getRecentCashShifts(limit: limit, forceRefresh: forceRefresh);
 
   Future<CashShiftModel?> getCurrentOpenShift({bool forceRefresh = false}) =>
       _reportRepo.getCurrentOpenShift(forceRefresh: forceRefresh);
 
   Future<void> openCashShift(CashShiftModel shift) => _reportRepo.openCashShift(shift);
+
+  Future<List<BillModel>> getStoreBills({String? storeCode, DateTime? startDate, DateTime? endDate}) =>
+      _reportRepo.getStoreBills(storeCode: storeCode, startDate: startDate, endDate: endDate);
+
+  Future<List<BillModel>> getBillsForShift(CashShiftModel shift, {String? storeCode}) =>
+      _reportRepo.getBillsForShift(shift, storeCode: storeCode);
 
   Future<void> recordCashShiftSale({
     required int cashAmount,
@@ -370,30 +467,8 @@ class FirebaseService {
 
   Future<void> saveCustomer(KmtCustomerModel customer) => _reportRepo.saveCustomer(customer);
 
-  Future<void> awardPoints({
-    required String customerId,
-    required int billAmount,
-    double rate = 1.0,
-    int pointRedeemRate = 1000,
-    String? billCode,
-  }) => _reportRepo.awardPoints(
-    customerId: customerId,
-    billAmount: billAmount,
-    rate: rate,
-    pointRedeemRate: pointRedeemRate,
-    billCode: billCode,
-  );
-
-  Future<void> redeemCustomerPoints({
-    required String customerId,
-    required int points,
-    String? billCode,
-  }) => _reportRepo.redeemCustomerPoints(
-    customerId: customerId,
-    points: points,
-    billCode: billCode,
-  );
-
+  // awardPoints / redeemCustomerPoints (ghi điểm trực tiếp vào Firestore) đã gỡ bỏ:
+  // điểm chỉ đổi qua closeAndPayBill (LoyaltyService, RTDB), Firestore do Cloud Function đồng bộ.
   Future<List<KmtCustomerModel>> getAllCustomers() => _reportRepo.getAllCustomers();
 
   // ==================== KIOTVIET TABLE RESERVATIONS ====================

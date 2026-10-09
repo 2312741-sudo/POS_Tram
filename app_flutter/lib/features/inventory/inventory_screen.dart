@@ -77,13 +77,13 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
             }
           },
           itemBuilder: (ctx) => [
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'import',
               child: Row(
                 children: [
-                  Icon(Icons.upload_file_rounded, size: 18, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Nhập file Excel'),
+                  Icon(Icons.upload_file_rounded, size: 18, color: context.tc.primary),
+                  const SizedBox(width: 8),
+                  const Text('Nhập file Excel'),
                 ],
               ),
             ),
@@ -97,13 +97,13 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                 ],
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'template',
               child: Row(
                 children: [
-                  Icon(Icons.description_outlined, size: 18, color: AppColors.textSecondary),
-                  SizedBox(width: 8),
-                  Text('Tải file mẫu Excel'),
+                  Icon(Icons.description_outlined, size: 18, color: context.tc.textSecondary),
+                  const SizedBox(width: 8),
+                  const Text('Tải file mẫu Excel'),
                 ],
               ),
             ),
@@ -113,12 +113,12 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
       body: Column(
         children: [
           Container(
-            color: AppColors.surface,
+            color: context.tc.surface,
             child: TabBar(
               controller: _tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
+              labelColor: context.tc.primary,
+              unselectedLabelColor: context.tc.textSecondary,
+              indicatorColor: context.tc.primary,
               isScrollable: true,
               tabs: const [
                 Tab(text: 'Danh sách hàng'),
@@ -170,10 +170,11 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                         onPressed: () => _showCatalogDialog(null),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Thêm hàng'),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget), backgroundColor: context.tc.primary, foregroundColor: Colors.white),
                       ),
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                         onPressed: () => _showImportExcelDialog(items),
                         icon: const Icon(Icons.upload_file_rounded, size: 18),
                         label: const Text('Nhập Excel'),
@@ -201,7 +202,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               // Thanh tìm kiếm & thao tác nhanh
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                color: AppColors.card,
+                color: context.tc.card,
                 child: Column(
                   children: [
                     Row(
@@ -211,14 +212,14 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                             onChanged: (val) => setState(() => _catalogSearch = val.trim()),
                             decoration: InputDecoration(
                               hintText: 'Tìm theo tên, mã SKU, nhóm hàng...',
-                              hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textSecondary),
+                              hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
                               prefixIcon: const Icon(Icons.search, size: 20),
                               isDense: true,
                               filled: true,
-                              fillColor: AppColors.surface,
+                              fillColor: context.tc.surface,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(color: AppColors.border),
+                                borderSide: BorderSide(color: context.tc.border),
                               ),
                               contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                             ),
@@ -230,8 +231,8 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                           icon: const Icon(Icons.upload_file_rounded, size: 20),
                           tooltip: 'Nhập Excel',
                           style: IconButton.styleFrom(
-                            backgroundColor: AppColors.primary.withAlpha(25),
-                            foregroundColor: AppColors.primary,
+                            backgroundColor: context.tc.primary.withAlpha(25),
+                            foregroundColor: context.tc.primary,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -262,7 +263,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                   ],
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: context.tc.border),
               Expanded(
                 child: filteredItems.isEmpty
                     ? const Center(child: Text('Không tìm thấy mặt hàng phù hợp'))
@@ -288,7 +289,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           floatingActionButton: _auth.can(AppPermissions.editCatalogItem)
               ? FloatingActionButton(
                   onPressed: () => _showCatalogDialog(null),
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: context.tc.primary,
                   child: const Icon(Icons.add, color: Colors.white),
                 )
               : null,
@@ -305,7 +306,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Lỗi: \${snapshot.error}'));
+          return Center(child: Text('Lỗi: ${snapshot.error}'));
         }
 
         final stocks = snapshot.data ?? [];
@@ -324,8 +325,8 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text('Hàng ID: \${stock.itemId}'),
-                subtitle: Text('Tồn: \${stock.onHandQty} | Khả dụng: \${stock.availableQty}'),
+                title: Text('Hàng ID: ${stock.itemId}'),
+                subtitle: Text('Tồn: ${stock.onHandQty} | Khả dụng: ${stock.availableQty}'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(
@@ -359,10 +360,10 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: context.tc.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.login_rounded, color: AppColors.primary),
+            child: Icon(Icons.login_rounded, color: context.tc.primary),
           ),
           title: const Text('Phiếu nhập hàng (Stock In)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Nhập nguyên vật liệu từ nhà cung cấp, cập nhật giá vốn'),
@@ -383,10 +384,10 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.warningLight.withValues(alpha: 0.1),
+              color: context.tc.warningLight.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.logout_rounded, color: AppColors.warningLight),
+            child: Icon(Icons.logout_rounded, color: context.tc.warningLight),
           ),
           title: const Text('Phiếu xuất kho (Stock Out)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Xuất nguyên vật liệu cho quầy bar, bếp, pha chế nội bộ'),
@@ -407,10 +408,10 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.dangerLight.withValues(alpha: 0.1),
+              color: context.tc.dangerLight.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.delete_sweep_outlined, color: AppColors.dangerLight),
+            child: Icon(Icons.delete_sweep_outlined, color: context.tc.dangerLight),
           ),
           title: const Text('Phiếu xuất hủy (Waste)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Ghi nhận hàng hết hạn, đổ vỡ, hư hỏng không sử dụng được'),
@@ -513,21 +514,21 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               switch (doc.docType) {
                 case 'INTERNAL_USE':
                   typeLabel = 'Xuất kho';
-                  typeColor = AppColors.warningLight;
+                  typeColor = context.tc.warningLight;
                   break;
                 case 'WASTE':
                   typeLabel = 'Xuất hủy';
-                  typeColor = AppColors.dangerLight;
+                  typeColor = context.tc.dangerLight;
                   break;
                 case 'PURCHASE_RECEIPT':
                 default:
                   typeLabel = 'Nhập hàng';
-                  typeColor = AppColors.primary;
+                  typeColor = context.tc.primary;
               }
 
               final subInfo = doc.docType == 'PURCHASE_RECEIPT'
                   ? (doc.supplierName?.isNotEmpty == true ? doc.supplierName! : 'Nhập hàng NCC')
-                  : (doc.reason?.isNotEmpty == true ? doc.reason! : (doc.note?.isNotEmpty == true ? doc.note! : 'Nội bộ'));
+                  : (doc.reason?.isNotEmpty == true ? doc.reason! : (doc.note.isNotEmpty ? doc.note : 'Nội bộ'));
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -572,7 +573,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                         doc.status == 'COMPLETED' ? 'Đã duyệt' : 'Bản nháp',
                         style: TextStyle(
                           fontSize: 12,
-                          color: doc.status == 'COMPLETED' ? AppColors.successLight : AppColors.textSecondary,
+                          color: doc.status == 'COMPLETED' ? context.tc.successLight : context.tc.textSecondary,
                         ),
                       ),
                     ],
@@ -595,7 +596,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           floatingActionButton: canAnyCreate
               ? FloatingActionButton.extended(
                   onPressed: () => _showCreateDocSheet(context),
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: context.tc.primary,
                   icon: const Icon(Icons.add, color: Colors.white),
                   label: const Text('Tạo phiếu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 )
@@ -613,7 +614,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Lỗi: \${snapshot.error}'));
+          return Center(child: Text('Lỗi: ${snapshot.error}'));
         }
 
         final suppliers = snapshot.data ?? [];
@@ -640,7 +641,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   title: Text(sup.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('\${sup.supplierCode} | SĐT: \${sup.phone ?? ''}'),
+                  subtitle: Text('${sup.supplierCode} | SĐT: ${sup.phone ?? ''}'),
                   onTap: () => _showSupplierDialog(sup),
                 ),
               );
@@ -649,7 +650,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
           floatingActionButton: _auth.can(AppPermissions.editSuppliers)
               ? FloatingActionButton(
                   onPressed: () => _showSupplierDialog(null),
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: context.tc.primary,
                   child: const Icon(Icons.add, color: Colors.white),
                 )
               : null,
@@ -682,11 +683,11 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
       labelStyle: GoogleFonts.beVietnamPro(
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        color: isSelected ? Colors.white : AppColors.textPrimary,
+        color: isSelected ? Colors.white : context.tc.textPrimary,
       ),
-      selectedColor: AppColors.primary,
-      backgroundColor: AppColors.surface,
-      side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border),
+      selectedColor: context.tc.primary,
+      backgroundColor: context.tc.surface,
+      side: BorderSide(color: isSelected ? context.tc.primary : context.tc.border),
       onSelected: (_) => setState(() => _catalogFilterKind = kindKey),
     );
   }
@@ -724,7 +725,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Đã xuất file Excel danh sách hàng hóa kho thành công!'),
-            backgroundColor: Color(0xFF146A65),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -745,7 +746,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Đã tạo và mở file mẫu Excel thành công!'),
-            backgroundColor: Color(0xFF146A65),
+            backgroundColor: AppColors.success,
           ),
         );
       }

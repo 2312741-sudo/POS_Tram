@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
+import '../../widgets/theme_mode_selector.dart';
 import '../../core/printer/bluetooth_printer_service.dart';
 import '../../core/printer/print_queue_service.dart';
 import '../../core/printer/printer_types.dart';
@@ -74,7 +75,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_btService.lastErrorMessage),
-            backgroundColor: TramColors.warning,
+            backgroundColor: AppColors.warning,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -95,7 +96,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Kết nối thành công với ${device.name}!'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
       _startScan();
@@ -105,7 +106,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           content: Text(_btService.lastErrorMessage.isNotEmpty
               ? _btService.lastErrorMessage
               : 'Không thể kết nối với máy in.'),
-          backgroundColor: TramColors.danger,
+          backgroundColor: AppColors.danger,
         ),
       );
     }
@@ -150,7 +151,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isKitchen ? 'In thử phiếu bếp thành công!' : 'In thử hóa đơn thành công!'),
-            backgroundColor: TramColors.success,
+            backgroundColor: AppColors.success,
           ),
         );
       } else {
@@ -159,7 +160,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             content: Text(_btService.lastErrorMessage.isNotEmpty
                 ? _btService.lastErrorMessage
                 : 'Máy in mất kết nối hoặc hết giấy. Vui lòng kiểm tra giấy in và kết nối thiết bị.'),
-            backgroundColor: TramColors.danger,
+            backgroundColor: AppColors.danger,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -182,7 +183,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('In lại ${job.title} thành công!'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
     } else {
@@ -191,7 +192,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           content: Text(_btService.lastErrorMessage.isNotEmpty
               ? _btService.lastErrorMessage
               : 'Máy in mất kết nối hoặc hết giấy.'),
-          backgroundColor: TramColors.danger,
+          backgroundColor: AppColors.danger,
         ),
       );
     }
@@ -204,14 +205,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Đã in lại thành công $count phiếu!'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Không thể in lại. Vui lòng kiểm tra nguồn và giấy máy in.'),
-          backgroundColor: TramColors.danger,
+          backgroundColor: AppColors.danger,
         ),
       );
     }
@@ -223,14 +224,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     final failedCount = _queueService.failedCount;
 
     return Scaffold(
-      backgroundColor: TramColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Text(
           'Cài Đặt Máy In',
           style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: TramColors.surface,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.surface,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         elevation: 0.5,
         actions: [
           if (failedCount > 0)
@@ -239,10 +240,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               child: Center(
                 child: Badge(
                   label: Text('$failedCount'),
-                  backgroundColor: TramColors.danger,
+                  backgroundColor: context.tc.danger,
                   child: IconButton(
                     tooltip: 'Phiếu in lỗi chờ in lại',
-                    icon: const Icon(Icons.print_disabled, color: TramColors.danger),
+                    icon: Icon(Icons.print_disabled, color: context.tc.danger),
                     onPressed: () {
                       _showQueueBottomSheet();
                     },
@@ -253,10 +254,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           IconButton(
             tooltip: 'Quét lại thiết bị',
             icon: _isScanning
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: TramColors.brandPrimary),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary),
                   )
                 : const Icon(Icons.refresh),
             onPressed: _isScanning ? null : _startScan,
@@ -290,6 +291,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
             // 6. Hàng đợi in lại (Print Queue)
             _buildQueueOverviewCard(),
+            const SizedBox(height: 16),
+
+            // 7. Giao diện thiết bị (Sáng / Tối / Theo hệ thống)
+            const ThemeModeCard(),
             const SizedBox(height: 24),
           ],
         ),
@@ -314,12 +319,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: (isConnected ? TramColors.success : TramColors.warning).withValues(alpha: 0.12),
+                    color: (isConnected ? context.tc.success : context.tc.warning).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     isConnected ? Icons.print : Icons.print_disabled,
-                    color: isConnected ? TramColors.success : TramColors.warning,
+                    color: isConnected ? context.tc.success : context.tc.warning,
                     size: 28,
                   ),
                 ),
@@ -333,7 +338,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: isConnected ? TramColors.success : TramColors.textPrimary,
+                          color: isConnected ? context.tc.success : context.tc.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -342,13 +347,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: TramColors.textPrimary,
+                          color: context.tc.textPrimary,
                         ),
                       ),
                       if (savedMac.isNotEmpty)
                         Text(
                           'MAC: $savedMac',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                         ),
                     ],
                   ),
@@ -356,8 +361,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 if (isConnected)
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: TramColors.danger,
-                      side: const BorderSide(color: TramColors.danger),
+                      minimumSize: const Size(64, AppSpacing.minTapTarget),
+                      foregroundColor: context.tc.danger,
+                      side: BorderSide(color: context.tc.danger),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     ),
                     onPressed: _disconnectDevice,
@@ -366,7 +372,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 else if (savedMac.isNotEmpty)
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: TramColors.brandPrimary,
+                      minimumSize: const Size(64, AppSpacing.minTapTarget),
+                      backgroundColor: context.tc.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     ),
@@ -384,10 +391,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ),
               subtitle: Text(
                 'Tự phát hiện và kết nối lại máy in đã lưu mà không cần quét lại',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
               value: _btService.autoReconnectEnabled,
-              activeThumbColor: TramColors.brandPrimary,
+              activeThumbColor: context.tc.primary,
               onChanged: (val) => _btService.setAutoReconnect(val),
             ),
           ],
@@ -409,7 +416,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.receipt, color: TramColors.brandPrimary, size: 20),
+                Icon(Icons.receipt, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'Khổ Giấy In Nhiệt',
@@ -420,7 +427,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const SizedBox(height: 6),
             Text(
               'Chọn đúng khổ giấy để hóa đơn được căn lề chuẩn và không bị tràn ký tự',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 14),
             Row(
@@ -433,12 +440,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                       decoration: BoxDecoration(
                         color: currentSize == PrinterPaperSize.mm58
-                            ? TramColors.brandPrimary.withValues(alpha: 0.1)
-                            : TramColors.surface,
+                            ? context.tc.primary.withValues(alpha: 0.1)
+                            : context.tc.surface,
                         border: Border.all(
                           color: currentSize == PrinterPaperSize.mm58
-                              ? TramColors.brandPrimary
-                              : Colors.grey.shade300,
+                              ? context.tc.primary
+                              : context.tc.border,
                           width: currentSize == PrinterPaperSize.mm58 ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(10),
@@ -448,8 +455,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           Icon(
                             Icons.receipt_outlined,
                             color: currentSize == PrinterPaperSize.mm58
-                                ? TramColors.brandPrimary
-                                : Colors.grey.shade600,
+                                ? context.tc.primary
+                                : context.tc.textSecondary,
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -458,13 +465,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: currentSize == PrinterPaperSize.mm58
-                                  ? TramColors.brandPrimary
-                                  : TramColors.textPrimary,
+                                  ? context.tc.primary
+                                  : context.tc.textPrimary,
                             ),
                           ),
                           Text(
                             '32 ký tự / dòng (Mini/Cầm tay)',
-                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -481,12 +488,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                       decoration: BoxDecoration(
                         color: currentSize == PrinterPaperSize.mm80
-                            ? TramColors.brandPrimary.withValues(alpha: 0.1)
-                            : TramColors.surface,
+                            ? context.tc.primary.withValues(alpha: 0.1)
+                            : context.tc.surface,
                         border: Border.all(
                           color: currentSize == PrinterPaperSize.mm80
-                              ? TramColors.brandPrimary
-                              : Colors.grey.shade300,
+                              ? context.tc.primary
+                              : context.tc.border,
                           width: currentSize == PrinterPaperSize.mm80 ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(10),
@@ -496,8 +503,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           Icon(
                             Icons.receipt_long_outlined,
                             color: currentSize == PrinterPaperSize.mm80
-                                ? TramColors.brandPrimary
-                                : Colors.grey.shade600,
+                                ? context.tc.primary
+                                : context.tc.textSecondary,
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -506,13 +513,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: currentSize == PrinterPaperSize.mm80
-                                  ? TramColors.brandPrimary
-                                  : TramColors.textPrimary,
+                                  ? context.tc.primary
+                                  : context.tc.textPrimary,
                             ),
                           ),
                           Text(
                             '48 ký tự / dòng (Máy thu ngân)',
-                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -541,7 +548,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.text_fields, color: TramColors.brandPrimary, size: 20),
+                Icon(Icons.text_fields, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'Hỗ Trợ Tiếng Việt Có Dấu',
@@ -552,35 +559,38 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const SizedBox(height: 6),
             Text(
               'Máy in không hỗ trợ bảng mã tiếng Việt có thể chọn chế độ Đồ Họa Raster để in chữ có dấu sắc nét',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 10),
-            RadioListTile<PrinterTextEncoding>(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Không dấu (ESC/POS chuẩn)', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: Text('Tốc độ in nhanh nhất, loại bỏ dấu tiếng Việt, tương thích mọi máy in nhiệt', style: GoogleFonts.beVietnamPro(fontSize: 11)),
-              value: PrinterTextEncoding.vietnameseAscii,
+            RadioGroup<PrinterTextEncoding>(
               groupValue: currentEnc,
-              activeColor: TramColors.brandPrimary,
               onChanged: (val) => val != null ? _btService.setEncoding(val) : null,
-            ),
-            RadioListTile<PrinterTextEncoding>(
-              contentPadding: EdgeInsets.zero,
-              title: Text('UTF-8 Trực tiếp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: Text('Gửi mã UTF-8 có dấu (chỉ dành cho máy in hỗ trợ nạp font tiếng Việt)', style: GoogleFonts.beVietnamPro(fontSize: 11)),
-              value: PrinterTextEncoding.utf8Direct,
-              groupValue: currentEnc,
-              activeColor: TramColors.brandPrimary,
-              onChanged: (val) => val != null ? _btService.setEncoding(val) : null,
-            ),
-            RadioListTile<PrinterTextEncoding>(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Đồ họa Raster Bitmap (Có dấu 100%)', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: Text('Chuyển toàn bộ phiếu sang hình ảnh đơn sắc, in rõ ràng mọi dấu tiếng Việt', style: GoogleFonts.beVietnamPro(fontSize: 11)),
-              value: PrinterTextEncoding.rasterImage,
-              groupValue: currentEnc,
-              activeColor: TramColors.brandPrimary,
-              onChanged: (val) => val != null ? _btService.setEncoding(val) : null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<PrinterTextEncoding>(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Không dấu (ESC/POS chuẩn)', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text('Tốc độ in nhanh nhất, loại bỏ dấu tiếng Việt, tương thích mọi máy in nhiệt', style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                    value: PrinterTextEncoding.vietnameseAscii,
+                    activeColor: context.tc.primary,
+                  ),
+                  RadioListTile<PrinterTextEncoding>(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('UTF-8 Trực tiếp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text('Gửi mã UTF-8 có dấu (chỉ dành cho máy in hỗ trợ nạp font tiếng Việt)', style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                    value: PrinterTextEncoding.utf8Direct,
+                    activeColor: context.tc.primary,
+                  ),
+                  RadioListTile<PrinterTextEncoding>(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Đồ họa Raster Bitmap (Có dấu 100%)', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text('Chuyển toàn bộ phiếu sang hình ảnh đơn sắc, in rõ ràng mọi dấu tiếng Việt', style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                    value: PrinterTextEncoding.rasterImage,
+                    activeColor: context.tc.primary,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -599,7 +609,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.print_outlined, color: TramColors.brandPrimary, size: 20),
+                Icon(Icons.print_outlined, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'In Thử Nghiệm (Test Print)',
@@ -610,7 +620,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const SizedBox(height: 6),
             Text(
               'Kiểm tra kết nối và thẩm mỹ của bản in trước khi phục vụ khách',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 12),
             Row(
@@ -618,7 +628,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: TramColors.brandPrimary,
+                      backgroundColor: context.tc.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -637,13 +647,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: TramColors.brandPrimary,
-                      side: const BorderSide(color: TramColors.brandPrimary),
+                      foregroundColor: context.tc.primary,
+                      side: BorderSide(color: context.tc.primary),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     icon: _isTesting
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: TramColors.brandPrimary))
+                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary))
                         : const Icon(Icons.soup_kitchen, size: 18),
                     label: Text(
                       'In Thử Phiếu Bếp',
@@ -674,7 +684,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.bluetooth_searching, color: TramColors.brandPrimary, size: 20),
+                    Icon(Icons.bluetooth_searching, color: context.tc.primary, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Máy In Bluetooth Gần Đây',
@@ -690,14 +700,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ],
             ),
             if (_isScanning)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Column(
                     children: [
-                      CircularProgressIndicator(strokeWidth: 2, color: TramColors.brandPrimary),
-                      SizedBox(height: 10),
-                      Text('Đang quét các thiết bị Bluetooth ở gần...'),
+                      CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary),
+                      const SizedBox(height: 10),
+                      const Text('Đang quét các thiết bị Bluetooth ở gần...'),
                     ],
                   ),
                 ),
@@ -708,16 +718,16 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.bluetooth_disabled, color: Colors.grey.shade400, size: 40),
+                      Icon(Icons.bluetooth_disabled, color: context.tc.textHint, size: 40),
                       const SizedBox(height: 8),
                       Text(
                         'Chưa tìm thấy máy in Bluetooth nào.',
-                        style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary, fontSize: 13),
+                        style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 13),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Hãy bật Bluetooth của thiết bị và bật nguồn máy in nhiệt.',
-                        style: GoogleFonts.beVietnamPro(color: Colors.grey.shade500, fontSize: 11),
+                        style: GoogleFonts.beVietnamPro(color: context.tc.textHint, fontSize: 11),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -738,31 +748,32 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
                       Icons.print,
-                      color: isCurrent && isConnected ? TramColors.success : Colors.grey.shade600,
+                      color: isCurrent && isConnected ? context.tc.success : context.tc.textSecondary,
                     ),
                     title: Text(
                       dev.name,
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 14,
                         fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                        color: isCurrent && isConnected ? TramColors.success : TramColors.textPrimary,
+                        color: isCurrent && isConnected ? context.tc.success : context.tc.textPrimary,
                       ),
                     ),
                     subtitle: Text(
                       dev.macAddress,
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                     ),
                     trailing: isCurrent && isConnected
-                        ? const Chip(
-                            label: Text('Đang dùng', style: TextStyle(color: Colors.white, fontSize: 11)),
-                            backgroundColor: TramColors.success,
+                        ? Chip(
+                            label: const Text('Đang dùng', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            backgroundColor: context.tc.success,
                             visualDensity: VisualDensity.compact,
                           )
                         : ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: TramColors.brandPrimary,
+                              backgroundColor: context.tc.primary,
                               foregroundColor: Colors.white,
                               visualDensity: VisualDensity.compact,
+                              minimumSize: const Size(64, 40),
                             ),
                             onPressed: () => _connectDevice(dev),
                             child: const Text('Kết nối'),
@@ -793,7 +804,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.queue, color: TramColors.brandPrimary, size: 20),
+                    Icon(Icons.queue, color: context.tc.primary, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Hàng Đợi In Lại (Print Queue)',
@@ -804,7 +815,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 if (failedCount > 0)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: TramColors.danger,
+                      minimumSize: const Size(64, AppSpacing.minTapTarget),
+                      backgroundColor: context.tc.danger,
                       foregroundColor: Colors.white,
                       visualDensity: VisualDensity.compact,
                     ),
@@ -822,7 +834,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             const SizedBox(height: 6),
             Text(
               'Nếu máy in mất kết nối hoặc hết giấy, các phiếu sẽ được bảo lưu tại đây và không bị mất dữ liệu.',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 12),
             if (jobs.isEmpty)
@@ -831,7 +843,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 child: Center(
                   child: Text(
                     'Hàng đợi đang trống. Các lệnh in hoàn tất sẽ tự xóa.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade500),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textHint),
                   ),
                 ),
               )
@@ -849,16 +861,16 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     Color statusColor;
     switch (job.status) {
       case PrintJobStatus.success:
-        statusColor = TramColors.success;
+        statusColor = context.tc.success;
         break;
       case PrintJobStatus.failed:
-        statusColor = TramColors.danger;
+        statusColor = context.tc.danger;
         break;
       case PrintJobStatus.printing:
-        statusColor = TramColors.brandPrimary;
+        statusColor = context.tc.primary;
         break;
       case PrintJobStatus.pending:
-        statusColor = TramColors.warning;
+        statusColor = context.tc.warning;
         break;
     }
 
@@ -868,7 +880,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: TramColors.surface,
+        color: context.tc.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: statusColor.withValues(alpha: 0.3)),
       ),
@@ -890,12 +902,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 ),
                 Text(
                   'Thời gian: $timeStr • Thử lại: ${job.retryCount}',
-                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                 ),
                 if (job.errorMessage != null && job.status == PrintJobStatus.failed)
                   Text(
                     job.errorMessage!,
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.danger),
+                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.danger),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -916,7 +928,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           if (job.status == PrintJobStatus.failed) ...[
             const SizedBox(width: 6),
             IconButton(
-              icon: const Icon(Icons.refresh, size: 18, color: TramColors.brandPrimary),
+              icon: Icon(Icons.refresh, size: 18, color: context.tc.primary),
               tooltip: 'In lại phiếu này',
               onPressed: () => _retryJob(job),
             ),
@@ -954,7 +966,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                           if (_queueService.failedCount > 0)
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: TramColors.danger,
+                                minimumSize: const Size(64, AppSpacing.minTapTarget),
+                                backgroundColor: context.tc.danger,
                                 foregroundColor: Colors.white,
                                 visualDensity: VisualDensity.compact,
                               ),
@@ -966,7 +979,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                             ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: const Icon(Icons.delete_sweep, color: Colors.grey),
+                            icon: Icon(Icons.delete_sweep, color: context.tc.textHint),
                             tooltip: 'Dọn dẹp phiếu xong',
                             onPressed: () async {
                               await _queueService.clearCompletedJobs();
@@ -994,7 +1007,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                             background: Container(
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 16),
-                              color: TramColors.danger,
+                              color: context.tc.danger,
                               child: const Icon(Icons.delete, color: Colors.white),
                             ),
                             onDismissed: (_) {

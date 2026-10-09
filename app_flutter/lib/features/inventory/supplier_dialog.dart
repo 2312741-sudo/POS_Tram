@@ -66,7 +66,7 @@ class _SupplierDialogState extends State<SupplierDialog> {
       final now = DateTime.now().millisecondsSinceEpoch;
       final newSup = SupplierModel(
         supplierId: widget.supplier?.supplierId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        supplierCode: _codeCtrl.text.isEmpty ? 'NCC\${now.toString().substring(5)}' : _codeCtrl.text,
+        supplierCode: _codeCtrl.text.isEmpty ? 'NCC${now.toString().substring(5)}' : _codeCtrl.text,
         name: _nameCtrl.text,
         phone: _phoneCtrl.text,
         email: _emailCtrl.text,
@@ -82,14 +82,14 @@ class _SupplierDialogState extends State<SupplierDialog> {
       await _inventoryService.saveSupplier(newSup);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lưu nhà cung cấp thành công', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.successLight)
+          SnackBar(content: const Text('Lưu nhà cung cấp thành công', style: TextStyle(color: Colors.white)), backgroundColor: context.tc.successLight)
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi khi lưu: \$e', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.danger)
+          SnackBar(content: Text('Lỗi khi lưu: $e', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.danger)
         );
       }
     }

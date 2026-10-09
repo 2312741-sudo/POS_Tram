@@ -108,3 +108,20 @@ export function buildSyntheticEmail(username: string, storeCode: string): string
   const cleanStore = storeCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   return `${cleanUser}.${cleanStore}@tram.local`;
 }
+
+/** Vai trò Thu ngân (khớp database.rules.json: cashier / ROLE_CASHIER / employee). */
+export function isCashierRole(roleId?: string): boolean {
+  if (!roleId) return false;
+  const clean = roleId.toLowerCase();
+  return clean === "cashier" || clean === "role_cashier" || clean === "employee";
+}
+
+/**
+ * Nhập khách hàng từ Firestore kmt_customers vào RTDB của quán (importCustomerToStore):
+ * người gọi phải là thành viên ĐANG HOẠT ĐỘNG của quán (userIndex/{uid}/{store} === true)
+ * với vai trò Thu ngân trở lên.
+ */
+export function canCallerImportCustomer(caller: UserProfile | null, inStoreIndex: boolean): boolean {
+  if (!caller || !inStoreIndex || caller.isActive === false) return false;
+  return isOwnerRole(caller.roleId, caller.isRootOwner) || isManagerRole(caller.roleId) || isCashierRole(caller.roleId);
+}

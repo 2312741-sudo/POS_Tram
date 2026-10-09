@@ -15,14 +15,12 @@ class AppConstants {
   static const String prefBankId = 'BANK_ID';
   static const String prefBankAccount = 'BANK_ACCOUNT';
   static const String prefAccountName = 'ACCOUNT_NAME';
-  static const String prefManagerPin = 'MANAGER_PIN';
 
   // Default values
   static const String defaultPrinterIp = '192.168.1.100';
   static const String defaultBankId = 'MB';
   static const String defaultBankAccount = '123456789';
   static const String defaultAccountName = 'TRAM APP';
-  static const String defaultManagerPin = '1234';
 
   // Anti-cheat
   static const int cancelOrderThreshold = 3; // Max cancel per day per staff before alert

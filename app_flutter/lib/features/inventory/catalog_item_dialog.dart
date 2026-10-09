@@ -88,14 +88,14 @@ class _CatalogItemDialogState extends State<CatalogItemDialog> {
       await _inventoryService.saveCatalogItem(newItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lưu hàng hóa thành công', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.successLight)
+          SnackBar(content: const Text('Lưu hàng hóa thành công', style: TextStyle(color: Colors.white)), backgroundColor: context.tc.successLight)
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi khi lưu: \$e', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.danger)
+          SnackBar(content: Text('Lỗi khi lưu: $e', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.danger)
         );
       }
     }
@@ -131,7 +131,8 @@ class _CatalogItemDialogState extends State<CatalogItemDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedKind,
+                key: ValueKey<Object?>(_selectedKind),
+                initialValue: _selectedKind,
                 decoration: const InputDecoration(labelText: 'Loại'),
                 items: const [
                   DropdownMenuItem(value: 'rawMaterial', child: Text('Nguyên vật liệu (NVL)')),

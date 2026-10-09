@@ -69,13 +69,13 @@ class _AuditTabState extends State<AuditTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _logs.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary));
+      return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }
 
     final filtered = _filteredLogs;
 
     return RefreshIndicator(
-      color: TramColors.brandPrimary,
+      color: context.tc.primary,
       onRefresh: () async {
         setState(() {});
       },
@@ -84,34 +84,33 @@ class _AuditTabState extends State<AuditTab> {
           // Anti-Fraud Summary Banner
           Container(
             padding: const EdgeInsets.all(14),
-            color: Colors.white,
+            color: context.tc.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    Expanded(child: Row(
                       children: [
-                        const Icon(Icons.security, size: 22, color: TramColors.danger),
+                        Icon(Icons.security, size: 22, color: context.tc.danger),
                         const SizedBox(width: 8),
-                        Text(
+                        Flexible(child: Text(
                           'Giám Sát & Chống Gian Lận 🛡️',
-                          style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
-                        ),
+                          style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
-                    ),
+                    )),
                     if (_suspiciousCount > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: TramColors.dangerSurface,
+                          color: context.tc.dangerLight,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: TramColors.danger.withValues(alpha: 0.3)),
+                          border: Border.all(color: context.tc.danger.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           '$_suspiciousCount cảnh báo',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.danger),
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.danger),
                         ),
                       ),
                   ],
@@ -126,7 +125,7 @@ class _AuditTabState extends State<AuditTab> {
                         title: 'Nghi vấn',
                         count: '$_suspiciousCount ca',
                         icon: Icons.warning_amber_rounded,
-                        color: TramColors.danger,
+                        color: context.tc.danger,
                         active: _categoryFilter == 'SUSPICIOUS',
                         onTap: () => setState(() => _categoryFilter = _categoryFilter == 'SUSPICIOUS' ? 'ALL' : 'SUSPICIOUS'),
                       ),
@@ -137,7 +136,7 @@ class _AuditTabState extends State<AuditTab> {
                         title: 'Hủy món bếp',
                         count: '$_cancelItemCount lần',
                         icon: Icons.soup_kitchen_outlined,
-                        color: TramColors.warning,
+                        color: context.tc.warning,
                         active: _categoryFilter == 'CANCEL',
                         onTap: () => setState(() => _categoryFilter = _categoryFilter == 'CANCEL' ? 'ALL' : 'CANCEL'),
                       ),
@@ -148,7 +147,7 @@ class _AuditTabState extends State<AuditTab> {
                         title: 'Giảm giá tay',
                         count: '$_discountCount lần',
                         icon: Icons.discount_outlined,
-                        color: TramColors.info,
+                        color: context.tc.info,
                         active: _categoryFilter == 'PAYMENT',
                         onTap: () => setState(() => _categoryFilter = _categoryFilter == 'PAYMENT' ? 'ALL' : 'PAYMENT'),
                       ),
@@ -161,8 +160,8 @@ class _AuditTabState extends State<AuditTab> {
                 TextField(
                   decoration: InputDecoration(
                     hintText: 'Tìm theo nhân viên, bàn, món, thao tác...',
-                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade400),
-                    prefixIcon: const Icon(Icons.search, size: 20, color: TramColors.brandPrimary),
+                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textHint),
+                    prefixIcon: Icon(Icons.search, size: 20, color: context.tc.primary),
                     suffixIcon: _search.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear, size: 18),
@@ -171,14 +170,14 @@ class _AuditTabState extends State<AuditTab> {
                         : null,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     filled: true,
-                    fillColor: TramColors.background,
+                    fillColor: context.tc.background,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: TramColors.borderLight),
+                      borderSide: BorderSide(color: context.tc.borderLight),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: TramColors.borderLight),
+                      borderSide: BorderSide(color: context.tc.borderLight),
                     ),
                   ),
                   onChanged: (val) => setState(() => _search = val.trim()),
@@ -212,17 +211,16 @@ class _AuditTabState extends State<AuditTab> {
           // Total Count Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFFFBF8F2),
+            color: context.tc.cardElevated,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                Flexible(child: Text(
                   'Nhật ký thao tác (${filtered.length} sự kiện)',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
-                ),
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 Text(
                   'Cập nhật thời gian thực',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.success),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.success),
                 ),
               ],
             ),
@@ -235,11 +233,11 @@ class _AuditTabState extends State<AuditTab> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.shield_outlined, size: 56, color: Colors.grey),
+                        Icon(Icons.shield_outlined, size: 56, color: context.tc.textHint),
                         const SizedBox(height: 10),
                         Text(
                           'Không có nhật ký nào phù hợp bộ lọc',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
                         ),
                       ],
                     ),
@@ -273,9 +271,9 @@ class _AuditTabState extends State<AuditTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.15) : Colors.grey.shade50,
+          color: active ? color.withValues(alpha: 0.15) : context.tc.cardElevated,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? color : Colors.grey.shade300, width: active ? 1.5 : 1),
+          border: Border.all(color: active ? color : context.tc.border, width: active ? 1.5 : 1),
         ),
         child: Column(
           children: [
@@ -287,7 +285,7 @@ class _AuditTabState extends State<AuditTab> {
             ),
             Text(
               title,
-              style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
             ),
           ],
         ),
@@ -297,7 +295,7 @@ class _AuditTabState extends State<AuditTab> {
 
   Widget _buildFilterChip(String label, String key, {bool isWarning = false}) {
     final isSelected = _categoryFilter == key;
-    Color chipColor = isWarning ? TramColors.danger : TramColors.brandPrimary;
+    Color chipColor = isWarning ? context.tc.danger : context.tc.primary;
 
     return InkWell(
       onTap: () => setState(() => _categoryFilter = key),
@@ -305,16 +303,16 @@ class _AuditTabState extends State<AuditTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? chipColor : Colors.grey.shade100,
+          color: isSelected ? chipColor : context.tc.cardElevated,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? chipColor : Colors.grey.shade300),
+          border: Border.all(color: isSelected ? chipColor : context.tc.border),
         ),
         child: Text(
           label,
           style: GoogleFonts.beVietnamPro(
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : TramColors.textPrimary,
+            color: isSelected ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),
@@ -329,29 +327,29 @@ class _AuditTabState extends State<AuditTab> {
     IconData iconData;
 
     if (log.action.contains('CANCEL') || log.action.contains('HỦY')) {
-      iconColor = TramColors.danger;
+      iconColor = context.tc.danger;
       iconData = Icons.cancel_outlined;
     } else if (log.action.contains('DISCOUNT') || log.action.contains('GIẢM')) {
-      iconColor = TramColors.warning;
+      iconColor = context.tc.warning;
       iconData = Icons.discount_outlined;
     } else if (log.action.contains('TABLE') || log.action.contains('BÀN')) {
       iconColor = const Color(0xFF0284C7);
       iconData = Icons.swap_horiz;
     } else if (log.action.contains('PAY') || log.action.contains('THANH')) {
-      iconColor = TramColors.success;
+      iconColor = context.tc.success;
       iconData = Icons.check_circle_outline;
     } else {
-      iconColor = TramColors.info;
+      iconColor = context.tc.info;
       iconData = Icons.history;
     }
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isSuspicious ? const Color(0xFFFFF9F9) : Colors.white,
+        color: isSuspicious ? context.tc.card : context.tc.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isSuspicious ? TramColors.danger.withValues(alpha: 0.6) : TramColors.borderLight,
+          color: isSuspicious ? context.tc.danger.withValues(alpha: 0.6) : context.tc.borderLight,
           width: isSuspicious ? 1.5 : 1,
         ),
         boxShadow: const [
@@ -367,20 +365,20 @@ class _AuditTabState extends State<AuditTab> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: TramColors.dangerSurface,
+                color: context.tc.dangerLight,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: TramColors.danger.withValues(alpha: 0.4)),
+                border: Border.all(color: context.tc.danger.withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning, size: 14, color: TramColors.danger),
+                  Icon(Icons.warning, size: 14, color: context.tc.danger),
                   const SizedBox(width: 6),
                   Text(
                     'CẢNH BÁO THAO TÁC NGHI VẤN GIAN LẬN',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: TramColors.danger,
+                      color: context.tc.danger,
                     ),
                   ),
                 ],
@@ -408,17 +406,16 @@ class _AuditTabState extends State<AuditTab> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
+                        Flexible(child: Text(
                           log.action,
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: isSuspicious ? TramColors.danger : TramColors.textPrimary,
-                          ),
-                        ),
+                            color: isSuspicious ? context.tc.danger : context.tc.textPrimary,
+                          ), maxLines: 1, overflow: TextOverflow.ellipsis)),
                         Text(
                           timeStr,
-                          style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                         ),
                       ],
                     ),
@@ -428,7 +425,7 @@ class _AuditTabState extends State<AuditTab> {
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: TramColors.textSecondary,
+                        color: context.tc.textSecondary,
                       ),
                     ),
                   ],
@@ -443,13 +440,13 @@ class _AuditTabState extends State<AuditTab> {
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isSuspicious ? Colors.white : TramColors.background,
+              color: isSuspicious ? context.tc.card : context.tc.background,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: isSuspicious ? TramColors.danger.withValues(alpha: 0.2) : TramColors.borderLight),
+              border: Border.all(color: isSuspicious ? context.tc.danger.withValues(alpha: 0.2) : context.tc.borderLight),
             ),
             child: Text(
               log.details,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textPrimary),
             ),
           ),
 
@@ -459,9 +456,9 @@ class _AuditTabState extends State<AuditTab> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFAF7F2),
+                color: context.tc.cardElevated,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: TramColors.borderLight),
+                border: Border.all(color: context.tc.borderLight),
               ),
               child: Row(
                 children: [
@@ -471,21 +468,21 @@ class _AuditTabState extends State<AuditTab> {
                       children: [
                         Text(
                           'Trước khi đổi:',
-                          style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.textSecondary),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           log.beforeState.toString(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textPrimary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textPrimary),
                         ),
                       ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.arrow_forward, size: 14, color: Colors.grey),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward, size: 14, color: context.tc.textHint),
                   ),
                   Expanded(
                     child: Column(
@@ -493,14 +490,14 @@ class _AuditTabState extends State<AuditTab> {
                       children: [
                         Text(
                           'Sau khi đổi:',
-                          style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.primary),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           log.afterState.toString(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.primary),
                         ),
                       ],
                     ),

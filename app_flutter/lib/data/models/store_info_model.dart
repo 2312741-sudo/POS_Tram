@@ -18,7 +18,8 @@ class StoreInfoModel {
   final String ownerId;
   final int pointRedeemRate; // Tỷ lệ quy đổi điểm ra tiền chiết khấu (VD: 1.000đ/điểm)
   final double pointEarnRate; // Tỷ lệ tích điểm % trên doanh thu thực (VD: 1.0%)
-  final String managerPin; // Mã PIN quản lý duyệt giảm giá món
+  // KHÔNG còn managerPin: PIN duyệt quản lý lưu băm phía máy chủ (manager_pins/…),
+  // rules từ chối ghi storeInfo/managerPin.
 
   StoreInfoModel({
     required this.storeCode,
@@ -39,7 +40,6 @@ class StoreInfoModel {
     this.autoPrintBill = true,
     this.pointRedeemRate = 1000,
     this.pointEarnRate = 1.0,
-    this.managerPin = '1234',
   });
 
   factory StoreInfoModel.fromMap(Map<dynamic, dynamic> map, String storeCode) {
@@ -62,7 +62,6 @@ class StoreInfoModel {
       autoPrintBill: map['autoPrintBill'] ?? true,
       pointRedeemRate: (map['pointRedeemRate'] as num?)?.toInt() ?? 1000,
       pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
-      managerPin: map['managerPin']?.toString() ?? '1234',
     );
   }
 
@@ -84,7 +83,6 @@ class StoreInfoModel {
     'autoPrintBill': autoPrintBill,
     'pointRedeemRate': pointRedeemRate,
     'pointEarnRate': pointEarnRate,
-    'managerPin': managerPin,
   };
 
   StoreInfoModel copyWith({
@@ -106,7 +104,6 @@ class StoreInfoModel {
     bool? autoPrintBill,
     int? pointRedeemRate,
     double? pointEarnRate,
-    String? managerPin,
   }) {
     return StoreInfoModel(
       storeCode: storeCode ?? this.storeCode,
@@ -127,7 +124,6 @@ class StoreInfoModel {
       autoPrintBill: autoPrintBill ?? this.autoPrintBill,
       pointRedeemRate: pointRedeemRate ?? this.pointRedeemRate,
       pointEarnRate: pointEarnRate ?? this.pointEarnRate,
-      managerPin: managerPin ?? this.managerPin,
     );
   }
 }

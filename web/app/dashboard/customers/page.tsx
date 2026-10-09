@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Users,
   Search,
@@ -14,195 +14,123 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
-import { db, firestore } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { ref, get, update } from "firebase/database";
+import { db } from "@/lib/firebase";
+import { ref, onValue } from "firebase/database";
 import { exportCustomersList, CustomerExportItem } from "@/lib/export";
 import { formatVND, formatNumber } from "@/lib/reports";
+import {
+  CUSTOMER_TIERS,
+  StoreCustomer,
+  canEditPointConfig,
+  canReadCustomers,
+  parseStoreCustomers,
+} from "@/lib/customers";
 
-export interface KmtCustomer {
-  id: string;
-  soDienThoai: string;
-  hoTen: string;
-  maKhachHang: string;
-  diemHienTai: number;
-  hangThanhVien: string;
-  ngayTao?: string;
-  tongChiTieu?: number;
-  soDonDaMua?: number;
-}
-
-interface PointConfig {
-  pointRedeemRate?: number;
-  pointEarnRate?: number;
-}
-
-// Đọc cấu hình quy đổi điểm từ store_info (không setState — để effect/handler tự áp dụng)
-async function fetchPointConfig(): Promise<PointConfig> {
-  try {
-    const snap = await get(ref(db, "store_info"));
-    if (snap.exists()) {
-      const val = snap.val();
-      return {
-        pointRedeemRate: val.pointRedeemRate != null ? Number(val.pointRedeemRate) : undefined,
-        pointEarnRate: val.pointEarnRate != null ? Number(val.pointEarnRate) : undefined,
-      };
-    }
-  } catch (e) {
-    console.warn("Could not load point config from store_info:", e);
-  }
-  return {};
-}
-
-// Fetch all customers from Firestore kmt_customers with RTDB fallback
-async function fetchCustomerList(): Promise<KmtCustomer[]> {
-  const map = new Map<string, KmtCustomer>();
-
-  // 1. Fetch from Firestore collection kmt_customers
-  try {
-    const colRef = collection(firestore, "kmt_customers");
-    const snap = await getDocs(colRef);
-    snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      const phone = String(data.so_dien_thoai || data.phone || docSnap.id || "").trim();
-      const code = String(data.ma_khach_hang || data.customer_code || docSnap.id || "").trim();
-      const name = String(data.ho_ten || data.fullName || data.name || "Khách hàng KMT").trim();
-      const points = Number(data.diem_hien_tai ?? data.current_points ?? data.points ?? 0);
-      const tier = String(data.hang_thanh_vien || data.rank || (points >= 500 ? "Kim Cương" : points >= 200 ? "Vàng" : points >= 50 ? "Bạc" : "Thành viên"));
-      const created = data.ngay_tao || data.createdAt ? new Date(data.ngay_tao || data.createdAt).toLocaleDateString("vi-VN") : undefined;
-
-      if (phone || code) {
-        const key = phone || code;
-        map.set(key, {
-          id: docSnap.id,
-          soDienThoai: phone,
-          maKhachHang: code,
-          hoTen: name,
-          diemHienTai: points,
-          hangThanhVien: tier,
-          ngayTao: created,
-          tongChiTieu: Number(data.tong_chi_tieu || 0),
-          soDonDaMua: Number(data.so_don || 0),
-        });
-      }
-    });
-  } catch (err) {
-    console.warn("Firestore kmt_customers fetch fallback to RTDB:", err);
-  }
-
-  // 2. Fetch from RTDB customers fallback
-  try {
-    const rtdbSnap = await get(ref(db, "customers"));
-    if (rtdbSnap.exists()) {
-      const val = rtdbSnap.val();
-      if (typeof val === "object" && val !== null) {
-        Object.entries(val as Record<string, Record<string, unknown>>).forEach(([k, v]) => {
-          const phone = String(v.phone || v.so_dien_thoai || k).trim();
-          const code = String(v.customerCode || v.ma_khach_hang || k).trim();
-          const key = phone || code;
-          if (!map.has(key)) {
-            const pts = Number(v.currentPoints ?? v.diem_hien_tai ?? 0);
-            map.set(key, {
-              id: k,
-              soDienThoai: phone,
-              maKhachHang: code,
-              hoTen: String(v.fullName || v.ho_ten || "Khách lẻ"),
-              diemHienTai: pts,
-              hangThanhVien: String(v.tier || (pts >= 500 ? "Kim Cương" : pts >= 200 ? "Vàng" : pts >= 50 ? "Bạc" : "Thành viên")),
-              ngayTao: v.createdAt ? new Date(v.createdAt as string | number).toLocaleDateString("vi-VN") : undefined,
-              tongChiTieu: Number(v.totalSpent || 0),
-              soDonDaMua: Number(v.orderCount || 0),
-            });
-          }
-        });
-      }
-    }
-  } catch (e) {
-    console.warn("RTDB customers fetch error:", e);
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.diemHienTai - a.diemHienTai);
-}
+const DEFAULT_REDEEM_RATE = 1000;
+const DEFAULT_EARN_RATE = 1.0;
 
 export default function CustomersPage() {
   const { user } = useAuth();
-  const { stores, currentStoreCode } = useDashboardData();
+  const { stores, currentStoreCode, updateStore } = useDashboardData();
 
-  const [customers, setCustomers] = useState<KmtCustomer[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Dữ liệu khách theo từng chi nhánh: stores/{code}/customers (lắng nghe realtime)
+  const [customersByStore, setCustomersByStore] = useState<Record<string, StoreCustomer[]>>({});
+  const [loadedStores, setLoadedStores] = useState<Record<string, true>>({});
+  const [deniedStores, setDeniedStores] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedTier, setSelectedTier] = useState<string>("ALL");
 
-  // Point rate config
-  const [pointRedeemRate, setPointRedeemRate] = useState<number>(1000);
-  const [pointEarnRate, setPointEarnRate] = useState<number>(1.0);
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
-  const [editingRedeemRate, setEditingRedeemRate] = useState<string>("1000");
-  const [editingEarnRate, setEditingEarnRate] = useState<string>("1.0");
+  const [editingRedeemRate, setEditingRedeemRate] = useState<string>(String(DEFAULT_REDEEM_RATE));
+  const [editingEarnRate, setEditingEarnRate] = useState<string>(String(DEFAULT_EARN_RATE));
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
   const [configSuccess, setConfigSuccess] = useState<string | null>(null);
 
-  const canManage = useMemo(() => {
-    if (!user) return false;
-    if (user.isRootOwner) return true;
-    const r = (user.roleId || user.role || "").toUpperCase();
-    return r.includes("OWNER") || r.includes("MANAGER");
-  }, [user]);
+  const canRead = canReadCustomers(user?.roleId || user?.role, user?.isRootOwner);
+  // Rules: chỉ Chủ quán ghi storeInfo; cần chọn 1 chi nhánh cụ thể để lưu
+  const canEditConfig = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && currentStoreCode !== "ALL";
 
-  // Load point config from store info
-  const applyPointConfig = useCallback((cfg: PointConfig) => {
-    if (cfg.pointRedeemRate != null) {
-      setPointRedeemRate(cfg.pointRedeemRate);
-      setEditingRedeemRate(String(cfg.pointRedeemRate));
-    }
-    if (cfg.pointEarnRate != null) {
-      setPointEarnRate(cfg.pointEarnRate);
-      setEditingEarnRate(String(cfg.pointEarnRate));
-    }
-  }, []);
+  // Chi nhánh cần đọc: "ALL" → mọi chi nhánh truy cập được; ngược lại chỉ chi nhánh đang chọn
+  const targetCodes = useMemo(() => {
+    if (currentStoreCode !== "ALL") return currentStoreCode ? [currentStoreCode] : [];
+    return stores.map((s) => s.storeCode).filter(Boolean);
+  }, [stores, currentStoreCode]);
+  const targetKey = targetCodes.join(",");
 
-  const reloadAll = useCallback(() => {
-    return Promise.all([fetchPointConfig(), fetchCustomerList()]);
-  }, []);
+  // Tỷ lệ quy đổi theo từng chi nhánh (storeInfo.pointRedeemRate / pointEarnRate)
+  const ratesByStore = useMemo(() => {
+    const map: Record<string, { redeem: number; earn: number }> = {};
+    stores.forEach((s) => {
+      map[s.storeCode] = {
+        redeem: typeof s.pointRedeemRate === "number" && s.pointRedeemRate > 0 ? s.pointRedeemRate : DEFAULT_REDEEM_RATE,
+        earn: typeof s.pointEarnRate === "number" ? s.pointEarnRate : DEFAULT_EARN_RATE,
+      };
+    });
+    return map;
+  }, [stores]);
+  const redeemRateOf = (storeCode: string) => ratesByStore[storeCode]?.redeem ?? DEFAULT_REDEEM_RATE;
+  const displayRates = currentStoreCode !== "ALL"
+    ? ratesByStore[currentStoreCode] || { redeem: DEFAULT_REDEEM_RATE, earn: DEFAULT_EARN_RATE }
+    : null;
 
   useEffect(() => {
-    let active = true;
-    reloadAll().then(([cfg, list]) => {
-      if (!active) return;
-      applyPointConfig(cfg);
-      setCustomers(list);
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [reloadAll, applyPointConfig]);
+    if (!canRead) return;
+    const codes = targetKey ? targetKey.split(",") : [];
+    const unsubs = codes.map((code) =>
+      onValue(
+        ref(db, `stores/${code}/customers`),
+        (snap) => {
+          setCustomersByStore((prev) => ({ ...prev, [code]: parseStoreCustomers(code, snap.val()) }));
+          setLoadedStores((prev) => (prev[code] ? prev : { ...prev, [code]: true }));
+          setDeniedStores((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : prev));
+        },
+        (error) => {
+          console.warn(`[customers] Không thể đọc stores/${code}/customers:`, error.message);
+          setCustomersByStore((prev) => ({ ...prev, [code]: [] }));
+          setLoadedStores((prev) => (prev[code] ? prev : { ...prev, [code]: true }));
+          setDeniedStores((prev) => (prev.includes(code) ? prev : [...prev, code]));
+        }
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [canRead, targetKey, reloadKey]);
+
+  const loading = canRead && targetCodes.some((c) => !loadedStores[c]);
+
+  const customers = useMemo(() => {
+    const list: StoreCustomer[] = [];
+    targetCodes.forEach((code) => list.push(...(customersByStore[code] || [])));
+    return list.sort((a, b) => b.diemHienTai - a.diemHienTai);
+  }, [customersByStore, targetCodes]);
 
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return customers.filter((c) => {
-      if (selectedTier !== "ALL" && c.hangThanhVien !== selectedTier) {
-        return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchPhone = c.soDienThoai.toLowerCase().includes(q);
-        const matchName = c.hoTen.toLowerCase().includes(q);
-        const matchCode = c.maKhachHang.toLowerCase().includes(q);
-        if (!matchPhone && !matchName && !matchCode) return false;
+      if (selectedTier !== "ALL" && c.hangThanhVien !== selectedTier) return false;
+      if (q) {
+        const match =
+          c.soDienThoai.toLowerCase().includes(q) ||
+          c.hoTen.toLowerCase().includes(q) ||
+          c.maKhachHang.toLowerCase().includes(q);
+        if (!match) return false;
       }
       return true;
     });
   }, [customers, searchQuery, selectedTier]);
 
-  // Aggregate KPI stats
+  // Aggregate KPI stats (giá trị quy đổi theo tỷ lệ của từng chi nhánh)
   const kpiStats = useMemo(() => {
     const totalCustomers = customers.length;
     const totalPoints = customers.reduce((sum, c) => sum + c.diemHienTai, 0);
-    const totalPointValue = totalPoints * pointRedeemRate;
+    const totalPointValue = customers.reduce(
+      (sum, c) => sum + c.diemHienTai * (ratesByStore[c.storeCode]?.redeem ?? DEFAULT_REDEEM_RATE),
+      0
+    );
     const vipCount = customers.filter((c) => c.diemHienTai >= 200).length;
     return { totalCustomers, totalPoints, totalPointValue, vipCount };
-  }, [customers, pointRedeemRate]);
+  }, [customers, ratesByStore]);
 
   // Export Excel
   const handleExportExcel = () => {
@@ -211,7 +139,7 @@ export default function CustomersPage() {
       hoTen: c.hoTen,
       soDienThoai: c.soDienThoai,
       diemHienTai: c.diemHienTai,
-      giaTriQuyDoi: c.diemHienTai * pointRedeemRate,
+      giaTriQuyDoi: c.diemHienTai * redeemRateOf(c.storeCode),
       hangThanhVien: c.hangThanhVien,
       ngayTao: c.ngayTao,
       tongChiTieu: c.tongChiTieu,
@@ -220,31 +148,39 @@ export default function CustomersPage() {
     exportCustomersList(exportData);
   };
 
-  // Save point config
+  const openConfigModal = () => {
+    if (displayRates) {
+      setEditingRedeemRate(String(displayRates.redeem));
+      setEditingEarnRate(String(displayRates.earn));
+    }
+    setShowConfigModal(true);
+  };
+
+  // Save point config → stores/{code}/storeInfo (chỉ Chủ quán, theo rules)
   const handleSaveConfig = async () => {
-    const newRedeem = parseInt(editingRedeemRate.replace(/[^0-9]/g, ""), 10) || 1000;
-    const newEarn = parseFloat(editingEarnRate) || 1.0;
+    if (!canEditConfig) return;
+    const newRedeem = parseInt(editingRedeemRate.replace(/[^0-9]/g, ""), 10) || DEFAULT_REDEEM_RATE;
+    const parsedEarn = parseFloat(editingEarnRate);
+    const newEarn = Number.isFinite(parsedEarn) && parsedEarn >= 0 ? parsedEarn : DEFAULT_EARN_RATE;
     setIsSavingConfig(true);
     try {
-      await update(ref(db, "store_info"), {
-        pointRedeemRate: newRedeem,
-        pointEarnRate: newEarn,
-      });
-      setPointRedeemRate(newRedeem);
-      setPointEarnRate(newEarn);
+      const res = await updateStore(currentStoreCode, { pointRedeemRate: newRedeem, pointEarnRate: newEarn });
+      if (!res.success) throw new Error(res.error || "Không lưu được cấu hình");
       setConfigSuccess("Đã lưu tỷ lệ đổi điểm thành công!");
       setTimeout(() => {
         setConfigSuccess(null);
         setShowConfigModal(false);
       }, 1500);
     } catch (err) {
-      alert("Lỗi lưu cấu hình: " + err);
+      alert("Lỗi lưu cấu hình: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsSavingConfig(false);
     }
   };
 
-  const tiers = ["ALL", "Thành viên", "Bạc", "Vàng", "Kim Cương"];
+  const tiers = ["ALL", ...CUSTOMER_TIERS];
+  const showStoreColumn = currentStoreCode === "ALL";
+  const columnCount = showStoreColumn ? 9 : 8;
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1280px", margin: "0 auto" }}>
@@ -279,19 +215,15 @@ export default function CustomersPage() {
               </span>
             </div>
             <p style={{ fontSize: "13px", color: "var(--subtext)", marginTop: "4px", margin: 0 }}>
-              Đồng bộ dữ liệu khách hàng đa nền tảng với ứng dụng Khuyến Mãi Trạm • Điểm đổi voucher khấu trừ doanh thu
+              Số dư điểm lấy trực tiếp từ POS theo từng chi nhánh • Đồng bộ sang Khuyến Mãi Trạm • Điểm đổi voucher khấu trừ doanh thu
             </p>
           </div>
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button
               onClick={() => {
-                setLoading(true);
-                reloadAll().then(([cfg, list]) => {
-                  applyPointConfig(cfg);
-                  setCustomers(list);
-                  setLoading(false);
-                });
+                setLoadedStores({});
+                setReloadKey((k) => k + 1);
               }}
               style={{
                 display: "flex",
@@ -309,9 +241,9 @@ export default function CustomersPage() {
             >
               <RefreshCw size={15} /> Làm mới
             </button>
-            {canManage && (
+            {canEditConfig && (
               <button
-                onClick={() => setShowConfigModal(true)}
+                onClick={openConfigModal}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -350,6 +282,22 @@ export default function CustomersPage() {
           </div>
         </div>
       </div>
+
+      {deniedStores.length > 0 && (
+        <div
+          style={{
+            background: "var(--warning-bg, #FEF7E0)",
+            color: "#8A5B00",
+            border: "1px solid var(--border)",
+            borderRadius: "12px",
+            padding: "10px 14px",
+            fontSize: "13px",
+            marginBottom: "16px",
+          }}
+        >
+          Không có quyền đọc khách hàng của chi nhánh: {deniedStores.join(", ")}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: "16px", marginBottom: "20px" }}>
@@ -406,10 +354,10 @@ export default function CustomersPage() {
             </div>
           </div>
           <div style={{ fontSize: "20px", fontWeight: "800", color: "var(--primary)", marginTop: "8px" }}>
-            1 điểm = {formatVND(pointRedeemRate)}
+            {displayRates ? `1 điểm = ${formatVND(displayRates.redeem)}` : "Theo từng chi nhánh"}
           </div>
           <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
-            Tích {pointEarnRate}% doanh số hóa đơn
+            {displayRates ? `Tích ${displayRates.earn}% doanh số hóa đơn` : "Chọn 1 chi nhánh để xem / sửa tỷ lệ"}
           </div>
         </div>
       </div>
@@ -501,6 +449,7 @@ export default function CustomersPage() {
             <thead>
               <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)", textAlign: "left", color: "var(--text)" }}>
                 <th style={{ padding: "12px 14px", width: "50px", textAlign: "center" }}>STT</th>
+                {showStoreColumn && <th style={{ padding: "12px 14px" }}>Chi nhánh</th>}
                 <th style={{ padding: "12px 14px" }}>Khách hàng</th>
                 <th style={{ padding: "12px 14px" }}>Số điện thoại</th>
                 <th style={{ padding: "12px 14px" }}>Mã khách hàng</th>
@@ -513,25 +462,34 @@ export default function CustomersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
-                    Đang tải danh sách khách hàng KMT...
+                  <td colSpan={columnCount} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+                    Đang tải danh sách khách hàng...
+                  </td>
+                </tr>
+              ) : !canRead ? (
+                <tr>
+                  <td colSpan={columnCount} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+                    Vai trò của bạn không có quyền xem danh sách khách hàng
                   </td>
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={columnCount} style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
                     Không tìm thấy khách hàng nào phù hợp
                   </td>
                 </tr>
               ) : (
                 filteredCustomers.map((c, idx) => {
-                  const redeemVal = c.diemHienTai * pointRedeemRate;
+                  const redeemVal = c.diemHienTai * redeemRateOf(c.storeCode);
                   return (
                     <tr
-                      key={c.id || c.soDienThoai || idx}
+                      key={`${c.storeCode}:${c.id}`}
                       style={{ borderBottom: "1px solid #F0ECE1" }}
                     >
                       <td style={{ padding: "12px 14px", textAlign: "center", color: "var(--muted)" }}>{idx + 1}</td>
+                      {showStoreColumn && (
+                        <td style={{ padding: "12px 14px", color: "var(--subtext)", fontFamily: "monospace" }}>{c.storeCode}</td>
+                      )}
                       <td style={{ padding: "12px 14px", fontWeight: "700", color: "var(--text)" }}>
                         {c.hoTen}
                       </td>

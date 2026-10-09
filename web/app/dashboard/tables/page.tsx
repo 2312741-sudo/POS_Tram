@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type CSSProperties } from "react";
 import { db } from "@/lib/firebase";
 import { ref, update } from "firebase/database";
 import {
@@ -24,6 +24,11 @@ import {
   Phone,
   DollarSign,
   XCircle,
+  Minus,
+  Percent,
+  ArrowRightLeft,
+  GitMerge,
+  KeyRound,
 } from "lucide-react";
 
 interface OrderItem {
@@ -42,6 +47,7 @@ interface OrderItem {
   discountAmount?: number;
   note?: string;
   imageBase64?: string;
+  isSentKitchen?: boolean;
 }
 
 interface Table {
@@ -57,6 +63,8 @@ interface Table {
   currentBillId?: string | null;
   currentOrderCode?: string | null;
   actionLogsJson?: string | null;
+  prePrintedAt?: number | null;
+  prePrintedBy?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
@@ -78,7 +86,20 @@ const emptyForm: TableFormData = {
 import { useDashboardData, resolveWriteStoreCode } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
 import { buildTableBillHtml } from "@/lib/print-html";
-import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
+import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
+import { deriveTableStatus, prePrintedAtOf, TABLE_STATUS_META, TABLE_STATUS_ORDER, type TableStatus } from "@/lib/table-status";
+import { hasPermission, useAuth } from "@/lib/auth";
+import LineDiscountDialog from "@/components/LineDiscountDialog";
+import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinDialog";
+import TableTransferDialog from "@/components/TableTransferDialog";
+import {
+  approverOptions,
+  canUserApprove,
+  isApprovalValid,
+  withApprovalMeta,
+  type ApprovalAction,
+  type ManagerApproval,
+} from "@/lib/manager-approval";
 
 export default function TablesPage() {
   const {
@@ -91,10 +112,25 @@ export default function TablesPage() {
     cancelActiveTable,
     saveTable,
     deleteTable,
+    updateTableOrderItems,
+    transferTable,
+    mergeTables,
+    markTablePrePrinted,
+    usersList,
   } = useDashboardData();
+  const { user } = useAuth();
+  // Giống Flutter: giảm giá dòng cần DISCOUNT_ITEM (alias MANUAL_DISCOUNT);
+  // giảm số lượng món đã gửi bếp cần CANCEL_KITCHEN_ITEM.
+  const canDiscountItem = hasPermission(user, "DISCOUNT_ITEM");
+  const canCancelKitchenItem = hasPermission(user, "CANCEL_KITCHEN_ITEM");
+  // Giống Flutter: chuyển bàn = CHANGE_TABLE ("Đổi bàn / Chuyển khu vực"), gộp bàn = MERGE_SPLIT_TABLE
+  const canTransferTable = hasPermission(user, "CHANGE_TABLE");
+  const canMergeTable = hasPermission(user, "MERGE_SPLIT_TABLE");
+  // Quản lý / chủ quán có thể tự đặt PIN duyệt
+  const canSetApprovalPin = !!user && canUserApprove({ ...user }, "DISCOUNT_ITEM");
   const loading = ctxLoading && tables.length === 0;
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "IN_USE" | "EMPTY" | "RESERVED">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | TableStatus>("ALL");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
   
@@ -117,6 +153,23 @@ export default function TablesPage() {
   const [completingPayment, setCompletingPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "TRANSFER">("CASH");
   const [checkoutToast, setCheckoutToast] = useState<string | null>(null);
+  // Giảm giá dòng: chụp lại JSON đơn lúc mở hộp thoại để ghi đúng dòng (và phát hiện xung đột)
+  const [discountTarget, setDiscountTarget] = useState<{ orderJson: string; index: number } | null>(null);
+  const [lineSaving, setLineSaving] = useState(false);
+  const [lineError, setLineError] = useState("");
+  // Quản lý duyệt bằng PIN (khi thiếu DISCOUNT_ITEM / CANCEL_KITCHEN_ITEM)
+  const [discountApproval, setDiscountApproval] = useState<ManagerApproval | null>(null);
+  const [pinRequest, setPinRequest] = useState<{
+    action: ApprovalAction;
+    storeCode: string;
+    context: string;
+    onApproved: (a: ManagerApproval) => void;
+  } | null>(null);
+  const [showSetPin, setShowSetPin] = useState(false);
+  // Chuyển / gộp bàn
+  const [tableOp, setTableOp] = useState<{ kind: "TRANSFER" | "MERGE"; source: Table } | null>(null);
+  const [tableOpBusy, setTableOpBusy] = useState(false);
+  const [tableOpError, setTableOpError] = useState("");
 
   // Bàn đang xem luôn lấy bản mới nhất từ danh sách realtime; bàn đã được giải phóng thì đóng modal
   const selectedTableForOrder = useMemo<Table | null>(() => {
@@ -133,18 +186,18 @@ export default function TablesPage() {
         !search ||
         t.name.toLowerCase().includes(search.toLowerCase()) ||
         (t.zone && t.zone.toLowerCase().includes(search.toLowerCase()));
-      let matchStatus = true;
-      if (statusFilter === "IN_USE") matchStatus = t.inUse;
-      else if (statusFilter === "EMPTY") matchStatus = !t.inUse && !t.isReserved;
-      else if (statusFilter === "RESERVED") matchStatus = !!t.isReserved;
+      const matchStatus = statusFilter === "ALL" || deriveTableStatus(t) === statusFilter;
       return matchZone && matchSearch && matchStatus;
     });
   }, [tables, selectedZone, search, statusFilter]);
 
   // Statistics
   const inUseCount = useMemo(() => tables.filter((t) => t.inUse).length, [tables]);
-  const reservedCount = useMemo(() => tables.filter((t) => t.isReserved).length, [tables]);
-  const emptyCount = useMemo(() => tables.filter((t) => !t.inUse && !t.isReserved).length, [tables]);
+  const statusCounts = useMemo(() => {
+    const c: Record<TableStatus, number> = { EMPTY: 0, IN_USE: 0, RESERVED: 0, AWAITING_PAYMENT: 0 };
+    for (const t of tables) c[deriveTableStatus(t)] += 1;
+    return c;
+  }, [tables]);
   const totalGuests = useMemo(
     () =>
       tables
@@ -182,6 +235,20 @@ export default function TablesPage() {
     } catch {
       return "—";
     }
+  };
+
+  const qtyBtnStyle: CSSProperties = {
+    width: "26px",
+    height: "26px",
+    borderRadius: "6px",
+    border: "1px solid var(--border)",
+    background: "var(--surface-muted)",
+    color: "var(--text)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    padding: 0,
   };
 
   const formatVND = (amount: number) => {
@@ -363,6 +430,10 @@ export default function TablesPage() {
 
   const printBill = (table: Table) => {
     const items = parseOrderItems(table.currentOrderJson);
+    if (items.length === 0) {
+      alert("Bàn chưa có món để in tạm tính");
+      return;
+    }
     const total = calculateTableTotal(items);
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -380,7 +451,175 @@ export default function TablesPage() {
       })
     );
     printWindow.document.close();
+    // Đánh dấu "Chờ thanh toán" (prePrintedAt) — tự xóa khi món thay đổi / thanh toán / hủy
+    void markTablePrePrinted(table, user?.username).then((res) => {
+      if (!res.success) alert("Đã in nhưng không cập nhật được trạng thái chờ thanh toán: " + (res.error || ""));
+    });
   };
+
+  // Ghi lại danh sách món của bàn (dựa trên JSON đã chụp, để không ghi nhầm dòng nếu POS vừa sửa đơn)
+  const writeOrderLines = async (
+    table: Table,
+    orderJson: string,
+    nextItems: RawOrderLine[],
+    action: string,
+    details: string,
+    approval?: ManagerApproval | null
+  ): Promise<string | null> => {
+    const res = await updateTableOrderItems({ ...table, currentOrderJson: orderJson }, nextItems, {
+      action,
+      details,
+      staffUsername: user?.username,
+      staffFullName: user?.fullName,
+      approval: approval ?? null,
+    });
+    const err = res.success ? null : res.error || "Không lưu được thay đổi";
+    setLineError(err || "");
+    return err;
+  };
+
+  const tableStoreCode = (t: Table) => t.storeCode || resolveWriteStoreCode(currentStoreCode);
+
+  /** Mở hộp thoại PIN quản lý cho thao tác thiếu quyền */
+  const requestManagerPin = (table: Table, action: ApprovalAction, context: string, onApproved: (a: ManagerApproval) => void) => {
+    setPinRequest({ action, storeCode: tableStoreCode(table), context, onApproved });
+  };
+
+  const openLineDiscount = (table: Table, index: number) => {
+    setLineError("");
+    const orderJson = table.currentOrderJson || "";
+    if (canDiscountItem) {
+      setDiscountApproval(null);
+      setDiscountTarget({ orderJson, index });
+      return;
+    }
+    const line = (parseOrderItems(orderJson) as unknown as RawOrderLine[])[index];
+    requestManagerPin(table, "DISCOUNT_ITEM", `Giảm giá "${String(line?.name ?? "")}" tại ${table.name}`, (a) => {
+      setDiscountApproval(a);
+      setDiscountTarget({ orderJson, index });
+    });
+  };
+
+  const closeLineDiscount = () => {
+    setDiscountTarget(null);
+    setDiscountApproval(null);
+    setLineError("");
+  };
+
+  const handleSaveLineDiscount = async (table: Table, rawNextLine: RawOrderLine) => {
+    if (!discountTarget) return;
+    const approval = canDiscountItem ? null : discountApproval;
+    if (!canDiscountItem && !isApprovalValid(approval, "DISCOUNT_ITEM")) {
+      setLineError("Lần duyệt PIN đã hết hạn. Vui lòng đóng và nhờ Quản lý duyệt lại.");
+      return;
+    }
+    const items = parseOrderItems(discountTarget.orderJson) as unknown as RawOrderLine[];
+    const prevLine = items[discountTarget.index];
+    if (!prevLine) return;
+    const nextLine = withApprovalMeta(rawNextLine, approval, lineDiscountTotal(rawNextLine) > 0);
+    const nextItems = items.map((it, i) => (i === discountTarget.index ? nextLine : it));
+    const label = lineDiscountLabel(nextLine, (n) => `${formatVND(n)}đ`);
+    const details = label
+      ? `${label} cho "${String(prevLine.name ?? "")}" (-${formatVND(lineDiscountTotal(nextLine))}đ)`
+      : `Bỏ giảm giá "${String(prevLine.name ?? "")}"`;
+    setLineSaving(true);
+    const err = await writeOrderLines(table, discountTarget.orderJson, nextItems, "DISCOUNT_ITEM", details, approval);
+    setLineSaving(false);
+    if (!err) closeLineDiscount();
+  };
+
+  const handleChangeLineQuantity = async (
+    table: Table,
+    index: number,
+    delta: number,
+    approval?: ManagerApproval,
+    snapshotJson?: string
+  ) => {
+    const orderJson = snapshotJson ?? (table.currentOrderJson || "");
+    const items = parseOrderItems(orderJson) as unknown as RawOrderLine[];
+    const line = items[index];
+    if (!line) return;
+    const qty = lineQuantity(line);
+    const sent = line.isSentKitchen === true;
+    if (delta < 0) {
+      if (qty <= 1) return;
+      const needsPin = sent && !canCancelKitchenItem;
+      if (needsPin && approval) {
+        if (!isApprovalValid(approval, "CANCEL_KITCHEN_ITEM")) {
+          alert("Lần duyệt PIN đã hết hạn. Vui lòng thử lại.");
+          return;
+        }
+      } else {
+        if (sent && !confirm(`Giảm "${String(line.name ?? "")}" từ ${qty} xuống ${qty - 1} (món đã gửi bếp)?`)) return;
+        if (needsPin) {
+          // Thiếu CANCEL_KITCHEN_ITEM → nhờ Quản lý duyệt bằng PIN rồi thực hiện trên đúng bản đơn đã chụp
+          requestManagerPin(table, "CANCEL_KITCHEN_ITEM", `Giảm "${String(line.name ?? "")}" ${qty} → ${qty - 1} tại ${table.name}`, (a) => {
+            void handleChangeLineQuantity(table, index, delta, a, orderJson);
+          });
+          return;
+        }
+      }
+    } else if (sent) {
+      // Web không gửi phiếu bếp — thêm phần cho món đã gửi bếp phải làm trên POS
+      return;
+    }
+    const nextLine = setLineQuantity(line, qty + delta);
+    const nextItems = items.map((it, i) => (i === index ? nextLine : it));
+    const action = delta < 0 && sent ? "CANCEL_KITCHEN_ITEM" : "UPDATE_ITEM_QTY";
+    setLineSaving(true);
+    const err = await writeOrderLines(
+      table,
+      orderJson,
+      nextItems,
+      action,
+      `Đổi số lượng "${String(line.name ?? "")}" ${qty} → ${lineQuantity(nextLine)}`,
+      approval ?? null
+    );
+    setLineSaving(false);
+    if (err) alert(err);
+  };
+
+  const openTableOp = (kind: "TRANSFER" | "MERGE", source: Table) => {
+    setTableOpError("");
+    setTableOp({ kind, source });
+  };
+
+  const tableOpCandidates = (kind: "TRANSFER" | "MERGE", source: Table): Table[] => {
+    const sc = tableStoreCode(source);
+    return tables
+      .filter((t) => t.id !== source.id && tableStoreCode(t) === sc)
+      .filter((t) => (kind === "TRANSFER" ? !t.inUse && t.isReserved !== true : t.inUse))
+      .sort((a, b) => (a.zone || "").localeCompare(b.zone || "", "vi") || a.name.localeCompare(b.name, "vi", { numeric: true }));
+  };
+
+  const handlePickTableOpTarget = async (target: Table) => {
+    if (!tableOp) return;
+    const { kind, source } = tableOp;
+    const msg =
+      kind === "TRANSFER"
+        ? `Chuyển toàn bộ đơn từ ${source.name} sang ${target.name}?`
+        : `Gộp hóa đơn của ${source.name} vào ${target.name}? ${source.name} sẽ được trả về trống.`;
+    if (!confirm(msg)) return;
+    setTableOpBusy(true);
+    setTableOpError("");
+    const actor = { username: user?.username, fullName: user?.fullName, roleId: user?.roleId };
+    const res = kind === "TRANSFER" ? await transferTable(source, target, actor) : await mergeTables(source, target, actor);
+    setTableOpBusy(false);
+    if (!res.success) {
+      setTableOpError(res.error || "Không thực hiện được");
+      return;
+    }
+    setTableOp(null);
+    setSelectedTableForOrder(target);
+    setCheckoutToast(
+      kind === "TRANSFER"
+        ? `✅ Đã chuyển toàn bộ món từ ${source.name} sang ${target.name}!`
+        : `✅ Đã gộp hóa đơn của ${source.name} vào ${target.name}!`
+    );
+    setTimeout(() => setCheckoutToast(null), 5000);
+  };
+
+  const myProfile = usersList.find((u) => u.uid === user?.uid);
 
   if (loading) {
     return (
@@ -482,6 +721,12 @@ export default function TablesPage() {
             </button>
           </div>
 
+          {canSetApprovalPin && (
+            <button className="btn-secondary" onClick={() => setShowSetPin(true)} title="Đặt PIN để duyệt thao tác cho nhân viên">
+              <KeyRound size={16} />
+              PIN duyệt
+            </button>
+          )}
           <button className="btn-primary" onClick={openAdd}>
             <Plus size={16} />
             Thêm bàn mới
@@ -517,7 +762,13 @@ export default function TablesPage() {
             {inUseCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--primary)" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--primary)", marginTop: "4px", fontWeight: "600" }}>
-            🔴 Đã gửi bếp & đang phục vụ
+            {statusCounts.AWAITING_PAYMENT > 0 ? (
+              <span style={{ color: "var(--table-awaiting)" }}>
+                {statusCounts.AWAITING_PAYMENT} bàn chờ thanh toán (đã in tạm tính)
+              </span>
+            ) : (
+              "🔴 Đã gửi bếp & đang phục vụ"
+            )}
           </div>
         </div>
 
@@ -532,7 +783,7 @@ export default function TablesPage() {
             BÀN TRỐNG (AVAILABLE)
           </div>
           <div style={{ fontSize: "28px", fontWeight: "800", color: "var(--success)" }}>
-            {emptyCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--success)" }}>bàn</span>
+            {statusCounts.EMPTY} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--success)" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--success)", marginTop: "4px", fontWeight: "600" }}>
             🟢 Sẵn sàng nhận khách mới
@@ -555,14 +806,14 @@ export default function TablesPage() {
           className="stat-card"
           style={{
             borderLeft: "4px solid #B45309",
-            background: reservedCount > 0 ? "linear-gradient(135deg, var(--surface) 0%, var(--warning-bg) 100%)" : "var(--surface)",
+            background: statusCounts.RESERVED > 0 ? "linear-gradient(135deg, var(--surface) 0%, var(--warning-bg) 100%)" : "var(--surface)",
           }}
         >
           <div style={{ fontSize: "13px", fontWeight: "700", color: "#B45309", marginBottom: "8px" }}>
             ĐẶT TRƯỚC (RESERVED)
           </div>
           <div style={{ fontSize: "28px", fontWeight: "800", color: "#B45309" }}>
-            {reservedCount} <span style={{ fontSize: "14px", fontWeight: "600", color: "#B45309" }}>bàn</span>
+            {statusCounts.RESERVED} <span style={{ fontSize: "14px", fontWeight: "600", color: "#B45309" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "#B45309", marginTop: "4px", fontWeight: "600" }}>
             🟡 Đã có khách hẹn
@@ -669,60 +920,38 @@ export default function TablesPage() {
           >
             Tất cả ({tables.length})
           </button>
-          <button
-            type="button"
-            aria-pressed={statusFilter === "IN_USE"}
-            onClick={() => setStatusFilter("IN_USE")}
-            style={{
-              minHeight: "32px",
-              padding: "6px 12px",
-              borderRadius: "14px",
-              fontSize: "12px",
-              fontWeight: statusFilter === "IN_USE" ? "700" : "500",
-              background: statusFilter === "IN_USE" ? "var(--primary)" : "var(--primary-light)",
-              color: statusFilter === "IN_USE" ? "#FFFFFF" : "var(--primary)",
-              border: "1px solid rgba(126, 41, 48, 0.2)",
-              cursor: "pointer",
-            }}
-          >
-            🔴 Đang có khách ({inUseCount})
-          </button>
-          <button
-            type="button"
-            aria-pressed={statusFilter === "EMPTY"}
-            onClick={() => setStatusFilter("EMPTY")}
-            style={{
-              minHeight: "32px",
-              padding: "6px 12px",
-              borderRadius: "14px",
-              fontSize: "12px",
-              fontWeight: statusFilter === "EMPTY" ? "700" : "500",
-              background: statusFilter === "EMPTY" ? "var(--success)" : "var(--success-bg)",
-              color: statusFilter === "EMPTY" ? "#FFFFFF" : "var(--success)",
-              border: "1px solid rgba(20, 106, 101, 0.2)",
-              cursor: "pointer",
-            }}
-          >
-            🟢 Bàn trống ({emptyCount})
-          </button>
-          <button
-            type="button"
-            aria-pressed={statusFilter === "RESERVED"}
-            onClick={() => setStatusFilter("RESERVED")}
-            style={{
-              minHeight: "32px",
-              padding: "6px 12px",
-              borderRadius: "14px",
-              fontSize: "12px",
-              fontWeight: statusFilter === "RESERVED" ? "700" : "500",
-              background: statusFilter === "RESERVED" ? "var(--warning)" : "var(--warning-bg)",
-              color: statusFilter === "RESERVED" ? "#FFFFFF" : "var(--warning)",
-              border: "1px solid rgba(180, 83, 9, 0.2)",
-              cursor: "pointer",
-            }}
-          >
-            🟡 Đặt trước ({reservedCount})
-          </button>
+          {TABLE_STATUS_ORDER.map((st) => {
+            const meta = TABLE_STATUS_META[st];
+            const active = statusFilter === st;
+            return (
+              <button
+                key={st}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setStatusFilter(st)}
+                style={{
+                  minHeight: "32px",
+                  padding: "6px 12px",
+                  borderRadius: "14px",
+                  fontSize: "12px",
+                  fontWeight: active ? "700" : "500",
+                  background: active ? meta.color : meta.bg,
+                  color: active ? "var(--surface)" : meta.color,
+                  border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ width: "10px", height: "10px", borderRadius: "3px", background: active ? "var(--surface)" : meta.color }}
+                />
+                {meta.label} ({statusCounts[st]})
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -759,7 +988,9 @@ export default function TablesPage() {
               const elapsedMinutes = getElapsedMinutes(t.openedAt);
 
               if (t.inUse) {
-                // Thẻ bàn ĐANG CÓ KHÁCH (Màu đỏ mận Trạm)
+                // Thẻ bàn ĐANG CÓ KHÁCH (Màu đỏ mận Trạm) — đã in tạm tính: CHỜ THANH TOÁN (màu tím)
+                const awaiting = deriveTableStatus(t) === "AWAITING_PAYMENT";
+                const accent = awaiting ? "var(--table-awaiting)" : "var(--primary)";
                 return (
                   <div
                     key={t.id}
@@ -767,7 +998,7 @@ export default function TablesPage() {
                     style={{
                       background: "var(--surface)",
                       borderRadius: "16px",
-                      border: "2px solid var(--primary)",
+                      border: `2px solid ${accent}`,
                       boxShadow: "0 6px 18px rgba(126, 41, 48, 0.15)",
                       overflow: "hidden",
                       cursor: "pointer",
@@ -788,7 +1019,9 @@ export default function TablesPage() {
                     {/* Header bàn */}
                     <div
                       style={{
-                        background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
+                        background: awaiting
+                          ? "linear-gradient(135deg, var(--table-awaiting) 0%, color-mix(in srgb, var(--table-awaiting) 72%, black) 100%)"
+                          : "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
                         padding: "14px 16px",
                         display: "flex", flexWrap: "wrap", rowGap: "8px",
                         alignItems: "center",
@@ -829,10 +1062,20 @@ export default function TablesPage() {
                     <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
                       {/* Trạng thái & Thời gian */}
                       <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between" }}>
-                        <span className="badge badge-danger">
-                          <CheckCircle2 size={13} />
-                          Đang có khách
-                        </span>
+                        {awaiting ? (
+                          <span
+                            className="badge badge-awaiting"
+                            title={t.prePrintedBy ? `In tạm tính bởi ${t.prePrintedBy}` : undefined}
+                          >
+                            <Printer size={13} />
+                            Chờ thanh toán
+                          </span>
+                        ) : (
+                          <span className="badge badge-danger">
+                            <CheckCircle2 size={13} />
+                            Đang có khách
+                          </span>
+                        )}
                         <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--subtext)" }}>
                           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                             <Users size={14} color="#7E2930" />
@@ -1309,9 +1552,12 @@ export default function TablesPage() {
                         </span>
                       </td>
                       <td>
-                        <span className={t.inUse ? "badge badge-danger" : (t.isReserved ? "badge badge-warning" : "badge badge-success")}>
-                          {t.inUse ? "🔴 Đang có khách" : (t.isReserved ? "🟡 Đặt trước" : "🟢 Trống")}
-                        </span>
+                        {(() => {
+                          const st = deriveTableStatus(t);
+                          const cls =
+                            st === "AWAITING_PAYMENT" ? "badge badge-awaiting" : st === "IN_USE" ? "badge badge-danger" : st === "RESERVED" ? "badge badge-warning" : "badge badge-success";
+                          return <span className={cls}>{TABLE_STATUS_META[st].label}</span>;
+                        })()}
                       </td>
                       <td>
                         {t.inUse ? (
@@ -1471,16 +1717,31 @@ export default function TablesPage() {
                   >
                     {selectedTableForOrder.zone}
                   </span>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      background: "var(--success)",
-                    }}
-                  >
-                    Đang phục vụ
-                  </span>
+                  {prePrintedAtOf(selectedTableForOrder) != null ? (
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: "var(--table-awaiting)",
+                        color: "var(--surface)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Chờ thanh toán
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: "var(--success)",
+                      }}
+                    >
+                      Đang phục vụ
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.2)", borderRadius: "8px", padding: "2px 8px" }}>
@@ -1532,9 +1793,36 @@ export default function TablesPage() {
 
             {/* Modal Body: Danh sách món */}
             <div style={{ padding: "20px 24px" }}>
+              {(() => {
+                const at = prePrintedAtOf(selectedTableForOrder);
+                if (at == null) return null;
+                return (
+                  <div
+                    role="status"
+                    style={{
+                      background: "var(--table-awaiting-bg)",
+                      color: "var(--table-awaiting)",
+                      border: "1px solid color-mix(in srgb, var(--table-awaiting) 35%, transparent)",
+                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      marginBottom: "12px",
+                    }}
+                  >
+                    🖨 Đã in tạm tính lúc {new Date(at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                    {selectedTableForOrder.prePrintedBy ? ` bởi ${selectedTableForOrder.prePrintedBy}` : ""} — sửa món sẽ hủy trạng thái chờ thanh toán.
+                  </div>
+                );
+              })()}
               <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)", marginBottom: "12px" }}>
                 Danh sách món đã gửi bếp từ POS:
               </div>
+              {!canDiscountItem && (
+                <div style={{ fontSize: "11px", color: "var(--subtext)", marginBottom: "8px" }}>
+                  Bạn không có quyền &quot;Giảm giá món&quot; — bấm nút giảm giá để nhờ Quản lý duyệt bằng PIN.
+                </div>
+              )}
 
               {parseOrderItems(selectedTableForOrder.currentOrderJson).length === 0 ? (
                 <div
@@ -1565,6 +1853,9 @@ export default function TablesPage() {
                         <th style={{ padding: "10px 14px", textAlign: "center" }}>SL</th>
                         <th style={{ padding: "10px 14px", textAlign: "right" }}>Đơn giá</th>
                         <th style={{ padding: "10px 14px", textAlign: "right" }}>Thành tiền</th>
+                        <th style={{ padding: "10px 8px", textAlign: "center" }}>
+                          <span className="sr-only">Giảm giá</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1602,14 +1893,59 @@ export default function TablesPage() {
                                 </div>
                               )}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: "700" }}>
-                              {qty}
+                            <td style={{ padding: "12px 8px", textAlign: "center", fontWeight: "700" }}>
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <button
+                                  type="button"
+                                  aria-label={`Giảm số lượng ${item.name}`}
+                                  title={
+                                    qty <= 1
+                                      ? "Số lượng tối thiểu là 1"
+                                      : item.isSentKitchen && !canCancelKitchenItem
+                                        ? "Món đã gửi bếp — cần Quản lý duyệt bằng PIN"
+                                        : "Giảm 1 phần"
+                                  }
+                                  disabled={lineSaving || qty <= 1}
+                                  onClick={() => handleChangeLineQuantity(selectedTableForOrder, idx, -1)}
+                                  style={qtyBtnStyle}
+                                >
+                                  <Minus size={13} />
+                                </button>
+                                <span style={{ minWidth: "18px" }}>{qty}</span>
+                                <button
+                                  type="button"
+                                  aria-label={`Tăng số lượng ${item.name}`}
+                                  title={item.isSentKitchen ? "Món đã gửi bếp — thêm phần trên POS để in phiếu bếp" : "Tăng 1 phần"}
+                                  disabled={lineSaving || item.isSentKitchen === true}
+                                  onClick={() => handleChangeLineQuantity(selectedTableForOrder, idx, 1)}
+                                  style={qtyBtnStyle}
+                                >
+                                  <Plus size={13} />
+                                </button>
+                              </div>
                             </td>
                             <td style={{ padding: "12px 14px", textAlign: "right", color: "var(--subtext)" }}>
                               {formatVND(itemPriceWithTopping)}đ
                             </td>
                             <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: "800", color: "var(--primary)" }}>
                               {formatVND(lineTotal)}đ
+                            </td>
+                            <td style={{ padding: "12px 8px", textAlign: "center" }}>
+                              <button
+                                type="button"
+                                aria-label={`Giảm giá ${item.name}`}
+                                title={canDiscountItem ? "Giảm giá món" : "Giảm giá món — Quản lý duyệt bằng PIN"}
+                                disabled={lineSaving}
+                                onClick={() => openLineDiscount(selectedTableForOrder, idx)}
+                                style={{
+                                  ...qtyBtnStyle,
+                                  width: "32px",
+                                  height: "32px",
+                                  color: discountLabel ? "var(--danger)" : "var(--primary)",
+                                }}
+                              >
+                                <Percent size={14} />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1764,6 +2100,32 @@ export default function TablesPage() {
               </div>
 
               {/* Actions */}
+              {(canTransferTable || canMergeTable) && (
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
+                  {canTransferTable && (
+                    <button
+                      className="btn-secondary"
+                      onClick={() => openTableOp("TRANSFER", selectedTableForOrder)}
+                      disabled={completingPayment}
+                      style={{ flex: 1, minWidth: "130px", justifyContent: "center" }}
+                    >
+                      <ArrowRightLeft size={16} />
+                      Chuyển bàn
+                    </button>
+                  )}
+                  {canMergeTable && (
+                    <button
+                      className="btn-secondary"
+                      onClick={() => openTableOp("MERGE", selectedTableForOrder)}
+                      disabled={completingPayment}
+                      style={{ flex: 1, minWidth: "130px", justifyContent: "center" }}
+                    >
+                      <GitMerge size={16} />
+                      Gộp bàn
+                    </button>
+                  )}
+                </div>
+              )}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <button
                   className="btn-secondary"
@@ -1802,6 +2164,63 @@ export default function TablesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedTableForOrder && discountTarget && (() => {
+        const line = (parseOrderItems(discountTarget.orderJson) as unknown as RawOrderLine[])[discountTarget.index];
+        if (!line) return null;
+        return (
+          <LineDiscountDialog
+            key={`${discountTarget.index}-${discountTarget.orderJson.length}`}
+            line={line}
+            saving={lineSaving}
+            error={lineError}
+            approval={canDiscountItem ? null : discountApproval}
+            onCancel={closeLineDiscount}
+            onSave={(next) => handleSaveLineDiscount(selectedTableForOrder, next)}
+          />
+        );
+      })()}
+
+      {pinRequest && (
+        <ManagerPinDialog
+          storeCode={pinRequest.storeCode}
+          action={pinRequest.action}
+          context={pinRequest.context}
+          approvers={approverOptions(
+            usersList.filter((u) => (u.storeCode || pinRequest.storeCode) === pinRequest.storeCode),
+            pinRequest.action,
+            user?.uid
+          )}
+          onCancel={() => setPinRequest(null)}
+          onApproved={(a) => {
+            const cb = pinRequest.onApproved;
+            setPinRequest(null);
+            cb(a);
+          }}
+        />
+      )}
+
+      {showSetPin && (
+        <SetApprovalPinDialog
+          storeCode={user?.storeCode || resolveWriteStoreCode(currentStoreCode)}
+          hasPin={myProfile?.hasApprovalPin === true}
+          onClose={() => setShowSetPin(false)}
+        />
+      )}
+
+      {tableOp && (
+        <TableTransferDialog
+          kind={tableOp.kind}
+          source={tableOp.source}
+          candidates={tableOpCandidates(tableOp.kind, tableOp.source)}
+          busy={tableOpBusy}
+          error={tableOpError}
+          onPick={(t) => void handlePickTableOpTarget(t)}
+          onCancel={() => {
+            if (!tableOpBusy) setTableOp(null);
+          }}
+        />
       )}
 
       {/* Modal: Thêm / Sửa bàn */}

@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -72,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Text('Báo Cáo Tổng Quan Hôm Nay', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
         actions: [
@@ -86,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 reportType: 'DoanhThu',
                 bills: _todayPaidBills,
               );
-              if (mounted) {
+              if (context.mounted) {
                 if (path != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -119,12 +118,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: context.tc.primaryLight,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.storefront, size: 32, color: AppColors.primary),
+                        Icon(Icons.storefront, size: 32, color: context.tc.primary),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -132,11 +131,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               Text(
                                 _auth.currentStoreInfo?.storeName ?? 'POS Trạm',
-                                style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primaryDark),
+                                style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16, color: context.tc.primaryDark),
                               ),
                               Text(
                                 'Mã CH: ${_auth.currentStoreCode} • Ngày: ${FormatUtils.dateOnly(DateTime.now().millisecondsSinceEpoch)}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -159,25 +158,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         title: 'Doanh thu hôm nay',
                         value: FormatUtils.vnd(_todayRevenue),
                         icon: Icons.monetization_on,
-                        color: AppColors.success,
+                        color: context.tc.success,
                       ),
                       StatCard(
                         title: 'Số đơn đã bán',
                         value: '${_todayPaidBills.length} đơn',
                         icon: Icons.receipt_long,
-                        color: AppColors.primary,
+                        color: context.tc.primary,
                       ),
                       StatCard(
                         title: 'Bàn đang phục vụ',
                         value: '$_occupiedTables/${_tables.length} bàn',
                         icon: Icons.table_restaurant,
-                        color: AppColors.warning,
+                        color: context.tc.warning,
                       ),
                       StatCard(
                         title: 'Tổng khuyến mãi đã giảm',
                         value: FormatUtils.vnd(_todayDiscounts),
                         icon: Icons.discount,
-                        color: AppColors.danger,
+                        color: context.tc.danger,
                       ),
                     ],
                   ),
@@ -190,7 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Center(child: Text('Chưa có dữ liệu bán hàng hôm nay', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary))),
+                        child: Center(child: Text('Chưa có dữ liệu bán hàng hôm nay', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary))),
                       ),
                     )
                   else
@@ -205,12 +204,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle),
-                                    child: const Icon(Icons.local_fire_department, size: 16, color: AppColors.primary),
+                                    decoration: BoxDecoration(color: context.tc.primaryLight, shape: BoxShape.circle),
+                                    child: Icon(Icons.local_fire_department, size: 16, color: context.tc.primary),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(child: Text(e.key, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13))),
-                                  Text('${e.value} phần', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                  Text('${e.value} phần', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: context.tc.primary)),
                                 ],
                               ),
                             );

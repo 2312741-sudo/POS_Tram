@@ -4,6 +4,7 @@
 /// - Tiền tệ: int (VND, không có số thập phân)
 /// - Thời gian: int (epoch milliseconds UTC)
 /// - Null safety được đảm bảo.
+library;
 
 // ---------------------------------------------------------------------------
 // 1. Enums

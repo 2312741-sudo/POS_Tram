@@ -23,9 +23,9 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
   final _auth = AuthService();
 
   List<CashShiftModel> _shifts = [];
-  List<BillModel> _allBills = [];
   StreamSubscription<List<CashShiftModel>>? _shiftsSub;
-  StreamSubscription<List<BillModel>>? _billsSub;
+  Timer? _safetyTimeoutTimer;
+  final Map<String, List<BillModel>> _shiftBillsCache = {};
   bool _loading = true;
   String _searchQuery = '';
   String _statusFilter = 'ALL'; // ALL, OPEN, CLOSED
@@ -49,13 +49,13 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
   void initState() {
     super.initState();
     _loadStoreSetting();
-    _loadShifts();
+    _initShiftsData();
   }
 
   @override
   void dispose() {
+    _safetyTimeoutTimer?.cancel();
     _shiftsSub?.cancel();
-    _billsSub?.cancel();
     super.dispose();
   }
 
@@ -70,27 +70,74 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     } catch (_) {}
   }
 
-  void _loadShifts() {
+  void _initShiftsData() {
+    // 1. Lấy dữ liệu ngay từ cache trong Repository nếu có sẵn
+    final cached = _fb.cachedCashShiftsList;
+    if (cached != null && cached.isNotEmpty) {
+      _shifts = cached;
+      _loading = false;
+    } else if (_fb.activeShiftCache != null) {
+      _shifts = [_fb.activeShiftCache!];
+      _loading = false;
+    }
+
+    // 2. Cơ chế timeout an toàn 3s: Tự động tắt loading tránh spinner xoay vô tận
+    _safetyTimeoutTimer?.cancel();
+    _safetyTimeoutTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    });
+
+    // 3. Chủ động lấy danh sách ca gần nhất qua Future (bổ sung cho stream)
+    _fb.getRecentCashShifts().then((recent) {
+      if (mounted && recent.isNotEmpty) {
+        setState(() {
+          _shifts = recent;
+          _loading = false;
+        });
+      }
+    }).catchError((_) {
+      if (mounted && _loading) {
+        setState(() => _loading = false);
+      }
+    });
+
+    // 4. Lắng nghe Stream realtime (đã hỗ trợ replay cache ngay lập tức khi đăng ký)
     _shiftsSub = _fb.cashShiftsStream().listen((list) {
+      _safetyTimeoutTimer?.cancel();
       if (mounted) {
         setState(() {
           _shifts = list;
           _loading = false;
         });
       }
-    });
-
-    _billsSub = _fb.billsStream().listen((bills) {
-      if (mounted) {
-        setState(() {
-          _allBills = bills;
-        });
+    }, onError: (_) {
+      _safetyTimeoutTimer?.cancel();
+      if (mounted && _loading) {
+        setState(() => _loading = false);
       }
     });
   }
 
-  List<BillModel> _getShiftBills(CashShiftModel shift) {
-    return _allBills.where((b) {
+  Future<List<BillModel>> _getOrFetchShiftBills(CashShiftModel shift) async {
+    if (_shiftBillsCache.containsKey(shift.id)) {
+      return _shiftBillsCache[shift.id]!;
+    }
+    try {
+      final bills = await _fb.getBillsForShift(shift);
+      _shiftBillsCache[shift.id] = bills;
+      return bills;
+    } catch (_) {
+      return <BillModel>[];
+    }
+  }
+
+  List<BillModel> _getShiftBills(CashShiftModel shift, {List<BillModel>? bills}) {
+    final list = bills ?? _shiftBillsCache[shift.id] ?? <BillModel>[];
+    return list.where((b) {
       if (b.shiftId != null && b.shiftId!.isNotEmpty) {
         return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
       }
@@ -99,8 +146,8 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     }).toList();
   }
 
-  Map<String, dynamic> _computeShiftPromoStats(CashShiftModel shift) {
-    final bills = _getShiftBills(shift).where((b) => b.status == 'PAID').toList();
+  Map<String, dynamic> _computeShiftPromoStats(CashShiftModel shift, {List<BillModel>? bills}) {
+    final shiftBills = _getShiftBills(shift, bills: bills).where((b) => b.status == 'PAID').toList();
     int discountedItemsCount = 0;
     int discountedItemsTotal = 0;
     int voucherCount = 0;
@@ -108,7 +155,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     int pointsUsedTotal = 0;
     int pointsDiscountTotal = 0;
 
-    for (final b in bills) {
+    for (final b in shiftBills) {
       for (final it in b.items) {
         if (it.lineDiscountTotal > 0) {
           // Chỉ đếm số phần được giảm; tổng giảm là tổng CẢ DÒNG đã lưu
@@ -136,12 +183,13 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
       'pointsUsedTotal': pointsUsedTotal,
       'pointsDiscountTotal': pointsDiscountTotal,
       'totalPromoDiscount': totalPromoDiscount,
-      'paidBills': bills,
+      'paidBills': shiftBills,
     };
   }
 
   Future<void> _exportShiftPromotionsExcel(CashShiftModel shift) async {
-    final promo = _computeShiftPromoStats(shift);
+    final bills = await _getOrFetchShiftBills(shift);
+    final promo = _computeShiftPromoStats(shift, bills: bills);
     final List<BillModel> paidBills = List<BillModel>.from(promo['paidBills']);
     final storeInfo = _auth.currentStoreInfo;
     final storeName = storeInfo?.storeName ?? 'POS Trạm F&B';
@@ -261,7 +309,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
           content: Text(val
               ? 'Đã BẬT cho phép nhân viên xem chênh lệch khi kết ca'
               : 'Đã TẮT (Ẩn chênh lệch két đối với nhân viên khi kết ca)'),
-          backgroundColor: val ? TramColors.success : TramColors.warningInk,
+          backgroundColor: val ? AppColors.success : AppColors.warningInk,
         ),
       );
     }
@@ -315,239 +363,274 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     final storeAddress = storeInfo?.address ?? '';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.tc.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Slip Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PHIẾU BÀN GIAO CA',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: TramColors.brandPrimary,
-                    ),
-                  ),
-                  Text(
-                    'Mã ca: ${shift.shiftCode}',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: TramColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: shift.isOpen
-                      ? TramColors.successSurface
-                      : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: shift.isOpen
-                        ? TramColors.success
-                        : Colors.grey.shade400,
-                  ),
-                ),
-                child: Text(
-                  shift.isOpen ? 'ĐANG MỞ' : 'ĐÃ KẾT CA',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: shift.isOpen ? TramColors.success : Colors.grey.shade700,
-                  ),
+                  color: context.tc.border,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ],
-          ),
-          const Divider(height: 24),
-          // Store & Staff Info
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            // Slip Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildSlipMetaRow('Cửa hàng / Chi nhánh:', storeName),
-                if (storeAddress.isNotEmpty)
-                  _buildSlipMetaRow('Địa chỉ:', storeAddress),
-                _buildSlipMetaRow(
-                    'Thu ngân bàn giao:', '${shift.staffFullName} (${shift.staffUsername})'),
-                _buildSlipMetaRow('Giờ mở ca:', openedStr),
-                _buildSlipMetaRow('Giờ kết ca:', closedStr),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Numbers Breakdown
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: TramColors.borderLight),
-            ),
-            child: Column(
-              children: [
-                _buildNumberRow('1. Tiền mặt đầu ca:', FormatUtils.vnd(shift.initialCash)),
-                _buildNumberRow('2. Doanh số tiền mặt (+):', FormatUtils.vnd(shift.totalCashSales),
-                    color: TramColors.success),
-                _buildNumberRow('3. Doanh thu Chuyển khoản (VietQR):', FormatUtils.vnd(shift.totalQrSales),
-                    color: TramColors.info),
-                if (shift.totalCardSales > 0)
-                  _buildNumberRow('4. Doanh thu Thẻ POS:', FormatUtils.vnd(shift.totalCardSales)),
-                _buildNumberRow('5. Nộp thêm vào két (Cash In):', FormatUtils.vnd(shift.cashIn)),
-                _buildNumberRow('6. Chi vặt từ két (Cash Out):', FormatUtils.vnd(shift.cashOut),
-                    color: TramColors.danger),
-                const Divider(height: 16),
-                _buildNumberRow('TỔNG DOANH THU BÁN TRONG CA:', FormatUtils.vnd(shift.totalRevenue),
-                    isBold: true),
-                const Divider(height: 16),
-                if (_canViewDifference) ...[
-                  _buildNumberRow('TIỀN MẶT KỲ VỌNG TRONG KÉT:', FormatUtils.vnd(shift.expectedCash),
-                      isBold: true, color: TramColors.brandPrimary),
-                  if (!shift.isOpen) ...[
-                    _buildNumberRow(
-                        'TIỀN MẶT THỰC KIỂM ĐẾM:', FormatUtils.vnd(shift.actualCash ?? 0),
-                        isBold: true),
-                    _buildNumberRow(
-                      'CHÊNH LỆCH KÉT:',
-                      '${(shift.difference ?? 0) >= 0 ? "+" : ""}${FormatUtils.vnd(shift.difference ?? 0)}',
-                      isBold: true,
-                      color: (shift.difference ?? 0) == 0
-                          ? TramColors.success
-                          : ((shift.difference ?? 0) > 0 ? TramColors.info : TramColors.danger),
-                    ),
-                  ],
-                ] else ...[
-                  _buildNumberRow('TIỀN MẶT THỰC KIỂM ĐẾM:',
-                      FormatUtils.vnd(shift.actualCash ?? 0),
-                      isBold: true),
-                  _buildNumberRow('CHÊNH LỆCH KÉT:', '•••••• (Chỉ Quản lý được xem)',
-                      isBold: true, color: Colors.grey),
-                ],
-              ],
-            ),
-          ),
-          // Promotional Breakdown for Shift (Module 4)
-          Builder(
-            builder: (ctx) {
-              final promo = _computeShiftPromoStats(shift);
-              final discItemsCount = promo['discountedItemsCount'] as int;
-              final discItemsTotal = promo['discountedItemsTotal'] as int;
-              final vCount = promo['voucherCount'] as int;
-              final vTotal = promo['voucherTotal'] as int;
-              final pUsed = promo['pointsUsedTotal'] as int;
-              final pDisc = promo['pointsDiscountTotal'] as int;
-              final totDisc = promo['totalPromoDiscount'] as int;
-
-              return Container(
-                margin: const EdgeInsets.only(top: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDF5F6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFF5D5D8)),
-                ),
-                child: Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Text(
+                      'PHIẾU BÀN GIAO CA',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.tc.primary,
+                      ),
+                    ),
+                    Text(
+                      'Mã ca: ${shift.shiftCode}',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: context.tc.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: shift.isOpen
+                        ? context.tc.successLight
+                        : context.tc.cardElevated,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: shift.isOpen
+                          ? context.tc.success
+                          : context.tc.textHint,
+                    ),
+                  ),
+                  child: Text(
+                    shift.isOpen ? 'ĐANG MỞ' : 'ĐÃ KẾT CA',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            // Store & Staff Info
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.tc.cardElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.tc.borderLight),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSlipMetaRow('Cửa hàng / Chi nhánh:', storeName),
+                  if (storeAddress.isNotEmpty)
+                    _buildSlipMetaRow('Địa chỉ:', storeAddress),
+                  _buildSlipMetaRow(
+                      'Thu ngân bàn giao:', '${shift.staffFullName} (${shift.staffUsername})'),
+                  _buildSlipMetaRow('Giờ mở ca:', openedStr),
+                  _buildSlipMetaRow('Giờ kết ca:', closedStr),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Numbers Breakdown
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.tc.card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.tc.borderLight),
+              ),
+              child: Column(
+                children: [
+                  _buildNumberRow('1. Tiền mặt đầu ca:', FormatUtils.vnd(shift.initialCash)),
+                  _buildNumberRow('2. Doanh số tiền mặt (+):', FormatUtils.vnd(shift.totalCashSales),
+                      color: context.tc.success),
+                  _buildNumberRow('3. Doanh thu Chuyển khoản (VietQR):', FormatUtils.vnd(shift.totalQrSales),
+                      color: context.tc.info),
+                  if (shift.totalCardSales > 0)
+                    _buildNumberRow('4. Doanh thu Thẻ POS:', FormatUtils.vnd(shift.totalCardSales)),
+                  _buildNumberRow('5. Nộp thêm vào két (Cash In):', FormatUtils.vnd(shift.cashIn)),
+                  _buildNumberRow('6. Chi vặt từ két (Cash Out):', FormatUtils.vnd(shift.cashOut),
+                      color: context.tc.danger),
+                  const Divider(height: 16),
+                  _buildNumberRow('TỔNG DOANH THU BÁN TRONG CA:', FormatUtils.vnd(shift.totalRevenue),
+                      isBold: true),
+                  const Divider(height: 16),
+                  if (_canViewDifference) ...[
+                    _buildNumberRow('TIỀN MẶT KỲ VỌNG TRONG KÉT:', FormatUtils.vnd(shift.expectedCash),
+                        isBold: true, color: context.tc.primary),
+                    if (!shift.isOpen) ...[
+                      _buildNumberRow(
+                          'TIỀN MẶT THỰC KIỂM ĐẾM:', FormatUtils.vnd(shift.actualCash ?? 0),
+                          isBold: true),
+                      _buildNumberRow(
+                        'CHÊNH LỆCH KÉT:',
+                        '${(shift.difference ?? 0) >= 0 ? "+" : ""}${FormatUtils.vnd(shift.difference ?? 0)}',
+                        isBold: true,
+                        color: (shift.difference ?? 0) == 0
+                            ? context.tc.success
+                            : ((shift.difference ?? 0) > 0 ? context.tc.info : context.tc.danger),
+                      ),
+                    ],
+                  ] else ...[
+                    _buildNumberRow('TIỀN MẶT THỰC KIỂM ĐẾM:',
+                        FormatUtils.vnd(shift.actualCash ?? 0),
+                        isBold: true),
+                    _buildNumberRow('CHÊNH LỆCH KÉT:', '•••••• (Chỉ Quản lý được xem)',
+                        isBold: true, color: context.tc.textHint),
+                  ],
+                ],
+              ),
+            ),
+            // Promotional Breakdown for Shift (Module 4) - tải bills theo ca khi mở sheet
+            FutureBuilder<List<BillModel>>(
+              future: _getOrFetchShiftBills(shift),
+              builder: (ctx, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !_shiftBillsCache.containsKey(shift.id)) {
+                  return Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: context.tc.primaryLight,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.line(const Color(0xFFF5D5D8))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.discount_outlined, size: 16, color: Color(0xFF7E2930)),
-                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          'KHUYẾN MÃI & GIẢM GIÁ TRONG CA',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF7E2930)),
+                          'Đang tính toán khuyến mãi ca...',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.primary),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildNumberRow('• Món giảm giá ($discItemsCount món):', '-${FormatUtils.vnd(discItemsTotal)}', color: TramColors.danger),
-                    _buildNumberRow('• Voucher / KM ($vCount lượt):', '-${FormatUtils.vnd(vTotal)}', color: TramColors.danger),
-                    _buildNumberRow('• Điểm KMT đổi ($pUsed điểm):', '-${FormatUtils.vnd(pDisc)}', color: TramColors.danger),
-                    const Divider(height: 12),
-                    _buildNumberRow('TỔNG GIẢM GIÁ TRONG CA:', '-${FormatUtils.vnd(totDisc)}', isBold: true, color: const Color(0xFF7E2930)),
-                  ],
-                ),
-              );
-            },
-          ),
-          if (shift.notes.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: TramColors.warningSurface,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Ghi chú ca: ${shift.notes}',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.warningInk),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.table_view_outlined, size: 18, color: Color(0xFF137333)),
-              label: const Text('Xuất Excel Khuyến Mãi Ca', style: TextStyle(color: Color(0xFF137333), fontWeight: FontWeight.bold)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF137333)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              onPressed: () async {
-                try {
-                  await _exportShiftPromotionsExcel(shift);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: TramColors.danger),
-                    );
-                  }
+                  );
                 }
+                final bills = snapshot.data ?? _shiftBillsCache[shift.id] ?? <BillModel>[];
+                final promo = _computeShiftPromoStats(shift, bills: bills);
+                final discItemsCount = promo['discountedItemsCount'] as int;
+                final discItemsTotal = promo['discountedItemsTotal'] as int;
+                final vCount = promo['voucherCount'] as int;
+                final vTotal = promo['voucherTotal'] as int;
+                final pUsed = promo['pointsUsedTotal'] as int;
+                final pDisc = promo['pointsDiscountTotal'] as int;
+                final totDisc = promo['totalPromoDiscount'] as int;
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.tc.primaryLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.line(const Color(0xFFF5D5D8))),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.discount_outlined, size: 16, color: context.tc.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'KHUYẾN MÃI & GIẢM GIÁ TRONG CA',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _buildNumberRow('• Món giảm giá ($discItemsCount món):', '-${FormatUtils.vnd(discItemsTotal)}', color: context.tc.danger),
+                      _buildNumberRow('• Voucher / KM ($vCount lượt):', '-${FormatUtils.vnd(vTotal)}', color: context.tc.danger),
+                      _buildNumberRow('• Điểm KMT đổi ($pUsed điểm):', '-${FormatUtils.vnd(pDisc)}', color: context.tc.danger),
+                      const Divider(height: 12),
+                      _buildNumberRow('TỔNG GIẢM GIÁ TRONG CA:', '-${FormatUtils.vnd(totDisc)}', isBold: true, color: context.tc.primary),
+                    ],
+                  ),
+                );
               },
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.share_outlined, size: 18),
-                  label: const Text('Chia Sẻ Phiếu'),
-                  onPressed: () {
-                    final text = '''
+            if (shift.notes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: context.tc.warningLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Ghi chú ca: ${shift.notes}',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: Icon(Icons.table_view_outlined, size: 18, color: context.ink(const Color(0xFF137333))),
+                label: Text('Xuất Excel Khuyến Mãi Ca', style: TextStyle(color: context.ink(const Color(0xFF137333)), fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF137333)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: () async {
+                  try {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Đang chuẩn bị dữ liệu và xuất Excel...'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    await _exportShiftPromotionsExcel(shift);
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: AppColors.danger),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.share_outlined, size: 18),
+                    label: const Text('Chia Sẻ Phiếu'),
+                    onPressed: () {
+                      final text = '''
 ================================
 ${storeName.toUpperCase()}
 PHIẾU BÀN GIAO CA BÁN HÀNG
@@ -564,34 +647,35 @@ Kết ca: $closedStr
 --------------------------------
 TỔNG DOANH THU: ${FormatUtils.vnd(shift.totalRevenue)}
 TIỀN KIỂM ĐẾM THỰC TẾ: ${FormatUtils.vnd(shift.actualCash ?? 0)}
-${_canViewDifference ? "CHÊNH LỆCH: " + FormatUtils.vnd(shift.difference ?? 0) : ""}
+${_canViewDifference ? "CHÊNH LỆCH: ${FormatUtils.vnd(shift.difference ?? 0)}" : ""}
 Ghi chú: ${shift.notes}
 ================================
 ''';
-                    Share.share(text, subject: 'Phiếu bàn giao ca ${shift.shiftCode}');
-                  },
+                      Share.share(text, subject: 'Phiếu bàn giao ca ${shift.shiftCode}');
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.print_outlined, size: 18),
-                  label: const Text('In Phiếu Bàn Giao'),
-                  style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Đã gửi lệnh in phiếu bàn giao ca ${shift.shiftCode} tới máy in nhiệt.'),
-                        backgroundColor: TramColors.success,
-                      ),
-                    );
-                  },
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('In Phiếu Bàn Giao'),
+                    style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Đã gửi lệnh in phiếu bàn giao ca ${shift.shiftCode} tới máy in nhiệt.'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -606,7 +690,7 @@ Ghi chú: ${shift.notes}
             width: 130,
             child: Text(
               label,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
           ),
           Expanded(
@@ -638,7 +722,7 @@ Ghi chú: ${shift.notes}
             style: GoogleFonts.beVietnamPro(
               fontSize: 13,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color ?? TramColors.textPrimary,
+              color: color ?? context.tc.textPrimary,
             ),
           ),
         ],
@@ -651,7 +735,7 @@ Ghi chú: ${shift.notes}
     final filtered = _filteredShifts;
 
     return Scaffold(
-      backgroundColor: TramColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,7 +746,7 @@ Ghi chú: ${shift.notes}
             ),
             Text(
               'Xem phiên giao két & chênh lệch của nhân viên',
-              style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
             ),
           ],
         ),
@@ -698,9 +782,9 @@ Ghi chú: ${shift.notes}
               margin: const EdgeInsets.fromLTRB(14, 10, 14, 6),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.tc.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: TramColors.borderLight),
+                border: Border.all(color: context.tc.borderLight),
               ),
               child: Row(
                 children: [
@@ -708,15 +792,15 @@ Ghi chú: ${shift.notes}
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: _allowStaffViewDifference
-                          ? TramColors.successSurface
-                          : TramColors.warningSurface,
+                          ? context.tc.successLight
+                          : context.tc.warningLight,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       _allowStaffViewDifference ? Icons.visibility : Icons.visibility_off,
                       color: _allowStaffViewDifference
-                          ? TramColors.success
-                          : TramColors.warningInk,
+                          ? context.tc.success
+                          : context.tc.warningInk,
                       size: 20,
                     ),
                   ),
@@ -738,7 +822,7 @@ Ghi chú: ${shift.notes}
                               : 'Ẩn chênh lệch: Nhân viên kiểm đếm mù, chỉ Quản lý xem đối soát',
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 11,
-                            color: TramColors.textSecondary,
+                            color: context.tc.textSecondary,
                           ),
                         ),
                       ],
@@ -746,7 +830,7 @@ Ghi chú: ${shift.notes}
                   ),
                   Switch(
                     value: _allowStaffViewDifference,
-                    activeColor: TramColors.brandPrimary,
+                    activeThumbColor: context.tc.primary,
                     onChanged: _updatingSetting ? null : _toggleAllowDifference,
                   ),
                 ],
@@ -765,10 +849,10 @@ Ghi chú: ${shift.notes}
                       prefixIcon: const Icon(Icons.search, size: 20),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: context.tc.card,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: TramColors.borderLight),
+                        borderSide: BorderSide(color: context.tc.borderLight),
                       ),
                     ),
                     onChanged: (v) => setState(() => _searchQuery = v),
@@ -778,9 +862,9 @@ Ghi chú: ${shift.notes}
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.tc.card,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: TramColors.borderLight),
+                    border: Border.all(color: context.tc.borderLight),
                   ),
                   child: DropdownButton<String>(
                     value: _statusFilter,
@@ -804,14 +888,14 @@ Ghi chú: ${shift.notes}
               padding: const EdgeInsets.only(left: 16, bottom: 6),
               child: Row(
                 children: [
-                  const Icon(Icons.filter_alt, size: 14, color: TramColors.brandPrimary),
+                  Icon(Icons.filter_alt, size: 14, color: context.tc.primary),
                   const SizedBox(width: 4),
                   Text(
                     'Đang lọc ngày: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: TramColors.brandPrimary,
+                      color: context.tc.primary,
                     ),
                   ),
                 ],
@@ -822,31 +906,49 @@ Ghi chú: ${shift.notes}
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : filtered.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey.shade400),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Không tìm thấy phiên giao két nào',
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 14,
-                                color: TramColors.textSecondary,
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      final list = await _fb.getRecentCashShifts(forceRefresh: true);
+                      if (mounted) {
+                        setState(() {
+                          _shifts = list;
+                          _loading = false;
+                        });
+                      }
+                    },
+                    child: filtered.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.18),
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.receipt_long_outlined, size: 56, color: context.tc.textHint),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Không tìm thấy phiên giao két nào',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 14,
+                                        color: context.tc.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
-                        itemCount: filtered.length,
-                        itemBuilder: (ctx, i) {
-                          final shift = filtered[i];
-                          return _buildShiftCard(shift);
-                        },
-                      ),
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+                            itemCount: filtered.length,
+                            itemBuilder: (ctx, i) {
+                              final shift = filtered[i];
+                              return _buildShiftCard(shift);
+                            },
+                          ),
+                  ),
           ),
         ],
       ),
@@ -866,9 +968,9 @@ Ghi chú: ${shift.notes}
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: TramColors.borderLight),
+        border: Border.all(color: context.tc.borderLight),
         boxShadow: const [
           BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
         ],
@@ -893,14 +995,14 @@ Ghi chú: ${shift.notes}
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: shift.isOpen
-                                ? TramColors.successSurface
-                                : Colors.grey.shade100,
+                                ? context.tc.successLight
+                                : context.tc.cardElevated,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             Icons.point_of_sale,
                             size: 18,
-                            color: shift.isOpen ? TramColors.success : Colors.grey.shade700,
+                            color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -918,7 +1020,7 @@ Ghi chú: ${shift.notes}
                               'NV: ${shift.staffFullName} (${shift.staffUsername})',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 11,
-                                color: TramColors.textSecondary,
+                                color: context.tc.textSecondary,
                               ),
                             ),
                           ],
@@ -928,7 +1030,7 @@ Ghi chú: ${shift.notes}
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: shift.isOpen ? TramColors.success : Colors.grey.shade200,
+                        color: shift.isOpen ? context.tc.success : context.tc.borderLight,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -936,7 +1038,7 @@ Ghi chú: ${shift.notes}
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: shift.isOpen ? Colors.white : Colors.grey.shade800,
+                          color: shift.isOpen ? Colors.white : context.tc.textPrimary,
                         ),
                       ),
                     ),
@@ -945,7 +1047,7 @@ Ghi chú: ${shift.notes}
                 const SizedBox(height: 10),
                 Text(
                   'Thời gian: $openedStr ➔ $closedStr',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                 ),
                 const Divider(height: 16),
                 Row(
@@ -956,13 +1058,13 @@ Ghi chú: ${shift.notes}
                       children: [
                         Text('Tổng doanh thu ca',
                             style: GoogleFonts.beVietnamPro(
-                                fontSize: 11, color: TramColors.textSecondary)),
+                                fontSize: 11, color: context.tc.textSecondary)),
                         Text(
                           FormatUtils.vnd(shift.totalRevenue),
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: TramColors.brandPrimary,
+                            color: context.tc.primary,
                           ),
                         ),
                       ],
@@ -972,7 +1074,7 @@ Ghi chú: ${shift.notes}
                       children: [
                         Text('Tiền đếm thực tế',
                             style: GoogleFonts.beVietnamPro(
-                                fontSize: 11, color: TramColors.textSecondary)),
+                                fontSize: 11, color: context.tc.textSecondary)),
                         Text(
                           shift.isOpen
                               ? 'Đang bán...'
@@ -989,15 +1091,15 @@ Ghi chú: ${shift.notes}
                       children: [
                         Text('Chênh lệch',
                             style: GoogleFonts.beVietnamPro(
-                                fontSize: 11, color: TramColors.textSecondary)),
+                                fontSize: 11, color: context.tc.textSecondary)),
                         if (!_canViewDifference && !shift.isOpen)
                           Text('••••••',
                               style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey))
+                                  fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textHint))
                         else if (shift.isOpen)
                           Text('Chưa chốt',
                               style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, color: TramColors.textSecondary))
+                                  fontSize: 12, color: context.tc.textSecondary))
                         else
                           Text(
                             '${diff >= 0 ? "+" : ""}${FormatUtils.vnd(diff)}',
@@ -1005,8 +1107,8 @@ Ghi chú: ${shift.notes}
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: diff == 0
-                                  ? TramColors.success
-                                  : (diff > 0 ? TramColors.info : TramColors.danger),
+                                  ? context.tc.success
+                                  : (diff > 0 ? context.tc.info : context.tc.danger),
                             ),
                           ),
                       ],
@@ -1022,7 +1124,7 @@ Ghi chú: ${shift.notes}
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: TramColors.brandPrimary,
+                        color: context.tc.primary,
                       ),
                     ),
                   ],

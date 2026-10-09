@@ -18,7 +18,6 @@ class CashShiftDialog extends StatefulWidget {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       constraints: const BoxConstraints(maxWidth: 640),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => const CashShiftDialog(),
@@ -182,8 +181,6 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           } else {
             _actualCashCtrl.text = '';
           }
-        } else if (_currentShift == null) {
-          _currentShift = null;
         }
         _isLoading = false;
       });
@@ -222,7 +219,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Đã mở ca $shiftCode thành công! Tiền két đầu ca: ${FormatUtils.vnd(initial)}'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
       Navigator.of(context).pop(true);
@@ -270,7 +267,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${isCashIn ? "Đã nộp thêm" : "Đã chi vặt"} ${FormatUtils.vnd(amount)}'),
-          backgroundColor: isCashIn ? TramColors.success : TramColors.warningInk,
+          backgroundColor: isCashIn ? AppColors.success : AppColors.warningInk,
         ),
       );
     }
@@ -319,7 +316,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                   'Chênh lệch: ${diff >= 0 ? "+" : ""}${FormatUtils.vnd(diff)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: diff == 0 ? TramColors.success : (diff > 0 ? TramColors.info : TramColors.danger),
+                    color: diff == 0 ? context.tc.success : (diff > 0 ? context.tc.info : context.tc.danger),
                   ),
                 ),
               ],
@@ -353,10 +350,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: TramColors.infoSurface, borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: context.tc.infoLight, borderRadius: BorderRadius.circular(8)),
                   child: Text(
                     'Đã lưu thông tin bàn giao ca. Quản lý sẽ kiểm đếm đối soát số dư két.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.info),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.info),
                   ),
                 ),
               ],
@@ -390,15 +387,15 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: TramColors.border, borderRadius: BorderRadius.circular(2))),
+          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2))),
         ),
         const SizedBox(height: 16),
         Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: TramColors.warningSurface, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.lock_open_rounded, color: TramColors.warningInk, size: 24),
+              decoration: BoxDecoration(color: context.tc.warningLight, borderRadius: BorderRadius.circular(12)),
+              child: Icon(Icons.lock_open_rounded, color: context.tc.warningInk, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -408,7 +405,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                   Text('Mở Ca Bán Hàng & Két Tiền', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
                   Text(
                     'Khai báo tiền mặt đầu ca để bắt đầu nhận đơn',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -444,10 +441,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           runSpacing: 8,
           children: [0, 500000, 1000000, 2000000, 3000000, 5000000].map((amt) {
             return ActionChip(
-              backgroundColor: TramColors.primaryLight.withValues(alpha: 0.4),
+              backgroundColor: context.tc.primaryLight.withValues(alpha: 0.4),
               label: Text(
                 FormatUtils.vnd(amt),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: TramColors.primaryDark),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: context.tc.primaryDark),
               ),
               onPressed: () {
                 setState(() {
@@ -466,7 +463,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.check_circle_outline),
             label: Text(_isSubmitting ? 'Đang kích hoạt ca...' : 'Bắt Đầu Ca Làm Việc'),
-            style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             onPressed: _isSubmitting ? null : _openShift,
           ),
         ),
@@ -478,10 +475,10 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               navigator.pop();
               navigator.push(MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
             },
-            icon: const Icon(Icons.history, size: 16, color: TramColors.brandPrimary),
+            icon: Icon(Icons.history, size: 16, color: context.tc.primary),
             label: Text(
               'Xem lịch sử các ca trước đó ›',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
             ),
           ),
         ),
@@ -496,7 +493,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(
-          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: TramColors.border, borderRadius: BorderRadius.circular(2))),
+          child: Container(width: 40, height: 4, decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2))),
         ),
         const SizedBox(height: 12),
         Row(
@@ -507,12 +504,12 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: shift.isOpen ? TramColors.successSurface : Colors.grey.shade100,
+                      color: shift.isOpen ? context.tc.successLight : context.tc.cardElevated,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       Icons.point_of_sale,
-                      color: shift.isOpen ? TramColors.success : TramColors.textSecondary,
+                      color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
                       size: 20,
                     ),
                   ),
@@ -529,7 +526,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                         ),
                         Text(
                           'NV: ${shift.staffFullName} • Mở lúc ${DateFormat('HH:mm').format(DateTime.fromMillisecondsSinceEpoch(shift.openedAt))}',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -543,7 +540,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: shift.isOpen ? TramColors.success : TramColors.textSecondary,
+                color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -566,14 +563,14 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               },
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_long, size: 16, color: TramColors.brandPrimary),
+                  Icon(Icons.receipt_long, size: 16, color: context.tc.primary),
                   const SizedBox(width: 4),
                   Text(
                     'Xem tất cả phiếu giao ca ›',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: TramColors.brandPrimary,
+                      color: context.tc.primary,
                     ),
                   ),
                 ],
@@ -584,14 +581,15 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 onTap: () async {
                   final nextVal = !_allowStaffViewDifference;
                   await _fb.updateStoreShiftDifferenceSetting(nextVal);
+                  if (!mounted) return;
                   setState(() => _allowStaffViewDifference = nextVal);
-                  if (context.mounted) {
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(nextVal
                             ? 'Đã BẬT cho phép nhân viên xem chênh lệch khi kết ca'
                             : 'Đã TẮT (Ẩn chênh lệch két đối với nhân viên)'),
-                        backgroundColor: nextVal ? TramColors.success : TramColors.warningInk,
+                        backgroundColor: nextVal ? AppColors.success : AppColors.warningInk,
                       ),
                     );
                   }
@@ -601,7 +599,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                     Icon(
                       _allowStaffViewDifference ? Icons.visibility : Icons.visibility_off,
                       size: 14,
-                      color: _allowStaffViewDifference ? TramColors.success : Colors.grey,
+                      color: _allowStaffViewDifference ? context.tc.success : context.tc.textHint,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -609,7 +607,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: _allowStaffViewDifference ? TramColors.success : Colors.grey,
+                        color: _allowStaffViewDifference ? context.tc.success : context.tc.textHint,
                       ),
                     ),
                   ],
@@ -620,9 +618,9 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         const SizedBox(height: 8),
         TabBar(
           controller: _tabController,
-          labelColor: TramColors.brandPrimary,
-          unselectedLabelColor: TramColors.textSecondary,
-          indicatorColor: TramColors.brandPrimary,
+          labelColor: context.tc.primary,
+          unselectedLabelColor: context.tc.textSecondary,
+          indicatorColor: context.tc.primary,
           labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Tổng Quan'),
@@ -641,15 +639,15 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 child: Column(
                   children: [
                     _buildStatRow('Tiền mặt đầu ca:', FormatUtils.vnd(shift.initialCash)),
-                    _buildStatRow('+ Bán hàng tiền mặt:', FormatUtils.vnd(shift.totalCashSales), color: TramColors.success),
-                    _buildStatRow('+ Doanh thu VietQR:', FormatUtils.vnd(shift.totalQrSales), color: TramColors.info),
+                    _buildStatRow('+ Bán hàng tiền mặt:', FormatUtils.vnd(shift.totalCashSales), color: context.tc.success),
+                    _buildStatRow('+ Doanh thu VietQR:', FormatUtils.vnd(shift.totalQrSales), color: context.tc.info),
                     _buildStatRow('+ Tiền nộp thêm (Cash In):', FormatUtils.vnd(shift.cashIn)),
-                    _buildStatRow('- Tiền chi vặt (Cash Out):', FormatUtils.vnd(shift.cashOut), color: TramColors.danger),
+                    _buildStatRow('- Tiền chi vặt (Cash Out):', FormatUtils.vnd(shift.cashOut), color: context.tc.danger),
                     const Divider(height: 20),
                     if (_canViewDifference)
-                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', FormatUtils.vnd(shift.expectedCash), isBold: true, color: TramColors.brandPrimary)
+                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', FormatUtils.vnd(shift.expectedCash), isBold: true, color: context.tc.primary)
                     else
-                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', '•••••• (Chỉ Quản lý)', isBold: true, color: Colors.grey),
+                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', '•••••• (Chỉ Quản lý)', isBold: true, color: context.tc.textHint),
                     _buildStatRow('TỔNG DOANH SỐ CA:', FormatUtils.vnd(shift.totalRevenue), isBold: true),
                     Builder(
                       builder: (ctx) {
@@ -665,26 +663,26 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                           margin: const EdgeInsets.only(top: 10),
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFDF5F6),
+                            color: context.tc.primaryLight,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFF5D5D8)),
+                            border: Border.all(color: context.line(const Color(0xFFF5D5D8))),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.discount_outlined, size: 14, color: Color(0xFF7E2930)),
+                                  Icon(Icons.discount_outlined, size: 14, color: context.tc.primary),
                                   const SizedBox(width: 4),
-                                  Text('Khuyến mãi ca:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF7E2930))),
+                                  Text('Khuyến mãi ca:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary)),
                                   const Spacer(),
-                                  Text('-${FormatUtils.vnd(totalPromo)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.danger)),
+                                  Text('-${FormatUtils.vnd(totalPromo)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
                                 ],
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '$dItems món giảm (-${FormatUtils.vnd(dItemsTotal)}) • $vCount voucher • $pUsed điểm KMT',
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -716,7 +714,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.add_circle_outline),
                             label: const Text('Nộp Thêm Tiền'),
-                            style: ElevatedButton.styleFrom(backgroundColor: TramColors.success),
+                            style: ElevatedButton.styleFrom(backgroundColor: context.tc.success),
                             onPressed: _isSubmitting ? null : () => _addAdjustment(true),
                           ),
                         ),
@@ -725,7 +723,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.remove_circle_outline),
                             label: const Text('Rút / Chi Vặt'),
-                            style: ElevatedButton.styleFrom(backgroundColor: TramColors.warningInk),
+                            style: ElevatedButton.styleFrom(backgroundColor: context.tc.warningInk),
                             onPressed: _isSubmitting ? null : () => _addAdjustment(false),
                           ),
                         ),
@@ -745,18 +743,18 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: TramColors.warningSurface,
+                          color: context.tc.warningLight,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: TramColors.warning.withValues(alpha: 0.3)),
+                          border: Border.all(color: context.tc.warning.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.lock_clock, size: 16, color: TramColors.warningInk),
+                            Icon(Icons.lock_clock, size: 16, color: context.tc.warningInk),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Kiểm đếm mù đang bật: Nhân viên tự đếm và khai báo toàn bộ tiền mặt trong két để quản lý đối soát.',
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.warningInk),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.warningInk),
                               ),
                             ),
                           ],
@@ -764,7 +762,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                       )
                     else
                       Text('Kiểm đếm toàn bộ tiền mặt trong két và nhập số thực tế vào bên dưới:',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary)),
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _actualCashCtrl,
@@ -785,7 +783,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.check_circle_outline),
                         label: Text(_isSubmitting ? 'Đang chốt ca...' : 'Xác Nhận Chốt Két & Kết Ca'),
-                        style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
+                        style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
                         onPressed: _isSubmitting ? null : _closeShift,
                       ),
                     ),
@@ -809,7 +807,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
             child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
           ),
           const SizedBox(width: 8),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? TramColors.textPrimary)),
+          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? context.tc.textPrimary)),
         ],
       ),
     );

@@ -176,7 +176,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.settings, color: TramColors.brandPrimary),
+            Icon(Icons.settings, color: context.tc.primary),
             const SizedBox(width: 8),
             Text(
               'Cấu Hình Tỷ Lệ Điểm KMT',
@@ -190,7 +190,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           children: [
             Text(
               'Thiết lập giá trị quy đổi điểm tích luỹ và tỷ lệ thưởng điểm cho khách hàng CRM Khuyến Mãi Trạm:',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -215,7 +215,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
             const SizedBox(height: 8),
             Text(
               'Ví dụ: 1 pt = 1.000đ, khi khách dùng 20 điểm sẽ giảm 20.000đ (được tính là khuyến mãi, không tính vào doanh thu thuần).',
-              style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey.shade600),
+              style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: context.tc.textSecondary),
             ),
           ],
         ),
@@ -225,7 +225,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             onPressed: () async {
               final newRedeem = int.tryParse(redeemCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1000;
               final newEarn = double.tryParse(earnCtrl.text.trim()) ?? 1.0;
@@ -246,7 +246,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Đã cập nhật cấu hình tỷ lệ đổi điểm thành công!'),
-                    backgroundColor: TramColors.success,
+                    backgroundColor: AppColors.success,
                   ),
                 );
               }
@@ -265,7 +265,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     final totalValue = totalPoints * _pointRedeemRate;
 
     return Scaffold(
-      backgroundColor: TramColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Text(
           'Khách Hàng & CRM Tích Điểm',
@@ -296,7 +296,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
               children: [
                 // Top KPI Summary
                 Container(
-                  color: Colors.white,
+                  color: context.tc.card,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
@@ -305,7 +305,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           title: 'Tổng khách hàng',
                           value: '$totalCustomers',
                           icon: Icons.people_outline,
-                          color: TramColors.brandPrimary,
+                          color: context.tc.primary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -314,7 +314,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           title: 'Tổng điểm KMT',
                           value: '${FormatUtils.number(totalPoints)} pt',
                           icon: Icons.monetization_on_outlined,
-                          color: Colors.blue.shade700,
+                          color: context.ink(Colors.blue.shade700),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -323,7 +323,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           title: 'Giá trị quy đổi',
                           value: FormatUtils.vnd(totalValue),
                           icon: Icons.redeem_outlined,
-                          color: TramColors.success,
+                          color: context.tc.success,
                         ),
                       ),
                     ],
@@ -332,7 +332,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
 
                 // Search & Filter
                 Container(
-                  color: Colors.white,
+                  color: context.tc.card,
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: Column(
                     children: [
@@ -342,7 +342,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           prefixIcon: const Icon(Icons.search, size: 20),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           filled: true,
-                          fillColor: Colors.grey.shade100,
+                          fillColor: context.tc.cardElevated,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide.none,
@@ -378,11 +378,11 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.person_search_outlined, size: 64, color: Colors.grey.shade400),
+                              Icon(Icons.person_search_outlined, size: 64, color: context.tc.textHint),
                               const SizedBox(height: 8),
                               Text(
                                 'Không tìm thấy khách hàng nào',
-                                style: GoogleFonts.beVietnamPro(color: Colors.grey.shade600),
+                                style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -401,7 +401,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                               elevation: 0.5,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: isVip ? Colors.amber.shade300 : Colors.grey.shade200),
+                                side: BorderSide(color: isVip ? Colors.amber.shade300 : context.tc.borderLight),
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
@@ -409,12 +409,12 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                   children: [
                                     CircleAvatar(
                                       radius: 22,
-                                      backgroundColor: isVip ? Colors.amber.shade100 : TramColors.primaryLight.withValues(alpha: 0.4),
+                                      backgroundColor: isVip ? context.bg(Colors.amber.shade100) : context.tc.primaryLight.withValues(alpha: 0.4),
                                       child: Text(
                                         c.fullName.isNotEmpty ? c.fullName.substring(0, 1).toUpperCase() : 'K',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: isVip ? Colors.amber.shade900 : TramColors.primaryDark,
+                                          color: isVip ? context.ink(Colors.amber.shade900) : context.tc.primaryDark,
                                         ),
                                       ),
                                     ),
@@ -434,16 +434,16 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: isVip ? Colors.amber.shade50 : Colors.grey.shade100,
+                                                  color: isVip ? context.bg(Colors.amber.shade50) : context.tc.cardElevated,
                                                   borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: isVip ? Colors.amber.shade400 : Colors.grey.shade300),
+                                                  border: Border.all(color: isVip ? Colors.amber.shade400 : context.tc.border),
                                                 ),
                                                 child: Text(
                                                   c.groupName,
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.bold,
-                                                    color: isVip ? Colors.amber.shade900 : Colors.grey.shade700,
+                                                    color: isVip ? context.ink(Colors.amber.shade900) : context.tc.textSecondary,
                                                   ),
                                                 ),
                                               ),
@@ -452,11 +452,11 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
-                                              const Icon(Icons.phone, size: 12, color: Colors.grey),
+                                              Icon(Icons.phone, size: 12, color: context.tc.textHint),
                                               const SizedBox(width: 4),
-                                              Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade700)),
+                                              Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                                               const SizedBox(width: 10),
-                                              Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.grey.shade600)),
+                                              Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                                             ],
                                           ),
                                         ],
@@ -471,7 +471,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                           style: GoogleFonts.beVietnamPro(
                                             fontSize: 14,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.blue.shade800,
+                                            color: context.ink(Colors.blue.shade800),
                                           ),
                                         ),
                                         Text(
@@ -479,7 +479,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                           style: GoogleFonts.beVietnamPro(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
-                                            color: TramColors.success,
+                                            color: context.tc.success,
                                           ),
                                         ),
                                       ],
@@ -519,7 +519,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: Colors.grey.shade700),
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -543,8 +543,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     return ChoiceChip(
       label: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       selected: isSelected,
-      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.15),
-      labelStyle: TextStyle(color: isSelected ? TramColors.brandPrimary : Colors.black87),
+      selectedColor: context.tc.primary.withValues(alpha: 0.15),
+      labelStyle: TextStyle(color: isSelected ? context.tc.primary : context.tc.textPrimary),
       onSelected: (val) {
         if (val) setState(() => _selectedTier = key);
       },

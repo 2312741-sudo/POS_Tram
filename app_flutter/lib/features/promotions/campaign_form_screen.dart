@@ -377,10 +377,10 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TramColors.brandSurface,
+      backgroundColor: context.tc.surface,
       appBar: AppBar(
         title: Text(widget.campaign == null ? 'Tạo Khuyến mãi' : 'Sửa Khuyến mãi'),
-        backgroundColor: TramColors.brandPrimary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -421,66 +421,62 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
 
             const SizedBox(height: 16),
             _buildSectionTitle('Loại Khuyến Mãi'),
-            _buildCard([
-              RadioListTile<CampaignType>(
-                title: const Text('Giảm giá đơn hàng'),
-                subtitle: const Text('Giảm theo % hoặc số tiền trên tổng hóa đơn'),
-                value: CampaignType.billDiscount,
-                groupValue: _campaignType,
-                onChanged: (val) => setState(() => _campaignType = val!),
-                activeColor: TramColors.brandPrimary,
-              ),
-              RadioListTile<CampaignType>(
-                title: const Text('Tặng món theo GTĐ'),
-                subtitle: const Text('Tặng món khi hóa đơn đạt ngưỡng'),
-                value: CampaignType.orderValueItemBenefit,
-                groupValue: _campaignType,
-                onChanged: (val) => setState(() => _campaignType = val!),
-                activeColor: TramColors.brandPrimary,
-              ),
-              RadioListTile<CampaignType>(
-                title: const Text('Mua X tặng Y'),
-                subtitle: const Text('Mua đủ số lượng sẽ được tặng món'),
-                value: CampaignType.buyXGetY,
-                groupValue: _campaignType,
-                onChanged: (val) => setState(() => _campaignType = val!),
-                activeColor: TramColors.brandPrimary,
-              ),
-              RadioListTile<CampaignType>(
-                title: const Text('Đồng giá / Đồng giảm'),
-                subtitle: const Text('Áp dụng mức giá cố định cho một số món'),
-                value: CampaignType.itemPriceRule,
-                groupValue: _campaignType,
-                onChanged: (val) => setState(() => _campaignType = val!),
-                activeColor: TramColors.brandPrimary,
-              ),
-            ]),
+            RadioGroup<CampaignType>(
+              groupValue: _campaignType,
+              onChanged: (val) => setState(() => _campaignType = val!),
+              child: _buildCard([
+                RadioListTile<CampaignType>(
+                  title: const Text('Giảm giá đơn hàng'),
+                  subtitle: const Text('Giảm theo % hoặc số tiền trên tổng hóa đơn'),
+                  value: CampaignType.billDiscount,
+                  activeColor: context.tc.primary,
+                ),
+                RadioListTile<CampaignType>(
+                  title: const Text('Tặng món theo GTĐ'),
+                  subtitle: const Text('Tặng món khi hóa đơn đạt ngưỡng'),
+                  value: CampaignType.orderValueItemBenefit,
+                  activeColor: context.tc.primary,
+                ),
+                RadioListTile<CampaignType>(
+                  title: const Text('Mua X tặng Y'),
+                  subtitle: const Text('Mua đủ số lượng sẽ được tặng món'),
+                  value: CampaignType.buyXGetY,
+                  activeColor: context.tc.primary,
+                ),
+                RadioListTile<CampaignType>(
+                  title: const Text('Đồng giá / Đồng giảm'),
+                  subtitle: const Text('Áp dụng mức giá cố định cho một số món'),
+                  value: CampaignType.itemPriceRule,
+                  activeColor: context.tc.primary,
+                ),
+              ]),
+            ),
 
             if (_campaignType == CampaignType.billDiscount) ...[
               const SizedBox(height: 16),
               _buildSectionTitle('Cấu hình mức giảm giá'),
               _buildCard([
-                Row(
-                  children: [
-                    Expanded(
-                      child: RadioListTile<String>(
-                        title: const Text('Giảm theo %'),
-                        value: 'PERCENT',
-                        groupValue: _discountType,
-                        onChanged: (v) => setState(() => _discountType = v!),
-                        activeColor: TramColors.brandPrimary,
+                RadioGroup<String>(
+                  groupValue: _discountType,
+                  onChanged: (v) => setState(() => _discountType = v!),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: const Text('Giảm theo %'),
+                          value: 'PERCENT',
+                          activeColor: context.tc.primary,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: RadioListTile<String>(
-                        title: const Text('Giảm số tiền (VND)'),
-                        value: 'AMOUNT',
-                        groupValue: _discountType,
-                        onChanged: (v) => setState(() => _discountType = v!),
-                        activeColor: TramColors.brandPrimary,
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: const Text('Giảm số tiền (VND)'),
+                          value: 'AMOUNT',
+                          activeColor: context.tc.primary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -542,9 +538,9 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 ],
               ),
               if (_includedGroupIds.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Tất cả nhóm hàng (Không giới hạn)', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Tất cả nhóm hàng (Không giới hạn)', style: TextStyle(color: context.tc.textHint, fontStyle: FontStyle.italic)),
                 )
               else
                 Wrap(
@@ -555,7 +551,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                       label: Text(catName),
                       deleteIcon: const Icon(Icons.close, size: 14),
                       onDeleted: () => setState(() => _includedGroupIds.remove(catName)),
-                      backgroundColor: TramColors.brandSurface,
+                      backgroundColor: context.tc.surface,
                     );
                   }).toList(),
                 ),
@@ -572,9 +568,9 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 ],
               ),
               if (_includedItemIds.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Tất cả món hàng (Không giới hạn)', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Tất cả món hàng (Không giới hạn)', style: TextStyle(color: context.tc.textHint, fontStyle: FontStyle.italic)),
                 )
               else
                 Wrap(
@@ -587,7 +583,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                       label: Text(name),
                       deleteIcon: const Icon(Icons.close, size: 14),
                       onDeleted: () => setState(() => _includedItemIds.remove(itemId)),
-                      backgroundColor: TramColors.brandSurface,
+                      backgroundColor: context.tc.surface,
                     );
                   }).toList(),
                 ),
@@ -614,8 +610,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   return FilterChip(
                     label: Text(d['label'] as String),
                     selected: isSelected,
-                    selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
-                    checkmarkColor: TramColors.brandPrimary,
+                    selectedColor: context.tc.primary.withValues(alpha: 0.2),
+                    checkmarkColor: context.tc.primary,
                     onSelected: (selected) {
                       setState(() {
                         if (selected) {
@@ -632,7 +628,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 padding: const EdgeInsets.only(top: 4, bottom: 12),
                 child: Text(
                   _daysOfWeek.isEmpty ? 'Áp dụng tất cả các ngày trong tuần' : 'Chỉ áp dụng các ngày đã chọn',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: context.tc.textHint),
                 ),
               ),
               const Divider(),
@@ -648,9 +644,9 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 ],
               ),
               if (_timeSlots.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Áp dụng toàn bộ khung giờ trong ngày', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Áp dụng toàn bộ khung giờ trong ngày', style: TextStyle(color: context.tc.textHint, fontStyle: FontStyle.italic)),
                 )
               else
                 Column(
@@ -660,7 +656,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.access_time, color: TramColors.brandPrimary),
+                      leading: Icon(Icons.access_time, color: context.tc.primary),
                       title: Text('${slot.startTime} - ${slot.endTime}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -739,35 +735,35 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 subtitle: const Text('Nhân viên phải nhập lý do/ghi chú khi áp dụng mã'),
                 value: _requireStaffNote,
                 onChanged: (val) => setState(() => _requireStaffNote = val),
-                activeThumbColor: TramColors.brandPrimary,
+                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Có phát hành mã (Voucher)'),
                 subtitle: const Text('Khách cần nhập mã để được áp dụng'),
                 value: _hasCodes,
                 onChanged: (val) => setState(() => _hasCodes = val),
-                activeThumbColor: TramColors.brandPrimary,
+                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Tự động áp dụng'),
                 subtitle: const Text('Tự động tính giảm giá cho bill hợp lệ'),
                 value: _autoApply,
                 onChanged: (val) => setState(() => _autoApply = val),
-                activeThumbColor: TramColors.brandPrimary,
+                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Cho phép cộng dồn'),
                 subtitle: const Text('Được áp dụng chung với KM khác'),
                 value: _stackingMode,
                 onChanged: (val) => setState(() => _stackingMode = val),
-                activeThumbColor: TramColors.brandPrimary,
+                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Kích hoạt chương trình'),
                 subtitle: const Text('Bật để chương trình hoạt động ngay'),
                 value: _active,
                 onChanged: (val) => setState(() => _active = val),
-                activeThumbColor: TramColors.brandPrimary,
+                activeThumbColor: context.tc.primary,
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -783,7 +779,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             ElevatedButton(
               onPressed: _save,
               style: ElevatedButton.styleFrom(
-                backgroundColor: TramColors.brandPrimary,
+                backgroundColor: context.tc.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               child: const Text('LƯU CHƯƠNG TRÌNH', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -800,7 +796,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 13),
+        style: TextStyle(fontWeight: FontWeight.bold, color: context.tc.textHint, fontSize: 13),
       ),
     );
   }
@@ -808,7 +804,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   Widget _buildCard(List<Widget> children) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey[300]!)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: context.tc.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -10,6 +10,17 @@
  */
 
 export const MAX_FAILED_ATTEMPTS = 5;
+
+/**
+ * Đường dẫn bộ đếm đăng nhập sai: nằm ở GỐC `login_attempts/{storeCode}/{username}`,
+ * NGOÀI cây `stores/{storeCode}`. Lý do: trong RTDB quyền `.read` đã cấp ở nút cha sẽ lan xuống
+ * mọi nút con (không thể chặn bằng `.read: false` ở con). Nút gốc này không có rule nào
+ * nên client luôn bị từ chối; chỉ Admin SDK (Cloud Functions) đọc/ghi được.
+ * Dữ liệu cũ tại `stores/{s}/login_attempts` không còn dùng và có thể xóa.
+ */
+export function loginAttemptPath(storeCode: string, username: string): string {
+  return `login_attempts/${storeCode}/${username}`;
+}
 export const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 phút
 /** Các lần sai cách nhau quá cửa sổ này sẽ được đếm lại từ đầu */
 export const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;

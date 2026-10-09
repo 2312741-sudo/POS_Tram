@@ -29,7 +29,7 @@ class SectionHeader extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.beVietnamPro(
-                  color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700,
+                  color: context.tc.textPrimary, fontSize: 16, fontWeight: FontWeight.w700,
                 ),
               ),
               if (subtitle != null)
@@ -37,7 +37,7 @@ class SectionHeader extends StatelessWidget {
                   subtitle!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 12),
+                  style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 12),
                 ),
             ],
           ),
@@ -77,11 +77,11 @@ class StatCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: context.tc.card,
             borderRadius: AppRadius.brLg,
-            border: Border.all(color: AppColors.borderLight),
+            border: Border.all(color: context.tc.borderLight),
             gradient: LinearGradient(
-              colors: [color.withValues(alpha: 0.08), AppColors.card],
+              colors: [color.withValues(alpha: 0.08), context.tc.card],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -101,7 +101,7 @@ class StatCard extends StatelessWidget {
                     child: Icon(icon, color: color, size: 20),
                   ),
                   if (onTap != null)
-                    const Icon(Icons.arrow_forward_ios, color: AppColors.textHint, size: 14),
+                    Icon(Icons.arrow_forward_ios, color: context.tc.textHint, size: 14),
                 ],
               ),
               const Spacer(),
@@ -112,7 +112,7 @@ class StatCard extends StatelessWidget {
                   value,
                   maxLines: 1,
                   style: GoogleFonts.beVietnamPro(
-                    color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w700,
+                    color: context.tc.textPrimary, fontSize: 22, fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -121,7 +121,7 @@ class StatCard extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 12),
+                style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 12),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
@@ -166,7 +166,7 @@ class AppScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor ?? AppColors.background,
+      backgroundColor: backgroundColor ?? context.tc.background,
       appBar: AppBar(
         // Trước đây nền kem + chữ trắng của theme => tiêu đề gần như vô hình.
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -218,17 +218,17 @@ class EmptyState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppSpacing.xxl),
               decoration: BoxDecoration(
-                color: AppColors.card,
+                color: context.tc.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.tc.border),
               ),
-              child: Icon(icon, color: AppColors.textHint, size: 48),
+              child: Icon(icon, color: context.tc.textHint, size: 48),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
               title,
               style: GoogleFonts.beVietnamPro(
-                color: AppColors.textSecondary, fontSize: 18, fontWeight: FontWeight.w600,
+                color: context.tc.textSecondary, fontSize: 18, fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
             ),
@@ -236,7 +236,7 @@ class EmptyState extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 subtitle!,
-                style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 13),
+                style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -269,7 +269,7 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = foreground ?? AppColors.textPrimary;
+    final fg = foreground ?? context.tc.textPrimary;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -280,8 +280,8 @@ class ErrorState extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: const BoxDecoration(color: AppColors.dangerLight, shape: BoxShape.circle),
-                child: const Icon(Icons.cloud_off_rounded, color: AppColors.danger, size: 40),
+                decoration: BoxDecoration(color: context.tc.dangerLight, shape: BoxShape.circle),
+                child: Icon(Icons.cloud_off_rounded, color: context.tc.danger, size: 40),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(
@@ -333,7 +333,7 @@ class LoadingState extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               message!,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: color ?? AppColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: color ?? context.tc.textSecondary),
             ),
           ],
         ],
@@ -369,16 +369,16 @@ class InfoBanner extends StatelessWidget {
     this.solid = false,
   });
 
-  (Color fg, Color bg) get _colors {
+  (Color fg, Color bg) _colors(BuildContext context) {
     switch (tone) {
       case BannerTone.success:
-        return (AppColors.success, AppColors.successLight);
+        return (context.tc.success, context.tc.successLight);
       case BannerTone.warning:
-        return (AppColors.warningInk, AppColors.warningLight);
+        return (context.tc.warningInk, context.tc.warningLight);
       case BannerTone.danger:
-        return (AppColors.danger, AppColors.dangerLight);
+        return (context.tc.danger, context.tc.dangerLight);
       case BannerTone.info:
-        return (AppColors.info, AppColors.infoLight);
+        return (context.tc.info, context.tc.infoLight);
     }
   }
 
@@ -397,7 +397,7 @@ class InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (fg, bg) = _colors;
+    final (fg, bg) = _colors(context);
     final textColor = solid ? Colors.white : fg;
     final background = solid ? fg : bg;
 
@@ -439,7 +439,7 @@ class InfoBanner extends StatelessWidget {
               icon: Icon(actionIcon ?? Icons.arrow_forward, size: 16),
               label: Text(actionLabel!),
               style: TextButton.styleFrom(
-                backgroundColor: solid ? Colors.white : fg,
+                backgroundColor: solid ? context.tc.card : fg,
                 foregroundColor: solid ? fg : Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 minimumSize: const Size(0, 40),
@@ -533,7 +533,7 @@ class QuantityStepper extends StatelessWidget {
           child: SizedBox(
             width: buttonSize,
             height: buttonSize,
-            child: Icon(icon, size: 20, color: onTap == null ? AppColors.textDisabled : color),
+            child: Icon(icon, size: 20, color: onTap == null ? context.tc.textDisabled : color),
           ),
         ),
       );
@@ -541,19 +541,19 @@ class QuantityStepper extends StatelessWidget {
 
     final valueText = Text(
       suffix == null ? '$value' : '$value $suffix',
-      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
+      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 15, color: context.tc.textPrimary),
     );
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardElevated,
+        color: context.tc.cardElevated,
         borderRadius: AppRadius.brSm,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.tc.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          btn(Icons.remove, onDecrement, AppColors.danger, 'Giảm'),
+          btn(Icons.remove, onDecrement, context.tc.danger, 'Giảm'),
           ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 28),
             child: onTapValue == null
@@ -566,7 +566,7 @@ class QuantityStepper extends StatelessWidget {
                     ),
                   ),
           ),
-          btn(Icons.add, onIncrement, AppColors.primary, 'Tăng'),
+          btn(Icons.add, onIncrement, context.tc.primary, 'Tăng'),
         ],
       ),
     );
@@ -606,7 +606,7 @@ class AmountRow extends StatelessWidget {
               style: GoogleFonts.beVietnamPro(
                 fontSize: fontSize,
                 fontWeight: emphasize ? FontWeight.w700 : FontWeight.w400,
-                color: color ?? (emphasize ? AppColors.textPrimary : AppColors.textSecondary),
+                color: color ?? (emphasize ? context.tc.textPrimary : context.tc.textSecondary),
               ),
             ),
           ),
@@ -616,7 +616,7 @@ class AmountRow extends StatelessWidget {
             style: GoogleFonts.beVietnamPro(
               fontSize: fontSize,
               fontWeight: FontWeight.w700,
-              color: color ?? AppColors.textPrimary,
+              color: color ?? context.tc.textPrimary,
             ),
           ),
         ],
@@ -644,7 +644,7 @@ class ShimmerBox extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: AppColors.borderLight,
+        color: context.tc.borderLight,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
     );
@@ -662,13 +662,13 @@ class RoleBadge extends StatelessWidget {
     String label = FormatUtils.roleLabel(role);
     switch (role.toUpperCase()) {
       case 'MANAGER':
-        color = AppColors.primary;
+        color = context.tc.primary;
         break;
       case 'KITCHEN':
-        color = AppColors.warningInk;
+        color = context.tc.warningInk;
         break;
       default:
-        color = AppColors.info;
+        color = context.tc.info;
         break;
     }
     return Container(
@@ -707,25 +707,25 @@ Future<bool?> showConfirmDialog(BuildContext context, {
         children: [
           Icon(
             isDanger ? Icons.warning_amber_rounded : Icons.help_outline,
-            color: isDanger ? AppColors.danger : AppColors.primary,
+            color: isDanger ? context.tc.danger : context.tc.primary,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(title, style: GoogleFonts.beVietnamPro(
-              color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 17,
+              color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 17,
             )),
           ),
         ],
       ),
-      content: Text(message, style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
+      content: Text(message, style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogCtx, false),
-          child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
+          child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(dialogCtx, true),
-          style: dialogActionStyle(background: isDanger ? AppColors.danger : AppColors.primary),
+          style: dialogActionStyle(background: isDanger ? context.tc.danger : context.tc.primary),
           child: Text(confirmText, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
         ),
       ],
@@ -733,78 +733,5 @@ Future<bool?> showConfirmDialog(BuildContext context, {
   );
 }
 
-// ==================== MANAGER PIN DIALOG ====================
-Future<bool> showManagerPinDialog(BuildContext context, String managerPin) async {
-  final ctrl = TextEditingController();
-  // Lưu ý: biến trạng thái phải nằm NGOÀI builder, nếu không mỗi lần
-  // setState sẽ reset về false và lỗi "PIN không đúng" không bao giờ hiện.
-  bool wrong = false;
-  final bool? result = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => StatefulBuilder(
-      builder: (ctx, setSt) {
-        void submit() {
-          if (ctrl.text == managerPin) {
-            Navigator.pop(ctx, true);
-          } else {
-            setSt(() => wrong = true);
-          }
-        }
-
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.lock_outline, color: AppColors.warning, size: 24),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Xác nhận Quản lý', style: GoogleFonts.beVietnamPro(
-                  color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 17,
-                )),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Nhập PIN quản lý để xác nhận hành động này',
-                style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 13)),
-              const SizedBox(height: AppSpacing.lg),
-              TextField(
-                controller: ctrl,
-                obscureText: true,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                style: const TextStyle(color: AppColors.textPrimary, letterSpacing: 8, fontSize: 20),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  hintText: '• • • •',
-                  hintStyle: const TextStyle(color: AppColors.textHint),
-                  counterText: '',
-                  errorText: wrong ? 'PIN không đúng!' : null,
-                ),
-                onChanged: (_) {
-                  if (wrong) setSt(() => wrong = false);
-                },
-                onSubmitted: (_) => submit(),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
-            ),
-            ElevatedButton(
-              style: dialogActionStyle(),
-              onPressed: submit,
-              child: const Text('Xác nhận'),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-  return result == true;
-}
+// Hộp thoại duyệt bằng PIN quản lý: xem lib/widgets/manager_pin_dialogs.dart
+// (xác minh phía máy chủ qua callable verifyManagerPin — client không bao giờ giữ PIN).

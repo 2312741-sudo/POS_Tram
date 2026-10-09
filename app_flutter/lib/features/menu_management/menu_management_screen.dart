@@ -123,15 +123,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.tc.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(existing == null ? 'Thêm sản phẩm' : 'Sửa sản phẩm',
-                style: GoogleFonts.beVietnamPro(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                style: GoogleFonts.beVietnamPro(color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
               Text('Chi nhánh: $_selectedStoreCode',
-                style: GoogleFonts.beVietnamPro(color: TramColors.brandPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+                style: GoogleFonts.beVietnamPro(color: context.tc.primary, fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
           content: SingleChildScrollView(
@@ -147,9 +147,9 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   child: Container(
                     width: 100, height: 100,
                     decoration: BoxDecoration(
-                      color: AppColors.cardElevated,
+                      color: context.tc.cardElevated,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.tc.border),
                     ),
                     child: base64Image != null
                       ? ClipRRect(
@@ -158,20 +158,20 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       : (existing?.assetPath != null
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(11),
-                              child: Image.asset(existing!.assetPath!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Column(
+                              child: Image.asset(existing!.assetPath!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary, size: 32),
-                                  SizedBox(height: 4),
-                                  Text('Chọn ảnh', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                  Icon(Icons.add_photo_alternate_outlined, color: context.tc.textSecondary, size: 32),
+                                  const SizedBox(height: 4),
+                                  Text('Chọn ảnh', style: TextStyle(color: context.tc.textSecondary, fontSize: 11)),
                                 ],
                               )))
-                          : const Column(
+                          : Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_photo_alternate_outlined, color: AppColors.textSecondary, size: 32),
-                                SizedBox(height: 4),
-                                Text('Chọn ảnh', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                Icon(Icons.add_photo_alternate_outlined, color: context.tc.textSecondary, size: 32),
+                                const SizedBox(height: 4),
+                                Text('Chọn ảnh', style: TextStyle(color: context.tc.textSecondary, fontSize: 11)),
                               ],
                             )),
                   ),
@@ -179,7 +179,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: codeCtrl,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(
                     labelText: 'Mã món / SKU',
                     hintText: 'VD: SP001, TRA01...',
@@ -187,25 +187,26 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: nameCtrl, style: const TextStyle(color: AppColors.textPrimary),
+                TextField(controller: nameCtrl, style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Tên sản phẩm *')),
                 const SizedBox(height: 12),
                 TextField(controller: priceCtrl, keyboardType: TextInputType.number,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Giá bán (đ) *')),
                 const SizedBox(height: 12),
                 TextField(controller: costPriceCtrl, keyboardType: TextInputType.number,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Giá vốn (đ, để tính lãi gộp)')),
                 const SizedBox(height: 12),
-                TextField(controller: unitCtrl, style: const TextStyle(color: AppColors.textPrimary),
+                TextField(controller: unitCtrl, style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Đơn vị (ly, phần, ...)')),
                 const SizedBox(height: 12),
                 if (_categories.isNotEmpty)
                   DropdownButtonFormField<String>(
-                    value: selectedCat.isEmpty ? null : selectedCat,
-                    dropdownColor: AppColors.card,
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    key: ValueKey<Object?>(selectedCat.isEmpty ? null : selectedCat),
+                    initialValue: selectedCat.isEmpty ? null : selectedCat,
+                    dropdownColor: context.tc.card,
+                    style: TextStyle(color: context.tc.textPrimary),
                     decoration: const InputDecoration(labelText: 'Danh mục'),
                     items: _categories.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))).toList(),
                     onChanged: (v) => setSt(() => selectedCat = v ?? ''),
@@ -216,7 +217,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   title: const Text('Món này là Topping', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   subtitle: const Text('Có thể thêm vào các món nước/trà khác', style: TextStyle(fontSize: 12)),
                   value: isTopping,
-                  activeColor: AppColors.primary,
+                  activeColor: context.tc.primary,
                   onChanged: (val) => setSt(() => isTopping = val ?? false),
                 ),
               ],
@@ -224,7 +225,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx),
-              child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary))),
+              child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary))),
             ElevatedButton(
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty || priceCtrl.text.trim().isEmpty) return;
@@ -260,7 +261,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   details: '${existing == null ? "Thêm" : "Sửa"} sản phẩm [$_selectedStoreCode]: ${product.name} (SKU: ${product.code}, giá vốn: ${product.costPrice ?? 0}đ)',
                   targetId: product.name,
                 ));
-                if (mounted) Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: Text(existing == null ? 'Thêm' : 'Lưu'),
             ),
@@ -340,10 +341,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Sao chép toàn bộ món và nhóm danh mục sang chi nhánh hiện tại ($_selectedStoreCode):',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textSecondary)),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: sourceStore,
+                key: ValueKey<Object?>(sourceStore),
+                initialValue: sourceStore,
                 decoration: const InputDecoration(labelText: 'Chọn chi nhánh nguồn'),
                 items: otherStores.map((s) => DropdownMenuItem(
                   value: s.storeCode,
@@ -368,7 +370,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Đã sao chép $count món từ $sourceStore sang $_selectedStoreCode thành công!'),
-                      backgroundColor: TramColors.success,
+                      backgroundColor: AppColors.success,
                     ),
                   );
                 }
@@ -395,7 +397,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Đã làm trống thực đơn của chi nhánh $_selectedStoreCode!'),
-            backgroundColor: TramColors.warningInk,
+            backgroundColor: AppColors.warningInk,
           ),
         );
       }
@@ -414,7 +416,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     final cats = catSet.toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Text('Quản lý thực đơn', style: GoogleFonts.beVietnamPro(
           color: Colors.white, fontWeight: FontWeight.w700,
@@ -432,23 +434,23 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               if (val == 'CLEAR') _showClearMenuDialog();
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'COPY',
                 child: Row(
                   children: [
-                    Icon(Icons.copy_all_outlined, size: 18, color: TramColors.brandPrimary),
-                    SizedBox(width: 8),
-                    Text('Sao chép từ chi nhánh khác...'),
+                    Icon(Icons.copy_all_outlined, size: 18, color: context.tc.primary),
+                    const SizedBox(width: 8),
+                    const Text('Sao chép từ chi nhánh khác...'),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'CLEAR',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_outlined, size: 18, color: TramColors.danger),
-                    SizedBox(width: 8),
-                    Text('Làm trống menu chi nhánh này', style: TextStyle(color: TramColors.danger)),
+                    Icon(Icons.delete_sweep_outlined, size: 18, color: context.tc.danger),
+                    const SizedBox(width: 8),
+                    Text('Làm trống menu chi nhánh này', style: TextStyle(color: context.tc.danger)),
                   ],
                 ),
               ),
@@ -460,33 +462,33 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         children: [
           // Store Selector Bar
           Container(
-            color: AppColors.cardElevated,
+            color: context.tc.cardElevated,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.storefront, color: TramColors.brandPrimary, size: 20),
+                Icon(Icons.storefront, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.card,
+                      color: context.tc.card,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.tc.border),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _availableStores.any((s) => s.storeCode == _selectedStoreCode) ? _selectedStoreCode : null,
                         hint: Text(_selectedStoreCode),
                         isExpanded: true,
-                        dropdownColor: AppColors.card,
+                        dropdownColor: context.tc.card,
                         items: _availableStores.map((s) => DropdownMenuItem(
                           value: s.storeCode,
                           child: Text(
                             '${s.storeCode} • ${s.storeName}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textPrimary, fontWeight: FontWeight.w600),
                             overflow: TextOverflow.ellipsis,
                           ),
                         )).toList(),
@@ -510,14 +512,14 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           // Menu Stats Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: AppColors.card,
+            color: context.tc.card,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
                     'Thực đơn [$_selectedStoreCode]: ${_products.length} món • ${_categories.length} nhóm',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary, fontWeight: FontWeight.w500),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -525,7 +527,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Đang bán: ${_products.where((p) => p.isAvailable).length}',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.success, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -548,12 +550,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                     duration: 200.ms,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: sel ? AppColors.primary : AppColors.card,
+                      color: sel ? context.tc.primary : context.tc.card,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: sel ? AppColors.primary : AppColors.border),
+                      border: Border.all(color: sel ? context.tc.primary : context.tc.border),
                     ),
                     child: Text(cat, style: GoogleFonts.beVietnamPro(
-                      color: sel ? Colors.white : AppColors.textSecondary,
+                      color: sel ? Colors.white : context.tc.textSecondary,
                       fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
                       fontSize: 13,
                     )),
@@ -579,12 +581,14 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                           icon: const Icon(Icons.add, color: Colors.white),
                           label: Text('Thêm sản phẩm', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            minimumSize: const Size(64, AppSpacing.minTapTarget),
+                            backgroundColor: context.tc.primary,
                             foregroundColor: Colors.white,
                           ),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                           onPressed: _showCopyMenuDialog,
                           icon: const Icon(Icons.copy_all),
                           label: const Text('Sao chép món'),
@@ -595,7 +599,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const Divider(color: AppColors.border, height: 12),
+                    separatorBuilder: (_, __) => Divider(color: context.tc.border, height: 12),
                     itemBuilder: (_, i) => _ProductItem(
                       product: _filtered[i],
                       onEdit: () => _showProductDialog(existing: _filtered[i]),
@@ -610,7 +614,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         onPressed: () => _showProductDialog(),
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Thêm món mới', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
       ),
     );
@@ -646,21 +650,21 @@ class _ProductItem extends StatelessWidget {
                 child: (product.imageBase64 != null && product.imageBase64!.isNotEmpty)
                   ? Image.memory(base64Decode(product.imageBase64!.contains(',') ? product.imageBase64!.split(',').last : product.imageBase64!), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        color: AppColors.cardElevated,
-                        child: const Icon(Icons.restaurant, color: AppColors.textHint),
+                        color: context.tc.cardElevated,
+                        child: Icon(Icons.restaurant, color: context.tc.textHint),
                       ))
                   : (product.assetPath != null
                       ? Image.asset(
                           product.assetPath!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            color: AppColors.cardElevated,
-                            child: const Icon(Icons.restaurant, color: AppColors.textHint),
+                            color: context.tc.cardElevated,
+                            child: Icon(Icons.restaurant, color: context.tc.textHint),
                           ),
                         )
                       : Container(
-                          color: AppColors.cardElevated,
-                          child: const Icon(Icons.restaurant, color: AppColors.textHint),
+                          color: context.tc.cardElevated,
+                          child: Icon(Icons.restaurant, color: context.tc.textHint),
                         )),
               ),
             ),
@@ -676,12 +680,12 @@ class _ProductItem extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           margin: const EdgeInsets.only(right: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
+                            color: context.tc.primary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             product.code,
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.primary),
                           ),
                         ),
                       ],
@@ -689,7 +693,7 @@ class _ProductItem extends StatelessWidget {
                         child: Text(
                           product.name,
                           style: GoogleFonts.beVietnamPro(
-                            color: product.isAvailable ? AppColors.textPrimary : Colors.grey,
+                            color: product.isAvailable ? context.tc.textPrimary : context.tc.textHint,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                             decoration: product.isAvailable ? null : TextDecoration.lineThrough,
@@ -714,8 +718,8 @@ class _ProductItem extends StatelessWidget {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
-                          child: Text('Tạm ngưng', style: GoogleFonts.beVietnamPro(color: Colors.red.shade800, fontSize: 10, fontWeight: FontWeight.bold)),
+                          decoration: BoxDecoration(color: context.bg(Colors.red.shade100), borderRadius: BorderRadius.circular(4)),
+                          child: Text('Tạm ngưng', style: GoogleFonts.beVietnamPro(color: context.ink(Colors.red.shade800), fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],
@@ -724,28 +728,28 @@ class _ProductItem extends StatelessWidget {
                   Row(
                     children: [
                       Text(FormatUtils.currency(product.price), style: GoogleFonts.beVietnamPro(
-                        color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14,
+                        color: context.tc.primary, fontWeight: FontWeight.w700, fontSize: 14,
                       )),
                       const SizedBox(width: 8),
                       Text('• ${product.unit}', style: GoogleFonts.beVietnamPro(
-                        color: AppColors.textSecondary, fontSize: 12,
+                        color: context.tc.textSecondary, fontSize: 12,
                       )),
                       if (product.costPrice != null && product.costPrice! > 0) ...[
                         const SizedBox(width: 8),
                         Text('• Vốn: ${FormatUtils.currency(product.costPrice!)}', style: GoogleFonts.beVietnamPro(
-                          color: AppColors.textSecondary, fontSize: 11,
+                          color: context.tc.textSecondary, fontSize: 11,
                         )),
                       ],
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.card,
+                          color: context.tc.card,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.tc.border),
                         ),
                         child: Text(product.category, style: GoogleFonts.beVietnamPro(
-                          color: AppColors.textSecondary, fontSize: 10,
+                          color: context.tc.textSecondary, fontSize: 10,
                         )),
                       ),
                     ],
@@ -760,19 +764,19 @@ class _ProductItem extends StatelessWidget {
                   onPressed: onToggleAvailability,
                   icon: Icon(
                     product.isAvailable ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                    color: product.isAvailable ? TramColors.success : Colors.grey,
+                    color: product.isAvailable ? context.tc.success : context.tc.textHint,
                     size: 20,
                   ),
                   tooltip: product.isAvailable ? 'Đang bán (Bấm để tạm ngưng)' : 'Tạm ngưng (Bấm để mở bán)',
                 ),
                 IconButton(
                   onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 20),
+                  icon: Icon(Icons.edit_outlined, color: context.tc.textSecondary, size: 20),
                   tooltip: 'Sửa món',
                 ),
                 IconButton(
                   onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                  icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                   tooltip: 'Xóa khỏi chi nhánh',
                 ),
               ],

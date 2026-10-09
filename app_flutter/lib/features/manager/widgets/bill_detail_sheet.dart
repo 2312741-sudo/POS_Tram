@@ -37,9 +37,9 @@ class BillDetailSheet extends StatelessWidget {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.tc.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -49,7 +49,7 @@ class BillDetailSheet extends StatelessWidget {
             width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: context.tc.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -74,12 +74,12 @@ class BillDetailSheet extends StatelessWidget {
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: TramColors.textPrimary,
+                                color: context.tc.textPrimary,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildStatusBadge(bill.status),
+                          _buildStatusBadge(context, bill.status),
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -89,7 +89,7 @@ class BillDetailSheet extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 12,
-                          color: TramColors.textSecondary,
+                          color: context.tc.textSecondary,
                         ),
                       ),
                     ],
@@ -113,28 +113,28 @@ class BillDetailSheet extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: TramColors.background,
+                    color: context.tc.background,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: TramColors.borderLight),
+                    border: Border.all(color: context.tc.borderLight),
                   ),
                   child: Column(
                     children: [
-                      _infoRow('Thu ngân thanh toán:', bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername),
+                      _infoRow(context, 'Thu ngân thanh toán:', bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername),
                       const SizedBox(height: 6),
-                      _infoRow('Nhân viên nhận order:', bill.orderStaffSummary),
+                      _infoRow(context, 'Nhân viên nhận order:', bill.orderStaffSummary),
                       const SizedBox(height: 6),
-                      _infoRow('Giờ mở bàn:', createdTime),
+                      _infoRow(context, 'Giờ mở bàn:', createdTime),
                       const SizedBox(height: 6),
-                      _infoRow('Giờ thanh toán:', closedTime),
+                      _infoRow(context, 'Giờ thanh toán:', closedTime),
                       const SizedBox(height: 6),
-                      _infoRow('Hình thức thanh toán:', _paymentMethodText(bill.paymentMethod)),
+                      _infoRow(context, 'Hình thức thanh toán:', _paymentMethodText(bill.paymentMethod)),
                       if (bill.customerName != null && bill.customerName!.isNotEmpty) ...[
                         const SizedBox(height: 6),
-                        _infoRow('Khách hàng:', '${bill.customerName} (${bill.customerPhone ?? ""})'),
+                        _infoRow(context, 'Khách hàng:', '${bill.customerName} (${bill.customerPhone ?? ""})'),
                       ],
                       if (bill.notes.isNotEmpty) ...[
                         const SizedBox(height: 6),
-                        _infoRow('Ghi chú hóa đơn:', bill.notes),
+                        _infoRow(context, 'Ghi chú hóa đơn:', bill.notes),
                       ],
                     ],
                   ),
@@ -144,7 +144,7 @@ class BillDetailSheet extends StatelessWidget {
                 // Danh sách món ăn chi tiết
                 Row(
                   children: [
-                    const Icon(Icons.restaurant_menu, size: 20, color: TramColors.brandPrimary),
+                    Icon(Icons.restaurant_menu, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Danh sách món ăn (${bill.items.length} món)',
@@ -156,14 +156,14 @@ class BillDetailSheet extends StatelessWidget {
 
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.tc.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: TramColors.borderLight),
+                    border: Border.all(color: context.tc.borderLight),
                   ),
                   child: Column(
                     children: [
                       for (int i = 0; i < bill.items.length; i++) ...[
-                        _buildItemRow(bill.items[i], i + 1),
+                        _buildItemRow(context, bill.items[i], i + 1),
                         if (i < bill.items.length - 1) const Divider(height: 1, indent: 14, endIndent: 14),
                       ],
                     ],
@@ -175,24 +175,24 @@ class BillDetailSheet extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFBF8F2),
+                    color: context.tc.cardElevated,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: TramColors.borderLight),
+                    border: Border.all(color: context.tc.borderLight),
                   ),
                   child: Column(
                     children: [
-                      _calcRow('Tiền hàng (Tạm tính):', FormatUtils.vnd(bill.subTotal)),
+                      _calcRow(context, 'Tiền hàng (Tạm tính):', FormatUtils.vnd(bill.subTotal)),
                       if (bill.totalDiscount > 0) ...[
                         const SizedBox(height: 8),
-                        _calcRow(
+                        _calcRow(context, 
                           'Giảm giá / Voucher:',
                           '- ${FormatUtils.vnd(bill.totalDiscount)}',
-                          valueColor: TramColors.danger,
+                          valueColor: context.tc.danger,
                         ),
                       ],
                       if (bill.vatAmount > 0) ...[
                         const SizedBox(height: 8),
-                        _calcRow(
+                        _calcRow(context, 
                           'Thuế VAT (${bill.vatRate}%):',
                           '+ ${FormatUtils.vnd(bill.vatAmount)}',
                         ),
@@ -209,7 +209,7 @@ class BillDetailSheet extends StatelessWidget {
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: TramColors.textPrimary,
+                              color: context.tc.textPrimary,
                             ),
                           ),
                           Text(
@@ -217,7 +217,7 @@ class BillDetailSheet extends StatelessWidget {
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: TramColors.brandPrimary,
+                              color: context.tc.primary,
                             ),
                           ),
                         ],
@@ -231,7 +231,7 @@ class BillDetailSheet extends StatelessWidget {
                 if (bill.actionLogs.isNotEmpty) ...[
                   Row(
                     children: [
-                      const Icon(Icons.history_toggle_off, size: 20, color: TramColors.info),
+                      Icon(Icons.history_toggle_off, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
                       Text(
                         'Lịch sử thao tác đơn (${bill.actionLogs.length})',
@@ -243,14 +243,14 @@ class BillDetailSheet extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: context.tc.card,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: TramColors.borderLight),
+                      border: Border.all(color: context.tc.borderLight),
                     ),
                     child: Column(
                       children: [
                         for (int i = 0; i < bill.actionLogs.length; i++) ...[
-                          _buildActionLogRow(bill.actionLogs[i]),
+                          _buildActionLogRow(context, bill.actionLogs[i]),
                           if (i < bill.actionLogs.length - 1)
                             const Divider(height: 12, indent: 8, endIndent: 8),
                         ],
@@ -267,16 +267,16 @@ class BillDetailSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: TramColors.borderLight)),
+              color: context.tc.card,
+              border: Border(top: BorderSide(color: context.tc.borderLight)),
             ),
             child: Row(
               children: [
                 IconButton(
                   tooltip: bill.status == 'CANCELLED' ? 'Xóa vĩnh viễn' : 'Hủy hóa đơn',
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.red.shade50,
-                    foregroundColor: TramColors.danger,
+                    backgroundColor: context.bg(Colors.red.shade50),
+                    foregroundColor: context.tc.danger,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.all(12),
                   ),
@@ -288,15 +288,15 @@ class BillDetailSheet extends StatelessWidget {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: const BorderSide(color: TramColors.brandPrimary),
+                      side: BorderSide(color: context.tc.primary),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Icon(Icons.file_download_outlined, color: TramColors.brandPrimary),
+                    icon: Icon(Icons.file_download_outlined, color: context.tc.primary),
                     label: Text(
                       'Xuất / Chia Sẻ',
                       style: GoogleFonts.beVietnamPro(
                         fontWeight: FontWeight.bold,
-                        color: TramColors.brandPrimary,
+                        color: context.tc.primary,
                       ),
                     ),
                     onPressed: () async {
@@ -317,7 +317,7 @@ class BillDetailSheet extends StatelessWidget {
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: TramColors.brandPrimary,
+                      backgroundColor: context.tc.primary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.print, color: Colors.white),
@@ -336,7 +336,7 @@ class BillDetailSheet extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Đã gửi lệnh in hóa đơn sang máy in!'),
-                            backgroundColor: TramColors.success,
+                            backgroundColor: AppColors.success,
                           ),
                         );
                       }
@@ -351,7 +351,7 @@ class BillDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildItemRow(OrderItemModel item, int index) {
+  Widget _buildItemRow(BuildContext context, OrderItemModel item, int index) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(
@@ -364,7 +364,7 @@ class BillDetailSheet extends StatelessWidget {
                 '$index.',
                 style: GoogleFonts.beVietnamPro(
                   fontWeight: FontWeight.bold,
-                  color: TramColors.textSecondary,
+                  color: context.tc.textSecondary,
                   fontSize: 13,
                 ),
               ),
@@ -378,7 +378,7 @@ class BillDetailSheet extends StatelessWidget {
                       style: GoogleFonts.beVietnamPro(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
-                        color: TramColors.textPrimary,
+                        color: context.tc.textPrimary,
                       ),
                     ),
                     if (item.optionsSummary.isNotEmpty)
@@ -388,7 +388,7 @@ class BillDetailSheet extends StatelessWidget {
                           item.optionsSummary,
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 11,
-                            color: TramColors.textSecondary,
+                            color: context.tc.textSecondary,
                           ),
                         ),
                       ),
@@ -400,7 +400,7 @@ class BillDetailSheet extends StatelessWidget {
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 11,
                             fontStyle: FontStyle.italic,
-                            color: TramColors.warning,
+                            color: context.tc.warning,
                           ),
                         ),
                       ),
@@ -412,7 +412,7 @@ class BillDetailSheet extends StatelessWidget {
                           '${item.discountReason.isNotEmpty ? ' (${item.discountReason})' : ''}',
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 11,
-                            color: TramColors.danger,
+                            color: context.tc.danger,
                           ),
                         ),
                       ),
@@ -423,7 +423,7 @@ class BillDetailSheet extends StatelessWidget {
                           'Phục vụ: ${item.orderedByName}${item.orderedAt != null ? " • ${FormatUtils.timeOnly(item.orderedAt!)}" : ""}',
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 11,
-                            color: TramColors.info,
+                            color: context.tc.info,
                           ),
                         ),
                       ),
@@ -439,14 +439,14 @@ class BillDetailSheet extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: TramColors.brandPrimary,
+                      color: context.tc.primary,
                     ),
                   ),
                   Text(
                     '${item.quantity} x ${FormatUtils.vndWithoutUnit(item.price)}',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 11,
-                      color: TramColors.textSecondary,
+                      color: context.tc.textSecondary,
                     ),
                   ),
                 ],
@@ -458,7 +458,7 @@ class BillDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildActionLogRow(OrderActionLogModel log) {
+  Widget _buildActionLogRow(BuildContext context, OrderActionLogModel log) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -466,8 +466,8 @@ class BillDetailSheet extends StatelessWidget {
           width: 8,
           height: 8,
           margin: const EdgeInsets.only(top: 5, right: 8),
-          decoration: const BoxDecoration(
-            color: TramColors.info,
+          decoration: BoxDecoration(
+            color: context.tc.info,
             shape: BoxShape.circle,
           ),
         ),
@@ -483,14 +483,14 @@ class BillDetailSheet extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: TramColors.textPrimary,
+                      color: context.tc.textPrimary,
                     ),
                   ),
                   Text(
                     FormatUtils.dateTime(log.timestamp),
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 10,
-                      color: TramColors.textSecondary,
+                      color: context.tc.textSecondary,
                     ),
                   ),
                 ],
@@ -499,7 +499,7 @@ class BillDetailSheet extends StatelessWidget {
                 '${log.action}: ${log.details}',
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 11,
-                  color: TramColors.textSecondary,
+                  color: context.tc.textSecondary,
                 ),
               ),
             ],
@@ -509,54 +509,54 @@ class BillDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(String label, String value) {
+  Widget _infoRow(BuildContext context, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary)),
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
         Flexible(
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: TramColors.textPrimary),
+            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
           ),
         ),
       ],
     );
   }
 
-  Widget _calcRow(String label, String value, {Color? valueColor}) {
+  Widget _calcRow(BuildContext context, String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: TramColors.textSecondary)),
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
         Text(
           value,
           style: GoogleFonts.beVietnamPro(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: valueColor ?? TramColors.textPrimary,
+            color: valueColor ?? context.tc.textPrimary,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatusBadge(String status) {
+  Widget _buildStatusBadge(BuildContext context, String status) {
     Color bg;
     Color text;
     String label;
     if (status == 'PAID') {
-      bg = TramColors.successSurface;
-      text = TramColors.success;
+      bg = context.tc.successLight;
+      text = context.tc.success;
       label = 'Đã thanh toán';
     } else if (status == 'CANCELLED') {
-      bg = TramColors.dangerSurface;
-      text = TramColors.danger;
+      bg = context.tc.dangerLight;
+      text = context.tc.danger;
       label = 'Đã hủy';
     } else {
-      bg = TramColors.warningSurface;
-      text = TramColors.warning;
+      bg = context.tc.warningLight;
+      text = context.tc.warning;
       label = 'Đang phục vụ';
     }
 
@@ -616,8 +616,8 @@ class BillDetailSheet extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
-                child: const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+                decoration: BoxDecoration(color: context.bg(Colors.red.shade50), shape: BoxShape.circle),
+                child: Icon(Icons.warning_amber_rounded, color: context.tc.danger, size: 24),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -636,9 +636,9 @@ class BillDetailSheet extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: context.tc.cardElevated,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: context.tc.borderLight),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,15 +646,15 @@ class BillDetailSheet extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark)),
-                          Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? AppColors.danger : AppColors.success)),
+                          Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark)),
+                          Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success)),
                         ],
                       ),
                       if (bill.orderCode != null && bill.orderCode!.isNotEmpty)
                         Text('Mã đặt món: ${bill.orderCode}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blueGrey)),
                       const SizedBox(height: 4),
                       Text('Bàn: ${bill.tableName} (${bill.zone}) • Tổng tiền: ${FormatUtils.vnd(bill.finalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary)),
+                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                     ],
                   ),
                 ),
@@ -667,10 +667,10 @@ class BillDetailSheet extends StatelessWidget {
                   children: quickReasons.map((r) {
                     final isSel = selectedReason == r;
                     return ChoiceChip(
-                      label: Text(r, style: TextStyle(fontSize: 11, color: isSel ? Colors.white : AppColors.textPrimary)),
+                      label: Text(r, style: TextStyle(fontSize: 11, color: isSel ? Colors.white : context.tc.textPrimary)),
                       selected: isSel,
-                      selectedColor: AppColors.danger,
-                      backgroundColor: Colors.grey.shade100,
+                      selectedColor: context.tc.danger,
+                      backgroundColor: context.tc.cardElevated,
                       onSelected: (val) {
                         if (val) {
                           setDlgState(() {
@@ -703,7 +703,7 @@ class BillDetailSheet extends StatelessWidget {
             if (bill.status != 'CANCELLED')
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.danger,
+                  backgroundColor: context.tc.danger,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -734,8 +734,8 @@ class BillDetailSheet extends StatelessWidget {
             if (auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill))
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red.shade800,
-                  side: BorderSide(color: Colors.red.shade300),
+                  foregroundColor: context.ink(Colors.red.shade800),
+                  side: BorderSide(color: context.line(Colors.red.shade300)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.delete_forever, size: 16),
@@ -755,7 +755,6 @@ class BillDetailSheet extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Đã xóa vĩnh viễn hóa đơn ${bill.billCode}!'),
-                        backgroundColor: Colors.black87,
                       ),
                     );
                   }

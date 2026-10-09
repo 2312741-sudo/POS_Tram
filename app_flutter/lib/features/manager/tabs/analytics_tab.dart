@@ -145,7 +145,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _bills.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary));
+      return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }
 
     final pData = _paymentData;
@@ -154,7 +154,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     final hourly = _hourlyData;
 
     return RefreshIndicator(
-      color: TramColors.brandPrimary,
+      color: context.tc.primary,
       onRefresh: () async {
         setState(() {});
       },
@@ -167,11 +167,11 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             children: [
               Text(
                 'Phân Tích Chuyên Sâu 📈',
-                style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
               ),
               Text(
                 'Tổng hợp ${_filteredBills.length} đơn hàng trong kỳ đã chọn',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -202,9 +202,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -214,7 +214,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.pie_chart, size: 20, color: TramColors.brandPrimary),
+                    Icon(Icons.pie_chart, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Tỷ Lệ Phương Thức Thanh Toán',
@@ -227,7 +227,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Center(
-                      child: Text('Chưa có dữ liệu thanh toán', style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary)),
+                      child: Text('Chưa có dữ liệu thanh toán', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                     ),
                   )
                 else
@@ -262,7 +262,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                         count: pData['cash']['count'],
                         amount: pData['cash']['amount'],
                         pct: pData['cash']['pct'],
-                        color: TramColors.success,
+                        color: context.tc.success,
                       ),
                       const Divider(height: 14),
                       _buildPaymentLegendItem(
@@ -270,7 +270,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                         count: pData['transfer']['count'],
                         amount: pData['transfer']['amount'],
                         pct: pData['transfer']['pct'],
-                        color: TramColors.info,
+                        color: context.tc.info,
                       ),
                       if (pData['other']['count'] > 0) ...[
                         const Divider(height: 14),
@@ -279,7 +279,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                           count: pData['other']['count'],
                           amount: pData['other']['amount'],
                           pct: pData['other']['pct'],
-                          color: TramColors.warning,
+                          color: context.tc.warning,
                         ),
                       ],
                     ],
@@ -293,9 +293,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -308,7 +308,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.access_time_filled, size: 20, color: TramColors.warning),
+                        Icon(Icons.access_time_filled, size: 20, color: context.tc.warning),
                         const SizedBox(width: 8),
                         Text(
                           'Khung Giờ Cao Điểm (0h - 23h)',
@@ -321,7 +321,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 const SizedBox(height: 4),
                 Text(
                   'Phân bổ doanh thu theo từng giờ để bố trí nhân lực',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -337,9 +337,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -362,7 +362,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Center(
-                      child: Text('Chưa có dữ liệu món bán', style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary)),
+                      child: Text('Chưa có dữ liệu món bán', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                     ),
                   )
                 else
@@ -390,9 +390,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.tc.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: TramColors.borderLight),
+                border: Border.all(color: context.tc.borderLight),
                 boxShadow: const [
                   BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
                 ],
@@ -402,7 +402,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.place, size: 20, color: TramColors.info),
+                      Icon(Icons.place, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
                       Text(
                         'Doanh Thu Theo Khu Vực / Tầng',
@@ -443,7 +443,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       final isTouched = _touchedPieIndex == sections.length;
       sections.add(
         PieChartSectionData(
-          color: TramColors.success,
+          color: context.tc.success,
           value: cashCount,
           title: '${data['cash']['pct']}%',
           radius: isTouched ? 55 : 48,
@@ -456,7 +456,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       final isTouched = _touchedPieIndex == sections.length;
       sections.add(
         PieChartSectionData(
-          color: TramColors.info,
+          color: context.tc.info,
           value: transferCount,
           title: '${data['transfer']['pct']}%',
           radius: isTouched ? 55 : 48,
@@ -469,7 +469,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       final isTouched = _touchedPieIndex == sections.length;
       sections.add(
         PieChartSectionData(
-          color: TramColors.warning,
+          color: context.tc.warning,
           value: otherCount,
           title: '${data['other']['pct']}%',
           radius: isTouched ? 55 : 48,
@@ -502,11 +502,11 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             children: [
               Text(
                 label,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: TramColors.textPrimary),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
               ),
               Text(
                 '$count đơn ($pct%)',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -556,7 +556,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 if (val == 0) return const SizedBox.shrink();
                 return Text(
                   val >= 1000000 ? '${(val / 1000000).toStringAsFixed(1)}M' : '${(val / 1000).toInt()}k',
-                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textSecondary),
                 );
               },
             ),
@@ -572,7 +572,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     data[idx]['hour'],
-                    style: GoogleFonts.beVietnamPro(fontSize: 9, color: TramColors.textSecondary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textSecondary),
                   ),
                 );
               },
@@ -584,7 +584,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           drawVerticalLine: false,
           horizontalInterval: maxY / 4,
           getDrawingHorizontalLine: (value) => FlLine(
-            color: TramColors.borderLight,
+            color: context.tc.borderLight,
             strokeWidth: 1,
             dashArray: [4, 4],
           ),
@@ -597,7 +597,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             barRods: [
               BarChartRodData(
                 toY: rev,
-                color: TramColors.warning,
+                color: context.tc.warning,
                 width: 7,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
               ),
@@ -623,7 +623,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     } else if (rank == 3) {
       badgeColor = const Color(0xFFCD7F32); // Bronze
     } else {
-      badgeColor = Colors.grey.shade400;
+      badgeColor = context.tc.textHint;
     }
 
     final ratio = maxQty > 0 ? (qty / maxQty).clamp(0.0, 1.0) : 0.0;
@@ -651,7 +651,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             children: [
               Text(
                 name,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
               ),
               const SizedBox(height: 4),
               ClipRRect(
@@ -659,14 +659,14 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 child: LinearProgressIndicator(
                   value: ratio,
                   minHeight: 5,
-                  backgroundColor: Colors.grey.shade100,
-                  valueColor: AlwaysStoppedAnimation<Color>(rank <= 3 ? TramColors.brandPrimary : TramColors.accent),
+                  backgroundColor: context.tc.cardElevated,
+                  valueColor: AlwaysStoppedAnimation<Color>(rank <= 3 ? context.tc.primary : TramColors.accent),
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 'Doanh thu: ${FormatUtils.vnd(revenue)}',
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -674,7 +674,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
         const SizedBox(width: 12),
         Text(
           '$qty ly',
-          style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+          style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.tc.primary),
         ),
       ],
     );
@@ -689,26 +689,25 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
+        Expanded(child: Row(
           children: [
-            const Icon(Icons.table_bar_outlined, size: 18, color: TramColors.brandPrimary),
+            Icon(Icons.table_bar_outlined, size: 18, color: context.tc.primary),
             const SizedBox(width: 8),
-            Text(
+            Flexible(child: Text(
               zone,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: TramColors.textPrimary),
-            ),
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis)),
           ],
-        ),
+        )),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
               FormatUtils.vnd(revenue),
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.primary),
             ),
             Text(
               '$pct% doanh số',
-              style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
             ),
           ],
         ),
@@ -724,10 +723,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? TramColors.brandPrimary : Colors.white,
+          color: active ? context.tc.primary : context.tc.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: active ? TramColors.brandPrimary : TramColors.borderLight,
+            color: active ? context.tc.primary : context.tc.borderLight,
           ),
         ),
         child: Text(
@@ -735,7 +734,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: active ? FontWeight.bold : FontWeight.w500,
-            color: active ? Colors.white : TramColors.textPrimary,
+            color: active ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),

@@ -263,12 +263,12 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       sm.showSnackBar(
         SnackBar(
           content: Text('Đã xuất Excel thành công: ${path.split("/").last}'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
     } catch (e) {
       sm.showSnackBar(
-        SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: TramColors.danger),
+        SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: AppColors.danger),
       );
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -301,12 +301,12 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       sm.showSnackBar(
         SnackBar(
           content: Text('Đã xuất PDF thành công: ${path.split("/").last}'),
-          backgroundColor: TramColors.success,
+          backgroundColor: AppColors.success,
         ),
       );
     } catch (e) {
       sm.showSnackBar(
-        SnackBar(content: Text('Lỗi xuất PDF: $e'), backgroundColor: TramColors.danger),
+        SnackBar(content: Text('Lỗi xuất PDF: $e'), backgroundColor: AppColors.danger),
       );
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -557,14 +557,14 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TramColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         title: Text(
           'Báo Cáo & Phân Tích Tài Chính',
           style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: TramColors.textPrimary,
+        backgroundColor: context.tc.card,
+        foregroundColor: context.tc.textPrimary,
         elevation: 0.5,
         actions: [
           IconButton(
@@ -573,7 +573,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             onPressed: _exporting ? null : _handleExportExcel,
           ),
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined, color: TramColors.brandPrimary),
+            icon: Icon(Icons.picture_as_pdf_outlined, color: context.tc.primary),
             tooltip: 'Xuất file PDF (.pdf)',
             onPressed: _exporting ? null : _handleExportPdf,
           ),
@@ -585,7 +585,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary))
+          ? Center(child: CircularProgressIndicator(color: context.tc.primary))
           : _errorMessage != null
               ? _buildErrorView()
               : SingleChildScrollView(
@@ -615,19 +615,19 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: TramColors.danger),
+            Icon(Icons.error_outline, size: 48, color: context.tc.danger),
             const SizedBox(height: 12),
             Text(
               _errorMessage ?? 'Đã xảy ra lỗi',
               textAlign: TextAlign.center,
-              style: GoogleFonts.beVietnamPro(fontSize: 14, color: TramColors.textPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 14, color: context.tc.textPrimary),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _loadInitialData,
               icon: const Icon(Icons.refresh),
               label: const Text('Thử lại'),
-              style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
+              style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             ),
           ],
         ),
@@ -637,7 +637,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
   Widget _buildFiltersBar() {
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,7 +649,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               Expanded(
                 flex: 2,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedStoreCode,
+                  key: ValueKey<Object?>(_selectedStoreCode),
+                  initialValue: _selectedStoreCode,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Cửa hàng',
@@ -671,7 +672,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               Expanded(
                 flex: 2,
                 child: DropdownButtonFormField<DateRangeFilter>(
-                  value: _dateFilter,
+                  key: ValueKey<Object?>(_dateFilter),
+                  initialValue: _dateFilter,
                   decoration: InputDecoration(
                     labelText: 'Khoảng ngày',
                     labelStyle: GoogleFonts.beVietnamPro(fontSize: 12),
@@ -701,7 +703,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedShiftId,
+                  key: ValueKey<Object?>(_selectedShiftId),
+                  initialValue: _selectedShiftId,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Ca làm việc',
@@ -724,7 +727,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedStaff,
+                  key: ValueKey<Object?>(_selectedStaff),
+                  initialValue: _selectedStaff,
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Nhân viên',
@@ -757,7 +761,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               Expanded(
                 child: Text(
                   'Kỳ: ${ReportDateUtils.formatDisplayDate(_startDate)} - ${ReportDateUtils.formatDisplayDate(_endDate)}',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: TramColors.brandPrimary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.primary),
                 ),
               ),
               Row(
@@ -765,7 +769,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 children: [
                   Checkbox(
                     value: _comparePreviousPeriod,
-                    activeColor: TramColors.brandPrimary,
+                    activeColor: context.tc.primary,
                     onChanged: (v) => setState(() => _comparePreviousPeriod = v ?? false),
                   ),
                   Text('So sánh kỳ trước', style: GoogleFonts.beVietnamPro(fontSize: 11)),
@@ -796,7 +800,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
   Widget _buildReportSelectorTabs() {
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.only(bottom: 8),
       child: SizedBox(
         height: 42,
@@ -809,15 +813,15 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             final kind = ReportKind.values[i];
             final isSelected = kind == _selectedKind;
             return ChoiceChip(
-              avatar: Icon(kind.icon, size: 14, color: isSelected ? Colors.white : TramColors.brandPrimary),
+              avatar: Icon(kind.icon, size: 14, color: isSelected ? Colors.white : context.tc.primary),
               label: Text(kind.title),
               selected: isSelected,
-              selectedColor: TramColors.brandPrimary,
-              backgroundColor: const Color(0xFFF7F4F2),
+              selectedColor: context.tc.primary,
+              backgroundColor: context.bg(const Color(0xFFF7F4F2)),
               labelStyle: GoogleFonts.beVietnamPro(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? Colors.white : TramColors.textPrimary,
+                color: isSelected ? Colors.white : context.tc.textPrimary,
               ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               onSelected: (_) => setState(() => _selectedKind = kind),
@@ -838,7 +842,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
@@ -850,12 +854,12 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             children: [
               Text(
                 'CHỈ SỐ TÀI CHÍNH CỐT LÕI',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary),
               ),
               if (_comparePreviousPeriod)
                 Text(
                   'Đang so sánh kỳ trước',
-                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.success, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.success, fontWeight: FontWeight.w600),
                 ),
             ],
           ),
@@ -866,7 +870,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 'Doanh thu thuần',
                 ReportExportService.formatCurrency(o.netRevenue),
                 icon: Icons.account_balance_wallet,
-                color: TramColors.brandPrimary,
+                color: context.tc.primary,
                 prevValue: prevO?.netRevenue,
                 currentValue: o.netRevenue,
               ),
@@ -875,7 +879,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 'Lợi nhuận gộp',
                 ReportExportService.formatCurrency(o.grossProfit),
                 icon: Icons.trending_up,
-                color: Colors.green.shade800,
+                color: context.ink(Colors.green.shade800),
                 subText: 'Biên LN: ${o.grossProfitMarginPercent}%',
               ),
             ],
@@ -887,7 +891,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 'Số hóa đơn',
                 '${o.paidBillsCount} đơn',
                 icon: Icons.receipt_long,
-                color: Colors.blue.shade800,
+                color: context.ink(Colors.blue.shade800),
                 subText: 'TB: ${ReportExportService.formatCurrency(o.avgRevenuePerPaidBill)}',
               ),
               const SizedBox(width: 8),
@@ -895,7 +899,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 'Tổng giảm giá',
                 ReportExportService.formatCurrency(o.totalDiscount),
                 icon: Icons.discount,
-                color: Colors.orange.shade800,
+                color: context.ink(Colors.orange.shade800),
                 subText: 'VAT: ${ReportExportService.formatCurrency(o.vatTotal)}',
               ),
             ],
@@ -915,7 +919,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
     int? currentValue,
   }) {
     String? diffText;
-    Color diffColor = Colors.grey;
+    Color diffColor = context.tc.textHint;
     if (prevValue != null && currentValue != null && prevValue > 0) {
       final diff = ((currentValue - prevValue) / prevValue * 100);
       final isUp = diff >= 0;
@@ -941,7 +945,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -962,7 +966,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               const SizedBox(height: 2),
               Text(
                 subText,
-                style: GoogleFonts.beVietnamPro(fontSize: 9, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textSecondary),
               ),
             ],
           ],
@@ -978,7 +982,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
@@ -987,7 +991,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         children: [
           Text(
             'BIỂU ĐỒ TRỰC QUAN',
-            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
+            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -1029,7 +1033,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 getTitlesWidget: (val, meta) {
                   final h = val.toInt();
                   if (h % 3 == 0) {
-                    return Text('$h h', style: GoogleFonts.beVietnamPro(fontSize: 9, color: Colors.grey));
+                    return Text('$h h', style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textHint));
                   }
                   return const SizedBox();
                 },
@@ -1043,7 +1047,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             barRods: [
               BarChartRodData(
                 toY: h.netRevenue.toDouble(),
-                color: TramColors.brandPrimary,
+                color: context.tc.primary,
                 width: 6,
                 borderRadius: BorderRadius.circular(3),
               ),
@@ -1138,7 +1142,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             barRods: [
               BarChartRodData(
                 toY: e.value.netRevenue.toDouble(),
-                color: TramColors.brandPrimary,
+                color: context.tc.primary,
                 width: 14,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -1154,7 +1158,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       children: [
         Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text('$label: ', style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary)),
+        Text('$label: ', style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary)),
         Text(ReportExportService.formatCurrency(amount), style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold)),
       ],
     );
@@ -1171,7 +1175,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
@@ -1181,13 +1185,12 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              Flexible(child: Text(
                 'CHI TIẾT: ${_selectedKind.title.toUpperCase()}',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
-              ),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
               Text(
                 '${rows.length} dòng',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -1231,9 +1234,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8F4EE)),
-                headingTextStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
-                dataTextStyle: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textPrimary),
+                headingRowColor: WidgetStateProperty.all(context.bg(const Color(0xFFF8F4EE))),
+                headingTextStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.primary),
+                dataTextStyle: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textPrimary),
                 columnSpacing: 16,
                 columns: headers.map((h) => DataColumn(
                   label: Text(h),
@@ -1245,9 +1248,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                   )),
                   if (totalRow != null)
                     DataRow(
-                      color: WidgetStateProperty.all(const Color(0xFFFDF8F5)),
+                      color: WidgetStateProperty.all(context.bg(const Color(0xFFFDF8F5))),
                       cells: totalRow.map((c) => DataCell(
-                        Text(c?.toString() ?? '', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: TramColors.brandPrimary)),
+                        Text(c?.toString() ?? '', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: context.tc.primary)),
                       )).toList(),
                     ),
                 ],
@@ -1264,11 +1267,11 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         padding: const EdgeInsets.symmetric(vertical: 36),
         child: Column(
           children: [
-            const Icon(Icons.inbox_outlined, size: 40, color: Colors.grey),
+            Icon(Icons.inbox_outlined, size: 40, color: context.tc.textHint),
             const SizedBox(height: 8),
             Text(
               'Không có dữ liệu trong khoảng thời gian này',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textHint),
             ),
           ],
         ),

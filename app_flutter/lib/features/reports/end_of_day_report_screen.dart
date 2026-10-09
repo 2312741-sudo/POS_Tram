@@ -394,7 +394,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               _buildDateOption('Tháng này', 'THIS_MONTH', ctx),
               _buildDateOption('Tháng trước', 'LAST_MONTH', ctx),
               ListTile(
-                leading: const Icon(Icons.date_range, color: TramColors.brandPrimary),
+                leading: Icon(Icons.date_range, color: context.tc.primary),
                 title: const Text('Tùy chọn ngày...'),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -427,13 +427,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     return ListTile(
       leading: Icon(
         isSelected ? Icons.check_circle : Icons.circle_outlined,
-        color: isSelected ? TramColors.brandPrimary : Colors.grey,
+        color: isSelected ? context.tc.primary : context.tc.textHint,
       ),
       title: Text(
         title,
         style: TextStyle(
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? TramColors.brandPrimary : Colors.black87,
+          color: isSelected ? context.tc.primary : context.tc.textPrimary,
         ),
       ),
       onTap: () {
@@ -459,7 +459,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               ListTile(
                 leading: Icon(
                   _selectedStoreCode.isEmpty ? Icons.check_circle : Icons.store,
-                  color: _selectedStoreCode.isEmpty ? TramColors.brandPrimary : Colors.grey,
+                  color: _selectedStoreCode.isEmpty ? context.tc.primary : context.tc.textHint,
                 ),
                 title: Text('${_auth.currentStoreInfo?.storeName ?? _auth.currentStoreCode} (Hiện tại)'),
                 onTap: () {
@@ -472,7 +472,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 return ListTile(
                   leading: Icon(
                     isSelected ? Icons.check_circle : Icons.store,
-                    color: isSelected ? TramColors.brandPrimary : Colors.grey,
+                    color: isSelected ? context.tc.primary : context.tc.textHint,
                   ),
                   title: Text(s.storeName),
                   subtitle: Text('Mã: ${s.storeCode}'),
@@ -505,13 +505,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               ListTile(
                 leading: Icon(
                   _selectedStaff == 'ALL' ? Icons.check_circle : Icons.circle_outlined,
-                  color: _selectedStaff == 'ALL' ? TramColors.brandPrimary : Colors.grey,
+                  color: _selectedStaff == 'ALL' ? context.tc.primary : context.tc.textHint,
                 ),
                 title: Text(
                   'Tất cả nhân viên (${_staffList.length})',
                   style: TextStyle(
                     fontWeight: _selectedStaff == 'ALL' ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedStaff == 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                    color: _selectedStaff == 'ALL' ? context.tc.primary : context.tc.textPrimary,
                   ),
                 ),
                 onTap: () {
@@ -524,13 +524,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 return ListTile(
                   leading: Icon(
                     isSelected ? Icons.check_circle : Icons.person_outline,
-                    color: isSelected ? TramColors.brandPrimary : Colors.grey,
+                    color: isSelected ? context.tc.primary : context.tc.textHint,
                   ),
                   title: Text(
                     staff,
                     style: TextStyle(
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? TramColors.brandPrimary : Colors.black87,
+                      color: isSelected ? context.tc.primary : context.tc.textPrimary,
                     ),
                   ),
                   onTap: () {
@@ -699,9 +699,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: context.tc.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         child: Column(
@@ -712,7 +712,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -725,10 +725,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: TramColors.warningSurface, borderRadius: BorderRadius.circular(16)),
+                  decoration: BoxDecoration(color: context.tc.warningLight, borderRadius: BorderRadius.circular(16)),
                   child: Text(
                     '${_servingTables.length} BÀN',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: TramColors.warningInk),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: context.tc.warningInk),
                   ),
                 ),
               ],
@@ -739,7 +739,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 padding: const EdgeInsets.symmetric(vertical: 32),
                 child: Center(
                   child: Text('Hiện tại không có bàn nào đang phục vụ',
-                      style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary)),
+                      style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                 ),
               )
             else
@@ -771,17 +771,17 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: TramColors.warningSurface,
+                          color: context.tc.warningLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.table_restaurant, color: TramColors.warningInk),
+                        child: Icon(Icons.table_restaurant, color: context.tc.warningInk),
                       ),
                       title: Text('${t.name} • ${t.zone}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text('${t.guestCount ?? 1} khách • $itemsCount món đang phục vụ',
-                          style: const TextStyle(fontSize: 12, color: TramColors.textSecondary)),
+                          style: TextStyle(fontSize: 12, color: context.tc.textSecondary)),
                       trailing: Text(
                         FormatUtils.vnd(estTotal),
-                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: context.tc.primary),
                       ),
                     );
                   },
@@ -801,23 +801,23 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     ).storeName;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F9),
+      backgroundColor: context.bg(const Color(0xFFF6F7F9)),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.card,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: Colors.black87),
+          icon: Icon(Icons.arrow_back_ios_new, size: 18, color: context.tc.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Báo cáo cuối ngày',
-          style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+          style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.assessment_outlined, color: TramColors.brandPrimary),
+            icon: Icon(Icons.assessment_outlined, color: context.tc.primary),
             tooltip: 'Trung tâm Báo cáo Quản trị',
             onPressed: () {
               Navigator.push(
@@ -827,7 +827,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             },
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.file_download_outlined, color: Colors.black87),
+            icon: Icon(Icons.file_download_outlined, color: context.tc.textPrimary),
             tooltip: 'Xuất báo cáo',
             onSelected: (val) {
               if (val == 'EXCEL_Z') _exportZReportExcel();
@@ -868,7 +868,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.black87),
+            icon: Icon(Icons.help_outline, color: context.tc.textPrimary),
             tooltip: 'Giải thích chỉ số',
             onPressed: () {
               showDialog(
@@ -907,11 +907,11 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF0F2F5),
+                        decoration: BoxDecoration(
+                          color: context.tc.cardElevated,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.tune, size: 18, color: Colors.black87),
+                        child: Icon(Icons.tune, size: 18, color: context.tc.textPrimary),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -922,7 +922,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F2F5),
+                          color: context.tc.cardElevated,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -930,10 +930,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                           children: [
                             Text(
                               _dateRangeLabel,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: context.tc.textPrimary),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(Icons.arrow_drop_down, size: 18, color: Colors.black54),
+                            Icon(Icons.arrow_drop_down, size: 18, color: context.tc.textSecondary),
                           ],
                         ),
                       ),
@@ -947,7 +947,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF0F2F5),
+                            color: context.tc.cardElevated,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -958,11 +958,11 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                   currentStoreName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: context.tc.textPrimary),
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              const Icon(Icons.arrow_drop_down, size: 18, color: Colors.black54),
+                              Icon(Icons.arrow_drop_down, size: 18, color: context.tc.textSecondary),
                             ],
                           ),
                         ),
@@ -975,10 +975,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               // 4 Tabs matching exact screenshot: Tổng hợp, Thu chi, Hàng hóa, Phòng bàn
               TabBar(
                 controller: _tabController,
-                indicatorColor: TramColors.brandPrimary,
+                indicatorColor: context.tc.primary,
                 indicatorWeight: 3,
-                labelColor: TramColors.brandPrimary,
-                unselectedLabelColor: TramColors.textSecondary,
+                labelColor: context.tc.primary,
+                unselectedLabelColor: context.tc.textSecondary,
                 labelStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
                 unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.normal),
                 tabs: const [
@@ -1059,13 +1059,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đã xuất Excel: ${path.split("/").last}'), backgroundColor: TramColors.success),
+          SnackBar(content: Text('Đã xuất Excel: ${path.split("/").last}'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: TramColors.danger),
+          SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1124,13 +1124,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đã xuất PDF: ${path.split("/").last}'), backgroundColor: TramColors.success),
+          SnackBar(content: Text('Đã xuất PDF: ${path.split("/").last}'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi xuất PDF: $e'), backgroundColor: TramColors.danger),
+          SnackBar(content: Text('Lỗi xuất PDF: $e'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1146,12 +1146,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.tc.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: TramColors.brandPrimary, width: 1.5),
+            border: Border.all(color: context.tc.primary, width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: TramColors.brandPrimary.withValues(alpha: 0.08),
+                color: context.tc.primary.withValues(alpha: 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -1168,7 +1168,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: TramColors.brandPrimary,
+                          color: context.tc.primary,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -1186,12 +1186,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: TramColors.textPrimary,
+                          color: context.tc.textPrimary,
                         ),
                       ),
                     ],
                   ),
-                  const Icon(Icons.calculate_outlined, color: TramColors.brandPrimary, size: 20),
+                  Icon(Icons.calculate_outlined, color: context.tc.primary, size: 20),
                 ],
               ),
               const SizedBox(height: 10),
@@ -1200,13 +1200,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
-                  color: TramColors.brandPrimary,
+                  color: context.tc.primary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Công thức: Tổng doanh thu (${FormatUtils.vnd(_netRevenue)}) + Đang phục vụ (${FormatUtils.vnd(_servingEstimatedRevenue)} từ ${_servingTables.length} bàn)',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -1305,7 +1305,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           title: 'PHƯƠNG THỨC THANH TOÁN BÁN HÀNG',
           rows: [
             _buildReportRow('Tiền mặt (Cash)', FormatUtils.vnd(_cashSales), isBold: true),
-            _buildReportRow('Chuyển khoản VietQR', FormatUtils.vnd(_qrSales), isBold: true, color: TramColors.info),
+            _buildReportRow('Chuyển khoản VietQR', FormatUtils.vnd(_qrSales), isBold: true, color: context.tc.info),
             if (_cardSales > 0)
               _buildReportRow('Thẻ ngân hàng POS', FormatUtils.vnd(_cardSales)),
             const Divider(height: 16),
@@ -1313,7 +1313,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               'TỔNG THỰC THU BÁN HÀNG',
               FormatUtils.vnd(_netRevenue),
               isBold: true,
-              color: TramColors.brandPrimary,
+              color: context.tc.primary,
             ),
           ],
         ),
@@ -1321,8 +1321,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         _buildSectionCard(
           title: 'GIAO DỊCH KÉT TIỀN & THU CHI KHÁC',
           rows: [
-            _buildReportRow('Tiền nộp thêm vào két (Cash In)', FormatUtils.vnd(_totalCashIn), color: TramColors.success),
-            _buildReportRow('Tiền rút / chi vặt két (Cash Out)', FormatUtils.vnd(_totalCashOut), color: TramColors.danger),
+            _buildReportRow('Tiền nộp thêm vào két (Cash In)', FormatUtils.vnd(_totalCashIn), color: context.tc.success),
+            _buildReportRow('Tiền rút / chi vặt két (Cash Out)', FormatUtils.vnd(_totalCashOut), color: context.tc.danger),
             const Divider(height: 16),
             _buildReportRow(
               'DÒNG TIỀN KÉT PHÁT SINH',
@@ -1346,7 +1346,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       children: [
         // Search & Filter header
         Container(
-          color: Colors.white,
+          color: context.tc.card,
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
           child: Column(
             children: [
@@ -1359,7 +1359,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         prefixIcon: const Icon(Icons.search, size: 20),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         filled: true,
-                        fillColor: const Color(0xFFF5F6F8),
+                        fillColor: context.tc.cardElevated,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -1375,10 +1375,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                     icon: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF5F6F8),
+                        color: context.tc.cardElevated,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.sort, color: TramColors.brandPrimary),
+                      child: Icon(Icons.sort, color: context.tc.primary),
                     ),
                     onSelected: (val) => setState(() => _sortBy = val),
                     itemBuilder: (ctx) => [
@@ -1407,10 +1407,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
-                          color: _selectedStaff != 'ALL' ? const Color(0xFFFBECEE) : const Color(0xFFF0F2F5),
+                          color: _selectedStaff != 'ALL' ? context.bg(const Color(0xFFFBECEE)) : context.tc.cardElevated,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.transparent,
+                            color: _selectedStaff != 'ALL' ? context.tc.primary : Colors.transparent,
                           ),
                         ),
                         child: Row(
@@ -1418,7 +1418,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                             Icon(
                               Icons.person_outline,
                               size: 16,
-                              color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                              color: _selectedStaff != 'ALL' ? context.tc.primary : context.tc.textPrimary,
                             ),
                             const SizedBox(width: 6),
                             Expanded(
@@ -1427,13 +1427,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 12,
                                   fontWeight: _selectedStaff != 'ALL' ? FontWeight.bold : FontWeight.w500,
-                                  color: _selectedStaff != 'ALL' ? TramColors.brandPrimary : Colors.black87,
+                                  color: _selectedStaff != 'ALL' ? context.tc.primary : context.tc.textPrimary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const Icon(Icons.arrow_drop_down, size: 18, color: Colors.black54),
+                            Icon(Icons.arrow_drop_down, size: 18, color: context.tc.textSecondary),
                           ],
                         ),
                       ),
@@ -1446,7 +1446,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
+                        color: context.bg(const Color(0xFFE8F5E9)),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.green.shade300),
                       ),
@@ -1460,7 +1460,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Colors.green.shade800,
+                              color: context.ink(Colors.green.shade800),
                             ),
                           ),
                         ],
@@ -1474,7 +1474,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               // Segmented Toggle: [Số tiền bán] vs [Số lượng bán]
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0F2F5),
+                  color: context.tc.cardElevated,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 padding: const EdgeInsets.all(3),
@@ -1494,7 +1494,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: _productViewMode == 'AMOUNT' ? Colors.white : Colors.transparent,
+                            color: _productViewMode == 'AMOUNT' ? context.tc.card : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             boxShadow: _productViewMode == 'AMOUNT'
                                 ? const [BoxShadow(color: Color(0x12000000), blurRadius: 4, offset: Offset(0, 1))]
@@ -1507,7 +1507,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                               Icon(
                                 Icons.monetization_on_outlined,
                                 size: 16,
-                                color: _productViewMode == 'AMOUNT' ? TramColors.brandPrimary : Colors.black87,
+                                color: _productViewMode == 'AMOUNT' ? context.tc.primary : context.tc.textPrimary,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1515,7 +1515,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 13,
                                   fontWeight: _productViewMode == 'AMOUNT' ? FontWeight.bold : FontWeight.w500,
-                                  color: _productViewMode == 'AMOUNT' ? TramColors.brandPrimary : Colors.black87,
+                                  color: _productViewMode == 'AMOUNT' ? context.tc.primary : context.tc.textPrimary,
                                 ),
                               ),
                             ],
@@ -1537,7 +1537,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: _productViewMode == 'QUANTITY' ? Colors.white : Colors.transparent,
+                            color: _productViewMode == 'QUANTITY' ? context.tc.card : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             boxShadow: _productViewMode == 'QUANTITY'
                                 ? const [BoxShadow(color: Color(0x12000000), blurRadius: 4, offset: Offset(0, 1))]
@@ -1550,7 +1550,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                               Icon(
                                 Icons.inventory_2_outlined,
                                 size: 16,
-                                color: _productViewMode == 'QUANTITY' ? TramColors.brandPrimary : Colors.black87,
+                                color: _productViewMode == 'QUANTITY' ? context.tc.primary : context.tc.textPrimary,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1558,7 +1558,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 13,
                                   fontWeight: _productViewMode == 'QUANTITY' ? FontWeight.bold : FontWeight.w500,
-                                  color: _productViewMode == 'QUANTITY' ? TramColors.brandPrimary : Colors.black87,
+                                  color: _productViewMode == 'QUANTITY' ? context.tc.primary : context.tc.textPrimary,
                                 ),
                               ),
                             ],
@@ -1575,17 +1575,16 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  Flexible(child: Text(
                     _productViewMode == 'AMOUNT'
                         ? '${list.length} món • Tổng: $totalQty phần'
                         : '${list.length} món • Doanh số: ${FormatUtils.vnd(totalRev)}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary, fontWeight: FontWeight.w600),
-                  ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   Text(
                     _productViewMode == 'AMOUNT'
                         ? 'Doanh số: ${FormatUtils.vnd(totalRev)}'
                         : 'Tổng bán: $totalQty phần',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.primary),
                   ),
                 ],
               ),
@@ -1601,11 +1600,11 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inventory_2_outlined, size: 50, color: Colors.grey.shade400),
+                      Icon(Icons.inventory_2_outlined, size: 50, color: context.tc.textHint),
                       const SizedBox(height: 10),
                       Text(
                         'Không có dữ liệu hàng hóa bán ra trong kỳ',
-                        style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary),
+                        style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary),
                       ),
                     ],
                   ),
@@ -1636,9 +1635,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.tc.card,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: context.tc.borderLight),
                         boxShadow: const [
                           BoxShadow(color: Color(0x04000000), blurRadius: 4, offset: Offset(0, 1)),
                         ],
@@ -1649,14 +1648,14 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: i < 3 ? TramColors.brandPrimary : Colors.grey.shade200,
+                              color: i < 3 ? context.tc.primary : context.tc.borderLight,
                               shape: BoxShape.circle,
                             ),
                             alignment: Alignment.center,
                             child: Text(
                               '${i + 1}',
                               style: TextStyle(
-                                color: i < 3 ? Colors.white : Colors.black87,
+                                color: i < 3 ? Colors.white : context.tc.textPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -1675,7 +1674,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                   _productViewMode == 'AMOUNT'
                                       ? 'Đơn giá: ${FormatUtils.vnd(item['unitPrice'])} • $qty phần bán ra'
                                       : 'Đơn giá: ${FormatUtils.vnd(item['unitPrice'])} • Doanh thu: ${FormatUtils.vnd(rev)}',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                                 ),
                                 if (staffLabel.isNotEmpty)
                                   Padding(
@@ -1685,7 +1684,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                       style: GoogleFonts.beVietnamPro(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
-                                        color: TramColors.brandPrimary,
+                                        color: context.tc.primary,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -1702,12 +1701,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: TramColors.brandPrimary,
+                                  color: context.tc.primary,
                                 ),
                               ),
                               Text(
                                 'Tỷ trọng: $pct%',
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -1731,9 +1730,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.table_bar_outlined, size: 50, color: Colors.grey.shade400),
+                Icon(Icons.table_bar_outlined, size: 50, color: context.tc.textHint),
                 const SizedBox(height: 10),
-                Text('Chưa có dữ liệu bàn nào trong kỳ', style: GoogleFonts.beVietnamPro(color: TramColors.textSecondary)),
+                Text('Chưa có dữ liệu bàn nào trong kỳ', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
               ],
             ),
           )
@@ -1750,19 +1749,19 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.tc.card,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: context.tc.borderLight),
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: TramColors.brandPrimary.withValues(alpha: 0.1),
+                        color: context.tc.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.table_restaurant, color: TramColors.brandPrimary, size: 22),
+                      child: Icon(Icons.table_restaurant, color: context.tc.primary, size: 22),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1772,7 +1771,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                           Text('${t['tableName']} (${t['zone']})',
                               style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold)),
                           Text('$orders lượt khách hoàn tất',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary)),
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                         ],
                       ),
                     ),
@@ -1780,8 +1779,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(FormatUtils.vnd(rev),
-                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: TramColors.brandPrimary)),
-                        Text('Tỷ trọng: $pct%', style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary)),
+                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.tc.primary)),
+                        Text('Tỷ trọng: $pct%', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                       ],
                     ),
                   ],
@@ -1799,7 +1798,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     required List<Widget> rows,
   }) {
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1814,12 +1813,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF6B7280),
+                    color: context.tc.textSecondary,
                     letterSpacing: 0.3,
                   ),
                 ),
                 if (trailingIcon != null)
-                  Icon(trailingIcon, size: 14, color: const Color(0xFF6B7280)),
+                  Icon(trailingIcon, size: 14, color: context.tc.textSecondary),
               ],
             ),
           ),
@@ -1840,7 +1839,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100, width: 1)),
+        border: Border(bottom: BorderSide(color: context.tc.cardElevated, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1854,14 +1853,14 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 14,
                   fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-                  color: Colors.black87,
+                  color: context.tc.textPrimary,
                 ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.grey.shade600),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                 ),
               ],
             ],
@@ -1871,7 +1870,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             style: GoogleFonts.beVietnamPro(
               fontSize: 14,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color ?? Colors.black87,
+              color: color ?? context.tc.textPrimary,
             ),
           ),
         ],

@@ -159,7 +159,8 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<CatalogItemModel>(
-                  value: selectedItem,
+                  key: ValueKey<Object?>(selectedItem),
+                  initialValue: selectedItem,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Chọn mặt hàng'),
                   items: items.map((it) => DropdownMenuItem(
@@ -396,7 +397,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
         title: Text(widget.documentId == null ? 'Tạo $_docTypeName' : '$_docTypeName: ${_doc?.documentCode ?? ""}'),
         backgroundColor: _currentDocType == 'WASTE'
             ? Colors.deepOrange
-            : (_currentDocType == 'INTERNAL_USE' ? Colors.blueGrey.shade700 : TramColors.brandPrimary),
+            : (_currentDocType == 'INTERNAL_USE' ? Colors.blueGrey.shade700 : context.tc.primary),
         foregroundColor: Colors.white,
         actions: [
           if (isDraft) ...[
@@ -483,12 +484,13 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: _selectedSupplier != null || _doc?.supplierName != null
-                              ? Colors.black87
+                              ? context.tc.textPrimary
                               : Colors.red,
                         ),
                       ),
                     ),
                     ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                       onPressed: () async {
                         final sups = await _inventoryService.getSuppliers();
                         if (sups.isNotEmpty && mounted) {
@@ -515,7 +517,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               else
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.business, color: TramColors.brandPrimary),
+                  leading: Icon(Icons.business, color: context.tc.primary),
                   title: Text(_doc?.supplierName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: const Text('Nhà cung cấp'),
                 ),
@@ -565,7 +567,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               const SizedBox(height: 8),
               Text(
                 'Duyệt bởi: ${_doc!.completedByName} lúc ${FormatUtils.dateTime(_doc!.completedAt ?? 0)}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                style: TextStyle(fontSize: 12, color: context.tc.textHint, fontStyle: FontStyle.italic),
               ),
             ],
           ],
@@ -580,11 +582,11 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
+            Icon(Icons.inventory_2_outlined, size: 48, color: context.tc.textHint),
             const SizedBox(height: 8),
             Text(
               'Chưa có mặt hàng nào trong $_docTypeName',
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: context.tc.textHint),
             ),
           ],
         ),
@@ -607,7 +609,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               children: [
                 Text(
                   FormatUtils.currency(line.lineNetMoney),
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: context.tc.primary),
                 ),
                 if (!isReadOnly)
                   IconButton(
@@ -633,8 +635,8 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: TramColors.brandSurface,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        color: context.tc.surface,
+        border: Border(top: BorderSide(color: context.tc.border)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -645,7 +647,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Thêm hàng vào phiếu'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: TramColors.brandPrimary,
+                backgroundColor: context.tc.primary,
                 minimumSize: const Size.fromHeight(44),
               ),
             ),
@@ -664,9 +666,9 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               const Text('Tổng giá trị phiếu:'),
               Text(
                 FormatUtils.currency(totalMoney),
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: TramColors.brandPrimary,
+                  color: context.tc.primary,
                   fontSize: 18,
                 ),
               ),

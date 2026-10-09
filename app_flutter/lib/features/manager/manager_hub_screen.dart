@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
+import '../../widgets/theme_mode_selector.dart';
+import '../../widgets/manager_pin_dialogs.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
@@ -65,7 +67,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.storefront, color: TramColors.brandPrimary),
+            Icon(Icons.storefront, color: context.tc.primary),
             const SizedBox(width: 8),
             Text(
               'Chọn Chi Nhánh',
@@ -87,18 +89,18 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     return ListTile(
                       leading: Icon(
                         isCurrent ? Icons.check_circle : Icons.store,
-                        color: isCurrent ? TramColors.brandPrimary : Colors.grey,
+                        color: isCurrent ? context.tc.primary : context.tc.textHint,
                       ),
                       title: Text(
                         s.storeName,
                         style: GoogleFonts.beVietnamPro(
                           fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: isCurrent ? TramColors.brandPrimary : TramColors.textPrimary,
+                          color: isCurrent ? context.tc.primary : context.tc.textPrimary,
                         ),
                       ),
                       subtitle: Text(
                         'Mã CH: ${s.storeCode} ${s.address.isNotEmpty ? "• ${s.address}" : ""}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                       ),
                       onTap: () async {
                         final sName = s.storeName;
@@ -111,7 +113,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                           sm.showSnackBar(
                             SnackBar(
                               content: Text('Đã chuyển sang chi nhánh: $sName ($sCode)'),
-                              backgroundColor: TramColors.success,
+                              backgroundColor: AppColors.success,
                             ),
                           );
                           setState(() {});
@@ -142,10 +144,10 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
         final roleName = _auth.isOwner ? 'CHỦ QUÁN' : 'QUẢN LÝ';
 
         return Scaffold(
-          backgroundColor: TramColors.background,
+          backgroundColor: context.tc.background,
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+            backgroundColor: context.tc.card,
+            foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
             elevation: 0.5,
             scrolledUnderElevation: 0,
             automaticallyImplyLeading: false,
@@ -168,13 +170,13 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: TramColors.textPrimary,
+                            color: context.tc.textPrimary,
                           ),
                         ),
                       ),
                       if (_auth.canAccessManagerHub) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.arrow_drop_down, size: 20, color: TramColors.brandPrimary),
+                        Icon(Icons.arrow_drop_down, size: 20, color: context.tc.primary),
                       ],
                     ],
                   ),
@@ -184,7 +186,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
-                          color: _auth.isOwner ? Colors.black : TramColors.accent,
+                          color: _auth.isOwner ? (context.isDarkMode ? context.tc.border : Colors.black) : TramColors.accent,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -197,11 +199,13 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        'CH: $storeCode • ${_auth.currentUser?.fullName ?? ""}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Flexible(
+                        child: Text(
+                          'CH: $storeCode • ${_auth.currentUser?.fullName ?? ""}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -209,19 +213,19 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               ),
             ),
             actions: [
-              // Nút nhỏ chuyển sang chế độ Bán Hàng (Full POS nghiệp vụ nhân viên)
+              // Nút chuyển sang chế độ Bán Hàng (Full POS nghiệp vụ nhân viên)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: TramColors.brandPrimary,
+                    backgroundColor: context.tc.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    minimumSize: const Size(0, 32),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.point_of_sale, size: 13),
+                  icon: const Icon(Icons.point_of_sale, size: 14),
                   label: Text(
                     'Bán Hàng',
                     style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold),
@@ -231,25 +235,26 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                   },
                 ),
               ),
+              if (MediaQuery.of(context).size.width >= 600)
+                IconButton(
+                  icon: Icon(Icons.assessment_outlined, color: context.tc.primary, size: 20),
+                  tooltip: 'Trung tâm Báo cáo',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
+                    );
+                  },
+                ),
               IconButton(
-                icon: const Icon(Icons.assessment_outlined, color: TramColors.brandPrimary, size: 20),
-                tooltip: 'Trung tâm Báo cáo',
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReportsHubScreen()),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: TramColors.textPrimary, size: 20),
+                icon: Icon(Icons.refresh, color: context.tc.textPrimary, size: 20),
                 tooltip: 'Làm mới',
                 visualDensity: VisualDensity.compact,
                 onPressed: () => setState(() {}),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: TramColors.textPrimary, size: 20),
+                icon: Icon(Icons.more_vert, color: context.tc.textPrimary, size: 20),
                 tooltip: 'Tuỳ chọn',
                 onSelected: (val) async {
                   if (val == 'REPORTS') {
@@ -264,50 +269,76 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     );
                   } else if (val == 'STORE') {
                     _showStoreSwitcherDialog();
+                  } else if (val == 'APPROVAL_PIN') {
+                    showSetApprovalPinDialog(context);
+                  } else if (val == 'THEME') {
+                    showThemeModeDialog(context);
                   } else if (val == 'LOGOUT') {
                     await _auth.logout();
-                    if (mounted) context.go('/login');
+                    if (context.mounted) context.go('/login');
                   }
                 },
                 itemBuilder: (ctx) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'REPORTS',
                     child: Row(
                       children: [
-                        Icon(Icons.assessment_outlined, size: 18, color: TramColors.brandPrimary),
-                        SizedBox(width: 8),
-                        Text('Trung tâm Báo cáo (12 BC)'),
+                        Icon(Icons.assessment_outlined, size: 18, color: context.tc.primary),
+                        const SizedBox(width: 8),
+                        const Text('Trung tâm Báo cáo (12 BC)'),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'CUSTOMERS',
                     child: Row(
                       children: [
-                        Icon(Icons.people_outline, size: 18, color: TramColors.brandPrimary),
-                        SizedBox(width: 8),
-                        Text('Khách hàng & Tích điểm KMT'),
+                        Icon(Icons.people_outline, size: 18, color: context.tc.primary),
+                        const SizedBox(width: 8),
+                        const Text('Khách hàng & Tích điểm KMT'),
                       ],
                     ),
                   ),
                   if (_auth.canAccessManagerHub)
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'STORE',
                       child: Row(
                         children: [
-                          Icon(Icons.storefront, size: 18, color: TramColors.brandPrimary),
-                          SizedBox(width: 8),
-                          Text('Đổi chi nhánh'),
+                          Icon(Icons.storefront, size: 18, color: context.tc.primary),
+                          const SizedBox(width: 8),
+                          const Text('Đổi chi nhánh'),
                         ],
                       ),
                     ),
-                  const PopupMenuItem(
+                  // Chỉ Chủ quán / Quản lý được đặt PIN duyệt (máy chủ kiểm tra lại)
+                  if (_auth.isOwner || _auth.isManager)
+                    PopupMenuItem(
+                      value: 'APPROVAL_PIN',
+                      child: Row(
+                        children: [
+                          Icon(Icons.pin_outlined, size: 18, color: context.tc.primary),
+                          const SizedBox(width: 8),
+                          const Text('PIN duyệt của tôi'),
+                        ],
+                      ),
+                    ),
+                  PopupMenuItem(
+                    value: 'THEME',
+                    child: Row(
+                      children: [
+                        Icon(Icons.palette_outlined, size: 18, color: context.tc.primary),
+                        const SizedBox(width: 8),
+                        const Text('Giao diện (Sáng/Tối)'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
                     value: 'LOGOUT',
                     child: Row(
                       children: [
-                        Icon(Icons.logout, size: 18, color: TramColors.danger),
-                        SizedBox(width: 8),
-                        Text('Đăng xuất', style: TextStyle(color: TramColors.danger)),
+                        Icon(Icons.logout, size: 18, color: context.tc.danger),
+                        const SizedBox(width: 8),
+                        Text('Đăng xuất', style: TextStyle(color: context.tc.danger)),
                       ],
                     ),
                   ),
@@ -335,8 +366,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
           ),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: TramColors.borderLight, width: 1)),
+              color: context.tc.card,
+              border: Border(top: BorderSide(color: context.tc.borderLight, width: 1)),
               boxShadow: const [
                 BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, -2)),
               ],
@@ -345,9 +376,9 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               currentIndex: _currentIndex,
               onTap: (index) => setState(() => _currentIndex = index),
               type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              selectedItemColor: TramColors.brandPrimary,
-              unselectedItemColor: TramColors.textSecondary,
+              backgroundColor: context.tc.card,
+              selectedItemColor: context.tc.primary,
+              unselectedItemColor: context.tc.textSecondary,
               selectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold),
               unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.normal),
               elevation: 0,

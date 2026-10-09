@@ -69,13 +69,13 @@ class CartItemCard extends StatelessWidget {
                           style: GoogleFonts.beVietnamPro(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
-                            color: AppColors.textPrimary,
+                            color: context.tc.textPrimary,
                           ),
                         ),
                         if (item.isSentKitchen)
-                          const StatusBadge(
+                          StatusBadge(
                             label: 'Đã gửi bếp',
-                            color: AppColors.success,
+                            color: context.tc.success,
                             icon: Icons.check,
                             fontSize: 10,
                           ),
@@ -86,8 +86,8 @@ class CartItemCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Xóa món',
                   onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline,
-                      size: 22, color: AppColors.textSecondary),
+                  icon: Icon(Icons.delete_outline,
+                      size: 22, color: context.tc.textSecondary),
                 ),
               ],
             ),
@@ -106,16 +106,16 @@ class CartItemCard extends StatelessWidget {
                     children: [
                       if (hasSize)
                         _AttrChip('Size ${item.selectedSize.trim()}',
-                            AppColors.info, AppColors.infoLight),
+                            context.tc.info, context.tc.infoLight),
                       if (hasSugar)
-                        _AttrChip(item.selectedSugar.trim(), AppColors.success,
-                            AppColors.successLight),
+                        _AttrChip(item.selectedSugar.trim(), context.tc.success,
+                            context.tc.successLight),
                       if (hasIce)
                         _AttrChip(item.selectedIce.trim(),
-                            const Color(0xFF0F5E66), const Color(0xFFE0F2F1)),
+                            context.ink(const Color(0xFF0F5E66)), context.bg(const Color(0xFFE0F2F1))),
                       if (hasToppings)
                         _AttrChip('+${item.selectedToppings.join(', ')}',
-                            AppColors.warningInk, AppColors.warningLight),
+                            context.tc.warningInk, context.tc.warningLight),
                     ],
                   ),
                 ),
@@ -134,16 +134,16 @@ class CartItemCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.warningLight,
+                      color: context.tc.warningLight,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                          color: AppColors.warning.withValues(alpha: 0.45)),
+                          color: context.tc.warning.withValues(alpha: 0.45)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.edit_note,
-                            size: 16, color: AppColors.warningInk),
+                        Icon(Icons.edit_note,
+                            size: 16, color: context.tc.warningInk),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
@@ -151,7 +151,7 @@ class CartItemCard extends StatelessWidget {
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 12,
                               fontStyle: FontStyle.italic,
-                              color: AppColors.warningInk,
+                              color: context.tc.warningInk,
                               fontWeight: FontWeight.w600,
                             ),
                             maxLines: 2,
@@ -174,16 +174,16 @@ class CartItemCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.dangerLight,
+                    color: context.tc.dangerLight,
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                        color: AppColors.danger.withValues(alpha: 0.3)),
+                        color: context.tc.danger.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     discountLabel(item),
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 12,
-                        color: AppColors.danger,
+                        color: context.tc.danger,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -210,7 +210,7 @@ class CartItemCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, color: AppColors.textSecondary),
+                                  fontSize: 12, color: context.tc.textSecondary),
                             ),
                             FittedBox(
                               fit: BoxFit.scaleDown,
@@ -220,7 +220,7 @@ class CartItemCard extends StatelessWidget {
                                 style: GoogleFonts.beVietnamPro(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.primary),
+                                    color: context.tc.primary),
                               ),
                             ),
                           ],
@@ -240,7 +240,7 @@ class CartItemCard extends StatelessWidget {
                         label: hasDiscount ? 'Đã giảm' : 'Giảm món',
                         compact: compact,
                         onTap: onDiscount,
-                        color: hasDiscount ? AppColors.danger : null,
+                        color: hasDiscount ? context.tc.danger : null,
                       ),
                       const SizedBox(width: 6),
                       QuantityStepper(
@@ -296,7 +296,7 @@ class _ActionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = color ?? AppColors.textPrimary;
+    final fg = color ?? context.tc.textPrimary;
     return Tooltip(
       message: label,
       child: InkWell(
@@ -307,12 +307,12 @@ class _ActionPill extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
           decoration: BoxDecoration(
             color:
-                color != null ? AppColors.dangerLight : AppColors.cardElevated,
+                color != null ? context.tc.dangerLight : context.tc.cardElevated,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
                 color: color != null
                     ? color!.withValues(alpha: 0.4)
-                    : AppColors.border),
+                    : context.tc.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

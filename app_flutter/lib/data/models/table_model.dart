@@ -8,7 +8,7 @@ class TableModel {
   final String name;
   final String zone;
   bool inUse;
-  String currentOrderJson;
+  String _currentOrderJson;
   String? mergedIntoTable; // Name of parent table if merged
   String? currentBillId; // Mã hóa đơn thanh toán (HD-yyMMdd-HHmmss)
   String? currentOrderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
@@ -24,11 +24,19 @@ class TableModel {
   int? guestCount; // Số lượng khách tại bàn do nhân viên nhập
   String? actionLogsJson; // Lịch sử thao tác đơn hàng (Audit trail)
 
+  // Trạng thái "Chờ thanh toán": đã in phiếu tạm tính (epoch ms) và người in (username).
+  // Hợp đồng chung với web: field `prePrintedAt` / `prePrintedBy` trên node tables/{key}.
+  // Bị XÓA khi: thanh toán, dọn bàn, hủy đơn, chuyển/gộp bàn đi (bàn nguồn), và khi món
+  // trong đơn thay đổi (thêm/bớt/sửa số lượng, ghi chú, topping, giá, giảm giá dòng) –
+  // xem setter [currentOrderJson]. Khi chuyển bàn, trạng thái đi theo đơn sang bàn đích.
+  int? prePrintedAt;
+  String? prePrintedBy;
+
   TableModel({
     required this.name,
     required this.zone,
     this.inUse = false,
-    this.currentOrderJson = '',
+    String currentOrderJson = '',
     this.mergedIntoTable,
     this.currentBillId,
     this.currentOrderCode,
@@ -41,7 +49,51 @@ class TableModel {
     this.openedAt,
     this.guestCount,
     this.actionLogsJson,
-  });
+    this.prePrintedAt,
+    this.prePrintedBy,
+  }) : _currentOrderJson = currentOrderJson;
+
+  /// Giỏ món hiện tại (JSON). Gán giá trị mới mà NỘI DUNG TÍNH TIỀN thay đổi (khác
+  /// [billSignatureOf]) sẽ tự xóa trạng thái "đã in tạm tính" → bàn quay về "Có khách".
+  /// Thay đổi chỉ cờ gửi bếp / người order (không ảnh hưởng phiếu) thì giữ nguyên.
+  String get currentOrderJson => _currentOrderJson;
+  set currentOrderJson(String value) {
+    if (prePrintedAt != null && billSignatureOf(value) != billSignatureOf(_currentOrderJson)) {
+      clearPrePrint();
+    }
+    _currentOrderJson = value;
+  }
+
+  /// Chữ ký nội dung tính tiền của giỏ món: những gì in lên phiếu tạm tính.
+  static String billSignatureOf(String orderJson) {
+    if (orderJson.isEmpty) return '';
+    try {
+      final List list = jsonDecode(orderJson);
+      return list.map((e) {
+        final i = OrderItemModel.fromMap(e);
+        return [
+          i.productId, i.name, i.unitPrice, i.quantity, i.note, i.selectedSize,
+          i.selectedSugar, i.selectedIce, i.selectedToppings.join('+'), i.lineDiscountTotal,
+        ].join('|');
+      }).join('\n');
+    } catch (_) {
+      return orderJson;
+    }
+  }
+
+  /// Bàn đang "Chờ thanh toán" (có khách và đã in phiếu tạm tính).
+  bool get isAwaitingPayment => inUse && prePrintedAt != null;
+
+  /// Đánh dấu đã in phiếu tạm tính.
+  void markPrePrinted({String? by, int? at}) {
+    prePrintedAt = at ?? DateTime.now().millisecondsSinceEpoch;
+    prePrintedBy = (by != null && by.isNotEmpty) ? by : null;
+  }
+
+  void clearPrePrint() {
+    prePrintedAt = null;
+    prePrintedBy = null;
+  }
 
   factory TableModel.fromMap(Map<dynamic, dynamic> map, [String? key]) {
     String name = map['name']?.toString() ?? '';
@@ -101,6 +153,15 @@ class TableModel {
       }
     }
 
+    int? prePrintedAt;
+    final rawPre = map['prePrintedAt'];
+    if (rawPre is num) {
+      prePrintedAt = rawPre.toInt();
+    } else if (rawPre != null) {
+      prePrintedAt = int.tryParse(rawPre.toString());
+    }
+    final prePrintedBy = map['prePrintedBy']?.toString();
+
     final rawIsReserved = map['isReserved'];
     final isReserved = rawIsReserved == true || rawIsReserved?.toString().toLowerCase() == 'true';
 
@@ -121,6 +182,8 @@ class TableModel {
       openedAt: openedAt,
       guestCount: guestCount,
       actionLogsJson: map['actionLogsJson']?.toString(),
+      prePrintedAt: prePrintedAt,
+      prePrintedBy: (prePrintedAt != null && prePrintedBy != null && prePrintedBy.isNotEmpty) ? prePrintedBy : null,
     );
   }
 
@@ -141,6 +204,8 @@ class TableModel {
     if (openedAt != null) 'openedAt': openedAt,
     if (guestCount != null) 'guestCount': guestCount,
     if (actionLogsJson != null) 'actionLogsJson': actionLogsJson,
+    if (prePrintedAt != null) 'prePrintedAt': prePrintedAt,
+    if (prePrintedAt != null && prePrintedBy != null) 'prePrintedBy': prePrintedBy,
   };
 
   List<OrderActionLogModel> get actionLogs {
@@ -208,5 +273,6 @@ class TableModel {
     currentOrderCode = null;
     mergedIntoTable = null;
     actionLogsJson = null;
+    clearPrePrint();
   }
 }

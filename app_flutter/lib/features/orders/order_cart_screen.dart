@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/printer/receipt_printer.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/manager_pin_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../core/vietqr/vietqr_generator.dart';
@@ -22,6 +23,7 @@ import 'widgets/cart_item_card.dart';
 import 'widgets/cart_panels.dart';
 import 'widgets/payment_widgets.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/manager_pin_dialogs.dart';
 
 class OrderCartScreen extends StatefulWidget {
   final TableModel table;
@@ -40,7 +42,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   late List<OrderItemModel> _cart;
   List<BillDiscountModel> _appliedDiscounts = [];
   double _vatRate = 0.0;
-  String _billNotes = '';
+  final String _billNotes = '';
   StoreInfoModel? _storeInfo;
   List<PromotionModel> _allPromotions = [];
   bool _isLoading = false;
@@ -191,7 +193,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== CART ACTIONS ====================
   Future<void> _incrementItem(int index) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     setState(() {
       _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity + 1);
     });
@@ -199,7 +201,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   Future<void> _decrementItem(int index) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
     if (item.isSentKitchen && !_auth.can(AppPermissions.cancelKitchenItem)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +221,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   Future<void> _confirmRemoveItem(int index) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
     final bool isKitchen = item.isSentKitchen;
 
@@ -239,7 +241,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.delete_outline, color: AppColors.danger, size: 24),
+            Icon(Icons.delete_outline, color: context.tc.danger, size: 24),
             const SizedBox(width: 8),
             Text('Xác nhận xóa món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -257,7 +259,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
+                  color: context.bg(Colors.amber.shade50),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.amber.shade300),
                 ),
@@ -268,7 +270,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Expanded(
                       child: Text(
                         'Món này đã gửi bếp, việc hủy món sẽ được ghi nhật ký kiểm toán.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.amber.shade900),
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.ink(Colors.amber.shade900)),
                       ),
                     ),
                   ],
@@ -279,7 +281,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               const SizedBox(height: 10),
               Text(
                 '💡 Đây là món cuối cùng. Xóa xong bàn sẽ tự động về trạng thái TRỐNG.',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.primary, fontStyle: FontStyle.italic),
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.primary, fontStyle: FontStyle.italic),
               ),
             ],
           ],
@@ -290,7 +292,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             child: const Text('Bỏ qua'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Xác nhận xóa', style: TextStyle(color: Colors.white)),
           ),
@@ -304,7 +306,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   Future<void> _removeItem(int index) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
     final staffUser = _auth.currentUser?.username ?? 'staff';
     final staffName = _auth.currentUser?.fullName ?? 'Nhân Viên';
@@ -380,7 +382,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== CANCEL ENTIRE BILL ====================
   Future<void> _showCancelBillDialog() async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     if (_cart.isEmpty) {
       widget.table.clearTable();
       await _fb.saveTable(widget.table);
@@ -420,7 +422,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
-                const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 24),
+                Icon(Icons.cancel_outlined, color: context.tc.danger, size: 24),
                 const SizedBox(width: 8),
                 Text('Hủy Hóa Đơn Bàn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
               ],
@@ -434,9 +436,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0F1),
+                      color: context.bg(const Color(0xFFFFF0F1)),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      border: Border.all(color: context.tc.primary.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,13 +446,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(widget.table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primaryDark)),
-                            Text('${widget.table.zone}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+                            Text(widget.table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: context.tc.primaryDark)),
+                            Text(widget.table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text('Mã HĐ: ${widget.table.currentBillId ?? "Chưa có"}${widget.table.currentOrderCode != null ? " • Đơn: ${widget.table.currentOrderCode}" : ""}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                        Text('Số món: ${_cart.length} món (${_cartCount} phần) • Tổng: ${FormatUtils.vnd(_finalTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                        Text('Mã HĐ: ${widget.table.currentBillId ?? "Chưa có"}${widget.table.currentOrderCode != null ? " • Đơn: ${widget.table.currentOrderCode}" : ""}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.primary)),
+                        Text('Số món: ${_cart.length} món ($_cartCount phần) • Tổng: ${FormatUtils.vnd(_finalTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                       ],
                     ),
                   ),
@@ -463,10 +465,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     children: quickReasons.map((r) {
                       final isSelected = reasonCtrl.text == r;
                       return ChoiceChip(
-                        label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                        label: Text(r, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : context.tc.textPrimary)),
                         selected: isSelected,
-                        selectedColor: AppColors.primary,
-                        backgroundColor: Colors.grey.shade100,
+                        selectedColor: context.tc.primary,
+                        backgroundColor: context.tc.cardElevated,
                         onSelected: (val) {
                           if (val) {
                             setDlgState(() => reasonCtrl.text = r);
@@ -486,7 +488,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   const SizedBox(height: 12),
                   Text(
                     '⚠️ Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.red.shade700, fontStyle: FontStyle.italic),
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.ink(Colors.red.shade700), fontStyle: FontStyle.italic),
                   ),
                 ],
               ),
@@ -497,7 +499,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 child: const Text('Bỏ qua'),
               ),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
                 icon: const Icon(Icons.delete_forever, size: 16, color: Colors.white),
                 label: const Text('Xác nhận Hủy Đơn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 onPressed: () {
@@ -572,7 +574,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== SEND TO KITCHEN ====================
   Future<void> _sendToKitchen() async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     if (_cart.isEmpty) return;
 
     final unsentItems = _cart.where((i) => !i.isSentKitchen).toList();
@@ -586,19 +588,23 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     final updatedCart = _cart.map((i) => i.copyWith(isSentKitchen: true)).toList();
     setState(() => _cart = updatedCart);
 
-    final kitchenOrder = KitchenOrderModel(
-      tableName: widget.table.name,
-      itemsJson: jsonEncode(unsentItems.map((e) => e.toMap()).toList()),
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-    );
-
     final staffUser = _auth.currentUser?.username ?? 'staff';
     final staffName = _auth.currentUser?.fullName ?? 'Nhân Viên';
+
+    final kitchenOrder = KitchenOrderModel(
+      tableName: widget.table.name,
+      orderCode: widget.table.currentOrderCode,
+      billCode: widget.table.currentBillId,
+      itemsJson: jsonEncode(unsentItems.map((e) => e.toMap()).toList()),
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      orderedBy: staffUser,
+      orderedByName: staffName,
+    );
 
     // Update table status and action log
     final t = widget.table;
     t.inUse = true;
-    if (t.openedAt == null) t.openedAt = DateTime.now().millisecondsSinceEpoch;
+    t.openedAt ??= DateTime.now().millisecondsSinceEpoch;
     t.currentOrderJson = jsonEncode(updatedCart.map((e) => e.toMap()).toList());
     t.addActionLog(OrderActionLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -662,7 +668,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Chọn số lượng món muốn tách sang hóa đơn mới:', style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textSecondary)),
+                  Text('Chọn số lượng món muốn tách sang hóa đơn mới:', style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
                   const SizedBox(height: 12),
                   ..._cart.map((item) {
                     final curr = splitQty[item.productId] ?? 0;
@@ -756,13 +762,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     await _fb.saveTable(widget.table);
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(this.context).showSnackBar(
                         SnackBar(
                           content: Text('Đã tách toàn bộ món sang hóa đơn ${newBill.billCode}! Bàn đã được dọn.'),
                           backgroundColor: AppColors.success,
                         ),
                       );
-                      context.go('/tables');
+                      this.context.go('/tables');
                     }
                   } else {
                     setState(() => _cart = remainingItems);
@@ -771,7 +777,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     _recalculateDiscounts();
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(this.context).showSnackBar(
                         SnackBar(
                           content: Text('Đã tách thành công hóa đơn ${newBill.billCode}!'),
                           backgroundColor: AppColors.success,
@@ -799,6 +805,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
 
     final allTables = await _fb.tablesStream().first;
+    if (!mounted) return;
     final otherInUseTables = allTables.where((t) => t.inUse && t.name != widget.table.name).toList();
 
     if (otherInUseTables.isEmpty) {
@@ -820,7 +827,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             itemBuilder: (_, i) {
               final t = otherInUseTables[i];
               return ListTile(
-                leading: const Icon(Icons.table_restaurant, color: AppColors.primary),
+                leading: Icon(Icons.table_restaurant, color: context.tc.primary),
                 title: Text(t.name),
                 subtitle: Text('${t.zone} • ${t.currentItems.length} món'),
                 onTap: () async {
@@ -878,6 +885,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                         onPressed: isSearching
                             ? null
                             : () async {
@@ -902,8 +910,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        border: Border.all(color: Colors.green.shade200),
+                        color: context.bg(Colors.green.shade50),
+                        border: Border.all(color: context.line(Colors.green.shade200)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -918,8 +926,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text('SĐT: ${foundCustomer!.phone}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                          Text('Điểm tích lũy: ${foundCustomer!.currentPoints} điểm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
-                          Text('Xếp hạng: ${foundCustomer!.groupName}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade700)),
+                          Text('Điểm tích lũy: ${foundCustomer!.currentPoints} điểm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade900))),
+                          Text('Xếp hạng: ${foundCustomer!.groupName}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                         ],
                       ),
                     ),
@@ -927,8 +935,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        border: Border.all(color: Colors.amber.shade200),
+                        color: context.bg(Colors.amber.shade50),
+                        border: Border.all(color: context.line(Colors.amber.shade200)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -1028,96 +1036,21 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   // ==================== ITEM DISCOUNT & MANAGER APPROVAL ====================
-  Future<bool> _requestManagerDiscountApproval() async {
-    // 1. Kiểm tra quyền DISCOUNT_ITEM
-    if (_auth.can(AppPermissions.discountItem)) return true;
-
-    final pinCtrl = TextEditingController();
-    final managerPin = _storeInfo?.managerPin ?? '1234';
-    bool wrong = false;
-
-    final approved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.shield_outlined, color: Colors.amber.shade900, size: 24),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Xác Nhận Quản Lý', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Duyệt giảm giá từng món', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.grey.shade600)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Nhân viên hiện tại không có quyền giảm giá dòng món. Vui lòng nhờ Quản lý nhập mã PIN hoặc mật khẩu duyệt:',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey.shade800),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: pinCtrl,
-                obscureText: true,
-                autofocus: true,
-                style: const TextStyle(letterSpacing: 4, fontSize: 18),
-                decoration: InputDecoration(
-                  labelText: 'Mã PIN / Mật khẩu Quản lý',
-                  hintText: '••••',
-                  errorText: wrong ? 'Mã PIN/Mật khẩu không đúng!' : null,
-                  prefixIcon: const Icon(Icons.lock_outline),
-                ),
-                onSubmitted: (val) {
-                  if (val == managerPin || val == '1234' || val == '9999') {
-                    Navigator.pop(ctx, true);
-                  } else {
-                    setSt(() => wrong = true);
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final v = pinCtrl.text.trim();
-                if (v == managerPin || v == '1234' || v == '9999') {
-                  Navigator.pop(ctx, true);
-                } else {
-                  setSt(() => wrong = true);
-                }
-              },
-              child: const Text('Xác Nhận Duyệt'),
-            ),
-          ],
-        ),
-      ),
+  /// Trả về (được phép, lần duyệt). Nhân viên có quyền DISCOUNT_ITEM → (true, null).
+  /// Không có quyền → nhờ Quản lý duyệt bằng PIN, xác minh PHÍA MÁY CHỦ (verifyManagerPin).
+  Future<(bool, ManagerApproval?)> _requestManagerDiscountApproval(OrderItemModel item) async {
+    if (_auth.can(AppPermissions.discountItem)) return (true, null);
+    final approval = await showManagerApprovalDialog(
+      context,
+      action: ManagerApprovalAction.discountItem,
+      contextText: 'Giảm giá "${item.name}" tại ${widget.table.name}',
     );
-
-    return approved == true;
+    return (approval != null, approval);
   }
 
   Future<void> _showItemDiscountDialog(int index) async {
-    final approved = await _requestManagerDiscountApproval();
-    if (!approved) return;
+    final (approved, approval) = await _requestManagerDiscountApproval(_cart[index]);
+    if (!approved || !mounted) return;
 
     final item = _cart[index];
     final lineGross = item.lineGross;
@@ -1166,8 +1099,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(Icons.local_offer, color: Colors.orange.shade900, size: 22),
+                  decoration: BoxDecoration(color: context.bg(Colors.orange.shade100), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.local_offer, color: context.ink(Colors.orange.shade900), size: 22),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1175,7 +1108,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Giảm Giá Món', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text(item.name, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(item.name, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -1188,7 +1121,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: context.tc.cardElevated, borderRadius: BorderRadius.circular(10)),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1319,7 +1252,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   // Calculation Preview
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                    decoration: BoxDecoration(color: context.bg(Colors.orange.shade50), borderRadius: BorderRadius.circular(10), border: Border.all(color: context.line(Colors.orange.shade200))),
                     child: Column(
                       children: [
                         Row(
@@ -1328,10 +1261,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Expanded(
                               child: Text(
                                 'Số tiền giảm (${discountMode == 'PERCENT' ? '${inputNum.clamp(0, 100)}%' : FormatUtils.vnd(inputNum)} × $discountedQty/${item.quantity} món):',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.orange.shade900),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.ink(Colors.orange.shade900)),
                               ),
                             ),
-                            Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                            Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.red.shade700))),
                           ],
                         ),
                         const Divider(height: 10),
@@ -1339,7 +1272,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Thành tiền sau giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
-                            Text(FormatUtils.vnd(calcAfter), style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
+                            Text(FormatUtils.vnd(calcAfter), style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade800))),
                           ],
                         ),
                       ],
@@ -1358,7 +1291,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     });
                     Navigator.pop(ctx);
                   },
-                  child: Text('Xóa Giảm Giá', style: TextStyle(color: Colors.red.shade700)),
+                  child: Text('Xóa Giảm Giá', style: TextStyle(color: context.ink(Colors.red.shade700))),
                 ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -1367,16 +1300,48 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               ElevatedButton(
                 onPressed: () {
                   final input = int.tryParse(valCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                  // Lần duyệt PIN chỉ có hiệu lực 5 phút (máy chủ cấp)
+                  if (approval != null && !approval.isValidFor(ManagerApprovalAction.discountItem)) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Lần duyệt PIN đã hết hạn. Vui lòng nhờ Quản lý duyệt lại.'), backgroundColor: AppColors.danger),
+                    );
+                    return;
+                  }
                   setState(() {
                     _cart[index] = _cart[index].withLineDiscount(
                       percent: discountMode == 'PERCENT' ? input.clamp(0, 100) : 0,
                       unitAmount: discountMode == 'AMOUNT' ? input : 0,
                       discountedQuantity: discountedQty,
                       reason: reasonCtrl.text.trim(),
+                      approvedBy: approval?.approverUid ?? '',
+                      approvedByName: approval?.approverName ?? '',
+                      approvalId: approval?.approvalId ?? '',
+                      approvedAt: approval?.approvedAt,
                     );
                     _recalculateDiscounts();
                   });
                   Navigator.pop(ctx);
+                  final applied = _cart[index];
+                  if (approval != null && applied.hasDiscount) {
+                    _fb.logAction(AuditLogModel(
+                      timestamp: DateTime.now().millisecondsSinceEpoch,
+                      username: _auth.currentUser?.username ?? '',
+                      userFullName: _auth.currentUser?.fullName ?? 'Nhân viên',
+                      userRole: _auth.currentUser?.roleId ?? 'UNKNOWN',
+                      action: 'DISCOUNT_ITEM',
+                      targetType: 'TABLE',
+                      targetId: widget.table.name,
+                      details: 'Giảm giá "${applied.name}" tại ${widget.table.name}: '
+                          '${applied.discountDescription(FormatUtils.vnd)} (-${FormatUtils.vnd(applied.lineDiscountTotal)})'
+                          '${ManagerPinLogic.approvalSuffix(approval)}',
+                      afterState: {
+                        'approvedBy': approval.approverUid,
+                        'approvedByName': approval.approverName,
+                        'approvalId': approval.approvalId,
+                      },
+                    ));
+                  }
                 },
                 child: const Text('Áp Dụng'),
               ),
@@ -1389,7 +1354,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== EDIT ITEM NOTE & TOPPING DIALOG ====================
   Future<void> _showEditItemNoteAndToppingDialog(int index) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
 
     // Find original product if possible
@@ -1406,8 +1371,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     final hasSizes = (originalProduct != null && originalProduct.sizes.isNotEmpty);
     String selectedSize = item.selectedSize.isNotEmpty
         ? item.selectedSize
-        : (hasSizes ? (originalProduct!.sizes.containsKey('M') ? 'M' : originalProduct.sizes.keys.first) : '');
-    int sizeExtra = hasSizes ? (originalProduct!.sizes[selectedSize] ?? item.sizeExtraPrice) : item.sizeExtraPrice;
+        : (hasSizes ? (originalProduct.sizes.containsKey('M') ? 'M' : originalProduct.sizes.keys.first) : '');
+    int sizeExtra = hasSizes ? (originalProduct.sizes[selectedSize] ?? item.sizeExtraPrice) : item.sizeExtraPrice;
 
     String selectedSugar = item.selectedSugar.isNotEmpty ? item.selectedSugar : '100% đường';
     String selectedIce = item.selectedIce.isNotEmpty ? item.selectedIce : '100% đá';
@@ -1509,7 +1474,6 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -1531,7 +1495,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     child: Container(
                       width: 40,
                       height: 4,
-                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1548,14 +1512,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             ),
                             Text(
                               'Đơn giá gốc: ${FormatUtils.vnd(item.price)} • Số lượng: x${item.quantity}',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                             ),
                           ],
                         ),
                       ),
                       Text(
                         FormatUtils.vnd(unitPrice),
-                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary),
                       ),
                     ],
                   ),
@@ -1573,9 +1537,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         return ChoiceChip(
                           label: Text('Size ${entry.key}$extraText'),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
+                          selectedColor: context.tc.primaryLight,
                           labelStyle: TextStyle(
-                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
@@ -1604,8 +1568,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         return ChoiceChip(
                           label: Text(s),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
-                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          selectedColor: context.tc.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? context.tc.primaryDark : context.tc.textPrimary, fontSize: 11),
                           onSelected: (val) {
                             if (val) setModalState(() => selectedSugar = s);
                           },
@@ -1623,8 +1587,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         return ChoiceChip(
                           label: Text(ice),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
-                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          selectedColor: context.tc.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? context.tc.primaryDark : context.tc.textPrimary, fontSize: 11),
                           onSelected: (val) {
                             if (val) setModalState(() => selectedIce = ice);
                           },
@@ -1644,7 +1608,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           TextButton(
                             onPressed: () => setModalState(() => selectedToppings.clear()),
                             style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
-                            child: const Text('Bỏ chọn hết', style: TextStyle(fontSize: 11, color: AppColors.danger)),
+                            child: Text('Bỏ chọn hết', style: TextStyle(fontSize: 11, color: context.tc.danger)),
                           ),
                       ],
                     ),
@@ -1659,9 +1623,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         return FilterChip(
                           label: Text('$topName (+$priceStr)'),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
+                          selectedColor: context.tc.primaryLight,
                           labelStyle: TextStyle(
-                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
@@ -1688,7 +1652,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     decoration: InputDecoration(
                       labelText: 'Ghi chú cho bếp / pha chế',
                       hintText: 'VD: ít ngọt, pha đậm vị, mang về...',
-                      prefixIcon: const Icon(Icons.edit_note, color: AppColors.primary),
+                      prefixIcon: Icon(Icons.edit_note, color: context.tc.primary),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       suffixIcon: noteCtrl.text.isNotEmpty
                           ? IconButton(
@@ -1715,14 +1679,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             preset,
                             style: TextStyle(
                               fontSize: 11,
-                              color: isPresetInNote ? AppColors.primaryDark : AppColors.textPrimary,
+                              color: isPresetInNote ? context.tc.primaryDark : context.tc.textPrimary,
                               fontWeight: isPresetInNote ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
-                          backgroundColor: isPresetInNote ? AppColors.primaryLight : AppColors.cardElevated,
+                          backgroundColor: isPresetInNote ? context.tc.primaryLight : context.tc.cardElevated,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: isPresetInNote ? AppColors.primary : AppColors.border),
+                            side: BorderSide(color: isPresetInNote ? context.tc.primary : context.tc.border),
                           ),
                           onPressed: () {
                             setModalState(() {
@@ -1751,7 +1715,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.tc.primary,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -1772,9 +1736,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         await _fb.saveTable(widget.table).catchError((_) {});
                         _recalculateDiscounts();
 
+                        if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(this.context).showSnackBar(
                             const SnackBar(
                               content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
                               backgroundColor: AppColors.success,
@@ -1818,7 +1782,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           children: [
             Text('Khách: ${_selectedCustomer!.fullName} (Có: ${_selectedCustomer!.currentPoints} điểm)', style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('Quy đổi: 1 điểm = ${FormatUtils.vnd(_pointRedeemRate)} trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+            Text('Quy đổi: 1 điểm = ${FormatUtils.vnd(_pointRedeemRate)} trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
             const SizedBox(height: 12),
             TextField(
               controller: pointsCtrl,
@@ -1863,11 +1827,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       context: context,
       barrierDismissible: false,
       builder: (noteCtx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.edit_note, color: TramColors.brandPrimary),
-            SizedBox(width: 8),
-            Text('Ghi chú áp dụng voucher'),
+            Icon(Icons.edit_note, color: context.tc.primary),
+            const SizedBox(width: 8),
+            const Text('Ghi chú áp dụng voucher'),
           ],
         ),
         content: Column(
@@ -1895,7 +1859,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: TramColors.brandPrimary,
+              backgroundColor: context.tc.primary,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
@@ -1952,6 +1916,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
+                          style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                           onPressed: () async {
                             final code = voucherCtrl.text.trim().toUpperCase();
                             if (code.isEmpty) return;
@@ -2021,6 +1986,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             // Bắt buộc nhân viên nhập ghi chú nếu requireStaffNote = true
                             String? staffNote;
                             if (campaign?.requireStaffNote == true || promo.requireStaffNote == true) {
+                              if (!context.mounted) return;
                               staffNote = await _promptStaffNote(context);
                               if (staffNote == null || staffNote.trim().isEmpty) {
                                 if (context.mounted) {
@@ -2068,7 +2034,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         enabled: isValid || isSelected,
                         title: Text(p.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
                         subtitle: Text(
-                          '${p.typeDisplay} • ${p.type == "PERCENT_BILL" ? "${p.value}%" : FormatUtils.vnd(p.value)} ${p.minBillAmount > 0 ? " (Đơn từ " + FormatUtils.vnd(p.minBillAmount) + ")" : ""}',
+                          '${p.typeDisplay} • ${p.type == "PERCENT_BILL" ? "${p.value}%" : FormatUtils.vnd(p.value)} ${p.minBillAmount > 0 ? " (Đơn từ ${FormatUtils.vnd(p.minBillAmount)})" : ""}',
                           style: GoogleFonts.beVietnamPro(fontSize: 11),
                         ),
                         onChanged: (val) async {
@@ -2132,7 +2098,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+                            style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget), backgroundColor: AppColors.accent),
                             onPressed: () {
                               final val = int.tryParse(manualValueCtrl.text.trim()) ?? 0;
                               if (val <= 0) return;
@@ -2167,7 +2133,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== PAYMENT BOTTOM SHEET ====================
   Future<void> _showPaymentSheet() async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
 
     String paymentMethod = 'CASH'; // 'CASH', 'TRANSFER_QR', 'SPLIT'
     final cashGivenCtrl = TextEditingController(text: '$_finalTotal');
@@ -2214,7 +2180,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           splits: splits,
         );
 
-        await _fb.closeAndPayBill(bill, widget.table);
+        // Đổi điểm (chặn nếu thiếu điểm) + tích điểm được xử lý trong closeAndPayBill (transaction, idempotent)
+        await _fb.closeAndPayBill(
+          bill,
+          widget.table,
+          pointEarnRate: _storeInfo?.pointEarnRate,
+          pointRedeemRate: _storeInfo?.pointRedeemRate,
+        );
 
         if (ctx.mounted) Navigator.pop(ctx);
         if (mounted) {
@@ -2238,9 +2210,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             isProcessingPayment = false;
             paymentError = 'Lỗi thanh toán: $e';
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi thanh toán: $e'), backgroundColor: AppColors.danger),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Lỗi thanh toán: $e'), backgroundColor: AppColors.danger),
+            );
+          }
         }
       }
     }
@@ -2249,7 +2223,6 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       // Tablet: không kéo giãn bảng thanh toán hết chiều ngang
       constraints: const BoxConstraints(maxWidth: 640),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -2299,18 +2272,24 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 if (amount <= 0 || amount != currentTargetAmount) return;
 
                 final content = (val['content']?.toString() ?? '').toLowerCase();
+                final rawText = (val['rawText']?.toString() ?? '').toLowerCase();
                 final bankName = val['bankName']?.toString() ?? 'Ngân hàng';
                 final tableNameClean = widget.table.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
                 final contentClean = content.replaceAll(RegExp(r'[^a-z0-9]'), '');
-                final storeClean = (_storeInfo?.storeCode ?? 'tram').toLowerCase();
+                final rawClean = rawText.replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final storeClean = (_storeInfo?.storeCode ?? 'tram').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-                final isMatched = tableNameClean.isNotEmpty && contentClean.contains(tableNameClean) ||
-                                  contentClean.contains(storeClean) ||
-                                  (val['timestamp'] as num? ?? 0) >= sheetOpenedTime - 10000;
+                // Khớp bàn nếu trong content hoặc rawText chứa tên bàn (VD: "a1", "ban_a1") hoặc mã chi nhánh ("tram01")
+                final textHasTable = tableNameClean.isNotEmpty && (contentClean.contains(tableNameClean) || rawClean.contains(tableNameClean));
+                final textHasStore = storeClean.isNotEmpty && (contentClean.contains(storeClean) || rawClean.contains(storeClean));
+                final isRecentEvent = (val['timestamp'] as num? ?? 0) >= sheetOpenedTime - 30000;
+
+                final isMatched = (textHasTable && textHasStore) || textHasTable || (textHasStore && isRecentEvent) || isRecentEvent;
 
                 if (isMatched) {
                   handledPaymentEventId = eventId;
                   await _fb.markPaymentEventProcessed(eventId);
+                  if (!ctx.mounted) return;
                   await executeCheckout(
                     ctx,
                     setSheetState,
@@ -2327,7 +2306,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
           final cashShortBy = cashGiven < _finalTotal ? _finalTotal - cashGiven : 0;
           final splitShortBy = cashGivenForSplit < splitCashAmount ? splitCashAmount - cashGivenForSplit : 0;
-          final moneyInputStyle = GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary);
+          final moneyInputStyle = GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: context.tc.textPrimary);
 
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -2340,7 +2319,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
-                      child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+                      child: Container(width: 40, height: 4, decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2))),
                     ),
                     const SizedBox(height: 12),
                     PaymentTotalHeader(
@@ -2397,7 +2376,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Text(
                               '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
                               textAlign: TextAlign.center,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
                             ),
                             const SizedBox(height: 10),
                             const PaymentBotWatchingBox(),
@@ -2411,14 +2390,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.infoLight,
+                          color: context.tc.infoLight,
                           borderRadius: AppRadius.brMd,
-                          border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+                          border: Border.all(color: context.tc.info.withValues(alpha: 0.3)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Phân bổ thanh toán hỗn hợp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.info)),
+                            Text('Phân bổ thanh toán hỗn hợp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.info)),
                             const SizedBox(height: 10),
                             TextField(
                               controller: cashSplitCtrl,
@@ -2460,7 +2439,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: const BoxDecoration(color: Colors.white, borderRadius: AppRadius.brSm),
+                              decoration: BoxDecoration(color: context.tc.card, borderRadius: AppRadius.brSm),
                               child: Row(
                                 children: [
                                   Expanded(
@@ -2468,7 +2447,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   ),
                                   Text(
                                     FormatUtils.vnd(splitQrAmount),
-                                    style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.info),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: context.tc.info),
                                   ),
                                 ],
                               ),
@@ -2486,7 +2465,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               Text(
                                 'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.info),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.info),
                               ),
                               const SizedBox(height: 8),
                               const PaymentBotWatchingBox(),
@@ -2546,6 +2525,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
                               );
                               _buildCurrentBillAsync(status: 'OPEN', method: paymentMethod).then((bill) {
+                                _markTablePrePrinted();
                                 final bytes = ReceiptPrinter.buildBillReceiptBytes(
                                   store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
                                   bill: bill,
@@ -2564,7 +2544,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           flex: 3,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success,
+                              backgroundColor: context.tc.success,
                               minimumSize: const Size(0, 56),
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                             ),
@@ -2652,25 +2632,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       ).catchError((_) {});
     }
 
-    // 2. KiotViet Customer CRM Points Sync (Tích/Tiêu điểm)
-    if (_selectedCustomer != null) {
-      if (_pointsUsed > 0) {
-        _fb.redeemCustomerPoints(
-          customerId: _selectedCustomer!.id,
-          points: _pointsUsed,
-          billCode: bill.billCode,
-        ).catchError((_) {});
-      }
-      if (bill.finalAmount > 0) {
-        _fb.awardPoints(
-          customerId: _selectedCustomer!.id,
-          billAmount: bill.finalAmount,
-          rate: _storeInfo?.pointEarnRate ?? 1.0,
-          pointRedeemRate: _storeInfo?.pointRedeemRate ?? 1000,
-          billCode: bill.billCode,
-        ).catchError((_) {});
-      }
-    }
+    // 2. Tích/đổi điểm khách: đã xử lý trong closeAndPayBill (transaction, idempotent theo hóa đơn)
 
     // 3. In hóa đơn ra máy in nhiệt LAN (nếu bật in bill và có cấu hình IP máy in)
     if (shouldPrint) {
@@ -2706,7 +2668,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('⚠️ Chức năng order & thanh toán đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
-            backgroundColor: TramColors.warningInk,
+            backgroundColor: AppColors.warningInk,
             duration: Duration(seconds: 3),
           ),
         );
@@ -2726,7 +2688,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   Future<void> _goToAddItems() async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
 
     final res = await context.push('/order-list', extra: {
       'table': widget.table,
@@ -2771,8 +2733,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.people_alt, color: AppColors.primary, size: 20),
+              decoration: BoxDecoration(color: context.tc.primaryLight, borderRadius: BorderRadius.circular(8)),
+              child: Icon(Icons.people_alt, color: context.tc.primary, size: 20),
             ),
             const SizedBox(width: 10),
             Text('Số Lượng Khách', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -2781,14 +2743,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Bàn ${widget.table.name} • ${widget.table.zone}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+            Text('Bàn ${widget.table.name} • ${widget.table.zone}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
             const SizedBox(height: 16),
             TextField(
               controller: ctrl,
               keyboardType: TextInputType.number,
               autofocus: true,
               textAlign: TextAlign.center,
-              style: GoogleFonts.beVietnamPro(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.primary),
+              style: GoogleFonts.beVietnamPro(fontSize: 26, fontWeight: FontWeight.bold, color: context.tc.primary),
               decoration: InputDecoration(
                 hintText: 'Nhập số khách',
                 suffixText: 'khách',
@@ -2800,12 +2762,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [1, 2, 4, 6, 8, 10, 15].map((num) {
+              children: [1, 2, 4, 6, 8, 10, 15].map((count) {
                 return ActionChip(
-                  backgroundColor: AppColors.primaryLight.withValues(alpha: 0.4),
-                  label: Text('$num khách', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                  backgroundColor: context.tc.primaryLight.withValues(alpha: 0.4),
+                  label: Text('$count khách', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                   onPressed: () {
-                    ctrl.text = '$num';
+                    ctrl.text = '$count';
                   },
                 );
               }).toList(),
@@ -2818,7 +2780,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             onPressed: () {
               final val = int.tryParse(ctrl.text.trim());
               if (val != null && val > 0) {
@@ -2940,7 +2902,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 SnackBar(
                   content: Text(newVal ? '🖨️ Đã BẬT tự động in bill khi thanh toán' : '🚫 Đã TẮT in bill khi thanh toán (chỉ chốt đơn, không in giấy)'),
                   duration: const Duration(seconds: 2),
-                  backgroundColor: newVal ? TramColors.success : TramColors.warningInk,
+                  backgroundColor: newVal ? AppColors.success : AppColors.warningInk,
                 ),
               );
             },
@@ -2954,34 +2916,34 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               if (val == 'CANCEL') _showCancelBillDialog();
             },
             itemBuilder: (ctx) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'SPLIT',
                 child: Row(
                   children: [
-                    Icon(Icons.call_split, size: 20, color: AppColors.primary),
-                    SizedBox(width: 10),
-                    Text('Tách hóa đơn'),
+                    Icon(Icons.call_split, size: 20, color: context.tc.primary),
+                    const SizedBox(width: 10),
+                    const Text('Tách hóa đơn'),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'MERGE',
                 child: Row(
                   children: [
-                    Icon(Icons.merge_type, size: 20, color: AppColors.primary),
-                    SizedBox(width: 10),
-                    Text('Ghép bàn'),
+                    Icon(Icons.merge_type, size: 20, color: context.tc.primary),
+                    const SizedBox(width: 10),
+                    const Text('Ghép bàn'),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'CANCEL',
                 child: Row(
                   children: [
-                    Icon(Icons.cancel_outlined, size: 20, color: AppColors.danger),
-                    SizedBox(width: 10),
-                    Text('Hủy hóa đơn bàn', style: TextStyle(color: AppColors.danger)),
+                    Icon(Icons.cancel_outlined, size: 20, color: context.tc.danger),
+                    const SizedBox(width: 10),
+                    Text('Hủy hóa đơn bàn', style: TextStyle(color: context.tc.danger)),
                   ],
                 ),
               ),
@@ -3093,7 +3055,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 SizedBox(
                                   width: 400,
                                   child: ColoredBox(
-                                    color: Colors.white,
+                                    color: context.tc.card,
                                     child: Column(
                                       children: [
                                         customerBar,
@@ -3114,12 +3076,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
+  /// Sau khi gửi lệnh in tạm tính: lưu giỏ hiện tại + đánh dấu bàn "Chờ thanh toán"
+  /// (`prePrintedAt`/`prePrintedBy`). Mọi thay đổi món sau đó sẽ tự xóa cờ này.
+  Future<void> _markTablePrePrinted() async {
+    if (_cart.isEmpty) return;
+    final t = widget.table;
+    t.inUse = true;
+    t.openedAt ??= DateTime.now().millisecondsSinceEpoch;
+    t.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+    t.markPrePrinted(by: _auth.currentUser?.username);
+    await _fb.saveTable(t).catchError((_) {});
+  }
+
   /// In phiếu tạm tính (giữ nguyên luồng cũ: gửi lệnh in LAN, bỏ qua lỗi máy in).
   void _printPreBill() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Đang gửi lệnh in tạm tính...'), duration: Duration(seconds: 1)),
     );
     _buildCurrentBillAsync(status: 'PRE_PRINT', method: 'PRE_PRINT').then((bill) {
+      _markTablePrePrinted();
       final bytes = ReceiptPrinter.buildBillReceiptBytes(
         store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
         bill: bill,

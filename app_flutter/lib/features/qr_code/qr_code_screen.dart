@@ -23,28 +23,28 @@ class QRCodeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.surface,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         leading: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.tc.border),
             ),
-            child: const Icon(Icons.arrow_back_ios_new, size: 14, color: AppColors.textPrimary),
+            child: Icon(Icons.arrow_back_ios_new, size: 14, color: context.tc.textPrimary),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text('Mã QR bàn', style: GoogleFonts.beVietnamPro(
-          color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700,
+          color: context.tc.textPrimary, fontSize: 17, fontWeight: FontWeight.w700,
         )),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: AppColors.textPrimary),
+            icon: Icon(Icons.share_outlined, color: context.tc.textPrimary),
             onPressed: () => _share(context),
             tooltip: 'Chia sẻ',
           ),
@@ -58,19 +58,19 @@ class QRCodeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.tc.border),
             ),
             child: Row(
               children: [
                 Container(
                   width: 48, height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: context.tc.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.table_restaurant, color: AppColors.primary, size: 24),
+                  child: Icon(Icons.table_restaurant, color: context.tc.primary, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -78,10 +78,10 @@ class QRCodeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Bàn $tableName', style: GoogleFonts.beVietnamPro(
-                        color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 18,
+                        color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 18,
                       )),
                       Text(tableZone, style: GoogleFonts.beVietnamPro(
-                        color: AppColors.textSecondary, fontSize: 13,
+                        color: context.tc.textSecondary, fontSize: 13,
                       )),
                     ],
                   ),
@@ -94,11 +94,12 @@ class QRCodeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
+              // QR luôn in trên nền trắng để máy quét đọc được ở mọi chế độ.
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.15),
+                  color: context.tc.primary.withValues(alpha: 0.15),
                   blurRadius: 30,
                   offset: const Offset(0, 8),
                 ),
@@ -135,19 +136,19 @@ class QRCodeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.tc.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Đường dẫn', style: GoogleFonts.beVietnamPro(
-                  color: AppColors.textSecondary, fontSize: 12,
+                  color: context.tc.textSecondary, fontSize: 12,
                 )),
                 const SizedBox(height: 6),
                 Text(_qrData, style: GoogleFonts.beVietnamPro(
-                  color: AppColors.info, fontSize: 13,
+                  color: context.tc.info, fontSize: 13,
                 ), overflow: TextOverflow.ellipsis, maxLines: 2),
               ],
             ),
@@ -157,27 +158,27 @@ class QRCodeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.05),
+              color: context.tc.primary.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              border: Border.all(color: context.tc.primary.withValues(alpha: 0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.info_outline, color: AppColors.primary, size: 16),
+                    Icon(Icons.info_outline, color: context.tc.primary, size: 16),
                     const SizedBox(width: 8),
                     Text('Hướng dẫn sử dụng', style: GoogleFonts.beVietnamPro(
-                      color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13,
+                      color: context.tc.primary, fontWeight: FontWeight.w600, fontSize: 13,
                     )),
                   ],
                 ),
                 const SizedBox(height: 8),
                 _Instruction('1. In mã QR và đặt lên bàn $tableName'),
-                _Instruction('2. Khách hàng quét mã bằng camera điện thoại'),
-                _Instruction('3. Khách có thể đặt món hoặc gọi nhân viên'),
-                _Instruction('4. Đơn sẽ hiện trong mục "Đơn online"'),
+                const _Instruction('2. Khách hàng quét mã bằng camera điện thoại'),
+                const _Instruction('3. Khách có thể đặt món hoặc gọi nhân viên'),
+                const _Instruction('4. Đơn sẽ hiện trong mục "Đơn online"'),
               ],
             ),
           ).animate().fadeIn(delay: 400.ms),
@@ -190,8 +191,8 @@ class QRCodeScreen extends StatelessWidget {
                   icon: const Icon(Icons.copy_outlined, size: 18),
                   label: Text('Sao chép link', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: context.tc.textPrimary,
+                    side: BorderSide(color: context.tc.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -200,7 +201,7 @@ class QRCodeScreen extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Đã sao chép link!', style: GoogleFonts.beVietnamPro()),
-                        backgroundColor: AppColors.cardElevated,
+                        backgroundColor: context.tc.cardElevated,
                       ),
                     );
                   },
@@ -230,7 +231,7 @@ class QRCodeScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Link đã được sao chép vào clipboard!', style: GoogleFonts.beVietnamPro()),
-        backgroundColor: AppColors.cardElevated,
+        backgroundColor: context.tc.cardElevated,
       ),
     );
   }
@@ -245,7 +246,7 @@ class _Instruction extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(text, style: GoogleFonts.beVietnamPro(
-        color: AppColors.textSecondary, fontSize: 12,
+        color: context.tc.textSecondary, fontSize: 12,
       )),
     );
   }

@@ -39,11 +39,6 @@ interface StockEventItem {
   createdAt: number;
 }
 
-const btnPrimary: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: "6px", padding: "10px 18px",
-  background: "#7E2930", color: "#fff", border: "none", borderRadius: "10px",
-  fontSize: "13px", fontWeight: "700", cursor: "pointer",
-};
 const thStyle: React.CSSProperties = {
   padding: "12px 14px", textAlign: "left", fontSize: "12px", fontWeight: "700",
   color: "#666", textTransform: "uppercase", letterSpacing: "0.03em",

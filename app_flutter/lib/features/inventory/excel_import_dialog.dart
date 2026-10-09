@@ -61,7 +61,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      backgroundColor: AppColors.card,
+      backgroundColor: context.tc.card,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 680, maxHeight: 780),
         child: Column(
@@ -69,11 +69,11 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: context.tc.border),
             Expanded(
               child: _currentStep == 1 ? _buildStep1Config() : _buildStep2UploadAndPreview(),
             ),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: context.tc.border),
             _buildFooterActions(),
           ],
         ),
@@ -85,19 +85,19 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: context.tc.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(25),
+              color: context.tc.primary.withAlpha(25),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.table_view_rounded, color: AppColors.primary, size: 24),
+            child: Icon(Icons.table_view_rounded, color: context.tc.primary, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -109,7 +109,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.tc.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -119,14 +119,14 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                       : 'Bước 2/2: Chọn file Excel & kiểm tra dữ liệu',
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: context.tc.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, color: AppColors.textSecondary),
+            icon: Icon(Icons.close, color: context.tc.textSecondary),
             onPressed: _isImporting ? null : () => Navigator.of(context).pop(),
             tooltip: 'Đóng',
           ),
@@ -144,75 +144,85 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         children: [
           // 1. Cập nhật giá trị tồn kho?
           _buildSectionTitle('1. Cập nhật giá trị tồn kho?'),
-          Row(
-            children: [
-              Expanded(
-                child: RadioListTile<bool>(
-                  title: const Text('Không'),
-                  value: false,
-                  groupValue: _updateStockBalance,
-                  activeColor: AppColors.primary,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) => setState(() => _updateStockBalance = val ?? false),
+          RadioGroup<bool>(
+            groupValue: _updateStockBalance,
+            onChanged: (val) => setState(() => _updateStockBalance = val ?? _updateStockBalance),
+            child: Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<bool>(
+                    title: const Text('Không'),
+                    value: false,
+                    activeColor: context.tc.primary,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: RadioListTile<bool>(
-                  title: const Text('Có'),
-                  value: true,
-                  groupValue: _updateStockBalance,
-                  activeColor: AppColors.primary,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) => setState(() => _updateStockBalance = val ?? true),
+                Expanded(
+                  child: RadioListTile<bool>(
+                    title: const Text('Có'),
+                    value: true,
+                    activeColor: context.tc.primary,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
           // 2. Xử lý trùng mã hàng, khác tên hàng?
           _buildSectionTitle('2. Xử lý trùng mã hàng, khác tên hàng?'),
-          RadioListTile<String>(
-            title: const Text('Báo lỗi và dừng import'),
-            value: 'error',
+          RadioGroup<String>(
             groupValue: _duplicateSkuOption,
-            activeColor: AppColors.primary,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            onChanged: (val) => setState(() => _duplicateSkuOption = val ?? 'error'),
-          ),
-          RadioListTile<String>(
-            title: const Text('Thay thế tên hàng cũ bằng tên hàng mới'),
-            value: 'replace',
-            groupValue: _duplicateSkuOption,
-            activeColor: AppColors.primary,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            onChanged: (val) => setState(() => _duplicateSkuOption = val ?? 'replace'),
+            onChanged: (val) => setState(() => _duplicateSkuOption = val ?? _duplicateSkuOption),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  title: const Text('Báo lỗi và dừng import'),
+                  value: 'error',
+                  activeColor: context.tc.primary,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  title: const Text('Thay thế tên hàng cũ bằng tên hàng mới'),
+                  value: 'replace',
+                  activeColor: context.tc.primary,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
           // 3. Phạm vi áp dụng trạng thái kinh doanh:
           _buildSectionTitle('3. Phạm vi áp dụng trạng thái kinh doanh:'),
-          RadioListTile<String>(
-            title: const Text('Toàn hệ thống'),
-            value: 'all',
+          RadioGroup<String>(
             groupValue: _scopeOption,
-            activeColor: AppColors.primary,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            onChanged: (val) => setState(() => _scopeOption = val ?? 'all'),
-          ),
-          RadioListTile<String>(
-            title: const Text('Theo chi nhánh'),
-            value: 'branch',
-            groupValue: _scopeOption,
-            activeColor: AppColors.primary,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            onChanged: (val) => setState(() => _scopeOption = val ?? 'branch'),
+            onChanged: (val) => setState(() => _scopeOption = val ?? _scopeOption),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  title: const Text('Toàn hệ thống'),
+                  value: 'all',
+                  activeColor: context.tc.primary,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  title: const Text('Theo chi nhánh'),
+                  value: 'branch',
+                  activeColor: context.tc.primary,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -220,9 +230,9 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFBEB),
+              color: context.bg(const Color(0xFFFFFBEB)),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFFDE68A)),
+              border: Border.all(color: context.line(const Color(0xFFFDE68A))),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +246,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF92400E),
+                        color: context.ink(const Color(0xFF92400E)),
                       ),
                     ),
                   ],
@@ -288,7 +298,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         style: GoogleFonts.beVietnamPro(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: context.tc.textPrimary,
         ),
       ),
     );
@@ -300,13 +310,13 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ', style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold)),
+          Text('• ', style: TextStyle(color: context.ink(const Color(0xFFB45309)), fontWeight: FontWeight.bold)),
           Expanded(
             child: Text(
               text,
               style: GoogleFonts.beVietnamPro(
                 fontSize: 12.5,
-                color: const Color(0xFF78350F),
+                color: context.ink(const Color(0xFF78350F)),
                 height: 1.35,
               ),
             ),
@@ -323,7 +333,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         // File selection banner
         Container(
           padding: const EdgeInsets.all(16),
-          color: AppColors.surface.withAlpha(120),
+          color: context.tc.surface.withAlpha(120),
           child: Row(
             children: [
               Expanded(
@@ -335,7 +345,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.tc.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -343,7 +353,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                     if (_pickedFile != null)
                       Text(
                         'Kích thước: ${(_pickedFile!.size / 1024).toStringAsFixed(1)} KB',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: AppColors.textSecondary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: context.tc.textSecondary),
                       ),
                   ],
                 ),
@@ -354,7 +364,8 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 icon: const Icon(Icons.file_open_outlined, size: 18),
                 label: Text(_pickedFile == null ? 'Chọn file Excel' : 'Đổi file khác'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(64, AppSpacing.minTapTarget),
+                  backgroundColor: context.tc.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   textStyle: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600),
@@ -384,7 +395,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline, color: AppColors.danger, size: 48),
+                            Icon(Icons.error_outline, color: context.tc.danger, size: 48),
                             const SizedBox(height: 12),
                             Text(
                               'Lỗi khi đọc file',
@@ -394,7 +405,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                             Text(
                               _parseError!,
                               textAlign: TextAlign.center,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textSecondary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(
@@ -412,7 +423,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.cloud_upload_outlined, size: 64, color: AppColors.border),
+                                Icon(Icons.cloud_upload_outlined, size: 64, color: context.tc.border),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Chưa có dữ liệu để xem trước',
@@ -422,7 +433,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                                 Text(
                                   'Vui lòng bấm nút "Chọn file Excel" để tải lên file .xlsx chứa 21 cột tiêu chuẩn',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: AppColors.textSecondary),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: context.tc.textSecondary),
                                 ),
                               ],
                             ),
@@ -443,19 +454,19 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         // Summary Chips Bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: AppColors.card,
+          color: context.tc.card,
           child: Row(
             children: [
               _buildCountBadge('Tổng số', _parsedRows.length, Colors.blueGrey),
               const SizedBox(width: 8),
-              _buildCountBadge('Hợp lệ', validCount, const Color(0xFF146A65)),
+              _buildCountBadge('Hợp lệ', validCount, context.tc.success),
               const SizedBox(width: 8),
               if (invalidCount > 0)
-                _buildCountBadge('Lỗi / Trùng', invalidCount, AppColors.danger),
+                _buildCountBadge('Lỗi / Trùng', invalidCount, context.tc.danger),
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: context.tc.border),
 
         // List of items
         Expanded(
@@ -468,10 +479,10 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: row.isValid ? AppColors.surface.withAlpha(60) : const Color(0xFFFEF2F2),
+                  color: row.isValid ? context.tc.surface.withAlpha(60) : context.bg(const Color(0xFFFEF2F2)),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: row.isValid ? AppColors.border : const Color(0xFFFCA5A5),
+                    color: row.isValid ? context.tc.border : const Color(0xFFFCA5A5),
                   ),
                 ),
                 child: Row(
@@ -483,7 +494,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                       height: 28,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: row.isValid ? AppColors.primary.withAlpha(20) : AppColors.danger.withAlpha(20),
+                        color: row.isValid ? context.tc.primary.withAlpha(20) : context.tc.danger.withAlpha(20),
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -491,7 +502,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: row.isValid ? AppColors.primary : AppColors.danger,
+                          color: row.isValid ? context.tc.primary : context.tc.danger,
                         ),
                       ),
                     ),
@@ -509,14 +520,14 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                                   style: GoogleFonts.beVietnamPro(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
+                                    color: context.tc.textPrimary,
                                   ),
                                 ),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: row.isValid ? const Color(0xFFE6F4F2) : const Color(0xFFFEE2E2),
+                                  color: row.isValid ? context.bg(const Color(0xFFE6F4F2)) : context.bg(const Color(0xFFFEE2E2)),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -524,7 +535,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                                   style: GoogleFonts.beVietnamPro(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: row.isValid ? const Color(0xFF146A65) : AppColors.danger,
+                                    color: row.isValid ? context.tc.success : context.tc.danger,
                                   ),
                                 ),
                               ),
@@ -537,15 +548,15 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                             children: [
                               Text(
                                 'Mã: ${row.sku}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                               ),
                               Text(
                                 'ĐVT: ${row.baseUnitId}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                               ),
                               Text(
                                 'Giá vốn: ${FormatUtils.currency(row.costPrice)}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                               ),
                               if (_updateStockBalance)
                                 Text(
@@ -553,12 +564,12 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                                   style: GoogleFonts.beVietnamPro(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.primary,
+                                    color: context.tc.primary,
                                   ),
                                 ),
                               Text(
                                 'Nhóm: ${row.managementGroup}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -588,7 +599,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         children: [
           Text(
             '$label: ',
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
           ),
           Text(
             '$count',
@@ -605,7 +616,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      color: AppColors.surface,
+      color: context.tc.surface,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -613,16 +624,18 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.border),
+                minimumSize: const Size(64, AppSpacing.minTapTarget),
+                side: BorderSide(color: context.tc.border),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
-              child: Text('Bỏ qua', style: GoogleFonts.beVietnamPro(color: AppColors.textPrimary)),
+              child: Text('Bỏ qua', style: GoogleFonts.beVietnamPro(color: context.tc.textPrimary)),
             ),
             const SizedBox(width: 12),
             ElevatedButton(
               onPressed: () => setState(() => _currentStep = 2),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                minimumSize: const Size(64, AppSpacing.minTapTarget),
+                backgroundColor: context.tc.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -635,16 +648,18 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             OutlinedButton(
               onPressed: _isImporting ? null : () => setState(() => _currentStep = 1),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.border),
+                minimumSize: const Size(64, AppSpacing.minTapTarget),
+                side: BorderSide(color: context.tc.border),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              child: Text('Quay lại', style: GoogleFonts.beVietnamPro(color: AppColors.textPrimary)),
+              child: Text('Quay lại', style: GoogleFonts.beVietnamPro(color: context.tc.textPrimary)),
             ),
             const SizedBox(width: 12),
             ElevatedButton(
               onPressed: (_isImporting || validCount == 0) ? null : _executeImport,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                minimumSize: const Size(64, AppSpacing.minTapTarget),
+                backgroundColor: context.tc.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
@@ -675,7 +690,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Đã tạo và mở file mẫu Excel thành công!'),
-            backgroundColor: Color(0xFF146A65),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -822,7 +837,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Đã nhập thành công ${validRows.length} mặt hàng vào kho!'),
-            backgroundColor: const Color(0xFF146A65),
+            backgroundColor: AppColors.success,
           ),
         );
       }

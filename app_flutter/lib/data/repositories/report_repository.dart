@@ -6,6 +6,7 @@ import '../../core/reports/report_date_utils.dart';
 import '../../core/reports/report_models.dart';
 import '../models/app_models.dart';
 import 'seed_data.dart';
+import '../services/customer_import_service.dart';
 
 class ReportRepository {
   final DatabaseReference Function() _getRoot;
@@ -18,7 +19,10 @@ class ReportRepository {
 
   CashShiftModel? activeShiftCache;
 
+  List<CashShiftModel>? _cachedCashShiftsList;
   Stream<List<CashShiftModel>>? _cachedCashShiftsStream;
+  Stream<List<CashShiftModel>>? _underlyingBroadcastStream;
+  StreamSubscription<List<CashShiftModel>>? _underlyingCashShiftsSub;
   String? _cachedCashShiftsStoreCode;
 
   ReportRepository({
@@ -51,6 +55,10 @@ class ReportRepository {
 
   void clearShiftCache() {
     activeShiftCache = null;
+    _cachedCashShiftsList = null;
+    _underlyingCashShiftsSub?.cancel();
+    _underlyingCashShiftsSub = null;
+    _underlyingBroadcastStream = null;
     _cachedCashShiftsStream = null;
     _cachedCashShiftsStoreCode = null;
   }
@@ -209,14 +217,19 @@ class ReportRepository {
   }
 
   // ==================== KIOTVIET CASH SHIFT (QUẢN LÝ KÉT TIỀN CA) ====================
+  List<CashShiftModel>? get cachedCashShiftsList => _cachedCashShiftsList;
+
   Stream<List<CashShiftModel>> cashShiftsStream() {
     if (_cachedCashShiftsStream != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
       return _cachedCashShiftsStream!;
     }
     _cachedCashShiftsStoreCode = _currentStoreCode;
-    _cachedCashShiftsStream = cashShiftsRef.onValue.map<List<CashShiftModel>>((event) {
+    _underlyingCashShiftsSub?.cancel();
+
+    final rawStream = cashShiftsRef.onValue.map<List<CashShiftModel>>((event) {
       if (!event.snapshot.exists || event.snapshot.value == null) {
         activeShiftCache = null;
+        _cachedCashShiftsList = <CashShiftModel>[];
         return <CashShiftModel>[];
       }
       final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
@@ -227,14 +240,79 @@ class ReportRepository {
         ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
       final openOne = list.where((s) => s.isOpen).firstOrNull;
       activeShiftCache = openOne;
+      _cachedCashShiftsList = list;
       return list;
-    }).handleError((_) => (activeShiftCache != null && activeShiftCache!.isOpen) ? [activeShiftCache!] : <CashShiftModel>[]).asBroadcastStream();
+    }).handleError((_) => (activeShiftCache != null && activeShiftCache!.isOpen)
+        ? [activeShiftCache!]
+        : (_cachedCashShiftsList ?? <CashShiftModel>[]));
+
+    final broadcast = rawStream.asBroadcastStream();
+    _underlyingBroadcastStream = broadcast;
+    _underlyingCashShiftsSub = broadcast.listen((list) {
+      _cachedCashShiftsList = list;
+    }, onError: (_) {});
+
+    _cachedCashShiftsStream = Stream<List<CashShiftModel>>.multi((controller) {
+      // Replay ngay lập tức dữ liệu cache nếu có cho listener mới (tránh việc listener mới bị kẹt không nhận được dữ liệu ban đầu)
+      if (_cachedCashShiftsList != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
+        controller.add(_cachedCashShiftsList!);
+      }
+      final sub = broadcast.listen(
+        (data) => controller.add(data),
+        onError: (err, st) => controller.addError(err, st),
+        onDone: () => controller.close(),
+      );
+      controller.onCancel = () {
+        sub.cancel();
+      };
+    }, isBroadcast: true);
+
     return _cachedCashShiftsStream!;
+  }
+
+  Future<List<CashShiftModel>> getRecentCashShifts({int limit = 50, bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedCashShiftsList != null &&
+        _cachedCashShiftsList!.isNotEmpty &&
+        _cachedCashShiftsStoreCode == _currentStoreCode) {
+      return _cachedCashShiftsList!;
+    }
+    try {
+      final snap = await cashShiftsRef.limitToLast(limit).get().timeout(const Duration(seconds: 4));
+      if (!snap.exists || snap.value == null) {
+        if (_cachedCashShiftsStoreCode == _currentStoreCode && _cachedCashShiftsList != null) {
+          return _cachedCashShiftsList!;
+        }
+        return <CashShiftModel>[];
+      }
+      final map = Map<dynamic, dynamic>.from(snap.value as Map);
+      final list = map.entries
+          .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
+          .where((s) => s.openedAt > 0)
+          .toList()
+        ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+      _cachedCashShiftsList = list;
+      _cachedCashShiftsStoreCode = _currentStoreCode;
+      final openOne = list.where((s) => s.isOpen).firstOrNull;
+      if (openOne != null) {
+        activeShiftCache = openOne;
+      }
+      return list;
+    } catch (_) {
+      return _cachedCashShiftsList ?? <CashShiftModel>[];
+    }
   }
 
   Future<CashShiftModel?> getCurrentOpenShift({bool forceRefresh = false}) async {
     if (!forceRefresh && activeShiftCache != null && activeShiftCache!.isOpen) {
       return activeShiftCache;
+    }
+    if (!forceRefresh && _cachedCashShiftsList != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
+      final found = _cachedCashShiftsList!.where((s) => s.isOpen && s.openedAt > 0).firstOrNull;
+      if (found != null) {
+        activeShiftCache = found;
+        return found;
+      }
     }
     try {
       final snap = await cashShiftsRef.get().timeout(const Duration(seconds: 5));
@@ -260,6 +338,9 @@ class ReportRepository {
 
   Future<void> openCashShift(CashShiftModel shift) async {
     activeShiftCache = shift;
+    if (_cachedCashShiftsList != null) {
+      _cachedCashShiftsList = [shift, ..._cachedCashShiftsList!.where((s) => s.id != shift.id)];
+    }
     try {
       // Đảm bảo không có ca cũ nào bị treo ở trạng thái OPEN
       final snap = await cashShiftsRef.get().timeout(const Duration(seconds: 3));
@@ -348,6 +429,9 @@ class ReportRepository {
       if (activeShiftCache == null || activeShiftCache!.id == shiftId) {
         activeShiftCache = updated.isOpen ? updated : activeShiftCache;
       }
+      if (_cachedCashShiftsList != null) {
+        _cachedCashShiftsList = _cachedCashShiftsList!.map((s) => s.id == shiftId ? updated : s).toList();
+      }
       return updated;
     } on TimeoutException {
       unawaited(fut.then((_) {}, onError: (Object e) => _logSyncFailure(what, e)));
@@ -393,6 +477,9 @@ class ReportRepository {
     shift.actualCash = actualCash;
     shift.difference = actualCash - shift.expectedCash;
     shift.notes = notes;
+    if (_cachedCashShiftsList != null) {
+      _cachedCashShiftsList = _cachedCashShiftsList!.map((s) => s.id == shift.id ? shift : s).toList();
+    }
     // Chỉ cập nhật các trường chốt ca (không ghi đè doanh số do máy khác cộng dồn)
     await _awaitWrite(
       cashShiftsRef.child(shift.id).update({
@@ -455,7 +542,7 @@ class ReportRepository {
               .timeout(const Duration(seconds: 2));
           if (phoneSnap.docs.isNotEmpty) {
             final doc = phoneSnap.docs.first;
-            return KmtCustomerModel.fromMap(doc.data(), doc.id);
+            return await _preferRtdb(KmtCustomerModel.fromMap(doc.data(), doc.id));
           }
 
           final legacyPhoneSnap = await FirebaseFirestore.instance
@@ -466,7 +553,7 @@ class ReportRepository {
               .timeout(const Duration(seconds: 2));
           if (legacyPhoneSnap.docs.isNotEmpty) {
             final doc = legacyPhoneSnap.docs.first;
-            return KmtCustomerModel.fromMap(doc.data(), doc.id);
+            return await _preferRtdb(KmtCustomerModel.fromMap(doc.data(), doc.id));
           }
         }
 
@@ -477,7 +564,7 @@ class ReportRepository {
             .get()
             .timeout(const Duration(seconds: 2));
         if (docSnap.exists && docSnap.data() != null) {
-          return KmtCustomerModel.fromMap(docSnap.data()!, docSnap.id);
+          return await _preferRtdb(KmtCustomerModel.fromMap(docSnap.data()!, docSnap.id));
         }
 
         final codeSnap = await FirebaseFirestore.instance
@@ -488,7 +575,7 @@ class ReportRepository {
             .timeout(const Duration(seconds: 2));
         if (codeSnap.docs.isNotEmpty) {
           final doc = codeSnap.docs.first;
-          return KmtCustomerModel.fromMap(doc.data(), doc.id);
+          return await _preferRtdb(KmtCustomerModel.fromMap(doc.data(), doc.id));
         }
       } catch (_) {}
 
@@ -511,128 +598,38 @@ class ReportRepository {
     }
   }
 
+  /// RTDB là nguồn chuẩn của điểm: khách tìm thấy trên Firestore mà đã có ở RTDB thì dùng bản RTDB.
+  Future<KmtCustomerModel> _preferRtdb(KmtCustomerModel fromFirestore) async {
+    try {
+      final snap = await customersRef.child(fromFirestore.id).get().timeout(const Duration(seconds: 2));
+      if (snap.exists && snap.value is Map) {
+        return KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), fromFirestore.id);
+      }
+    } catch (_) {}
+    return fromFirestore;
+  }
+
+  static const Set<String> _pointFields = {'diem_hien_tai', 'currentPoints', 'totalPoints'};
+
+  /// Lưu thông tin khách vào RTDB stores/{storeCode}/customers (nguồn chuẩn).
+  /// - KHÔNG ghi Firestore: Cloud Function mirrorCustomerToFirestore đồng bộ sang kmt_customers.
+  /// - KHÔNG đổi điểm: điểm chỉ thay đổi qua LoyaltyService (thao tác hóa đơn) hoặc Quản lý.
+  /// - Khách mới có điểm (lấy từ Firestore) → nhập qua importCustomerToStore để giữ số dư thật.
   Future<void> saveCustomer(KmtCustomerModel customer) async {
-    // 1. Lưu RTDB stores/{storeCode}/customers
     try {
-      await customersRef.child(customer.id).set(customer.toMap());
-    } catch (_) {}
-
-    // 2. Đồng bộ Firestore kmt_customers theo chuẩn Khuyến Mãi Trạm
-    try {
-      final docId = customer.code.isNotEmpty ? customer.code.toUpperCase() : customer.id;
-      final kmtData = customer.toMap();
-      await FirebaseFirestore.instance
-          .collection('kmt_customers')
-          .doc(docId)
-          .set(kmtData, SetOptions(merge: true));
-    } catch (_) {}
-  }
-
-  Future<void> awardPoints({
-    required String customerId,
-    required int billAmount,
-    double rate = 1.0,
-    int pointRedeemRate = 1000,
-    String? billCode,
-  }) async {
-    try {
-      final pointsToAdd = (billAmount * (rate / 100) / pointRedeemRate).round();
-      if (pointsToAdd <= 0) return;
-
-      int prevPoints = 0;
-      KmtCustomerModel? customer;
-
-      // Đọc thông tin từ Firestore trước
-      try {
-        final doc = await FirebaseFirestore.instance.collection('kmt_customers').doc(customerId).get();
-        if (doc.exists && doc.data() != null) {
-          customer = KmtCustomerModel.fromMap(doc.data()!, doc.id);
-          prevPoints = customer.currentPoints;
-        }
-      } catch (_) {}
-
-      // Nếu không có, đọc từ RTDB
-      if (customer == null) {
-        final snap = await customersRef.child(customerId).get();
-        if (snap.exists && snap.value != null) {
-          customer = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
-          prevPoints = customer.currentPoints;
-        }
+      final ref = customersRef.child(customer.id);
+      final info = Map<String, dynamic>.from(customer.toMap())..removeWhere((k, _) => _pointFields.contains(k));
+      final snap = await ref.get().timeout(const Duration(seconds: 3));
+      if (snap.exists) {
+        await ref.update(info);
+        return;
       }
-
-      if (customer != null) {
-        final newPoints = prevPoints + pointsToAdd;
-        customer.currentPoints = newPoints;
-        customer.totalPoints += pointsToAdd;
-        await saveCustomer(customer);
-
-        // Ghi nhận lịch sử tích điểm kmt_point_history (chuẩn Khuyến Mãi Trạm)
-        try {
-          await FirebaseFirestore.instance.collection('kmt_point_history').add({
-            'ma_khach_hang': customer.code.isNotEmpty ? customer.code : customer.id,
-            'ngay_tich': FieldValue.serverTimestamp(),
-            'cua_hang': _currentStoreCode,
-            'ten_cua_hang': 'POS Trạm ($_currentStoreCode)',
-            'diem_truoc': prevPoints,
-            'diem_thay_doi': pointsToAdd,
-            'diem_sau': newPoints,
-            'nguon': 'fnb_pos',
-            'bill_code': billCode ?? '',
-            'bill_amount': billAmount,
-          });
-        } catch (_) {}
+      if (customer.currentPoints == 0 && customer.totalPoints == 0) {
+        await ref.set(customer.toMap());
+        return;
       }
-    } catch (_) {}
-  }
-
-  Future<void> redeemCustomerPoints({
-    required String customerId,
-    required int points,
-    String? billCode,
-  }) async {
-    try {
-      if (points <= 0) return;
-      int prevPoints = 0;
-      KmtCustomerModel? customer;
-
-      // Đọc từ Firestore
-      try {
-        final doc = await FirebaseFirestore.instance.collection('kmt_customers').doc(customerId).get();
-        if (doc.exists && doc.data() != null) {
-          customer = KmtCustomerModel.fromMap(doc.data()!, doc.id);
-          prevPoints = customer.currentPoints;
-        }
-      } catch (_) {}
-
-      // Nếu không có, đọc từ RTDB
-      if (customer == null) {
-        final snap = await customersRef.child(customerId).get();
-        if (snap.exists && snap.value != null) {
-          customer = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), customerId);
-          prevPoints = customer.currentPoints;
-        }
-      }
-
-      if (customer != null) {
-        final newPoints = (prevPoints - points) > 0 ? (prevPoints - points) : 0;
-        customer.currentPoints = newPoints;
-        await saveCustomer(customer);
-
-        // Ghi nhận lịch sử đổi điểm kmt_point_history (chuẩn Khuyến Mãi Trạm)
-        try {
-          await FirebaseFirestore.instance.collection('kmt_point_history').add({
-            'ma_khach_hang': customer.code.isNotEmpty ? customer.code : customer.id,
-            'ngay_tich': FieldValue.serverTimestamp(),
-            'cua_hang': _currentStoreCode,
-            'ten_cua_hang': 'POS Trạm ($_currentStoreCode)',
-            'diem_truoc': prevPoints,
-            'diem_thay_doi': -points,
-            'diem_sau': newPoints,
-            'nguon': 'fnb_pos_redeem',
-            'bill_code': billCode ?? '',
-          });
-        } catch (_) {}
-      }
+      await CustomerImportService.importToStore(storeCode: _currentStoreCode, customerId: customer.id);
+      await ref.update(info);
     } catch (_) {}
   }
 
@@ -652,17 +649,15 @@ class ReportRepository {
       }
     } catch (_) {}
 
-    // 2. Đọc bổ sung từ RTDB
+    // 2. Đọc RTDB (ưu tiên hơn Firestore)
     try {
       final snap = await customersRef.get().timeout(const Duration(seconds: 3));
       if (snap.exists && snap.value != null) {
         final rawMap = Map<dynamic, dynamic>.from(snap.value as Map);
         for (final entry in rawMap.entries) {
           final id = entry.key.toString();
-          if (!map.containsKey(id)) {
-            final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), id);
-            map[id] = c;
-          }
+          // RTDB là nguồn chuẩn của điểm → ghi đè bản Firestore (có thể trễ)
+          map[id] = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), id);
         }
       }
     } catch (_) {}
@@ -713,6 +708,49 @@ class ReportRepository {
     } catch (_) {
       return <BillModel>[];
     }
+  }
+
+  Future<List<BillModel>> getBillsForShift(CashShiftModel shift, {String? storeCode}) async {
+    try {
+      final billsRef = _getStoreBillsRef(storeCode);
+      final start = shift.openedAt - (10 * 60 * 1000);
+      final end = (shift.closedAt ?? DateTime.now().millisecondsSinceEpoch) + (10 * 60 * 1000);
+      try {
+        final snap = await billsRef.orderByChild('createdAt').startAt(start).endAt(end).get().timeout(const Duration(seconds: 4));
+        if (snap.exists && snap.value != null) {
+          final map = Map<dynamic, dynamic>.from(snap.value as Map);
+          final list = map.entries
+              .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
+              .toList();
+          final deduped = ReportCalculator.deduplicateBills(list);
+          return deduped.where((b) {
+            if (b.shiftId != null && b.shiftId!.isNotEmpty) {
+              return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
+            }
+            final closeT = shift.closedAt ?? 9999999999999;
+            return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
+          }).toList();
+        }
+      } catch (_) {
+        final startDt = DateTime.fromMillisecondsSinceEpoch(shift.openedAt);
+        final endDt = DateTime.fromMillisecondsSinceEpoch(shift.closedAt ?? DateTime.now().millisecondsSinceEpoch);
+        final all = await getStoreBills(
+          storeCode: storeCode,
+          startDate: startDt.subtract(const Duration(hours: 1)),
+          endDate: endDt.add(const Duration(hours: 1)),
+        );
+        return all.where((b) {
+          if (b.shiftId != null && b.shiftId!.isNotEmpty) {
+            return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
+          }
+          final closeT = shift.closedAt ?? 9999999999999;
+          return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
+        }).toList();
+      }
+    } catch (_) {
+      return <BillModel>[];
+    }
+    return <BillModel>[];
   }
 
   Future<Map<int, ProductModel>> getProductsMap({String? storeCode}) async {

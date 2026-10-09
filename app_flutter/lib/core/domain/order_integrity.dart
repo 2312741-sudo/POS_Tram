@@ -348,3 +348,236 @@ class BillRecordBuilder {
     };
   }
 }
+
+// ==================== IDEMPOTENCY (VÒNG KHÓA TRONG NODE) ====================
+
+/// Danh sách ngắn các khóa thao tác đã áp dụng, lưu NGAY TRONG node được transaction
+/// (VD: stock_balances/{id}/recentSaleBills, customers/{id}/loyaltyOps).
+/// Vì nằm cùng node với số liệu nên kiểm tra + ghi là nguyên tử → không bao giờ áp dụng 2 lần,
+/// kể cả khi app bị tắt giữa lúc commit transaction và lúc ghi marker bên ngoài.
+class IdempotencyRing {
+  static const int defaultSize = 20;
+
+  static List<String> read(Object? raw) {
+    if (raw is List) return raw.where((e) => e != null).map((e) => e.toString()).toList();
+    if (raw is Map) {
+      // RTDB có thể trả mảng dưới dạng Map {"0": .., "1": ..}
+      final keys = raw.keys.map((k) => k.toString()).toList()
+        ..sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+      return keys.map((k) => raw[k]).where((e) => e != null).map((e) => e.toString()).toList();
+    }
+    return const [];
+  }
+
+  static bool contains(Object? raw, String key) => read(raw).contains(key);
+
+  /// Thêm [key] vào cuối, bỏ trùng, giữ tối đa [max] phần tử mới nhất.
+  static List<String> push(Object? raw, String key, {int max = defaultSize}) {
+    final list = read(raw).where((e) => e != key).toList()..add(key);
+    return list.length > max ? list.sublist(list.length - max) : list;
+  }
+}
+
+// ==================== TÍCH / ĐỔI ĐIỂM KHÁCH HÀNG ====================
+
+/// Khách không đủ điểm để đổi - chặn thanh toán TRƯỚC khi ghi hóa đơn.
+class InsufficientPointsException implements Exception {
+  final int requested;
+  final int available;
+  InsufficientPointsException(this.requested, this.available);
+  @override
+  String toString() => 'Khách chỉ còn $available điểm, không đủ để đổi $requested điểm';
+}
+
+/// Lỗi tích/đổi điểm khác (không tìm thấy khách...)
+class LoyaltyException implements Exception {
+  final String message;
+  LoyaltyException(this.message);
+  @override
+  String toString() => message;
+}
+
+enum LoyaltyOp { redeem, award, refund }
+
+enum LoyaltyTxnStatus { applied, alreadyApplied, insufficient, missingCustomer, nothingToRefund }
+
+class LoyaltyTxnOutcome {
+  final LoyaltyTxnStatus status;
+
+  /// Giá trị mới cho customers/{id} (null nếu không ghi)
+  final Map<String, dynamic>? next;
+  final int before;
+  final int after;
+  final int points;
+  LoyaltyTxnOutcome(this.status, {this.next, this.before = 0, this.after = 0, this.points = 0});
+}
+
+class LoyaltyMath {
+  static const String ringField = 'loyaltyOps';
+
+  static int _int(Object? v) => v is num ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0;
+
+  /// Khóa thao tác (cũng là giá trị lastLoyaltyOp mà rules kiểm tra): "{billId}:{op}"
+  static String opKey(String billId, LoyaltyOp op) => '$billId:${op.name}';
+
+  static int pointsOf(Map m) {
+    // Cùng thứ tự với database.rules.json (diem_hien_tai → currentPoints)
+    for (final k in const ['diem_hien_tai', 'currentPoints']) {
+      if (m[k] is num) return (m[k] as num).toInt();
+    }
+    return 0;
+  }
+
+  static int totalOf(Map m) {
+    if (m['totalPoints'] is num) return (m['totalPoints'] as num).toInt();
+    return pointsOf(m);
+  }
+
+  /// Số điểm tích cho hóa đơn: tiền thực trả × (rate%) / (đ/điểm), làm tròn.
+  static int pointsToAward({required int billAmount, required double earnRatePercent, required int redeemRate}) {
+    if (billAmount <= 0 || earnRatePercent <= 0 || redeemRate <= 0) return 0;
+    final p = (billAmount * (earnRatePercent / 100) / redeemRate).round();
+    return p > 0 ? p : 0;
+  }
+
+  /// Hàm thuần dùng trong runTransaction trên customers/{customerId}.
+  static LoyaltyTxnOutcome apply(
+    Object? current, {
+    required String billId,
+    required LoyaltyOp op,
+    required int points,
+    required int now,
+    String? by,
+  }) {
+    if (current is! Map) return LoyaltyTxnOutcome(LoyaltyTxnStatus.missingCustomer);
+    final m = Map<String, dynamic>.from(current);
+    final key = opKey(billId, op);
+    final before = pointsOf(m);
+    final total = totalOf(m);
+    if (IdempotencyRing.contains(m[ringField], key)) {
+      return LoyaltyTxnOutcome(LoyaltyTxnStatus.alreadyApplied, before: before, after: before, points: points);
+    }
+    if (points <= 0) return LoyaltyTxnOutcome(LoyaltyTxnStatus.applied, before: before, after: before);
+
+    int after;
+    int applied = points;
+    int newTotal = total;
+    final lastRedeem = m['lastRedeem'];
+    switch (op) {
+      case LoyaltyOp.redeem:
+        if (before < points) {
+          return LoyaltyTxnOutcome(LoyaltyTxnStatus.insufficient, before: before, after: before, points: points);
+        }
+        after = before - points;
+        m['lastRedeem'] = {'billId': billId, 'points': points};
+        break;
+      case LoyaltyOp.award:
+        after = before + points;
+        newTotal = total + points;
+        break;
+      case LoyaltyOp.refund:
+        if (lastRedeem is! Map || lastRedeem['billId']?.toString() != billId) {
+          return LoyaltyTxnOutcome(LoyaltyTxnStatus.nothingToRefund, before: before, after: before);
+        }
+        final held = _int(lastRedeem['points']);
+        final refund = points < held ? points : held;
+        if (refund <= 0) return LoyaltyTxnOutcome(LoyaltyTxnStatus.nothingToRefund, before: before, after: before);
+        after = before + refund;
+        applied = refund;
+        m.remove('lastRedeem');
+        break;
+    }
+
+    m['diem_hien_tai'] = after;
+    m['currentPoints'] = after;
+    m['totalPoints'] = newTotal;
+    m['lastLoyaltyOp'] = key;
+    m['lastLoyaltyBillId'] = billId;
+    m['lastLoyaltyType'] = op.name;
+    m['lastLoyaltyAt'] = now;
+    if (by != null) m['lastLoyaltyBy'] = by;
+    m['ngay_cap_nhat'] = now;
+    m[ringField] = IdempotencyRing.push(m[ringField], key);
+    return LoyaltyTxnOutcome(LoyaltyTxnStatus.applied, next: m, before: before, after: after, points: applied);
+  }
+}
+
+// ==================== TRỪ KHO CÓ THỂ THỬ LẠI ====================
+
+class StockRetryPlanner {
+  /// Trường vòng khóa trong stock_balances/{id}
+  static const String ringField = 'recentSaleBills';
+
+  /// Khóa Firebase hợp lệ cho itemId (không chứa . # $ [ ] /)
+  static String lineKey(String itemId) => itemId.replaceAll(RegExp(r'[.#$\[\]/]'), '_');
+
+  /// Các dòng nguyên liệu CÒN PHẢI trừ: [planned] trừ đi các dòng đã có marker
+  /// trong bill_stock_lines/{billId} ([doneRaw] = Map lineKey -> qty).
+  static Map<String, int> remaining(Map<String, int> planned, Object? doneRaw) {
+    final done = <String>{};
+    if (doneRaw is Map) {
+      for (final e in doneRaw.entries) {
+        if (e.value != null) done.add(e.key.toString());
+      }
+    }
+    return {
+      for (final e in planned.entries)
+        if (e.value != 0 && !done.contains(lineKey(e.key))) e.key: e.value,
+    };
+  }
+
+  static bool isComplete(Map<String, int> planned, Object? doneRaw) => remaining(planned, doneRaw).isEmpty;
+
+  /// Áp dụng trừ kho 1 lần cho [billId] trong transaction stock_balances/{id}.
+  /// Trả về null nếu hóa đơn đã được trừ cho dòng này (có trong vòng khóa) → abort.
+  static Map<String, dynamic>? applyConsumptionOnce(
+    Object? current, {
+    required String billId,
+    required String balanceId,
+    required String branchId,
+    required String itemId,
+    required int consumeQty,
+    required int now,
+  }) {
+    if (current is Map && IdempotencyRing.contains(current[ringField], billId)) return null;
+    final next = StockConsumptionPlanner.applyConsumption(
+      current,
+      balanceId: balanceId,
+      branchId: branchId,
+      itemId: itemId,
+      consumeQty: consumeQty,
+      now: now,
+    );
+    next[ringField] = IdempotencyRing.push(current is Map ? current[ringField] : null, billId);
+    return next;
+  }
+
+  /// Kế hoạch lưu trong stock_retry_queue/{billId}/plan: danh sách {itemId, qty}
+  static List<Map<String, dynamic>> encodePlan(Map<String, int> plan) =>
+      [for (final e in plan.entries) {'itemId': e.key, 'qty': e.value}];
+
+  static Map<String, int>? decodePlan(Object? raw) {
+    final list = raw is List ? raw : (raw is Map ? raw.values.toList() : null);
+    if (list == null) return null;
+    final out = <String, int>{};
+    for (final e in list) {
+      if (e is! Map) continue;
+      final id = e['itemId']?.toString() ?? '';
+      final q = e['qty'];
+      if (id.isEmpty || q is! num) continue;
+      out[id] = (out[id] ?? 0) + q.toInt();
+    }
+    return out;
+  }
+
+  /// Vai trò được phép trừ kho / chạy hàng đợi thử lại (khớp rules: Thu ngân trở lên).
+  static bool canRunRetry(String? roleId, {bool isRootOwner = false}) {
+    if (isRootOwner) return true;
+    const allowed = {
+      'owner', 'ROLE_OWNER',
+      'manager', 'manager_1', 'manager_2', 'ROLE_MANAGER', 'ROLE_MANAGER_1', 'ROLE_MANAGER_2',
+      'cashier', 'ROLE_CASHIER', 'employee',
+    };
+    return allowed.contains(roleId);
+  }
+}

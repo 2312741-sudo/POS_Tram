@@ -117,11 +117,11 @@ class _OverviewTabState extends State<OverviewTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _bills.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary));
+      return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }
 
     return RefreshIndicator(
-      color: TramColors.brandPrimary,
+      color: context.tc.primary,
       onRefresh: () async {
         setState(() {});
       },
@@ -140,18 +140,18 @@ class _OverviewTabState extends State<OverviewTab> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: TramColors.warningSurface,
+                          color: context.tc.warningLight,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: TramColors.warning.withValues(alpha: 0.3)),
+                          border: Border.all(color: context.tc.warning.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.delivery_dining, size: 20, color: TramColors.warning),
+                            Icon(Icons.delivery_dining, size: 20, color: context.tc.warning),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '$_pendingOnlineOrders đơn online cần duyệt',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.warningInk),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.warningInk),
                               ),
                             ),
                           ],
@@ -168,18 +168,18 @@ class _OverviewTabState extends State<OverviewTab> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: TramColors.dangerSurface,
+                          color: context.tc.dangerLight,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: TramColors.danger.withValues(alpha: 0.3)),
+                          border: Border.all(color: context.tc.danger.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.shield_outlined, size: 20, color: TramColors.danger),
+                            Icon(Icons.shield_outlined, size: 20, color: context.tc.danger),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '$_todaySuspiciousCount thao tác nghi vấn',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.danger),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger),
                               ),
                             ),
                           ],
@@ -212,7 +212,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   value: FormatUtils.vnd(_todayRevenue),
                   subtitle: '${_todayPaidBills.length} đơn hoàn tất',
                   icon: Icons.monetization_on,
-                  color: TramColors.brandPrimary,
+                  color: context.tc.primary,
                   onTap: widget.onGoToRevenue,
                 ),
               ),
@@ -223,7 +223,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   value: '${_todayPaidBills.length} đơn',
                   subtitle: 'Xem danh sách',
                   icon: Icons.receipt_long,
-                  color: TramColors.success,
+                  color: context.tc.success,
                   onTap: widget.onGoToBills,
                 ),
               ),
@@ -238,7 +238,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   value: '$_occupiedTables/${_tables.length} bàn',
                   subtitle: '${_tables.length - _occupiedTables} bàn còn trống',
                   icon: Icons.table_restaurant,
-                  color: TramColors.warning,
+                  color: context.tc.warning,
                   onTap: widget.onGoToPOS,
                 ),
               ),
@@ -249,7 +249,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   value: FormatUtils.vnd(_todayDiscounts),
                   subtitle: 'Voucher & điểm',
                   icon: Icons.discount,
-                  color: TramColors.danger,
+                  color: context.tc.danger,
                   onTap: widget.onGoToAnalytics,
                 ),
               ),
@@ -261,9 +261,9 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -274,21 +274,20 @@ class _OverviewTabState extends State<OverviewTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    Expanded(child: Row(
                       children: [
-                        const Icon(Icons.trending_up, size: 20, color: TramColors.brandPrimary),
+                        Icon(Icons.trending_up, size: 20, color: context.tc.primary),
                         const SizedBox(width: 8),
-                        Text(
+                        Flexible(child: Text(
                           'Xu Hướng 7 Ngày Qua',
-                          style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
+                          style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
-                    ),
+                    )),
                     TextButton(
                       onPressed: widget.onGoToRevenue,
                       child: Text(
                         'Chi tiết ›',
-                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
                       ),
                     ),
                   ],
@@ -307,9 +306,9 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -322,7 +321,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.local_fire_department, size: 20, color: TramColors.warning),
+                        Icon(Icons.local_fire_department, size: 20, color: context.tc.warning),
                         const SizedBox(width: 8),
                         Text(
                           'Top Món Bán Chạy Hôm Nay',
@@ -334,7 +333,7 @@ class _OverviewTabState extends State<OverviewTab> {
                       onPressed: widget.onGoToAnalytics,
                       child: Text(
                         'Top 10 ›',
-                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
                       ),
                     ),
                   ],
@@ -346,7 +345,7 @@ class _OverviewTabState extends State<OverviewTab> {
                     child: Center(
                       child: Text(
                         'Hôm nay chưa có món nào được thanh toán',
-                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                       ),
                     ),
                   )
@@ -381,15 +380,15 @@ class _OverviewTabState extends State<OverviewTab> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [TramColors.brandPrimary, Color(0xFFA03842)],
+                gradient: LinearGradient(
+                  colors: [context.tc.primary, const Color(0xFFA03842)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: TramColors.brandPrimary.withValues(alpha: 0.25),
+                    color: context.tc.primary.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -432,7 +431,7 @@ class _OverviewTabState extends State<OverviewTab> {
           // 6. Phím Tắt Nghiệp Vụ Quản Lý
           Text(
             'Lối tắt nghiệp vụ',
-            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
+            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.tc.textSecondary),
           ),
           const SizedBox(height: 10),
           Row(
@@ -441,7 +440,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Két Tiền Ca',
                   icon: Icons.point_of_sale,
-                  color: TramColors.success,
+                  color: context.tc.success,
                   onTap: () => CashShiftDialog.show(context),
                 ),
               ),
@@ -450,7 +449,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Voucher',
                   icon: Icons.discount_outlined,
-                  color: TramColors.warning,
+                  color: context.tc.warning,
                   onTap: () => context.push('/promotions'),
                 ),
               ),
@@ -459,7 +458,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Nhân Viên',
                   icon: Icons.people_outline,
-                  color: TramColors.info,
+                  color: context.tc.info,
                   onTap: () => context.push('/user-management'),
                 ),
               ),
@@ -468,7 +467,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Thực Đơn',
                   icon: Icons.menu_book_outlined,
-                  color: TramColors.brandPrimary,
+                  color: context.tc.primary,
                   onTap: () => context.push('/menu-management'),
                 ),
               ),
@@ -481,7 +480,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Báo Cáo Cuối Ngày',
                   icon: Icons.summarize_outlined,
-                  color: TramColors.brandPrimary,
+                  color: context.tc.primary,
                   onTap: () => context.push('/end-of-day-report'),
                 ),
               ),
@@ -490,7 +489,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Phiếu Giao Ca',
                   icon: Icons.receipt_long,
-                  color: TramColors.success,
+                  color: context.tc.success,
                   onTap: () => context.push('/cash-shifts'),
                 ),
               ),
@@ -508,7 +507,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: _buildActionShortcut(
                   label: 'Giám Sát',
                   icon: Icons.shield_outlined,
-                  color: TramColors.danger,
+                  color: context.tc.danger,
                   onTap: widget.onGoToAudit,
                 ),
               ),
@@ -534,9 +533,9 @@ class _OverviewTabState extends State<OverviewTab> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.tc.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: TramColors.borderLight),
+          border: Border.all(color: context.tc.borderLight),
           boxShadow: const [
             BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
           ],
@@ -555,7 +554,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   ),
                   child: Icon(icon, size: 20, color: color),
                 ),
-                Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey.shade400),
+                Icon(Icons.arrow_forward_ios, size: 12, color: context.tc.textHint),
               ],
             ),
             const SizedBox(height: 10),
@@ -563,12 +562,12 @@ class _OverviewTabState extends State<OverviewTab> {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: TramColors.textPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: context.tc.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
               title,
-              style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
             ),
             const SizedBox(height: 2),
             Text(
@@ -619,7 +618,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 if (val == 0) return const SizedBox.shrink();
                 return Text(
                   val >= 1000000 ? '${(val / 1000000).toStringAsFixed(1)}M' : '${(val / 1000).toInt()}k',
-                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textSecondary),
                 );
               },
             ),
@@ -634,7 +633,7 @@ class _OverviewTabState extends State<OverviewTab> {
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       trend[idx]['label'],
-                      style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                     ),
                   );
                 }
@@ -648,7 +647,7 @@ class _OverviewTabState extends State<OverviewTab> {
           drawVerticalLine: false,
           horizontalInterval: maxY / 4,
           getDrawingHorizontalLine: (value) => FlLine(
-            color: TramColors.borderLight,
+            color: context.tc.borderLight,
             strokeWidth: 1,
             dashArray: [4, 4],
           ),
@@ -662,7 +661,7 @@ class _OverviewTabState extends State<OverviewTab> {
             barRods: [
               BarChartRodData(
                 toY: rev,
-                color: isToday ? TramColors.brandPrimary : const Color(0xFFC76C74),
+                color: isToday ? context.tc.primary : const Color(0xFFC76C74),
                 width: 14,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
               ),
@@ -687,7 +686,7 @@ class _OverviewTabState extends State<OverviewTab> {
     } else if (rank == 3) {
       badgeColor = const Color(0xFFCD7F32); // Bronze
     } else {
-      badgeColor = Colors.grey.shade400;
+      badgeColor = context.tc.textHint;
     }
 
     final ratio = maxCount > 0 ? (count / maxCount).clamp(0.0, 1.0) : 0.0;
@@ -714,7 +713,7 @@ class _OverviewTabState extends State<OverviewTab> {
             children: [
               Text(
                 name,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: TramColors.textPrimary),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
               ),
               const SizedBox(height: 4),
               ClipRRect(
@@ -722,8 +721,8 @@ class _OverviewTabState extends State<OverviewTab> {
                 child: LinearProgressIndicator(
                   value: ratio,
                   minHeight: 5,
-                  backgroundColor: Colors.grey.shade100,
-                  valueColor: AlwaysStoppedAnimation<Color>(rank == 1 ? TramColors.brandPrimary : TramColors.accent),
+                  backgroundColor: context.tc.cardElevated,
+                  valueColor: AlwaysStoppedAnimation<Color>(rank == 1 ? context.tc.primary : TramColors.accent),
                 ),
               ),
             ],
@@ -732,7 +731,7 @@ class _OverviewTabState extends State<OverviewTab> {
         const SizedBox(width: 12),
         Text(
           '$count ly',
-          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.primary),
         ),
       ],
     );
@@ -750,9 +749,9 @@ class _OverviewTabState extends State<OverviewTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.tc.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: TramColors.borderLight),
+          border: Border.all(color: context.tc.borderLight),
         ),
         child: Column(
           children: [
@@ -768,7 +767,7 @@ class _OverviewTabState extends State<OverviewTab> {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: TramColors.textPrimary),
+              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
             ),
           ],
         ),

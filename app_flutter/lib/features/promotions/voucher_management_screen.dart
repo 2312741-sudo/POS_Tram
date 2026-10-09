@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'dart:math';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/permissions/app_permissions.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/campaign_service.dart';
-import '../../core/services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 
 class VoucherManagementScreen extends StatefulWidget {
   final CampaignModel campaign;
-  const VoucherManagementScreen({Key? key, required this.campaign}) : super(key: key);
+  const VoucherManagementScreen({super.key, required this.campaign});
 
   @override
   State<VoucherManagementScreen> createState() => _VoucherManagementScreenState();
@@ -18,17 +16,16 @@ class VoucherManagementScreen extends StatefulWidget {
 
 class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
   final _campaignService = CampaignService();
-  final _auth = AuthService();
   
   String _stateFilter = 'TẤT CẢ';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TramColors.brandSurface,
+      backgroundColor: context.tc.surface,
       appBar: AppBar(
-        title: Text('Quản lý mã - \${widget.campaign.name}'),
-        backgroundColor: TramColors.brandPrimary,
+        title: Text('Quản lý mã - ${widget.campaign.name}'),
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<List<VoucherModel>>(
@@ -38,7 +35,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Lỗi: \${snapshot.error}'));
+            return Center(child: Text('Lỗi: ${snapshot.error}'));
           }
 
           final vouchers = snapshot.data ?? [];
@@ -65,12 +62,12 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
     final cancelled = vouchers.where((v) => v.state == VoucherState.cancelled.toMap()).length;
 
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem('Tổng', total, Colors.black),
+          _buildStatItem('Tổng', total, context.tc.textPrimary),
           _buildStatItem('Phát hành', released, Colors.blue),
           _buildStatItem('Đã dùng', redeemed, Colors.green),
           _buildStatItem('Đã hủy', cancelled, Colors.red),
@@ -84,7 +81,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
       children: [
         Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 12, color: context.tc.textHint)),
       ],
     );
   }
@@ -102,7 +99,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Tạo mã'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: TramColors.brandPrimary,
+                backgroundColor: context.tc.primary,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -112,7 +109,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
             child: ElevatedButton.icon(
               onPressed: draftCount > 0 ? () => _releaseAll(vouchers) : null,
               icon: const Icon(Icons.send),
-              label: Text('Phát hành (\${draftCount})'),
+              label: Text('Phát hành (${draftCount})'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
@@ -156,9 +153,9 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           });
         }
       },
-      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
+      selectedColor: context.tc.primary.withValues(alpha: 0.2),
       labelStyle: TextStyle(
-        color: isSelected ? TramColors.brandPrimary : Colors.black87,
+        color: isSelected ? context.tc.primary : context.tc.textPrimary,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );
@@ -188,7 +185,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
   }
 
   Widget _buildVoucherCard(VoucherModel v) {
-    Color stateColor = Colors.grey;
+    Color stateColor = context.tc.textHint;
     String stateText = v.state;
     if (v.state == VoucherState.draft.toMap()) {
       stateColor = Colors.orange;
@@ -212,7 +209,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Hủy mã?'),
-            content: Text('Bạn có chắc muốn hủy mã \${v.normalizedCode} này?'),
+            content: Text('Bạn có chắc muốn hủy mã ${v.normalizedCode} này?'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('KHÔNG')),
               TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('HỦY MÃ', style: TextStyle(color: Colors.red))),
@@ -223,7 +220,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
       onDismissed: (direction) async {
         await _campaignService.cancelVoucher(widget.campaign.campaignId, v.voucherId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã hủy mã \${v.normalizedCode}')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã hủy mã ${v.normalizedCode}')));
         }
       },
       background: Container(
@@ -240,8 +237,8 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
             style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 16),
           ),
           subtitle: v.state == VoucherState.redeemed.toMap() && v.redeemedAt != null
-              ? Text('Dùng bởi \${v.redeemedBy ?? "?"} lúc \${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.redeemedAt!))}\\nBill: \${v.redeemedBillId}')
-              : Text('Tạo lúc \${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.createdAt))}'),
+              ? Text('Dùng bởi ${v.redeemedBy ?? "?"} lúc ${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.redeemedAt!))}\\nBill: ${v.redeemedBillId}')
+              : Text('Tạo lúc ${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.createdAt))}'),
           trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (stateColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: stateColor)), child: Text(stateText, style: TextStyle(color: stateColor, fontSize: 12, fontWeight: FontWeight.bold))),
         ),
       ),
@@ -258,7 +255,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: \$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     }
   }
@@ -293,7 +290,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                               onSelected: (val) {
                                 if (val) setDialogState(() => isCustom = false);
                               },
-                              selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
+                              selectedColor: context.tc.primary.withValues(alpha: 0.2),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -304,7 +301,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                               onSelected: (val) {
                                 if (val) setDialogState(() => isCustom = true);
                               },
-                              selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
+                              selectedColor: context.tc.primary.withValues(alpha: 0.2),
                             ),
                           ),
                         ],
@@ -325,9 +322,9 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                           onSaved: (val) => customCode = (val ?? '').trim().toUpperCase(),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Mã sẽ được kích hoạt ngay và dùng được trên cả POS lẫn Web.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                          style: TextStyle(fontSize: 12, color: context.tc.textHint),
                         ),
                       ] else ...[
                         TextFormField(
@@ -377,7 +374,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                       }
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary, foregroundColor: Colors.white),
                   child: const Text('TẠO MÃ'),
                 )
               ],
@@ -409,17 +406,17 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
     for (int i = 0; i < qty; i++) {
       String suffix = String.fromCharCodes(Iterable.generate(
         length, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
-      codes.add('\$prefix\$suffix');
+      codes.add('$prefix$suffix');
     }
 
     try {
       await _campaignService.createVouchers(widget.campaign.campaignId, codes, autoRelease: true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tạo thành công \$qty mã!')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tạo thành công $qty mã!')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi tạo mã: \$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi tạo mã: $e')));
       }
     }
   }

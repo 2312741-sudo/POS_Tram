@@ -28,23 +28,23 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.tc.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Thêm khu vực', style: GoogleFonts.beVietnamPro(
-          color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
         content: TextField(
           controller: ctrl,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: const InputDecoration(
+          style: TextStyle(color: context.tc.textPrimary),
+          decoration: InputDecoration(
             labelText: 'Tên khu vực (VD: Khu A, Tầng 2)',
-            prefixIcon: Icon(Icons.map_outlined, color: AppColors.textSecondary),
+            prefixIcon: Icon(Icons.map_outlined, color: context.tc.textSecondary),
           ),
           autofocus: true,
           textCapitalization: TextCapitalization.words,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context),
-            child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary))),
+            child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary))),
           ElevatedButton(
             onPressed: () async {
               if (ctrl.text.trim().isNotEmpty) {
@@ -73,12 +73,12 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.surface,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Quản lý khu vực', style: GoogleFonts.beVietnamPro(
-          color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
       ),
       body: _zones.isEmpty
         ? EmptyState(
@@ -97,9 +97,9 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (_, i) => Container(
               decoration: BoxDecoration(
-                color: AppColors.card,
+                color: context.tc.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.tc.border),
               ),
               child: ListTile(
                 leading: Container(
@@ -111,17 +111,17 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                   child: const Icon(Icons.location_on_outlined, color: AppColors.secondary, size: 18),
                 ),
                 title: Text(_zones[i].name, style: GoogleFonts.beVietnamPro(
-                  color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                  color: context.tc.textPrimary, fontWeight: FontWeight.w600)),
                 subtitle: StreamBuilder<List<TableModel>>(
                   stream: _fb.tablesStream(),
                   builder: (_, snap) {
                     final tables = (snap.data ?? []).where((t) => t.zone == _zones[i].name).length;
                     return Text('$tables bàn', style: GoogleFonts.beVietnamPro(
-                      color: AppColors.textSecondary, fontSize: 12));
+                      color: context.tc.textSecondary, fontSize: 12));
                   },
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                  icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                   onPressed: () => _deleteZone(_zones[i]),
                 ),
               ),
@@ -131,7 +131,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
         onPressed: _showAddDialog,
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Thêm', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
       ),
     );

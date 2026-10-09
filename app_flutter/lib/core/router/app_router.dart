@@ -10,7 +10,6 @@ import '../../features/orders/order_list_screen.dart';
 import '../../features/orders/order_cart_screen.dart';
 import '../../features/kitchen/kitchen_screen.dart';
 import '../../features/history/history_screen.dart';
-import '../../features/promotions/promotions_screen.dart';
 import '../../features/audit_logs/audit_logs_screen.dart';
 import '../../features/permissions/permissions_matrix_screen.dart';
 import '../../features/menu_management/menu_management_screen.dart';

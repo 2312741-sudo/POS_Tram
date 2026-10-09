@@ -181,15 +181,15 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.dangerLight,
+                                  color: context.tc.dangerLight,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text('Nhạy cảm', style: GoogleFonts.beVietnamPro(fontSize: 10, color: AppColors.danger, fontWeight: FontWeight.bold)),
+                                child: Text('Nhạy cảm', style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.danger, fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ],
                         ),
-                        subtitle: Text(perm.description, style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+                        subtitle: Text(perm.description, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                         value: isChecked,
                         dense: true,
                         onChanged: (val) {
@@ -221,7 +221,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                     isSystemRole: roleToEdit?.isSystemRole ?? false,
                   );
                   await _fb.saveRole(newRole);
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   _loadData();
                 },
                 child: const Text('Lưu Vai Trò'),
@@ -242,9 +242,9 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
         title: const Text('Kiểm Soát & Ma Trận Phân Quyền'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
+          labelColor: context.tc.primary,
+          unselectedLabelColor: context.tc.textSecondary,
+          indicatorColor: context.tc.primary,
           tabs: const [
             Tab(icon: Icon(Icons.grid_on), text: 'Ma Trận Quyền Nhân Viên'),
             Tab(icon: Icon(Icons.badge_outlined), text: 'Danh Sách Vai Trò'),
@@ -262,7 +262,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                     // Toolbar Filter
                     Container(
                       padding: const EdgeInsets.all(12),
-                      color: Colors.white,
+                      color: context.tc.card,
                       child: Column(
                         children: [
                           Row(
@@ -284,7 +284,8 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               Expanded(
                                 flex: 2,
                                 child: DropdownButtonFormField<String>(
-                                  value: _selectedCategory,
+                                  key: ValueKey<Object?>(_selectedCategory),
+                                  initialValue: _selectedCategory,
                                   isDense: true,
                                   decoration: InputDecoration(
                                     labelText: 'Nhóm quyền',
@@ -303,12 +304,12 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              const Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+                              Icon(Icons.info_outline, size: 16, color: context.tc.primary),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Chủ quán tick chọn trực tiếp quyền hạn cho từng nhân viên. Thay đổi có hiệu lực ngay lập tức.',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                                 ),
                               ),
                             ],
@@ -325,16 +326,16 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+                                  Icon(Icons.people_outline, size: 64, color: context.tc.textHint),
                                   const SizedBox(height: 16),
                                   Text(
                                     _searchQuery.isEmpty ? 'Chưa có tài khoản nhân viên nào' : 'Không tìm thấy tài khoản phù hợp',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: context.tc.textSecondary),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     'Vui lòng vào Quản lý tài khoản để thêm nhân viên vào quán.',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey.shade500),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textHint),
                                   ),
                                 ],
                               ),
@@ -344,7 +345,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
+                            headingRowColor: WidgetStateProperty.all(context.tc.cardElevated),
                             dataRowMinHeight: 48,
                             dataRowMaxHeight: 56,
                             columns: [
@@ -361,10 +362,10 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                     message: '${perm.label}\n${perm.description}',
                                     child: Row(
                                       children: [
-                                        Text(perm.label, style: TextStyle(fontWeight: FontWeight.bold, color: isSens ? AppColors.danger : null)),
+                                        Text(perm.label, style: TextStyle(fontWeight: FontWeight.bold, color: isSens ? context.tc.danger : null)),
                                         if (isSens) ...[
                                           const SizedBox(width: 4),
-                                          const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.danger),
+                                          Icon(Icons.warning_amber_rounded, size: 14, color: context.tc.danger),
                                         ],
                                       ],
                                     ),
@@ -382,13 +383,13 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                       children: [
                                         CircleAvatar(
                                           radius: 14,
-                                          backgroundColor: user.isRootOwner ? Colors.amber : AppColors.primaryLight,
+                                          backgroundColor: user.isRootOwner ? Colors.amber : context.tc.primaryLight,
                                           child: Text(
                                             user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
-                                              color: user.isRootOwner ? Colors.white : AppColors.primary,
+                                              color: user.isRootOwner ? Colors.white : context.tc.primary,
                                             ),
                                           ),
                                         ),
@@ -398,7 +399,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             Text(user.fullName, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
-                                            Text('@${user.username}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary)),
+                                            Text('@${user.username}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                                           ],
                                         ),
                                       ],
@@ -410,7 +411,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: user.isRootOwner ? Colors.amber.shade100 : Colors.blue.shade50,
+                                        color: user.isRootOwner ? context.bg(Colors.amber.shade100) : context.bg(Colors.blue.shade50),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -418,7 +419,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                         style: GoogleFonts.beVietnamPro(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          color: user.isRootOwner ? Colors.amber.shade900 : Colors.blue.shade800,
+                                          color: user.isRootOwner ? context.ink(Colors.amber.shade900) : context.ink(Colors.blue.shade800),
                                         ),
                                       ),
                                     ),
@@ -431,7 +432,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                       Center(
                                         child: Checkbox(
                                           value: hasPerm,
-                                          activeColor: user.isRootOwner ? Colors.amber.shade700 : AppColors.primary,
+                                          activeColor: user.isRootOwner ? Colors.amber.shade700 : context.tc.primary,
                                           onChanged: user.isRootOwner
                                               ? null
                                               : (val) {
@@ -457,7 +458,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                     onPressed: () => _showAddEditRoleDialog(),
                     icon: const Icon(Icons.add, color: Colors.white),
                     label: Text('Thêm Vai Trò Tùy Chỉnh', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: context.tc.primary,
                     foregroundColor: Colors.white,
                   ),
                   body: ListView.separated(
@@ -483,7 +484,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                   if (role.isSystemRole)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(4)),
+                                      decoration: BoxDecoration(color: context.tc.borderLight, borderRadius: BorderRadius.circular(4)),
                                       child: const Text('Mặc định hệ thống', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                                     ),
                                   IconButton(
@@ -492,7 +493,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                   ),
                                   if (!role.isSystemRole)
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                      icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                                       onPressed: () async {
                                         final confirm = await showDialog<bool>(
                                           context: context,
@@ -502,7 +503,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                             actions: [
                                               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
                                               ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                                style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
                                                 onPressed: () => Navigator.pop(ctx, true),
                                                 child: const Text('Xóa'),
                                               ),
@@ -519,7 +520,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               ),
                               if (role.description.isNotEmpty) ...[
                                 const SizedBox(height: 4),
-                                Text(role.description, style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 13)),
+                                Text(role.description, style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 13)),
                               ],
                               const SizedBox(height: 12),
                               Wrap(
@@ -529,7 +530,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                   final pObj = AppPermissions.allPermissions.where((p) => p.key == pKey).firstOrNull;
                                   return Chip(
                                     label: Text(pObj?.label ?? pKey, style: const TextStyle(fontSize: 11)),
-                                    backgroundColor: AppColors.primaryLight,
+                                    backgroundColor: context.tc.primaryLight,
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
                                   );

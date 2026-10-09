@@ -17,9 +17,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: TramColors.brandPrimary,
+        backgroundColor: context.tc.primary,
         title: const Text('Báo cáo Kho hàng', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -117,10 +117,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: context.tc.textPrimary,
       ),
     );
   }
@@ -134,7 +134,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 2.5,
       children: [
-        _buildMetricCard('Tổng giá trị tồn kho', FormatUtils.currency(totalValue), TramColors.brandPrimary),
+        _buildMetricCard('Tổng giá trị tồn kho', FormatUtils.currency(totalValue), context.tc.primary),
         _buildMetricCard('Số mặt hàng theo dõi', trackedItems.toString(), Colors.blue),
         _buildMetricCard('Dưới mức tối thiểu', lowStockCount.toString(), Colors.orange),
         _buildMetricCard('Hết hàng', outOfStockCount.toString(), Colors.red),
@@ -146,15 +146,15 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: context.tc.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(title, style: TextStyle(color: context.tc.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
         ],

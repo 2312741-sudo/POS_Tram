@@ -41,6 +41,13 @@ class OrderItemModel {
   int discountedQuantity;
   String discountReason;
 
+  // Người duyệt giảm giá dòng bằng PIN quản lý (verifyManagerPin) — khớp web
+  // withApprovalMeta. Rỗng/null khi nhân viên tự có quyền DISCOUNT_ITEM.
+  String discountApprovedBy; // uid người duyệt
+  String discountApprovedByName;
+  String discountApprovalId;
+  int? discountApprovedAt;
+
   // Thuộc tính KiotViet FnB (Size, Đường, Đá, Topping)
   String selectedSize;
   int sizeExtraPrice;
@@ -66,6 +73,10 @@ class OrderItemModel {
     this.discountUnitAmount = 0,
     int? discountedQuantity,
     this.discountReason = '',
+    this.discountApprovedBy = '',
+    this.discountApprovedByName = '',
+    this.discountApprovalId = '',
+    this.discountApprovedAt,
     this.selectedSize = '',
     this.sizeExtraPrice = 0,
     this.selectedSugar = '',
@@ -107,6 +118,10 @@ class OrderItemModel {
       discountUnitAmount: unitAmount,
       discountedQuantity: dq,
       discountReason: map['discountReason']?.toString() ?? '',
+      discountApprovedBy: map['discountApprovedBy']?.toString() ?? '',
+      discountApprovedByName: map['discountApprovedByName']?.toString() ?? '',
+      discountApprovalId: map['discountApprovalId']?.toString() ?? '',
+      discountApprovedAt: asInt(map['discountApprovedAt']),
       selectedSize: map['selectedSize']?.toString() ?? '',
       sizeExtraPrice: (map['sizeExtraPrice'] as num?)?.toInt() ?? 0,
       selectedSugar: map['selectedSugar']?.toString() ?? '',
@@ -133,6 +148,10 @@ class OrderItemModel {
     if (discountPercent > 0) 'discountPercent': discountPercent,
     if (discountUnitAmount > 0) 'discountUnitAmount': discountUnitAmount,
     if (discountReason.isNotEmpty) 'discountReason': discountReason,
+    if (hasDiscount && discountApprovedBy.isNotEmpty) 'discountApprovedBy': discountApprovedBy,
+    if (hasDiscount && discountApprovedByName.isNotEmpty) 'discountApprovedByName': discountApprovedByName,
+    if (hasDiscount && discountApprovalId.isNotEmpty) 'discountApprovalId': discountApprovalId,
+    if (hasDiscount && discountApprovedAt != null) 'discountApprovedAt': discountApprovedAt,
     if (selectedSize.isNotEmpty) 'selectedSize': selectedSize,
     if (sizeExtraPrice > 0) 'sizeExtraPrice': sizeExtraPrice,
     if (selectedSugar.isNotEmpty) 'selectedSugar': selectedSugar,
@@ -217,6 +236,10 @@ class OrderItemModel {
     int unitAmount = 0,
     required int discountedQuantity,
     String reason = '',
+    String approvedBy = '',
+    String approvedByName = '',
+    String approvalId = '',
+    int? approvedAt,
   }) {
     final pct = percent.clamp(0, 100);
     final amt = pct > 0 ? 0 : (unitAmount < 0 ? 0 : unitAmount);
@@ -227,6 +250,11 @@ class OrderItemModel {
       discountedQuantity: dq,
       discountReason: (pct > 0 || amt > 0) && dq > 0 ? reason : '',
       discountAmount: 0,
+      discountApprovedBy: approvedBy,
+      discountApprovedByName: approvedByName,
+      discountApprovalId: approvalId,
+      discountApprovedAt: approvedAt,
+      clearApproval: approvedAt == null,
     );
     next.discountAmount = next.recomputedLineDiscount;
     if (next.discountAmount == 0) {
@@ -234,6 +262,7 @@ class OrderItemModel {
       next.discountUnitAmount = 0;
       next.discountedQuantity = 0;
       next.discountReason = '';
+      next.clearApprovalMeta();
     }
     return next;
   }
@@ -245,7 +274,16 @@ class OrderItemModel {
         discountUnitAmount: 0,
         discountedQuantity: 0,
         discountReason: '',
+        clearApproval: true,
       );
+
+  /// Xóa thông tin người duyệt giảm giá
+  void clearApprovalMeta() {
+    discountApprovedBy = '';
+    discountApprovedByName = '';
+    discountApprovalId = '';
+    discountApprovedAt = null;
+  }
 
   /// Tách [takeQty] phần ra khỏi dòng (tách hóa đơn). Các phần được giảm được
   /// chia sang phần tách trước; tổng giảm 2 phần cộng lại đúng bằng tổng giảm cũ.
@@ -311,6 +349,11 @@ class OrderItemModel {
     int? discountUnitAmount,
     int? discountedQuantity,
     String? discountReason,
+    String? discountApprovedBy,
+    String? discountApprovedByName,
+    String? discountApprovalId,
+    int? discountApprovedAt,
+    bool clearApproval = false,
     String? selectedSize,
     int? sizeExtraPrice,
     String? selectedSugar,
@@ -336,6 +379,10 @@ class OrderItemModel {
       // Tăng số lượng KHÔNG tự giảm cho phần mới (giảm giá cần quản lý duyệt).
       discountedQuantity: (discountedQuantity ?? this.discountedQuantity).clamp(0, nextQty < 0 ? 0 : nextQty),
       discountReason: discountReason ?? this.discountReason,
+      discountApprovedBy: discountApprovedBy ?? (clearApproval ? '' : this.discountApprovedBy),
+      discountApprovedByName: discountApprovedByName ?? (clearApproval ? '' : this.discountApprovedByName),
+      discountApprovalId: discountApprovalId ?? (clearApproval ? '' : this.discountApprovalId),
+      discountApprovedAt: discountApprovedAt ?? (clearApproval ? null : this.discountApprovedAt),
       selectedSize: selectedSize ?? this.selectedSize,
       sizeExtraPrice: sizeExtraPrice ?? this.sizeExtraPrice,
       selectedSugar: selectedSugar ?? this.selectedSugar,

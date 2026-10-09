@@ -112,19 +112,20 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
     } catch (_) {}
   }
 
-  Future<void> _sendTestPayment() async {
+  Future<void> _sendTestPayment({int amount = 15000, String? content}) async {
+    final finalContent = content ?? 'tram01a1';
     try {
       await _methodChannel.invokeMethod('sendTestPayment', {
         'storeCode': _selectedStoreCode,
-        'amount': 35000,
-        'content': '${_selectedStoreCode}_BAN_D5',
+        'amount': amount,
+        'content': finalContent,
         'bankName': 'MB Bank (Test)',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Đã bắn thử giao dịch 35.000đ cho chi nhánh $_selectedStoreCode! Kiểm tra POS ngay.'),
+            content: Text('✅ Đã bắn thử giao dịch ${_formatVND(amount)} (ND: $finalContent) cho $_selectedStoreCode!'),
             backgroundColor: const Color(0xFF137333),
             duration: const Duration(seconds: 3),
           ),
@@ -326,19 +327,33 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                     style: TextStyle(fontSize: 13, color: Color(0xFF5D5B63)),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.send_rounded, size: 18),
-                      label: Text('Bắn thử giao dịch test 35.000đ ($_selectedStoreCode)'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF7E2930),
-                        side: const BorderSide(color: Color(0xFF7E2930)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.bolt, size: 18),
+                        label: const Text('Test Bàn A1 (15.000đ - tram01a1)'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF137333),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _sendTestPayment(amount: 15000, content: 'tram01a1'),
                       ),
-                      onPressed: _sendTestPayment,
-                    ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.send_rounded, size: 18),
+                        label: Text('Test Bàn D5 (35.000đ - ${_selectedStoreCode}_BAN_D5)'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF7E2930),
+                          side: const BorderSide(color: Color(0xFF7E2930)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _sendTestPayment(amount: 35000, content: '${_selectedStoreCode}_BAN_D5'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -426,9 +441,18 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        'Nội dung: ${p['content'] ?? ""}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                        'Nội dung nhận diện: ${p['content'] ?? ""}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF137333)),
                       ),
+                      if ((p['rawText']?.toString() ?? '').isNotEmpty && p['rawText'] != p['content']) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Tin gốc: ${p['rawText']}',
+                          style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                       const SizedBox(height: 2),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

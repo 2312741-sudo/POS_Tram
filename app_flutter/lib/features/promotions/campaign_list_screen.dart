@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/format_utils.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/permissions/app_permissions.dart';
-import '../../core/utils/format_utils.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/campaign_service.dart';
 import '../../core/services/auth_service.dart';
@@ -11,7 +11,7 @@ import 'campaign_form_screen.dart';
 import 'voucher_management_screen.dart';
 
 class CampaignListScreen extends StatefulWidget {
-  const CampaignListScreen({Key? key}) : super(key: key);
+  const CampaignListScreen({super.key});
 
   @override
   State<CampaignListScreen> createState() => _CampaignListScreenState();
@@ -28,10 +28,10 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TramColors.brandSurface,
+      backgroundColor: context.tc.surface,
       appBar: AppBar(
         title: const Text('Quản lý Khuyến mãi'),
-        backgroundColor: TramColors.brandPrimary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
@@ -45,7 +45,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Lỗi: \${snapshot.error}'));
+            return Center(child: Text('Lỗi: ${snapshot.error}'));
           }
 
           var campaigns = snapshot.data ?? [];
@@ -58,7 +58,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
               action: _auth.can(AppPermissions.createCampaign)
                   ? ElevatedButton(
                       onPressed: _goToCreateCampaign,
-                      style: ElevatedButton.styleFrom(backgroundColor: TramColors.brandPrimary),
+                      style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
                       child: const Text('Tạo khuyến mãi mới', style: TextStyle(color: Colors.white)),
                     )
                   : null,
@@ -77,7 +77,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
       floatingActionButton: _auth.can(AppPermissions.createCampaign)
           ? FloatingActionButton(
               onPressed: _goToCreateCampaign,
-              backgroundColor: TramColors.brandPrimary,
+              backgroundColor: context.tc.primary,
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
@@ -86,7 +86,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
 
   Widget _buildFilters() {
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: Column(
         children: [
@@ -99,7 +99,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                 borderSide: BorderSide.none,
               ),
               filled: true,
-              fillColor: Colors.grey[200],
+              fillColor: context.tc.borderLight,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               isDense: true,
             ),
@@ -143,9 +143,9 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
           });
         }
       },
-      selectedColor: TramColors.brandPrimary.withValues(alpha: 0.2),
+      selectedColor: context.tc.primary.withValues(alpha: 0.2),
       labelStyle: TextStyle(
-        color: isSelected ? TramColors.brandPrimary : Colors.black87,
+        color: isSelected ? context.tc.primary : context.tc.textPrimary,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );
@@ -186,6 +186,13 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
     final now = DateTime.now().millisecondsSinceEpoch;
     final isUpcoming = campaign.isUpcoming;
     final isEnded = campaign.schedule.absoluteEnd != null && now > campaign.schedule.absoluteEnd!;
+    final dateFmt = DateFormat('dd/MM/yyyy');
+    final startDateStr = campaign.schedule.absoluteStart != null
+        ? dateFmt.format(DateTime.fromMillisecondsSinceEpoch(campaign.schedule.absoluteStart!))
+        : 'Không giới hạn';
+    final endDateStr = campaign.schedule.absoluteEnd != null
+        ? dateFmt.format(DateTime.fromMillisecondsSinceEpoch(campaign.schedule.absoluteEnd!))
+        : 'Không giới hạn';
     
     String statusText = 'Tạm dừng';
     Color statusColor = Colors.orange;
@@ -193,7 +200,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
     if (campaign.active) {
       if (isEnded) {
         statusText = 'Đã kết thúc';
-        statusColor = Colors.grey;
+        statusColor = context.tc.textHint;
       } else if (isUpcoming) {
         statusText = 'Sắp tới';
         statusColor = Colors.blue;
@@ -202,13 +209,6 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
         statusColor = Colors.green;
       }
     }
-
-    final startDateStr = campaign.schedule.absoluteStart != null
-        ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(campaign.schedule.absoluteStart!))
-        : 'Không giới hạn';
-    final endDateStr = campaign.schedule.absoluteEnd != null
-        ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(campaign.schedule.absoluteEnd!))
-        : 'Không giới hạn';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -225,13 +225,13 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: TramColors.brandPrimary.withValues(alpha: 0.1),
+                    color: context.tc.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     campaign.programCode,
-                    style: const TextStyle(
-                      color: TramColors.brandPrimary,
+                    style: TextStyle(
+                      color: context.tc.primary,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -251,22 +251,22 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(_getTypeIcon(CampaignType.fromMap(campaign.campaignType)), size: 16, color: Colors.grey[600]),
+                Icon(_getTypeIcon(CampaignType.fromMap(campaign.campaignType)), size: 16, color: context.tc.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   _getTypeName(CampaignType.fromMap(campaign.campaignType)),
-                  style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                  style: TextStyle(color: context.tc.textSecondary, fontSize: 13),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                Icon(Icons.calendar_today, size: 14, color: context.tc.textHint),
                 const SizedBox(width: 4),
                 Text(
-                  '\$startDateStr - \$endDateStr',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  '$startDateStr - $endDateStr',
+                  style: TextStyle(fontSize: 12, color: context.tc.textHint),
                 ),
               ],
             ),
@@ -292,21 +292,21 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (campaign.budgetMoney != null) ...[
-                            Text('Ngân sách: \${FormatUtils.currency(spent)} / \${FormatUtils.currency(campaign.budgetMoney!)}', style: const TextStyle(fontSize: 12)),
+                            Text('Ngân sách: ${FormatUtils.currency(spent)} / ${FormatUtils.currency(campaign.budgetMoney!)}', style: TextStyle(fontSize: 12)),
                             const SizedBox(height: 4),
                             LinearProgressIndicator(
                               value: spent / campaign.budgetMoney!,
-                              backgroundColor: Colors.grey[200],
+                              backgroundColor: context.tc.borderLight,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                (spent / campaign.budgetMoney!) > 0.9 ? Colors.red : TramColors.brandPrimary
+                                (spent / campaign.budgetMoney!) > 0.9 ? Colors.red : context.tc.primary
                               ),
                             ),
                             const SizedBox(height: 8),
                           ],
                           if (campaign.maxUses != null) ...[
-                            Text('Lượt dùng: \$uses / \${campaign.maxUses}', style: const TextStyle(fontSize: 12)),
+                            Text('Lượt dùng: $uses / ${campaign.maxUses}', style: TextStyle(fontSize: 12)),
                           ] else ...[
-                            Text('Lượt dùng: \$uses', style: const TextStyle(fontSize: 12)),
+                            Text('Lượt dùng: $uses', style: TextStyle(fontSize: 12)),
                           ],
                         ],
                       );
@@ -319,13 +319,13 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                   children: [
                     Switch(
                       value: campaign.active,
-                      activeColor: TramColors.brandPrimary,
+                      activeThumbColor: context.tc.primary,
                       onChanged: (val) async {
                         try {
                           await _campaignService.toggleCampaignActive(campaign.campaignId, val);
                         } catch (e) {
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: \$e')));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
                           }
                         }
                       },

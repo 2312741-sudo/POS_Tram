@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/format_utils.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
 import '../../widgets/common_widgets.dart';
-import '../../core/utils/format_utils.dart';
 import 'package:intl/intl.dart';
 
 class StockCardScreen extends StatelessWidget {
@@ -35,7 +35,7 @@ class StockCardScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Lỗi: \${snapshot.error}'));
+            return Center(child: Text('Lỗi: ${snapshot.error}'));
           }
 
           final events = snapshot.data ?? [];
@@ -64,7 +64,7 @@ class StockCardScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(dateStr, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          Text(dateStr, style: TextStyle(color: context.tc.textSecondary, fontSize: 12)),
                           Text(
                             event.documentType,
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
@@ -75,13 +75,13 @@ class StockCardScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Chứng từ: \${event.documentId}'),
+                          Text('Chứng từ: ${event.documentId}'),
                           Text(
-                            '\${isPositive ? '+' : ''}\${event.qtyDeltaBase}',
+                            '${isPositive ? '+' : ''}${event.qtyDeltaBase}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: isPositive ? AppColors.successLight : AppColors.danger,
+                              color: isPositive ? context.tc.successLight : context.tc.danger,
                             ),
                           ),
                         ],
@@ -91,7 +91,7 @@ class StockCardScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           if (auth.can(AppPermissions.viewCostPrice))
-                            Text('Giá vốn: \${FormatUtils.currency(event.unitCostSnapshot)}'),
+                            Text('Giá vốn: ${FormatUtils.currency(event.unitCostSnapshot)}'),
                           // Note: balance after is not directly on event unless calculated, 
                           // but the requirements say "balance after". We will assume it is computable or part of UI
                           // For simplicity, we just show delta and cost.

@@ -37,9 +37,9 @@ class CartHeaderBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+      decoration: BoxDecoration(
+        color: context.tc.card,
+        border: Border(bottom: BorderSide(color: context.tc.borderLight)),
       ),
       child: Row(
         children: [
@@ -48,13 +48,13 @@ class CartHeaderBar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.primaryLight,
+                color: context.tc.primaryLight,
                 borderRadius: AppRadius.brSm,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.table_restaurant, size: 16, color: AppColors.primaryDark),
+                  Icon(Icons.table_restaurant, size: 16, color: context.tc.primaryDark),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -64,7 +64,7 @@ class CartHeaderBar extends StatelessWidget {
                       style: GoogleFonts.beVietnamPro(
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
-                        color: AppColors.primaryDark,
+                        color: context.tc.primaryDark,
                       ),
                     ),
                   ),
@@ -126,14 +126,14 @@ class CartCustomerBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = customer;
     return Material(
-      color: AppColors.warningLight,
+      color: context.tc.warningLight,
       child: InkWell(
         onTap: c == null ? onLookup : null,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
           child: Row(
             children: [
-              const Icon(Icons.person_pin, color: AppColors.warningInk, size: 22),
+              Icon(Icons.person_pin, color: context.tc.warningInk, size: 22),
               const SizedBox(width: 8),
               Expanded(
                 child: c == null
@@ -141,7 +141,7 @@ class CartCustomerBar extends StatelessWidget {
                         'Chạm để tìm khách & tích điểm',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.warningInk),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.warningInk),
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,13 +151,13 @@ class CartCustomerBar extends StatelessWidget {
                             '${c.fullName} • ${c.phone}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
                           ),
                           Text(
                             'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -169,7 +169,7 @@ class CartCustomerBar extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Bỏ chọn khách',
-                  icon: const Icon(Icons.close, size: 20, color: AppColors.textSecondary),
+                  icon: Icon(Icons.close, size: 20, color: context.tc.textSecondary),
                   onPressed: onClear,
                 ),
               ] else
@@ -179,7 +179,7 @@ class CartCustomerBar extends StatelessWidget {
                   label: const Text('Tìm khách'),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
-                    backgroundColor: AppColors.warningInk,
+                    backgroundColor: context.tc.warningInk,
                     minimumSize: const Size(0, 38),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
@@ -239,17 +239,17 @@ class CartSummaryPanel extends StatelessWidget {
     final breakdown = <Widget>[
       AmountRow(label: 'Tổng tiền hàng', value: FormatUtils.vnd(subTotal)),
       if (itemDiscountTotal > 0)
-        AmountRow(label: '− Giảm giá món', value: '-${FormatUtils.vnd(itemDiscountTotal)}', color: AppColors.success),
+        AmountRow(label: '− Giảm giá món', value: '-${FormatUtils.vnd(itemDiscountTotal)}', color: context.tc.success),
       ...appliedDiscounts.map((d) => AmountRow(
             label: '− ${d.promoCode ?? d.description}',
             value: '-${FormatUtils.vnd(d.amount)}',
-            color: AppColors.success,
+            color: context.tc.success,
           )),
       if (pointsDiscount > 0)
         AmountRow(
           label: '− Điểm tích lũy ($pointsUsed điểm)',
           value: '-${FormatUtils.vnd(pointsDiscount)}',
-          color: AppColors.success,
+          color: context.tc.success,
         ),
       if (vatRate > 0) AmountRow(label: 'VAT (${vatRate.toStringAsFixed(0)}%)', value: '+${FormatUtils.vnd(vatAmount)}'),
     ];
@@ -264,8 +264,8 @@ class CartSummaryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: sidePanel ? const Border(left: BorderSide(color: AppColors.borderLight)) : null,
+        color: context.tc.card,
+        border: sidePanel ? Border(left: BorderSide(color: context.tc.borderLight)) : null,
         boxShadow: sidePanel
             ? null
             : const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, -2))],
@@ -291,7 +291,7 @@ class CartSummaryPanel extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'TỔNG THANH TOÁN',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textPrimary, letterSpacing: 0.3),
+                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 14, color: context.tc.textPrimary, letterSpacing: 0.3),
                   ),
                 ),
                 Flexible(
@@ -301,7 +301,7 @@ class CartSummaryPanel extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: Text(
                       FormatUtils.vnd(finalTotal),
-                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 26, color: AppColors.primary),
+                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 26, color: context.tc.primary),
                     ),
                   ),
                 ),
@@ -330,8 +330,8 @@ class CartSummaryPanel extends StatelessWidget {
                     icon: const Icon(Icons.receipt_long_outlined, size: 18),
                     label: const Text('Tạm tính', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
-                      foregroundColor: const WidgetStatePropertyAll(AppColors.textPrimary),
-                      side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border, width: 1.5)),
+                      foregroundColor: WidgetStatePropertyAll(context.tc.textPrimary),
+                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.border, width: 1.5)),
                     ),
                     onPressed: onPrePrint,
                   ),
@@ -342,8 +342,8 @@ class CartSummaryPanel extends StatelessWidget {
                     icon: const Icon(Icons.cancel_outlined, size: 18),
                     label: const Text('Hủy đơn', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
-                      foregroundColor: const WidgetStatePropertyAll(AppColors.danger),
-                      side: WidgetStatePropertyAll(BorderSide(color: AppColors.danger.withValues(alpha: 0.5), width: 1.5)),
+                      foregroundColor: WidgetStatePropertyAll(context.tc.danger),
+                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.danger.withValues(alpha: 0.5), width: 1.5)),
                     ),
                     onPressed: onCancel,
                   ),
@@ -380,7 +380,7 @@ class CartSummaryPanel extends StatelessWidget {
                     icon: const Icon(Icons.payments_outlined, size: 22),
                     label: const Text('THANH TOÁN', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.tc.primary,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(0, 56),
                       padding: const EdgeInsets.symmetric(horizontal: 8),

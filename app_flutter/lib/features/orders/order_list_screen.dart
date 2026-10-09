@@ -30,7 +30,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
   List<CategoryModel> _categories = [];
   List<String> _backendNotePresets = [];
   bool _loading = false;
-  bool _isSendingKitchen = false;
   bool _isShiftOpen = false;
   final _searchCtrl = TextEditingController();
 
@@ -74,7 +73,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('⚠️ Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
-            backgroundColor: TramColors.warningInk,
+            backgroundColor: AppColors.warningInk,
             duration: Duration(seconds: 3),
           ),
         );
@@ -133,7 +132,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _quickAddToCart(ProductModel product) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
 
     final staffUser = _auth.currentUser?.username ?? 'staff';
     final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
@@ -184,7 +183,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   // ==================== KIOTVIET PRODUCT CUSTOMIZER ====================
   Future<void> _showProductCustomizer(ProductModel product) async {
-    if (!await _ensureShiftOpen()) return;
+    if (!await _ensureShiftOpen() || !mounted) return;
 
     final hasSizes = product.sizes.isNotEmpty;
 
@@ -293,7 +292,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -312,7 +310,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(
-                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2))),
                   ),
                   const SizedBox(height: 12),
 
@@ -326,11 +324,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           children: [
                             Text(product.name, style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold)),
                             if (product.code.isNotEmpty)
-                              Text('SKU: ${product.code} • ${product.category}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary)),
+                              Text('SKU: ${product.code} • ${product.category}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                           ],
                         ),
                       ),
-                      Text(FormatUtils.vnd(product.price), style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      Text(FormatUtils.vnd(product.price), style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary)),
                     ],
                   ),
                   const Divider(height: 24),
@@ -347,9 +345,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         return ChoiceChip(
                           label: Text('Size ${entry.key}$extraText'),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
+                          selectedColor: context.tc.primaryLight,
                           labelStyle: TextStyle(
-                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
@@ -378,8 +376,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         return ChoiceChip(
                           label: Text(s),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
-                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          selectedColor: context.tc.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? context.tc.primaryDark : context.tc.textPrimary, fontSize: 11),
                           onSelected: (val) {
                             if (val) setModalState(() => selectedSugar = s);
                           },
@@ -397,8 +395,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         return ChoiceChip(
                           label: Text(ice),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
-                          labelStyle: TextStyle(color: isSel ? AppColors.primaryDark : AppColors.textPrimary, fontSize: 11),
+                          selectedColor: context.tc.primaryLight,
+                          labelStyle: TextStyle(color: isSel ? context.tc.primaryDark : context.tc.textPrimary, fontSize: 11),
                           onSelected: (val) {
                             if (val) setModalState(() => selectedIce = ice);
                           },
@@ -422,9 +420,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         return FilterChip(
                           label: Text('$topName (+$priceStr)'),
                           selected: isSel,
-                          selectedColor: AppColors.primaryLight,
+                          selectedColor: context.tc.primaryLight,
                           labelStyle: TextStyle(
-                            color: isSel ? AppColors.primaryDark : AppColors.textPrimary,
+                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
                             fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                             fontSize: 12,
                           ),
@@ -469,14 +467,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
                             preset,
                             style: TextStyle(
                               fontSize: 11,
-                              color: isPresetInNote ? AppColors.primaryDark : AppColors.textPrimary,
+                              color: isPresetInNote ? context.tc.primaryDark : context.tc.textPrimary,
                               fontWeight: isPresetInNote ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
-                          backgroundColor: isPresetInNote ? AppColors.primaryLight : AppColors.cardElevated,
+                          backgroundColor: isPresetInNote ? context.tc.primaryLight : context.tc.cardElevated,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: isPresetInNote ? AppColors.primary : AppColors.border),
+                            side: BorderSide(color: isPresetInNote ? context.tc.primary : context.tc.border),
                           ),
                           onPressed: () {
                             setModalState(() {
@@ -506,7 +504,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       // Quantity Stepper
                       Container(
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.tc.border),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -529,7 +527,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: context.tc.primary,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
@@ -605,92 +603,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
     };
   }
 
-  // ==================== SEND TO KITCHEN LOGIC ====================
-  Future<void> _sendToKitchen() async {
-    if (!await _ensureShiftOpen()) return;
-
-    if (_cart.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn món trước khi gửi bếp!')),
-      );
-      return;
-    }
-
-    final unsentItems = _cart.where((i) => !i.isSentKitchen).toList();
-    if (unsentItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tất cả món đã được gửi bếp trước đó rồi!')),
-      );
-      return;
-    }
-
-    setState(() => _isSendingKitchen = true);
-
-    try {
-      final updatedCart = _cart.map((i) => i.copyWith(isSentKitchen: true)).toList();
-
-      widget.table.ensureCodes();
-      final kitchenOrder = KitchenOrderModel(
-        tableName: widget.table.name,
-        orderCode: widget.table.currentOrderCode ?? widget.table.currentBillId,
-        billCode: widget.table.currentBillId,
-        itemsJson: jsonEncode(unsentItems.map((e) => e.toMap()).toList()),
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-      );
-
-      // 1. Lưu trạng thái bàn và giỏ hàng ngay lập tức
-      final t = widget.table;
-      t.inUse = true;
-      if (t.openedAt == null) t.openedAt = DateTime.now().millisecondsSinceEpoch;
-      t.currentOrderJson = jsonEncode(updatedCart.map((e) => e.toMap()).toList());
-
-      // 2. Gửi phiếu sang bếp và lưu bàn song song (mất mạng: SDK tự đồng bộ; lỗi thật: báo ở catch)
-      await Future.wait([
-        _fb.sendKitchenOrder(kitchenOrder),
-        _fb.saveTable(t),
-      ]);
-
-      // 3. Ghi nhật ký thao tác (Audit Log)
-      _fb.logAction(AuditLogModel(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        username: _auth.currentUser?.username ?? 'staff',
-        userFullName: _auth.currentUser?.fullName ?? 'Nhân Viên',
-        userRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
-        action: 'SEND_KITCHEN',
-        targetType: 'TABLE',
-        targetId: widget.table.name,
-        details: 'Gửi bếp bàn ${widget.table.name} (Mã: ${widget.table.currentBillId ?? ""}): ${unsentItems.length} món mới',
-      ));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã gửi ${unsentItems.length} món đến Bếp thành công! 🍽️'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // 4. Ngay lập tức tự động thoát ra màn hình danh sách bàn
-        context.go('/tables');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi gửi bếp: $e'), backgroundColor: AppColors.danger),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSendingKitchen = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final hasItems = _cartCount > 0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -762,13 +680,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
       bottomNavigationBar: hasItems
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: context.tc.card,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.shadow,
+                    color: context.tc.shadow,
                     blurRadius: 10,
-                    offset: Offset(0, -3),
+                    offset: const Offset(0, -3),
                   ),
                 ],
               ),
@@ -779,18 +697,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     icon: Icon(widget.isAddingMore ? Icons.check_circle_outline : Icons.receipt_long, size: 22),
                     label: Text(
                       widget.isAddingMore
-                          ? 'Xong, Quay Lại Đơn • ${FormatUtils.vnd(_cartTotal)} (${_cartCount} món)'
-                          : 'Xem Lại Đơn • ${FormatUtils.vnd(_cartTotal)} (${_cartCount} món)',
+                          ? 'Xong, Quay Lại Đơn • ${FormatUtils.vnd(_cartTotal)} ($_cartCount món)'
+                          : 'Xem Lại Đơn • ${FormatUtils.vnd(_cartTotal)} ($_cartCount món)',
                       style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.tc.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
-                      if (!await _ensureShiftOpen()) return;
+                      if (!await _ensureShiftOpen() || !context.mounted) return;
 
                       final staffUser = _auth.currentUser?.username ?? 'staff';
                       final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
@@ -828,18 +746,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   Widget _buildSearchBar() {
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: TextField(
         controller: _searchCtrl,
-        style: const TextStyle(color: AppColors.textPrimary),
+        style: TextStyle(color: context.tc.textPrimary),
         decoration: InputDecoration(
           hintText: 'Tìm món ăn, thức uống, mã SKU...',
-          prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+          prefixIcon: Icon(Icons.search, color: context.tc.primary),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           suffixIcon: _search.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear, color: AppColors.textSecondary, size: 18),
+                  icon: Icon(Icons.clear, color: context.tc.textSecondary, size: 18),
                   onPressed: () {
                     _searchCtrl.clear();
                     setState(() => _search = '');
@@ -862,7 +780,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
     final cats = catSet.toList();
     return Container(
-      color: Colors.white,
+      color: context.tc.card,
       height: 52,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -875,9 +793,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
           return ChoiceChip(
             label: Text(cat),
             selected: isSelected,
-            selectedColor: AppColors.primaryLight,
+            selectedColor: context.tc.primaryLight,
             labelStyle: GoogleFonts.beVietnamPro(
-              color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+              color: isSelected ? context.tc.primaryDark : context.tc.textPrimary,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 13,
             ),
@@ -897,9 +815,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.no_meals_outlined, size: 64, color: AppColors.textHint),
+            Icon(Icons.no_meals_outlined, size: 64, color: context.tc.textHint),
             const SizedBox(height: 12),
-            Text('Không tìm thấy món nào', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
+            Text('Không tìm thấy món nào', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
           ],
         ),
       );
@@ -958,9 +876,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
         height: 76,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.tc.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.tc.border),
         ),
       ),
     );
@@ -990,17 +908,17 @@ class _ProductListRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isInCart ? AppColors.primaryLight.withValues(alpha: 0.35) : Colors.white,
+        color: isInCart ? context.tc.primaryLight.withValues(alpha: 0.35) : context.tc.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isInCart ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border,
+          color: isInCart ? context.tc.primary.withValues(alpha: 0.5) : context.tc.border,
           width: isInCart ? 1.5 : 1,
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadow,
+            color: context.tc.shadow,
             blurRadius: 4,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -1016,23 +934,23 @@ class _ProductListRow extends StatelessWidget {
                 // Product Image Thumbnail
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Container(
+                  child: SizedBox(
                     width: 58,
                     height: 58,
                     child: (product.imageBase64 != null && product.imageBase64!.isNotEmpty)
-                        ? _buildBase64Image(product.imageBase64!)
+                        ? _buildBase64Image(context, product.imageBase64!)
                         : (product.assetPath != null
                             ? Image.asset(
                                 product.assetPath!,
                                 fit: BoxFit.cover,
                                 width: 58,
                                 height: 58,
-                                errorBuilder: (_, __, ___) => const Center(
-                                  child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+                                errorBuilder: (_, __, ___) => Center(
+                                  child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
                                 ),
                               )
-                            : const Center(
-                                child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+                            : Center(
+                                child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
                               )),
                   ),
                 ),
@@ -1046,7 +964,7 @@ class _ProductListRow extends StatelessWidget {
                       Text(
                         product.name,
                         style: GoogleFonts.beVietnamPro(
-                          color: AppColors.textPrimary,
+                          color: context.tc.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -1059,7 +977,7 @@ class _ProductListRow extends StatelessWidget {
                           Text(
                             FormatUtils.vnd(product.price),
                             style: GoogleFonts.beVietnamPro(
-                              color: AppColors.primary,
+                              color: context.tc.primary,
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),
@@ -1068,16 +986,16 @@ class _ProductListRow extends StatelessWidget {
                             Text(
                               ' / ${product.unit}',
                               style: GoogleFonts.beVietnamPro(
-                                color: AppColors.textSecondary,
+                                color: context.tc.textSecondary,
                                 fontSize: 12,
                               ),
                             ),
                           if (product.category.isNotEmpty) ...[
-                            Text(' • ', style: TextStyle(color: Colors.grey.shade400)),
+                            Text(' • ', style: TextStyle(color: context.tc.textHint)),
                             Text(
                               product.category,
                               style: GoogleFonts.beVietnamPro(
-                                color: AppColors.textSecondary,
+                                color: context.tc.textSecondary,
                                 fontSize: 12,
                               ),
                             ),
@@ -1090,14 +1008,14 @@ class _ProductListRow extends StatelessWidget {
                       Row(
                         children: [
                           if (product.sizes.isNotEmpty)
-                            _buildPillTag('Size S/M/L', Colors.blue.shade700, Colors.blue.shade50),
+                            _buildPillTag('Size S/M/L', context.ink(Colors.blue.shade700), context.bg(Colors.blue.shade50)),
                           if (product.allowedToppings.isNotEmpty || hasOptions) ...[
                             const SizedBox(width: 4),
-                            _buildPillTag('Topping', Colors.orange.shade800, Colors.orange.shade50),
+                            _buildPillTag('Topping', context.ink(Colors.orange.shade800), context.bg(Colors.orange.shade50)),
                           ],
                           if (product.hasIceSugarOptions || hasOptions) ...[
                             const SizedBox(width: 4),
-                            _buildPillTag('Đường/Đá', Colors.green.shade800, Colors.green.shade50),
+                            _buildPillTag('Đường/Đá', context.ink(Colors.green.shade800), context.bg(Colors.green.shade50)),
                           ],
                         ],
                       ),
@@ -1114,11 +1032,11 @@ class _ProductListRow extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: context.tc.primary,
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.3),
+                            color: context.tc.primary.withValues(alpha: 0.3),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1145,18 +1063,18 @@ class _ProductListRow extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: context.tc.card,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+                            border: Border.all(color: context.tc.primary.withValues(alpha: 0.5)),
                           ),
-                          child: const Icon(Icons.remove, color: AppColors.primary, size: 16),
+                          child: Icon(Icons.remove, color: context.tc.primary, size: 16),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         'x$quantity',
                         style: GoogleFonts.beVietnamPro(
-                          color: AppColors.primary,
+                          color: context.tc.primary,
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
                         ),
@@ -1169,7 +1087,7 @@ class _ProductListRow extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: AppColors.primary,
+                            color: context.tc.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.add, color: Colors.white, size: 16),
@@ -1199,7 +1117,7 @@ class _ProductListRow extends StatelessWidget {
     );
   }
 
-  Widget _buildBase64Image(String base64) {
+  Widget _buildBase64Image(BuildContext context, String base64) {
     try {
       final String cleanBase64 = base64.contains(',') ? base64.split(',').last : base64;
       final bytes = base64Decode(cleanBase64);
@@ -1208,13 +1126,13 @@ class _ProductListRow extends StatelessWidget {
         fit: BoxFit.cover,
         width: 58,
         height: 58,
-        errorBuilder: (_, __, ___) => const Center(
-          child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+        errorBuilder: (_, __, ___) => Center(
+          child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
         ),
       );
     } catch (_) {
-      return const Center(
-        child: Icon(Icons.restaurant_menu, color: AppColors.primary, size: 28),
+      return Center(
+        child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
       );
     }
   }

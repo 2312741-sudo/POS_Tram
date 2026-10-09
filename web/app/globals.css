@@ -52,6 +52,16 @@
   --radius-lg: 14px;
   --radius-xl: 20px;
   --control-h: 40px;
+
+  /* Trạng thái bàn (sơ đồ bàn): trống / có khách / đặt trước / chờ thanh toán */
+  --table-empty: var(--success);
+  --table-empty-bg: var(--success-bg);
+  --table-in-use: var(--primary);
+  --table-in-use-bg: var(--primary-light);
+  --table-reserved: var(--warning);
+  --table-reserved-bg: var(--warning-bg);
+  --table-awaiting: #5B3FB0;
+  --table-awaiting-bg: #EEE9FA;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -86,6 +96,8 @@
     --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
     --focus-ring: 0 0 0 3px rgba(224, 122, 132, 0.45);
     --overlay: rgba(0, 0, 0, 0.7);
+    --table-awaiting: #B39DF2;
+    --table-awaiting-bg: #2A2240;
   }
 }
 
@@ -120,6 +132,8 @@
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
   --focus-ring: 0 0 0 3px rgba(224, 122, 132, 0.45);
   --overlay: rgba(0, 0, 0, 0.7);
+  --table-awaiting: #B39DF2;
+  --table-awaiting-bg: #2A2240;
 }
 
 * {
@@ -392,6 +406,12 @@ select.input-field option {
   background: var(--danger-bg);
   color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.badge-awaiting {
+  background: var(--table-awaiting-bg);
+  color: var(--table-awaiting);
+  border: 1px solid color-mix(in srgb, var(--table-awaiting) 35%, transparent);
 }
 
 .badge-warning {

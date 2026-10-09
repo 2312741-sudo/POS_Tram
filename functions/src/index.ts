@@ -1,4 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onValueWritten } from "firebase-functions/v2/database";
+import { FieldValue } from "firebase-admin/firestore";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import {
@@ -8,14 +10,27 @@ import {
   canCallerSetDisabled,
   normalizeUsername,
   buildSyntheticEmail,
+  canCallerImportCustomer,
   UserProfile,
 } from "./permissions";
+import {
+  AnyMap,
+  isValidCustomerKey,
+  isValidStoreCode,
+  buildRtdbCustomerFromFirestore,
+  decideImport,
+  buildFirestoreMirror,
+  shouldMirror,
+  buildPointHistoryEntry,
+  readCurrentPoints,
+} from "./customerSync";
 import {
   LoginAttemptRecord,
   reserveAttempt,
   applyFailure,
   remainingLockSeconds,
   buildLockoutMessage,
+  loginAttemptPath,
   isInvalidCredentialError,
 } from "./loginLockout";
 
@@ -320,7 +335,8 @@ async function verifyPasswordViaRest(email: string, password: string): Promise<{
 /**
  * 4. Đăng nhập nhân viên có khóa tạm chống brute-force (staffSignIn)
  *
- * - Kiểm tra & ghi bộ đếm sai tại stores/{storeCode}/login_attempts/{username} (chỉ Admin SDK truy cập được).
+ * - Kiểm tra & ghi bộ đếm sai tại login_attempts/{storeCode}/{username} ở GỐC (ngoài stores/{s} để không bị
+ *   quyền đọc của thành viên quán lan xuống; rules chặn hoàn toàn, chỉ Admin SDK truy cập được).
  * - Xác minh mật khẩu phía máy chủ qua Identity Toolkit REST.
  * - Thành công: trả về Custom Token để client gọi signInWithCustomToken.
  * - Sai {MAX_FAILED_ATTEMPTS} lần liên tiếp: khóa tạm 15 phút (mã lỗi resource-exhausted).
@@ -365,7 +381,7 @@ export const staffSignIn = onCall(
     }
 
     // 2. Giữ chỗ 1 lượt thử bằng transaction (an toàn khi gửi song song)
-    const attemptRef = db.ref(`stores/${cleanStoreCode}/login_attempts/${cleanUser}`);
+    const attemptRef = db.ref(loginAttemptPath(cleanStoreCode, cleanUser));
     let allowed = false;
     const reserveTx = await attemptRef.transaction((current: LoginAttemptRecord | null) => {
       const r = reserveAttempt(current, Date.now());
@@ -479,3 +495,111 @@ export const staffSignIn = onCall(
     };
   }
 );
+
+/**
+ * 5. Nhập khách hàng từ Firestore kmt_customers vào RTDB của quán (importCustomerToStore)
+ *
+ * - Thu ngân trở lên, đang hoạt động, thuộc quán (userIndex) mới được gọi.
+ * - Đọc Firestore bằng Admin SDK, ghi RTDB với SỐ DƯ THẬT (client không tự sao chép được nữa:
+ *   rules chỉ cho Thu ngân tạo khách với 0 điểm).
+ * - Idempotent: node RTDB đã có → giữ nguyên, trả về created=false (RTDB là nguồn chuẩn).
+ * - Ghi audit log IMPORT_CUSTOMER khi thực sự tạo mới.
+ */
+export const importCustomerToStore = onCall(
+  { region: FUNCTION_REGION },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
+    }
+    const { storeCode, customerId } = (request.data || {}) as { storeCode?: unknown; customerId?: unknown };
+    if (!isValidStoreCode(storeCode) || !isValidCustomerKey(customerId)) {
+      throw new HttpsError("invalid-argument", "Mã cửa hàng hoặc mã khách hàng không hợp lệ.");
+    }
+    const cleanStoreCode = storeCode.trim().toUpperCase();
+    const callerUid = request.auth.uid;
+
+    const [callerSnap, indexSnap] = await Promise.all([
+      db.ref(`stores/${cleanStoreCode}/users/${callerUid}`).get(),
+      db.ref(`userIndex/${callerUid}/${cleanStoreCode}`).get(),
+    ]);
+    const caller = (callerSnap.exists() ? callerSnap.val() : null) as UserProfile | null;
+    if (!canCallerImportCustomer(caller, indexSnap.val() === true)) {
+      throw new HttpsError("permission-denied", "Bạn không có quyền nhập khách hàng cho chi nhánh này.");
+    }
+
+    const customerRef = db.ref(`stores/${cleanStoreCode}/customers/${customerId}`);
+    const existing = await customerRef.get();
+    if (existing.exists()) {
+      return { success: true, created: false, currentPoints: readCurrentPoints(existing.val() as AnyMap) };
+    }
+
+    const doc = await admin.firestore().collection("kmt_customers").doc(customerId).get();
+    if (!doc.exists) {
+      throw new HttpsError("not-found", `Không tìm thấy khách hàng ${customerId} trên hệ thống Khuyến Mãi Trạm.`);
+    }
+    const seed = buildRtdbCustomerFromFirestore((doc.data() || {}) as AnyMap, customerId, Date.now());
+
+    let created = false;
+    const tx = await customerRef.transaction((current: unknown) => {
+      const d = decideImport(current, seed);
+      created = d.action === "create";
+      return d.action === "create" ? d.value : undefined; // undefined = hủy, giữ nguyên dữ liệu hiện có
+    });
+    const finalVal = (tx.snapshot.val() || null) as AnyMap | null;
+
+    if (created && tx.committed) {
+      const now = Date.now();
+      const logId = `LOG_${now}_${Math.random().toString(36).substring(2, 7)}`;
+      await db
+        .ref(`stores/${cleanStoreCode}/audit_logs/${logId}`)
+        .set({
+          timestamp: now,
+          action: "IMPORT_CUSTOMER",
+          username: caller?.username || "unknown",
+          userFullName: caller?.fullName || "",
+          userRole: caller?.roleId || "",
+          targetType: "CUSTOMER",
+          targetId: customerId,
+          details: `Nhập khách ${seed.ho_ten || customerId} (${customerId}) từ kmt_customers với ${seed.currentPoints} điểm`,
+        })
+        .catch(() => undefined);
+    }
+
+    return { success: true, created: created && tx.committed, currentPoints: readCurrentPoints(finalVal) };
+  }
+);
+
+/**
+ * 6. Đồng bộ một chiều RTDB → Firestore kmt_customers (mirrorCustomerToFirestore)
+ *
+ * RTDB stores/{s}/customers/{id} là nguồn chuẩn của điểm; Firestore chỉ là bản sao để
+ * hệ sinh thái Khuyến Mãi Trạm / web đọc. Client KHÔNG ghi điểm vào Firestore nữa.
+ * - Doc id Firestore = customerId (khóa RTDB).
+ * - Ghi lịch sử kmt_point_history với doc id cố định (chạy lại không trùng).
+ * - Xóa khách trên RTDB không xóa Firestore (giữ lịch sử cho hệ thống khác).
+ */
+export const mirrorCustomerToFirestore = onValueWritten(
+  { ref: "/stores/{storeCode}/customers/{customerId}", region: FUNCTION_REGION },
+  async (event) => {
+    const { storeCode, customerId } = event.params;
+    const before = (event.data.before.exists() ? event.data.before.val() : null) as AnyMap | null;
+    const after = (event.data.after.exists() ? event.data.after.val() : null) as AnyMap | null;
+    if (!after || !shouldMirror(before, after)) return;
+    if (!isValidCustomerKey(customerId)) return;
+
+    const fs = admin.firestore();
+    const now = Date.now();
+    await fs.collection("kmt_customers").doc(customerId).set(buildFirestoreMirror(after, storeCode, now), { merge: true });
+
+    const hist = buildPointHistoryEntry(before, after, storeCode, customerId, event.id);
+    if (hist) {
+      await fs
+        .collection("kmt_point_history")
+        .doc(hist.docId)
+        .set({ ...hist.data, ngay_tich: FieldValue.serverTimestamp() }, { merge: true });
+    }
+  }
+);
+
+// Quản lý duyệt bằng PIN (xem managerPin.ts)
+export { verifyManagerPin, setManagerPin } from "./managerPin";

@@ -9,28 +9,55 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 
 /// Trạng thái hiển thị của bàn (dùng chung cho thẻ bàn và chú thích).
-enum TableVisualStatus { empty, inUse, reserved }
+/// [awaitingPayment] = có khách và đã in phiếu tạm tính (TableModel.prePrintedAt).
+enum TableVisualStatus { empty, inUse, awaitingPayment, reserved }
 
 class TableStatusStyle {
   final String label;
-  final Color color;
-  final Color background;
-  final IconData icon;
-  const TableStatusStyle(this.label, this.color, this.background, this.icon);
 
-  static TableStatusStyle of(TableVisualStatus s) {
+  /// Màu nhận diện: dải màu, viền thẻ, nền nhãn trạng thái (chữ trắng đặt lên trên).
+  final Color color;
+
+  /// Nền thẻ bàn / ô màu mẫu trong chú thích.
+  final Color background;
+
+  /// Chữ/icon màu trạng thái đặt trên [background] (hoặc nền thẻ) – đủ tương phản.
+  final Color ink;
+  final IconData icon;
+  const TableStatusStyle(this.label, this.color, this.background, this.icon, {Color? ink}) : ink = ink ?? color;
+
+  /// Kiểu hiển thị theo theme hiện tại (sáng/tối).
+  static TableStatusStyle resolve(BuildContext context, TableVisualStatus s) =>
+      of(s, dark: context.isDarkMode);
+
+  static TableStatusStyle of(TableVisualStatus s, {bool dark = false}) {
     switch (s) {
       case TableVisualStatus.inUse:
-        return const TableStatusStyle('Có khách', TramColors.tableInUse, TramColors.tableInUseBg, Icons.people_alt);
+        return dark
+            ? const TableStatusStyle('Có khách', TramColors.tableInUseDark, TramColors.tableInUseBgDark, Icons.people_alt,
+                ink: TramColors.tableInUseInkDark)
+            : const TableStatusStyle('Có khách', TramColors.tableInUse, TramColors.tableInUseBg, Icons.people_alt,
+                ink: TramColors.brandDark);
+      case TableVisualStatus.awaitingPayment:
+        return dark
+            ? const TableStatusStyle('Chờ thanh toán', TramColors.tableAwaitingPaymentDark, TramColors.tableAwaitingPaymentBgDark,
+                Icons.receipt_long, ink: TramColors.tableAwaitingPaymentInkDark)
+            : const TableStatusStyle('Chờ thanh toán', TramColors.tableAwaitingPayment, TramColors.tableAwaitingPaymentBg, Icons.receipt_long);
       case TableVisualStatus.reserved:
-        return const TableStatusStyle('Đặt trước', TramColors.warningInk, TramColors.tableReservedBg, Icons.event_seat);
+        return dark
+            ? const TableStatusStyle('Đặt trước', TramColors.tableReservedDark, TramColors.tableReservedBgDark, Icons.event_seat,
+                ink: TramColors.tableReservedInkDark)
+            : const TableStatusStyle('Đặt trước', TramColors.warningInk, TramColors.tableReservedBg, Icons.event_seat);
       case TableVisualStatus.empty:
-        return const TableStatusStyle('Trống', TramColors.tableEmpty, Colors.white, Icons.check_circle_outline);
+        return dark
+            ? TableStatusStyle('Trống', TramColors.tableEmptyDark, TramTokens.dark.card, Icons.check_circle_outline,
+                ink: TramColors.tableEmptyInkDark)
+            : const TableStatusStyle('Trống', TramColors.tableEmpty, Colors.white, Icons.check_circle_outline);
     }
   }
 
   static TableVisualStatus statusOf(TableModel t) {
-    if (t.inUse) return TableVisualStatus.inUse;
+    if (t.inUse) return t.isAwaitingPayment ? TableVisualStatus.awaitingPayment : TableVisualStatus.inUse;
     if (t.isReserved) return TableVisualStatus.reserved;
     return TableVisualStatus.empty;
   }
@@ -53,14 +80,17 @@ class TableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = TableStatusStyle.statusOf(table);
-    final style = TableStatusStyle.of(status);
-    final inUse = status == TableVisualStatus.inUse;
+    final style = TableStatusStyle.resolve(context, status);
+    final tc = context.tc;
+    final awaiting = status == TableVisualStatus.awaitingPayment;
+    // Bàn chờ thanh toán vẫn là bàn có khách (chi tiết, tổng tiền, menu thao tác giống nhau).
+    final inUse = status == TableVisualStatus.inUse || awaiting;
     final isReserved = status == TableVisualStatus.reserved;
     final items = table.currentItems;
     final int itemsCount = items.fold(0, (sum, i) => sum + i.quantity);
     final int totalAmount = items.fold(0, (sum, i) => sum + i.itemTotal);
 
-    final accent = status == TableVisualStatus.empty ? AppColors.border : style.color;
+    final accent = status == TableVisualStatus.empty ? tc.border : style.color;
 
     return Semantics(
       button: true,
@@ -99,7 +129,7 @@ class TableCard extends StatelessWidget {
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: inUse ? AppColors.primaryDark : AppColors.textPrimary,
+                                color: inUse ? style.ink : tc.textPrimary,
                               ),
                             ),
                           ),
@@ -111,12 +141,12 @@ class TableCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Expanded(child: _buildDetails(style, inUse, isReserved)),
+                      Expanded(child: _buildDetails(context, style, inUse, isReserved)),
                       // Chân thẻ: tổng tiền / gợi ý + menu thao tác nhanh
                       Row(
                         children: [
-                          Expanded(child: _buildFooter(style, inUse, isReserved, itemsCount, totalAmount)),
-                          _buildMenu(inUse, isReserved),
+                          Expanded(child: _buildFooter(context, style, inUse, isReserved, itemsCount, totalAmount)),
+                          _buildMenu(context, inUse, isReserved),
                         ],
                       ),
                     ],
@@ -130,8 +160,8 @@ class TableCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDetails(TableStatusStyle style, bool inUse, bool isReserved) {
-    final small = GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary);
+  Widget _buildDetails(BuildContext context, TableStatusStyle style, bool inUse, bool isReserved) {
+    final small = GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary);
     final List<Widget> lines = [];
 
     if (isReserved) {
@@ -139,7 +169,7 @@ class TableCard extends StatelessWidget {
         table.reservationCustomer ?? 'Khách hẹn',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: style.color),
+        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: style.ink),
       ));
       final sub = [
         if ((table.reservationTime ?? '').isNotEmpty) '🕒 ${table.reservationTime}',
@@ -153,7 +183,7 @@ class TableCard extends StatelessWidget {
           'Cọc: ${FormatUtils.vnd(table.reservationDeposit)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success),
+          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.ink(TramColors.success)),
         ));
       }
     } else if (inUse) {
@@ -169,10 +199,20 @@ class TableCard extends StatelessWidget {
         meta,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.w600),
+        style: GoogleFonts.beVietnamPro(fontSize: 12, color: style.ink, fontWeight: FontWeight.w600),
       ));
       if (code != null) {
         lines.add(Text(code, maxLines: 1, overflow: TextOverflow.ellipsis, style: small.copyWith(fontSize: 11)));
+      }
+      if (table.isAwaitingPayment) {
+        final at = DateTime.fromMillisecondsSinceEpoch(table.prePrintedAt!);
+        final hhmm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+        lines.add(Text(
+          '🧾 Đã in tạm tính $hhmm',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),
+        ));
       }
     } else {
       lines.add(Text(table.zone, maxLines: 1, overflow: TextOverflow.ellipsis, style: small));
@@ -191,7 +231,7 @@ class TableCard extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(TableStatusStyle style, bool inUse, bool isReserved, int itemsCount, int totalAmount) {
+  Widget _buildFooter(BuildContext context, TableStatusStyle style, bool inUse, bool isReserved, int itemsCount, int totalAmount) {
     if (inUse) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +239,7 @@ class TableCard extends StatelessWidget {
         children: [
           Text(
             '$itemsCount món',
-            style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+            style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary, fontWeight: FontWeight.w600),
           ),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -207,7 +247,7 @@ class TableCard extends StatelessWidget {
             child: Text(
               FormatUtils.vnd(totalAmount),
               maxLines: 1,
-              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary),
+              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: context.isDarkMode ? style.ink : TramColors.primary),
             ),
           ),
         ],
@@ -219,27 +259,28 @@ class TableCard extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: GoogleFonts.beVietnamPro(
         fontSize: 11,
-        color: isReserved ? style.color : AppColors.textSecondary,
+        color: isReserved ? style.ink : context.tc.textSecondary,
         fontStyle: FontStyle.italic,
       ),
     );
   }
 
-  Widget _buildMenu(bool inUse, bool isReserved) {
+  Widget _buildMenu(BuildContext context, bool inUse, bool isReserved) {
+    final tc = context.tc;
     return PopupMenuButton<String>(
       tooltip: 'Thao tác nhanh',
-      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+      icon: Icon(Icons.more_vert, size: 20, color: tc.textSecondary),
       padding: EdgeInsets.zero,
       onSelected: onMenuSelected,
       itemBuilder: (ctx) => [
         if (!inUse && !isReserved)
-          _menuItem('RESERVE', Icons.bookmark_add_outlined, 'Đặt trước bàn này', TramColors.warningInk),
+          _menuItem('RESERVE', Icons.bookmark_add_outlined, 'Đặt trước bàn này', tc.warningInk),
         if (inUse) ...[
-          _menuItem('TRANSFER', Icons.swap_horiz, 'Chuyển sang bàn khác', TramColors.managerAccent),
-          _menuItem('MERGE', Icons.call_merge, 'Ghép vào bàn khác', TramColors.warning),
-          _menuItem('CANCEL_BILL', Icons.cancel_outlined, 'Hủy hóa đơn', AppColors.danger, danger: true),
+          _menuItem('TRANSFER', Icons.swap_horiz, 'Chuyển sang bàn khác', context.ink(TramColors.managerAccent)),
+          _menuItem('MERGE', Icons.call_merge, 'Ghép vào bàn khác', tc.warning),
+          _menuItem('CANCEL_BILL', Icons.cancel_outlined, 'Hủy hóa đơn', tc.danger, danger: true),
         ],
-        _menuItem('QR', Icons.qr_code, 'Xem mã QR', AppColors.textPrimary),
+        _menuItem('QR', Icons.qr_code, 'Xem mã QR', tc.textPrimary),
       ],
     );
   }
@@ -251,7 +292,7 @@ class TableCard extends StatelessWidget {
         children: [
           Icon(icon, size: 20, color: color),
           const SizedBox(width: 10),
-          Flexible(child: Text(label, style: danger ? const TextStyle(color: AppColors.danger) : null)),
+          Flexible(child: Text(label, style: danger ? TextStyle(color: color) : null)),
         ],
       ),
     );
@@ -280,10 +321,11 @@ class _StatusPill extends StatelessWidget {
 
 /// Thanh lọc trạng thái kiêm chú thích màu (legend) của sơ đồ bàn.
 class TableStatusFilterBar extends StatelessWidget {
-  final String selected; // 'ALL' | 'EMPTY' | 'IN_USE' | 'RESERVED'
+  final String selected; // 'ALL' | 'EMPTY' | 'IN_USE' | 'AWAITING' | 'RESERVED'
   final int total;
   final int emptyCount;
-  final int inUseCount;
+  final int inUseCount; // Có khách, CHƯA in tạm tính
+  final int awaitingCount; // Chờ thanh toán (đã in tạm tính)
   final int reservedCount;
   final ValueChanged<String> onSelected;
 
@@ -293,33 +335,42 @@ class TableStatusFilterBar extends StatelessWidget {
     required this.total,
     required this.emptyCount,
     required this.inUseCount,
+    this.awaitingCount = 0,
     required this.reservedCount,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final empty = TableStatusStyle.of(TableVisualStatus.empty);
-    final inUse = TableStatusStyle.of(TableVisualStatus.inUse);
-    final reserved = TableStatusStyle.of(TableVisualStatus.reserved);
+    final tc = context.tc;
+    final empty = TableStatusStyle.resolve(context, TableVisualStatus.empty);
+    final inUse = TableStatusStyle.resolve(context, TableVisualStatus.inUse);
+    final awaiting = TableStatusStyle.resolve(context, TableVisualStatus.awaitingPayment);
+    final reserved = TableStatusStyle.resolve(context, TableVisualStatus.reserved);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          _chip('ALL', 'Tất cả', total, AppColors.textPrimary, Colors.white),
+          _chip(context, 'ALL', 'Tất cả', total, tc.textPrimary, tc.textPrimary, tc.card, onFill: tc.card),
           const SizedBox(width: 8),
-          _chip('EMPTY', empty.label, emptyCount, empty.color, empty.background),
+          _chip(context, 'EMPTY', empty.label, emptyCount, empty.color, empty.ink, empty.background),
           const SizedBox(width: 8),
-          _chip('IN_USE', inUse.label, inUseCount, inUse.color, inUse.background),
+          _chip(context, 'IN_USE', inUse.label, inUseCount, inUse.color, inUse.ink, inUse.background),
           const SizedBox(width: 8),
-          _chip('RESERVED', reserved.label, reservedCount, reserved.color, reserved.background),
+          _chip(context, 'AWAITING', awaiting.label, awaitingCount, awaiting.color, awaiting.ink, awaiting.background),
+          const SizedBox(width: 8),
+          _chip(context, 'RESERVED', reserved.label, reservedCount, reserved.color, reserved.ink, reserved.background),
         ],
       ),
     );
   }
 
-  Widget _chip(String key, String label, int count, Color color, Color swatchBg) {
+  /// [color] = nền khi chọn / viền ô mẫu, [ink] = chữ khi chưa chọn,
+  /// [onFill] = chữ trên nền [color] khi đã chọn.
+  Widget _chip(BuildContext context, String key, String label, int count, Color color, Color ink, Color swatchBg,
+      {Color onFill = Colors.white}) {
+    final tc = context.tc;
     final isSelected = selected == key;
     return Semantics(
       selected: isSelected,
@@ -332,9 +383,9 @@ class TableStatusFilterBar extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? color : Colors.white,
+            color: isSelected ? color : tc.card,
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: isSelected ? color : AppColors.border, width: 1.2),
+            border: Border.all(color: isSelected ? color : tc.border, width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -346,7 +397,7 @@ class TableStatusFilterBar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: key == 'ALL' ? Colors.transparent : swatchBg,
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: isSelected ? Colors.white : color, width: 2),
+                  border: Border.all(color: isSelected ? onFill : color, width: 2),
                 ),
               ),
               const SizedBox(width: 6),
@@ -355,7 +406,7 @@ class TableStatusFilterBar extends StatelessWidget {
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : color,
+                  color: isSelected ? onFill : ink,
                 ),
               ),
             ],

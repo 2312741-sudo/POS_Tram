@@ -1,5 +1,4 @@
 // lib/core/vietqr/vietqr_generator.dart
-import 'dart:convert';
 
 class VietQrGenerator {
   /// Sinh đường dẫn ảnh QR Napas VietQR động theo chuẩn ngân hàng Việt Nam

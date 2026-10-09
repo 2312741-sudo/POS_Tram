@@ -136,7 +136,8 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<String>(
-                      value: selectedType,
+                      key: ValueKey<Object?>(selectedType),
+                      initialValue: selectedType,
                       decoration: const InputDecoration(labelText: 'Loại hình khuyến mãi *'),
                       items: const [
                         DropdownMenuItem(value: 'PERCENT_BILL', child: Text('Giảm % trên tổng hóa đơn')),
@@ -299,7 +300,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                     details: '${promoToEdit == null ? "Tạo" : "Sửa"} khuyến mãi ${promo.name} (${promo.code})',
                   ));
 
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   _loadData();
                 },
                 child: const Text('Lưu Khuyến Mãi'),
@@ -321,7 +322,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
         onPressed: () => _showAddEditPromoDialog(),
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Thêm Khuyến Mãi', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
       ),
       body: _isLoading
@@ -333,9 +334,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   margin: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
+                    color: context.bg(Colors.amber.shade50),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.amber.shade200),
+                    border: Border.all(color: context.line(Colors.amber.shade200)),
                   ),
                   child: Row(
                     children: [
@@ -351,14 +352,14 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                             ),
                             Text(
                               'Khi bật, thu ngân có thể áp dụng đồng thời mã Voucher + Giảm giá hóa đơn của quán.',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                             ),
                           ],
                         ),
                       ),
                       Switch(
                         value: _storeInfo?.allowStackPromotions ?? true,
-                        activeColor: Colors.amber.shade800,
+                        activeThumbColor: Colors.amber.shade800,
                         onChanged: _toggleStackPromotions,
                       ),
                     ],
@@ -372,9 +373,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.discount_outlined, size: 64, color: Colors.grey.shade400),
+                              Icon(Icons.discount_outlined, size: 64, color: context.tc.textHint),
                               const SizedBox(height: 12),
-                              Text('Chưa có chương trình khuyến mãi nào', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
+                              Text('Chưa có chương trình khuyến mãi nào', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                             ],
                           ),
                         )
@@ -397,7 +398,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                           decoration: BoxDecoration(
-                                            color: p.isActive && !isExpired ? AppColors.successLight : Colors.grey.shade200,
+                                            color: p.isActive && !isExpired ? context.tc.successLight : context.tc.borderLight,
                                             borderRadius: BorderRadius.circular(8),
                                           ),
                                           child: Text(
@@ -405,7 +406,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                             style: GoogleFonts.beVietnamPro(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
-                                              color: p.isActive && !isExpired ? AppColors.success : Colors.grey.shade700,
+                                              color: p.isActive && !isExpired ? context.tc.success : context.tc.textSecondary,
                                             ),
                                           ),
                                         ),
@@ -415,7 +416,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(p.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15)),
-                                              Text(p.typeDisplay, style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+                                              Text(p.typeDisplay, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                                             ],
                                           ),
                                         ),
@@ -424,7 +425,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                           onPressed: () => _showAddEditPromoDialog(p),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                          icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                                           onPressed: () async {
                                             final confirm = await showDialog<bool>(
                                               context: context,
@@ -434,7 +435,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                                 actions: [
                                                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
                                                   ElevatedButton(
-                                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                                    style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
                                                     onPressed: () => Navigator.pop(ctx, true),
                                                     child: const Text('Xóa'),
                                                   ),
@@ -477,9 +478,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
+        Icon(icon, size: 14, color: context.tc.textSecondary),
         const SizedBox(width: 4),
-        Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary)),
+        Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
       ],
     );
   }

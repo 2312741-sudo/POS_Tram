@@ -37,7 +37,6 @@ export default function StoresManagementPage() {
     setCurrentStoreCode,
     createStore,
     updateStore,
-    deleteStore,
   } = useDashboardData();
 
   const [search, setSearch] = useState("");
@@ -56,7 +55,7 @@ export default function StoresManagementPage() {
   const [newBankId, setNewBankId] = useState("MB");
   const [newBankAccount, setNewBankAccount] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
-  const [newVatRate, setNewVatRate] = useState("0");
+  const [newVatRate] = useState("0");
   const [copyMenuFrom, setCopyMenuFrom] = useState("TRAM01");
 
   // Edit form state

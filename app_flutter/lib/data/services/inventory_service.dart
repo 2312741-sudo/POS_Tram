@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import '../../data/models/inventory_models.dart';
@@ -424,27 +425,93 @@ class InventoryService {
 
   // ==================== TIÊU HAO KHO (STOCK CONSUMPTION) ====================
 
-  /// Tiêu hao kho khi bán hàng.
+  /// Tiêu hao kho khi bán hàng - an toàn khi thử lại.
   ///
-  /// - Idempotent: đánh dấu stores/{s}/bill_stock_applied/{billId} = true (chỉ tạo mới);
-  ///   gọi lại cho cùng hóa đơn sẽ bỏ qua, không trừ kho 2 lần.
-  /// - Trừ số dư bằng transaction trên stock_balances/{id} (an toàn khi bán đồng thời).
-  /// - Trừ cả topping nếu topping có hàng kho (trùng tên) và công thức.
-  /// - Tải công thức + hàng kho 1 lần mỗi lần gọi.
+  /// Mô hình dữ liệu (stores/{s}/...):
+  /// - bill_stock_applied/{billId} = true: hóa đơn đã trừ kho XONG (chỉ tạo mới, ghi ở cuối).
+  ///   Bản ghi `true` cũ (app phiên bản trước) cũng được coi là đã xong.
+  /// - bill_stock_lines/{billId}/{itemKey} = qty: marker từng dòng nguyên liệu đã trừ (chỉ tạo mới).
+  /// - stock_balances/{id}/recentSaleBills: vòng khóa trong chính node tồn kho → transaction
+  ///   trừ kho tự bỏ qua nếu hóa đơn đã trừ dòng này (kể cả khi marker dòng chưa kịp ghi).
+  /// - stock_retry_queue/{billId}: hàng đợi thử lại khi còn dòng lỗi (lưu kế hoạch trừ kho).
+  ///
+  /// Gọi lại cho cùng hóa đơn chỉ trừ các dòng còn thiếu, không bao giờ trừ 2 lần.
+  /// [plannedQty]: kế hoạch đã lập ở lần trước (từ hàng đợi) - bỏ qua bước lập kế hoạch.
   /// [billItems] nhận List<OrderItemModel> hoặc List<Map> (khóa productId / product_id).
-  /// Ném [StockConsumptionException] nếu có dòng trừ kho thất bại.
+  /// Ném [StockConsumptionException] nếu có dòng trừ kho thất bại (đã ghi hàng đợi thử lại).
   Future<StockConsumptionResult> consumeStockForBill(
     List<dynamic> billItems,
     String billId,
     String username, {
     String? storeCode,
+    String? billCode,
+    Map<String, int>? plannedQty,
   }) async {
     final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
     final store = storeRefFor(sc);
-    final lines = billItems.map(StockSaleLine.from).whereType<StockSaleLine>().toList();
-    if (lines.isEmpty) return StockConsumptionResult(applied: false, alreadyApplied: false);
+    Map<String, int>? plan = plannedQty;
+    var unmapped = <String>[];
 
-    // 1. Tải công thức + hàng kho (1 lần cho cả hóa đơn)
+    try {
+      // 0. Đã trừ xong?
+      final doneSnap = await store.child('bill_stock_applied/$billId').get();
+      if (doneSnap.value != null) {
+        await _dequeueStockRetry(store, billId);
+        return StockConsumptionResult(applied: false, alreadyApplied: true);
+      }
+
+      // 1. Lập kế hoạch (nếu chưa có)
+      if (plan == null) {
+        final p = await _planStock(store, sc, billItems);
+        unmapped = p.unmapped;
+        plan = p.qtyByItem;
+      }
+      if (plan.isEmpty) {
+        await _dequeueStockRetry(store, billId);
+        return StockConsumptionResult(applied: false, alreadyApplied: false, unmapped: unmapped);
+      }
+
+      // 2. Chỉ trừ các dòng chưa có marker
+      final linesSnap = await store.child('bill_stock_lines/$billId').get();
+      final todo = StockRetryPlanner.remaining(plan, linesSnap.value);
+
+      final failures = <String>[];
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final entry in todo.entries) {
+        try {
+          await _consumeLine(store, sc, billId, entry.key, entry.value, username, now);
+        } catch (e) {
+          failures.add('${entry.key} (-${entry.value}): $e');
+        }
+      }
+
+      if (failures.isNotEmpty) {
+        await _enqueueStockRetry(store, billId, billCode: billCode, username: username, plan: plan, error: failures.join('; '));
+        throw StockConsumptionException(billId, failures);
+      }
+
+      // 3. Hoàn tất: marker tổng (chỉ tạo mới - nếu thiết bị khác vừa ghi thì bỏ qua) + xóa hàng đợi
+      try {
+        await store.child('bill_stock_applied/$billId').set(true);
+      } catch (_) {
+        final again = await store.child('bill_stock_applied/$billId').get();
+        if (again.value == null) rethrow;
+      }
+      await _dequeueStockRetry(store, billId);
+      return StockConsumptionResult(applied: todo.isNotEmpty, alreadyApplied: todo.isEmpty, unmapped: unmapped);
+    } on StockConsumptionException {
+      rethrow;
+    } catch (e) {
+      // Lỗi trước/sau vòng trừ (đọc công thức, ghi marker...) → vẫn đưa vào hàng đợi
+      await _enqueueStockRetry(store, billId, billCode: billCode, username: username, plan: plan, error: '$e');
+      throw StockConsumptionException(billId, ['$e']);
+    }
+  }
+
+  Future<StockConsumptionPlan> _planStock(DatabaseReference store, String sc, List<dynamic> billItems) async {
+    final lines = billItems.map(StockSaleLine.from).whereType<StockSaleLine>().toList();
+    if (lines.isEmpty) return StockConsumptionPlan(const {}, const []);
+
     final recipeSnap = await store.child('recipes').get();
     final recipes = <RecipeVersionModel>[];
     if (recipeSnap.value is Map) {
@@ -456,7 +523,7 @@ class InventoryService {
         }
       }
     }
-    if (recipes.isEmpty) return StockConsumptionResult(applied: false, alreadyApplied: false);
+    if (recipes.isEmpty) return StockConsumptionPlan(const {}, const []);
 
     final catalogSnap = await store.child('catalog_items').get();
     final byLegacy = <int, String>{};
@@ -473,76 +540,195 @@ class InventoryService {
       }
     }
 
-    final plan = StockConsumptionPlanner.plan(
+    return StockConsumptionPlanner.plan(
       lines: lines,
       recipes: recipes,
       catalogIdByLegacyProductId: byLegacy,
       catalogIdByName: byName,
       branchId: sc,
     );
-    if (plan.qtyByItem.isEmpty) {
-      return StockConsumptionResult(applied: false, alreadyApplied: false, unmapped: plan.unmapped);
-    }
+  }
 
-    // 2. Đánh dấu idempotent (chỉ tạo mới - nếu đã có thì bỏ qua)
-    final marker = await store.child('bill_stock_applied/$billId').runTransaction((Object? current) {
-      if (current != null) return Transaction.abort();
-      return Transaction.success(true);
+  /// Trừ 1 dòng nguyên liệu: transaction tồn kho (có vòng khóa) rồi ghi sổ kho + marker dòng
+  /// trong cùng 1 lệnh multi-path.
+  Future<void> _consumeLine(
+    DatabaseReference store,
+    String sc,
+    String billId,
+    String itemId,
+    int qty,
+    String username,
+    int now,
+  ) async {
+    final balanceId = '${sc}_$itemId';
+    int avgCost = 0;
+    int valueDelta = 0;
+    bool alreadyInRing = false;
+    final res = await store.child('stock_balances/$balanceId').runTransaction((Object? current) {
+      final next = StockRetryPlanner.applyConsumptionOnce(
+        current,
+        billId: billId,
+        balanceId: balanceId,
+        branchId: sc,
+        itemId: itemId,
+        consumeQty: qty,
+        now: now,
+      );
+      if (next == null) {
+        alreadyInRing = true;
+        return Transaction.abort();
+      }
+      alreadyInRing = false;
+      avgCost = (next['averageCostScaled'] as num).toInt();
+      valueDelta = (next['inventoryValue'] as num).toInt() -
+          ((current is Map ? (current['inventoryValue'] as num?)?.toInt() : null) ?? 0);
+      return Transaction.success(next);
     });
-    if (!marker.committed) {
-      return StockConsumptionResult(applied: false, alreadyApplied: true, unmapped: plan.unmapped);
+    if (!res.committed && !alreadyInRing) throw Exception('transaction không được commit');
+
+    final eventId = 'EVT_SALE_${billId}_${StockRetryPlanner.lineKey(itemId)}';
+    final updates = <String, Object?>{
+      'bill_stock_lines/$billId/${StockRetryPlanner.lineKey(itemId)}': qty,
+    };
+    bool writeEvent = !alreadyInRing;
+    if (alreadyInRing) {
+      // Đã trừ ở lần trước nhưng có thể chưa kịp ghi sổ kho
+      final evt = await store.child('stock_events/$eventId').get();
+      writeEvent = evt.value == null;
     }
+    if (writeEvent) {
+      final event = StockEventModel(
+        eventId: eventId,
+        commandId: 'BILL_$billId',
+        documentId: billId,
+        documentType: 'SALE',
+        branchId: sc,
+        itemId: itemId,
+        qtyDeltaBase: -qty,
+        valueDeltaMoney: alreadyInRing ? 0 : valueDelta,
+        unitCostSnapshot: avgCost,
+        occurredAt: now,
+        committedAt: now,
+        actorId: username,
+        sequence: now,
+      );
+      updates['stock_events/$eventId'] = event.toMap();
+    }
+    await store.update(updates);
+  }
 
-    // 3. Trừ từng nguyên liệu bằng transaction + ghi sổ kho (ID xác định theo hóa đơn)
-    final failures = <String>[];
+  Future<void> _enqueueStockRetry(
+    DatabaseReference store,
+    String billId, {
+    String? billCode,
+    required String username,
+    Map<String, int>? plan,
+    required String error,
+  }) async {
+    final ref = store.child('stock_retry_queue/$billId');
     final now = DateTime.now().millisecondsSinceEpoch;
-    for (final entry in plan.qtyByItem.entries) {
-      final itemId = entry.key;
-      final qty = entry.value;
-      final balanceId = '${sc}_$itemId';
-      try {
-        int avgCost = 0;
-        int valueDelta = 0;
-        final res = await store.child('stock_balances/$balanceId').runTransaction((Object? current) {
-          final next = StockConsumptionPlanner.applyConsumption(
-            current,
-            balanceId: balanceId,
-            branchId: sc,
-            itemId: itemId,
-            consumeQty: qty,
-            now: now,
-          );
-          avgCost = (next['averageCostScaled'] as num).toInt();
-          valueDelta = (next['inventoryValue'] as num).toInt() -
-              ((current is Map ? (current['inventoryValue'] as num?)?.toInt() : null) ?? 0);
-          return Transaction.success(next);
+    try {
+      await ref.runTransaction((Object? current) {
+        final m = current is Map ? Map<String, dynamic>.from(current) : <String, dynamic>{};
+        final attempts = (m['attempts'] is num) ? (m['attempts'] as num).toInt() : 0;
+        return Transaction.success({
+          ...m,
+          'billId': billId,
+          if (billCode != null && billCode.isNotEmpty) 'billCode': billCode,
+          'username': username,
+          'attempts': attempts + 1,
+          'lastError': error.length > 500 ? error.substring(0, 500) : error,
+          'createdAt': m['createdAt'] ?? now,
+          'updatedAt': now,
+          if (plan != null && plan.isNotEmpty) 'plan': StockRetryPlanner.encodePlan(plan),
         });
-        if (!res.committed) throw Exception('transaction không được commit');
+      }).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Mất mạng: ghi thường (đồng bộ sau) để không mất dấu hóa đơn cần trừ kho
+      try {
+        await ref.update({
+          'billId': billId,
+          'username': username,
+          'attempts': 1,
+          'lastError': error.length > 500 ? error.substring(0, 500) : error,
+          'updatedAt': now,
+          if (plan != null && plan.isNotEmpty) 'plan': StockRetryPlanner.encodePlan(plan),
+        }).timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+  }
 
-        final event = StockEventModel(
-          eventId: 'EVT_SALE_${billId}_$itemId',
-          commandId: 'BILL_$billId',
-          documentId: billId,
-          documentType: 'SALE',
-          branchId: sc,
-          itemId: itemId,
-          qtyDeltaBase: -qty,
-          valueDeltaMoney: valueDelta,
-          unitCostSnapshot: avgCost,
-          occurredAt: now,
-          committedAt: now,
-          actorId: username,
-          sequence: now,
-        );
-        await store.child('stock_events/${event.eventId}').set(event.toMap());
-      } catch (e) {
-        failures.add('$itemId (-$qty): $e');
+  Future<void> _dequeueStockRetry(DatabaseReference store, String billId) async {
+    try {
+      await store.child('stock_retry_queue/$billId').remove().timeout(const Duration(seconds: 6));
+    } catch (_) {}
+  }
+
+  /// Danh sách hóa đơn đang chờ trừ kho lại (cho màn hình quản lý).
+  Future<List<StockRetryEntry>> pendingStockRetries({String? storeCode}) async {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    final snap = await storeRefFor(sc).child('stock_retry_queue').get();
+    final out = <StockRetryEntry>[];
+    if (snap.value is Map) {
+      for (final e in (snap.value as Map).entries) {
+        if (e.value is Map) out.add(StockRetryEntry.fromMap(e.key.toString(), e.value as Map));
       }
     }
-    if (failures.isNotEmpty) {
-      throw StockConsumptionException(billId, failures);
+    out.sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
+    return out;
+  }
+
+  /// Chạy lại toàn bộ hàng đợi trừ kho của chi nhánh. Mỗi hóa đơn chỉ trừ các dòng còn thiếu.
+  /// Gọi khi mở app / đổi chi nhánh (thu ngân trở lên) hoặc từ màn hình quản lý.
+  Future<StockRetrySummary> retryPendingStock({String? storeCode, required String username, int limit = 30}) async {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    final store = storeRefFor(sc);
+    final entries = await pendingStockRetries(storeCode: sc);
+    final summary = StockRetrySummary();
+    for (final entry in entries.take(limit)) {
+      try {
+        var items = const <dynamic>[];
+        if (entry.plan == null) {
+          items = await _loadBillItems(store, entry.billId);
+          if (items.isEmpty) throw Exception('không tìm thấy món của hóa đơn');
+        }
+        await consumeStockForBill(
+          items,
+          entry.billId,
+          entry.username.isNotEmpty ? entry.username : username,
+          storeCode: sc,
+          billCode: entry.billCode,
+          plannedQty: entry.plan,
+        );
+        summary.succeeded.add(entry.billCode ?? entry.billId);
+      } catch (e) {
+        if (e is! StockConsumptionException) {
+          await _enqueueStockRetry(store, entry.billId,
+              billCode: entry.billCode, username: entry.username, plan: entry.plan, error: '$e');
+        }
+        summary.failed[entry.billCode ?? entry.billId] = '$e';
+      }
     }
-    return StockConsumptionResult(applied: true, alreadyApplied: false, unmapped: plan.unmapped);
+    return summary;
+  }
+
+  Future<List<dynamic>> _loadBillItems(DatabaseReference store, String billId) async {
+    for (final node in const ['bills', 'history']) {
+      final snap = await store.child('$node/$billId').get();
+      final v = snap.value;
+      if (v is! Map) continue;
+      final items = v['items'];
+      if (items is List) return items.where((e) => e != null).toList();
+      if (items is Map) return items.values.toList();
+      final json = v['itemsJson'];
+      if (json is String && json.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(json);
+          if (decoded is List) return decoded;
+        } catch (_) {}
+      }
+    }
+    return const [];
   }
 
   // ==================== CÔNG NỢ NHÀ CUNG CẤP (SUPPLIER LEDGER) ====================
@@ -595,7 +781,52 @@ class StockConsumptionResult {
   StockConsumptionResult({required this.applied, required this.alreadyApplied, this.unmapped = const []});
 }
 
-/// Một số nguyên liệu không trừ được kho cho hóa đơn (đã đánh dấu bill_stock_applied).
+/// Hóa đơn chờ trừ kho lại (stores/{s}/stock_retry_queue/{billId})
+class StockRetryEntry {
+  final String billId;
+  final String? billCode;
+  final String username;
+  final int attempts;
+  final String lastError;
+  final int createdAt;
+  final int updatedAt;
+  final Map<String, int>? plan;
+
+  StockRetryEntry({
+    required this.billId,
+    this.billCode,
+    this.username = '',
+    this.attempts = 0,
+    this.lastError = '',
+    this.createdAt = 0,
+    this.updatedAt = 0,
+    this.plan,
+  });
+
+  factory StockRetryEntry.fromMap(String key, Map raw) {
+    int toInt(Object? v) => v is num ? v.toInt() : 0;
+    final plan = StockRetryPlanner.decodePlan(raw['plan']);
+    return StockRetryEntry(
+      billId: raw['billId']?.toString() ?? key,
+      billCode: raw['billCode']?.toString(),
+      username: raw['username']?.toString() ?? '',
+      attempts: toInt(raw['attempts']),
+      lastError: raw['lastError']?.toString() ?? '',
+      createdAt: toInt(raw['createdAt']),
+      updatedAt: toInt(raw['updatedAt']),
+      plan: (plan == null || plan.isEmpty) ? null : plan,
+    );
+  }
+}
+
+/// Kết quả chạy hàng đợi trừ kho
+class StockRetrySummary {
+  final List<String> succeeded = [];
+  final Map<String, String> failed = {};
+  bool get isEmpty => succeeded.isEmpty && failed.isEmpty;
+}
+
+/// Một số nguyên liệu không trừ được kho cho hóa đơn (đã ghi stock_retry_queue để thử lại).
 class StockConsumptionException implements Exception {
   final String billId;
   final List<String> failures;

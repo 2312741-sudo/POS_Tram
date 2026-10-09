@@ -211,7 +211,7 @@ class _BillsTabState extends State<BillsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _allBills.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary));
+      return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }
 
     final filtered = _filteredBills;
@@ -223,7 +223,7 @@ class _BillsTabState extends State<BillsTab> {
     final takeawayRevenue = takeawayBills.fold(0, (s, b) => s + b.finalAmount);
 
     return RefreshIndicator(
-      color: TramColors.brandPrimary,
+      color: context.tc.primary,
       onRefresh: () async {
         setState(() {});
       },
@@ -232,15 +232,15 @@ class _BillsTabState extends State<BillsTab> {
           // Filter & Search Header Box
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            color: Colors.white,
+            color: context.tc.card,
             child: Column(
               children: [
                 // Search Input
                 TextField(
                   decoration: InputDecoration(
                     hintText: 'Tìm theo mã bill, bàn, thu ngân, người order...',
-                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey.shade400),
-                    prefixIcon: const Icon(Icons.search, size: 20, color: TramColors.brandPrimary),
+                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textHint),
+                    prefixIcon: Icon(Icons.search, size: 20, color: context.tc.primary),
                     suffixIcon: _search.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear, size: 18),
@@ -249,14 +249,14 @@ class _BillsTabState extends State<BillsTab> {
                         : null,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     filled: true,
-                    fillColor: TramColors.background,
+                    fillColor: context.tc.background,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: TramColors.borderLight),
+                      borderSide: BorderSide(color: context.tc.borderLight),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: TramColors.borderLight),
+                      borderSide: BorderSide(color: context.tc.borderLight),
                     ),
                   ),
                   onChanged: (val) => setState(() => _search = val.trim()),
@@ -286,10 +286,10 @@ class _BillsTabState extends State<BillsTab> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: _dateFilter == 'CUSTOM' ? TramColors.brandPrimary : Colors.grey.shade100,
+                            color: _dateFilter == 'CUSTOM' ? context.tc.primary : context.tc.cardElevated,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: _dateFilter == 'CUSTOM' ? TramColors.brandPrimary : Colors.grey.shade300,
+                              color: _dateFilter == 'CUSTOM' ? context.tc.primary : context.tc.border,
                             ),
                           ),
                           child: Row(
@@ -297,7 +297,7 @@ class _BillsTabState extends State<BillsTab> {
                               Icon(
                                 Icons.calendar_month,
                                 size: 14,
-                                color: _dateFilter == 'CUSTOM' ? Colors.white : TramColors.textPrimary,
+                                color: _dateFilter == 'CUSTOM' ? Colors.white : context.tc.textPrimary,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -307,7 +307,7 @@ class _BillsTabState extends State<BillsTab> {
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 12,
                                   fontWeight: _dateFilter == 'CUSTOM' ? FontWeight.bold : FontWeight.normal,
-                                  color: _dateFilter == 'CUSTOM' ? Colors.white : TramColors.textPrimary,
+                                  color: _dateFilter == 'CUSTOM' ? Colors.white : context.tc.textPrimary,
                                 ),
                               ),
                             ],
@@ -350,10 +350,10 @@ class _BillsTabState extends State<BillsTab> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _tableFilter != 'ALL' ? TramColors.brandPrimary : Colors.grey.shade100,
+                              color: _tableFilter != 'ALL' ? context.tc.primary : context.tc.cardElevated,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: _tableFilter != 'ALL' ? TramColors.brandPrimary : Colors.grey.shade300,
+                                color: _tableFilter != 'ALL' ? context.tc.primary : context.tc.border,
                               ),
                             ),
                             child: Row(
@@ -361,7 +361,7 @@ class _BillsTabState extends State<BillsTab> {
                                 Icon(
                                   Icons.table_restaurant,
                                   size: 14,
-                                  color: _tableFilter != 'ALL' ? Colors.white : TramColors.textPrimary,
+                                  color: _tableFilter != 'ALL' ? Colors.white : context.tc.textPrimary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -369,13 +369,13 @@ class _BillsTabState extends State<BillsTab> {
                                   style: GoogleFonts.beVietnamPro(
                                     fontSize: 12,
                                     fontWeight: _tableFilter != 'ALL' ? FontWeight.bold : FontWeight.normal,
-                                    color: _tableFilter != 'ALL' ? Colors.white : TramColors.textPrimary,
+                                    color: _tableFilter != 'ALL' ? Colors.white : context.tc.textPrimary,
                                   ),
                                 ),
                                 Icon(
                                   Icons.arrow_drop_down,
                                   size: 16,
-                                  color: _tableFilter != 'ALL' ? Colors.white : TramColors.textPrimary,
+                                  color: _tableFilter != 'ALL' ? Colors.white : context.tc.textPrimary,
                                 ),
                               ],
                             ),
@@ -401,7 +401,7 @@ class _BillsTabState extends State<BillsTab> {
                             const SizedBox(width: 6),
                             _buildStatusChip('Đã hủy', 'CANCELLED'),
                             const SizedBox(width: 8),
-                            Container(width: 1, height: 16, color: Colors.grey.shade300),
+                            Container(width: 1, height: 16, color: context.tc.border),
                             const SizedBox(width: 8),
                             _buildPaymentChip('Tất cả HTTT', 'ALL'),
                             const SizedBox(width: 6),
@@ -414,7 +414,7 @@ class _BillsTabState extends State<BillsTab> {
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.file_download_outlined, color: TramColors.brandPrimary),
+                      icon: Icon(Icons.file_download_outlined, color: context.tc.primary),
                       tooltip: 'Xuất file Excel',
                       visualDensity: VisualDensity.compact,
                       onPressed: _exportFilteredExcel,
@@ -429,27 +429,26 @@ class _BillsTabState extends State<BillsTab> {
           // Total Bar with Takeaway Metrics
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: const Color(0xFFFBF8F2),
+            color: context.tc.cardElevated,
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    Expanded(child: Row(
                       children: [
-                        const Icon(Icons.receipt_long, size: 16, color: TramColors.textSecondary),
+                        Icon(Icons.receipt_long, size: 16, color: context.tc.textSecondary),
                         const SizedBox(width: 4),
-                        Text(
+                        Flexible(child: Text(
                           cancelledBills.isEmpty
                               ? 'Tổng: ${paidBills.length} hóa đơn'
                               : 'Tổng: ${paidBills.length} h/đơn (${cancelledBills.length} đã hủy)',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: TramColors.textSecondary),
-                        ),
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
-                    ),
+                    )),
                     Text(
                       FormatUtils.vnd(totalAmount),
-                      style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w800, color: TramColors.brandPrimary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w800, color: context.tc.primary),
                     ),
                   ],
                 ),
@@ -457,16 +456,15 @@ class _BillsTabState extends State<BillsTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    Expanded(child: Row(
                       children: [
                         const Icon(Icons.shopping_bag_outlined, size: 15, color: Color(0xFF8B5CF6)),
                         const SizedBox(width: 4),
-                        Text(
+                        Flexible(child: Text(
                           'Mang về: $takeawayCount đơn',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF8B5CF6)),
-                        ),
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF8B5CF6)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
-                    ),
+                    )),
                     Text(
                       FormatUtils.vnd(takeawayRevenue),
                       style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF8B5CF6)),
@@ -484,11 +482,11 @@ class _BillsTabState extends State<BillsTab> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey),
+                        Icon(Icons.receipt_long_outlined, size: 56, color: context.tc.textHint),
                         const SizedBox(height: 10),
                         Text(
                           'Không tìm thấy hóa đơn nào phù hợp bộ lọc',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: TramColors.textSecondary),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
                         ),
                       ],
                     ),
@@ -519,10 +517,10 @@ class _BillsTabState extends State<BillsTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? TramColors.brandPrimary : Colors.grey.shade100,
+          color: isSelected ? context.tc.primary : context.tc.cardElevated,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? TramColors.brandPrimary : Colors.grey.shade300,
+            color: isSelected ? context.tc.primary : context.tc.border,
           ),
         ),
         child: Text(
@@ -530,7 +528,7 @@ class _BillsTabState extends State<BillsTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : TramColors.textPrimary,
+            color: isSelected ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),
@@ -545,10 +543,10 @@ class _BillsTabState extends State<BillsTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? TramColors.brandPrimary : Colors.grey.shade100,
+          color: isSelected ? context.tc.primary : context.tc.cardElevated,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? TramColors.brandPrimary : Colors.grey.shade300,
+            color: isSelected ? context.tc.primary : context.tc.border,
           ),
         ),
         child: Text(
@@ -556,7 +554,7 @@ class _BillsTabState extends State<BillsTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : TramColors.textPrimary,
+            color: isSelected ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),
@@ -571,10 +569,10 @@ class _BillsTabState extends State<BillsTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? TramColors.brandPrimary.withValues(alpha: 0.12) : Colors.transparent,
+          color: isSelected ? context.tc.primary.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? TramColors.brandPrimary : Colors.grey.shade300,
+            color: isSelected ? context.tc.primary : context.tc.border,
           ),
         ),
         child: Text(
@@ -582,7 +580,7 @@ class _BillsTabState extends State<BillsTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? TramColors.brandPrimary : TramColors.textSecondary,
+            color: isSelected ? context.tc.primary : context.tc.textSecondary,
           ),
         ),
       ),
@@ -599,13 +597,13 @@ class _BillsTabState extends State<BillsTab> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDanger ? TramColors.danger : TramColors.brandPrimary)
-              : Colors.grey.shade100,
+              ? (isDanger ? context.tc.danger : context.tc.primary)
+              : context.tc.cardElevated,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? (isDanger ? TramColors.danger : TramColors.brandPrimary)
-                : Colors.grey.shade300,
+                ? (isDanger ? context.tc.danger : context.tc.primary)
+                : context.tc.border,
           ),
         ),
         child: Text(
@@ -613,7 +611,7 @@ class _BillsTabState extends State<BillsTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : TramColors.textPrimary,
+            color: isSelected ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),
@@ -643,10 +641,10 @@ class _BillsTabState extends State<BillsTab> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isCancelled ? Colors.red.shade50.withValues(alpha: 0.3) : Colors.white,
+          color: isCancelled ? context.bg(Colors.red.shade50).withValues(alpha: 0.3) : context.tc.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isCancelled ? TramColors.danger.withValues(alpha: 0.3) : TramColors.borderLight,
+            color: isCancelled ? context.tc.danger.withValues(alpha: 0.3) : context.tc.borderLight,
           ),
           boxShadow: const [
             BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
@@ -664,7 +662,7 @@ class _BillsTabState extends State<BillsTab> {
                     children: [
                       Text(
                         bill.billCode,
-                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14, color: TramColors.textPrimary),
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14, color: context.tc.textPrimary),
                       ),
                       if (showOrderCode) ...[
                         const SizedBox(width: 6),
@@ -679,7 +677,7 @@ class _BillsTabState extends State<BillsTab> {
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Colors.blueGrey.shade700,
+                              color: context.ink(Colors.blueGrey.shade700),
                             ),
                           ),
                         ),
@@ -692,7 +690,7 @@ class _BillsTabState extends State<BillsTab> {
                   style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
-                    color: isCancelled ? TramColors.danger : TramColors.brandPrimary,
+                    color: isCancelled ? context.tc.danger : context.tc.primary,
                     decoration: isCancelled ? TextDecoration.lineThrough : null,
                   ),
                 ),
@@ -708,7 +706,7 @@ class _BillsTabState extends State<BillsTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: TramColors.brandPrimary.withValues(alpha: 0.08),
+                        color: context.tc.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
@@ -717,12 +715,12 @@ class _BillsTabState extends State<BillsTab> {
                           Icon(
                             _isTakeaway(bill) ? Icons.shopping_bag_outlined : Icons.table_restaurant_outlined,
                             size: 13,
-                            color: TramColors.brandPrimary,
+                            color: context.tc.primary,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             tableDisplay,
-                            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.primary),
                           ),
                         ],
                       ),
@@ -732,16 +730,16 @@ class _BillsTabState extends State<BillsTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: TramColors.danger.withValues(alpha: 0.12),
+                        color: context.tc.danger.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: TramColors.danger.withValues(alpha: 0.3)),
+                        border: Border.all(color: context.tc.danger.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         'ĐÃ HỦY',
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: TramColors.danger,
+                          color: context.tc.danger,
                         ),
                       ),
                     ),
@@ -756,7 +754,7 @@ class _BillsTabState extends State<BillsTab> {
               bill.items.map((i) => '${i.quantity}x ${i.name}').join(', '),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
             ),
             if (isCancelled && bill.note.isNotEmpty) ...[
               const SizedBox(height: 4),
@@ -764,7 +762,7 @@ class _BillsTabState extends State<BillsTab> {
                 'Lý do hủy: ${bill.note}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: TramColors.danger),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontStyle: FontStyle.italic, color: context.tc.danger),
               ),
             ],
             const SizedBox(height: 8),
@@ -775,11 +773,11 @@ class _BillsTabState extends State<BillsTab> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 13, color: Colors.grey),
+                    Icon(Icons.access_time, size: 13, color: context.tc.textHint),
                     const SizedBox(width: 4),
                     Text(
                       timeStr,
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                     ),
                   ],
                 ),
@@ -789,8 +787,8 @@ class _BillsTabState extends State<BillsTab> {
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: (isCancelled
-                            ? TramColors.danger
-                            : (isCash ? TramColors.success : TramColors.info)).withValues(alpha: 0.12),
+                            ? context.tc.danger
+                            : (isCash ? context.tc.success : context.tc.info)).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -801,13 +799,13 @@ class _BillsTabState extends State<BillsTab> {
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: isCancelled
-                              ? TramColors.danger
-                              : (isCash ? TramColors.success : TramColors.info),
+                              ? context.tc.danger
+                              : (isCash ? context.tc.success : context.tc.info),
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                    Icon(Icons.chevron_right, size: 16, color: context.tc.textHint),
                   ],
                 ),
               ],

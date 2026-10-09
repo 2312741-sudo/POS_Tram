@@ -20,7 +20,7 @@ class PaymentTotalHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: AppRadius.brLg,
       ),
@@ -87,14 +87,14 @@ class PaymentMethodSelector extends StatelessWidget {
               duration: const Duration(milliseconds: 150),
               height: 64,
               decoration: BoxDecoration(
-                color: isSel ? AppColors.primaryLight : Colors.white,
+                color: isSel ? context.tc.primaryLight : context.tc.card,
                 borderRadius: AppRadius.brMd,
-                border: Border.all(color: isSel ? AppColors.primary : AppColors.border, width: isSel ? 2 : 1),
+                border: Border.all(color: isSel ? context.tc.primary : context.tc.border, width: isSel ? 2 : 1),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, size: 24, color: isSel ? AppColors.primary : AppColors.textSecondary),
+                  Icon(icon, size: 24, color: isSel ? context.tc.primary : context.tc.textSecondary),
                   const SizedBox(height: 2),
                   Text(
                     label,
@@ -103,7 +103,7 @@ class PaymentMethodSelector extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 13,
                       fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
-                      color: isSel ? AppColors.primary : AppColors.textPrimary,
+                      color: isSel ? context.tc.primary : context.tc.textPrimary,
                     ),
                   ),
                 ],
@@ -155,8 +155,8 @@ class QuickCashAmounts extends StatelessWidget {
         for (final v in list)
           ActionChip(
             label: Text(v == amountDue ? 'Đủ ${FormatUtils.vnd(v)}' : FormatUtils.vnd(v)),
-            labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-            avatar: v == amountDue ? const Icon(Icons.check, size: 16, color: AppColors.success) : null,
+            labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
+            avatar: v == amountDue ? Icon(Icons.check, size: 16, color: context.tc.success) : null,
             onPressed: () => onPick(v),
           ),
       ],
@@ -173,11 +173,11 @@ class ChangeDueRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isShort = shortBy > 0;
-    final color = isShort ? AppColors.danger : AppColors.success;
+    final color = isShort ? context.tc.danger : context.tc.success;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isShort ? AppColors.dangerLight : AppColors.successLight,
+        color: isShort ? context.tc.dangerLight : context.tc.successLight,
         borderRadius: AppRadius.brMd,
       ),
       child: Row(
@@ -209,7 +209,7 @@ class VietQrImage extends StatelessWidget {
     return ClipRRect(
       borderRadius: AppRadius.brMd,
       child: Container(
-        color: Colors.white,
+        color: context.tc.card,
         padding: const EdgeInsets.all(6),
         child: Image.network(
           url,
@@ -223,16 +223,16 @@ class VietQrImage extends StatelessWidget {
             width: height,
             alignment: Alignment.center,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.dangerLight, borderRadius: AppRadius.brMd),
+            decoration: BoxDecoration(color: context.tc.dangerLight, borderRadius: AppRadius.brMd),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.wifi_off, color: AppColors.danger, size: 32),
+                Icon(Icons.wifi_off, color: context.tc.danger, size: 32),
                 const SizedBox(height: 8),
                 Text(
                   'Không tải được mã QR.\nKiểm tra kết nối mạng.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.danger, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.danger, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -252,10 +252,10 @@ class AutoPrintToggleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: value ? AppColors.primaryLight : AppColors.cardElevated,
+      color: value ? context.tc.primaryLight : context.tc.cardElevated,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.brMd,
-        side: BorderSide(color: value ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border),
+        side: BorderSide(color: value ? context.tc.primary.withValues(alpha: 0.4) : context.tc.border),
       ),
       child: InkWell(
         borderRadius: AppRadius.brMd,
@@ -267,7 +267,7 @@ class AutoPrintToggleTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: value ? AppColors.primary : AppColors.textDisabled,
+                  color: value ? context.tc.primary : context.tc.textDisabled,
                   borderRadius: AppRadius.brSm,
                 ),
                 child: Icon(value ? Icons.print : Icons.print_disabled_outlined, size: 18, color: Colors.white),
@@ -279,11 +279,11 @@ class AutoPrintToggleTile extends StatelessWidget {
                   children: [
                     Text(
                       'In hóa đơn khi thanh toán',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
                     ),
                     Text(
                       value ? 'Tự động gửi lệnh in bill ra máy in nhiệt' : 'Tắt in bill (chỉ chốt đơn, không in giấy)',
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: value ? AppColors.primary : AppColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: value ? context.tc.primary : context.tc.textSecondary),
                     ),
                   ],
                 ),
@@ -308,28 +308,28 @@ class PaymentErrorBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
       decoration: BoxDecoration(
-        color: AppColors.dangerLight,
+        color: context.tc.dangerLight,
         borderRadius: AppRadius.brMd,
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
+        border: Border.all(color: context.tc.danger.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(Icons.error_outline, color: context.tc.danger, size: 20),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.danger, fontWeight: FontWeight.w600),
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.danger, fontWeight: FontWeight.w600),
             ),
           ),
           IconButton(
             tooltip: 'Đóng',
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.close, size: 18, color: AppColors.danger),
+            icon: Icon(Icons.close, size: 18, color: context.tc.danger),
             onPressed: onClose,
           ),
         ],
@@ -347,22 +347,22 @@ class PaymentBotWatchingBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.successLight,
+        color: context.tc.successLight,
         borderRadius: AppRadius.brMd,
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+        border: Border.all(color: context.tc.success.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.success),
+            child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.success),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Trạm Payment Bot đang dò tiền vào... Khi khách quét xong, hóa đơn sẽ tự đóng & in bill ngay lập tức.',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600),
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
             ),
           ),
         ],

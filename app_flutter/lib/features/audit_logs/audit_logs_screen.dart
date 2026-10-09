@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../core/permissions/app_permissions.dart';
-import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
@@ -19,7 +17,6 @@ class AuditLogsScreen extends StatefulWidget {
 
 class _AuditLogsScreenState extends State<AuditLogsScreen> {
   final _fb = FirebaseService();
-  final _auth = AuthService();
 
   String _searchStaff = '';
   String _selectedAction = 'ALL';
@@ -75,7 +72,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               // Filter Card
               Container(
                 padding: const EdgeInsets.all(12),
-                color: Colors.white,
+                color: context.tc.card,
                 child: Column(
                   children: [
                     Row(
@@ -97,7 +94,8 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                         Expanded(
                           flex: 2,
                           child: DropdownButtonFormField<String>(
-                            value: _selectedAction,
+                            key: ValueKey<Object?>(_selectedAction),
+                            initialValue: _selectedAction,
                             isDense: true,
                             decoration: InputDecoration(
                               labelText: 'Loại thao tác',
@@ -133,21 +131,22 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                       children: [
                         FilterChip(
                           selected: _onlySuspicious,
-                          avatar: Icon(Icons.security, size: 16, color: _onlySuspicious ? Colors.white : AppColors.danger),
+                          avatar: Icon(Icons.security, size: 16, color: _onlySuspicious ? Colors.white : context.tc.danger),
                           label: Text(
                             'Chỉ xem thao tác nhạy cảm / cảnh báo',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 12,
-                              color: _onlySuspicious ? Colors.white : AppColors.danger,
+                              color: _onlySuspicious ? Colors.white : context.tc.danger,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          selectedColor: AppColors.danger,
-                          backgroundColor: AppColors.dangerLight,
+                          selectedColor: context.tc.danger,
+                          backgroundColor: context.tc.dangerLight,
                           onSelected: (val) => setState(() => _onlySuspicious = val),
                         ),
                         const Spacer(),
                         OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                           icon: const Icon(Icons.date_range, size: 16),
                           label: Text(
                             _selectedDateRange == null
@@ -186,9 +185,9 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.history_toggle_off, size: 64, color: Colors.grey.shade400),
+                            Icon(Icons.history_toggle_off, size: 64, color: context.tc.textHint),
                             const SizedBox(height: 12),
-                            Text('Không tìm thấy nhật ký thao tác phù hợp', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary)),
+                            Text('Không tìm thấy nhật ký thao tác phù hợp', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                           ],
                         ),
                       )
@@ -210,18 +209,18 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   }
 
   Widget _buildLogCard(AuditLogModel log) {
-    Color badgeColor = AppColors.info;
-    Color badgeBg = AppColors.infoLight;
+    Color badgeColor = context.tc.info;
+    Color badgeBg = context.tc.infoLight;
 
     if (log.isSuspicious || log.action == 'CANCEL_BILL' || log.action == 'CANCEL_KITCHEN_ITEM' || log.action == 'MANUAL_DISCOUNT') {
-      badgeColor = AppColors.danger;
-      badgeBg = AppColors.dangerLight;
+      badgeColor = context.tc.danger;
+      badgeBg = context.tc.dangerLight;
     } else if (log.action == 'APPLY_DISCOUNT' || log.action == 'CHANGE_PERMISSION' || log.action == 'MERGE_TABLE') {
-      badgeColor = AppColors.warning;
-      badgeBg = AppColors.warningLight;
+      badgeColor = context.tc.warning;
+      badgeBg = context.tc.warningLight;
     } else if (log.action == 'CREATE_BILL' || log.action == 'LOGIN') {
-      badgeColor = AppColors.success;
-      badgeBg = AppColors.successLight;
+      badgeColor = context.tc.success;
+      badgeBg = context.tc.successLight;
     }
 
     final hasSnapshot = log.beforeState != null || log.afterState != null;
@@ -266,12 +265,12 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
             children: [
               Text(
                 '${log.userFullName} (@${log.username})',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary, fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 8),
               Text(
                 '• ${FormatUtils.dateTime(log.timestamp)}',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: AppColors.textHint),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textHint),
               ),
             ],
           ),
@@ -285,8 +284,8 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               if (log.isSuspicious)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: AppColors.dangerLight, borderRadius: BorderRadius.circular(4)),
-                  child: Text('CẢNH BÁO RỦI RO', style: GoogleFonts.beVietnamPro(fontSize: 10, color: AppColors.danger, fontWeight: FontWeight.bold)),
+                  decoration: BoxDecoration(color: context.tc.dangerLight, borderRadius: BorderRadius.circular(4)),
+                  child: Text('CẢNH BÁO RỦI RO', style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.danger, fontWeight: FontWeight.bold)),
                 ),
             ],
           ),
@@ -299,22 +298,22 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: context.tc.cardElevated,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: context.tc.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('DỮ LIỆU THAY ĐỔI (SNAPSHOT DIFF):', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                  Text('DỮ LIỆU THAY ĐỔI (SNAPSHOT DIFF):', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary)),
                   const SizedBox(height: 8),
                   if (log.beforeState != null) ...[
-                    Text('🔴 Trước khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.danger)),
+                    Text('🔴 Trước khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
                     Text(const JsonEncoder.withIndent('  ').convert(log.beforeState), style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
                     const SizedBox(height: 6),
                   ],
                   if (log.afterState != null) ...[
-                    Text('🟢 Sau khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
+                    Text('🟢 Sau khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.success)),
                     Text(const JsonEncoder.withIndent('  ').convert(log.afterState), style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
                   ],
                 ],

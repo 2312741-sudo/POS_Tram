@@ -114,12 +114,12 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: widget.isMandatory ? AppColors.warningLight : AppColors.primaryLight,
+                color: widget.isMandatory ? context.tc.warningLight : context.tc.primaryLight,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 widget.isMandatory ? Icons.warning_amber_rounded : Icons.lock_reset,
-                color: widget.isMandatory ? AppColors.warning : AppColors.primary,
+                color: widget.isMandatory ? context.tc.warning : context.tc.primary,
                 size: 24,
               ),
             ),
@@ -135,7 +135,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                   if (widget.isMandatory)
                     Text(
                       'Tài khoản mới hoặc vừa được cấp lại. Vui lòng đặt mật khẩu mới để tiếp tục.',
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: AppColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                     ),
                 ],
               ),
@@ -153,18 +153,18 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                   padding: const EdgeInsets.all(10),
                   margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.dangerLight,
+                    color: context.tc.dangerLight,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                    border: Border.all(color: context.tc.danger.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+                      Icon(Icons.error_outline, color: context.tc.danger, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: GoogleFonts.beVietnamPro(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w500),
+                          style: GoogleFonts.beVietnamPro(color: context.tc.danger, fontSize: 12, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -210,7 +210,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
             ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: context.tc.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

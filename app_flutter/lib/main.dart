@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_controller.dart';
 import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
 import 'data/services/firebase_service.dart';
@@ -64,6 +65,7 @@ void main() async {
   // Initialize Core Services
   FirebaseService().init();
   await AuthService().checkAutoLogin();
+  await ThemeModeController.instance.load();
 
   runApp(const ProviderScope(child: TramApp()));
 }
@@ -118,14 +120,28 @@ class TramApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MaterialApp.router(
-      title: 'POS Trạm',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      routerConfig: AppRouter.router,
-      builder: (context, child) {
-        return KeyboardDismissWrapper(child: child ?? const SizedBox.shrink());
-      },
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeModeController.instance,
+      builder: (context, mode, _) => MaterialApp.router(
+        title: 'POS Trạm',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.appDarkTheme,
+        themeMode: mode,
+        routerConfig: AppRouter.router,
+        builder: (context, child) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+              systemNavigationBarColor: context.tc.background,
+              systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            ),
+            child: KeyboardDismissWrapper(child: child ?? const SizedBox.shrink()),
+          );
+        },
+      ),
     );
   }
 }

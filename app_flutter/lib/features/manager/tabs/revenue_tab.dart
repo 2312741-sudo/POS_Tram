@@ -226,7 +226,7 @@ class _RevenueTabState extends State<RevenueTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading && _bills.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: TramColors.brandPrimary));
+      return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }
 
     final range = _currentRange;
@@ -234,7 +234,7 @@ class _RevenueTabState extends State<RevenueTab> {
     final filtered = _filteredBills;
 
     return RefreshIndicator(
-      color: TramColors.brandPrimary,
+      color: context.tc.primary,
       onRefresh: () async {
         setState(() {});
       },
@@ -245,22 +245,23 @@ class _RevenueTabState extends State<RevenueTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
+              Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Báo Cáo Doanh Thu 💰',
-                    style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
                   ),
                   Text(
                     'Phân tích & đối soát tài chính theo kỳ',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                   ),
                 ],
-              ),
+              )),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: TramColors.brandPrimary,
+                  minimumSize: const Size(64, AppSpacing.minTapTarget),
+                  backgroundColor: context.tc.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -277,7 +278,7 @@ class _RevenueTabState extends State<RevenueTab> {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: Colors.grey.shade200,
+              color: context.tc.borderLight,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -332,9 +333,9 @@ class _RevenueTabState extends State<RevenueTab> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -353,14 +354,14 @@ class _RevenueTabState extends State<RevenueTab> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.calendar_month, size: 16, color: TramColors.brandPrimary),
+                          Icon(Icons.calendar_month, size: 16, color: context.tc.primary),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
                               range['label'],
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
                             ),
                           ),
                         ],
@@ -397,7 +398,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_totalRevenue),
                     subtitle: '${filtered.length} hóa đơn đã thu',
                     icon: Icons.monetization_on,
-                    color: TramColors.brandPrimary,
+                    color: context.tc.primary,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -431,7 +432,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_cashRevenue),
                     subtitle: 'Doanh thu tiền mặt',
                     icon: Icons.payments_outlined,
-                    color: TramColors.success,
+                    color: context.tc.success,
                   ),
                 ),
               ],
@@ -445,7 +446,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_transferRevenue),
                     subtitle: 'Chuyển khoản / VietQR',
                     icon: Icons.qr_code_2,
-                    color: TramColors.info,
+                    color: context.tc.info,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -455,7 +456,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_avgPerOrder),
                     subtitle: 'Giá trị TB mỗi hóa đơn',
                     icon: Icons.analytics_outlined,
-                    color: TramColors.warning,
+                    color: context.tc.warning,
                   ),
                 ),
               ],
@@ -465,9 +466,9 @@ class _RevenueTabState extends State<RevenueTab> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: context.bg(const Color(0xFFEFF6FF)),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                  border: Border.all(color: context.line(const Color(0xFFBFDBFE))),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,10 +478,10 @@ class _RevenueTabState extends State<RevenueTab> {
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFDBEAFE),
+                            color: context.bg(const Color(0xFFDBEAFE)),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.table_restaurant, color: Color(0xFF2563EB), size: 18),
+                          child: Icon(Icons.table_restaurant, color: context.ink(const Color(0xFF2563EB)), size: 18),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -489,11 +490,11 @@ class _RevenueTabState extends State<RevenueTab> {
                             children: [
                               Text(
                                 'Đang phục vụ $_servingCount bàn (Chưa thanh toán)',
-                                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A)),
+                                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(const Color(0xFF1E3A8A))),
                               ),
                               Text(
                                 'Tổng tạm tính: ${FormatUtils.vnd(_servingTotal)}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF2563EB)),
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.ink(const Color(0xFF2563EB))),
                               ),
                             ],
                           ),
@@ -508,7 +509,7 @@ class _RevenueTabState extends State<RevenueTab> {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: context.tc.card,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xFF93C5FD)),
                           ),
@@ -526,11 +527,11 @@ class _RevenueTabState extends State<RevenueTab> {
                               const SizedBox(width: 6),
                               Text(
                                 '${st.name} (${st.zone}): ',
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF1E40AF)),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.ink(const Color(0xFF1E40AF))),
                               ),
                               Text(
                                 FormatUtils.vnd(st.currentTotal),
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF1D4ED8)),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: context.ink(const Color(0xFF1D4ED8))),
                               ),
                             ],
                           ),
@@ -550,7 +551,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_totalRevenue),
                     subtitle: '${filtered.length} đơn hoàn tất',
                     icon: Icons.monetization_on,
-                    color: TramColors.brandPrimary,
+                    color: context.tc.primary,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -574,7 +575,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_cashRevenue),
                     subtitle: 'Doanh thu tiền mặt',
                     icon: Icons.payments_outlined,
-                    color: TramColors.success,
+                    color: context.tc.success,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -584,7 +585,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     value: FormatUtils.vnd(_transferRevenue),
                     subtitle: 'Chuyển khoản / VietQR',
                     icon: Icons.qr_code_2,
-                    color: TramColors.info,
+                    color: context.tc.info,
                   ),
                 ),
               ],
@@ -595,7 +596,7 @@ class _RevenueTabState extends State<RevenueTab> {
               value: FormatUtils.vnd(_avgPerOrder),
               subtitle: 'Doanh thu bình quân mỗi hóa đơn',
               icon: Icons.analytics_outlined,
-              color: TramColors.warning,
+              color: context.tc.warning,
               fullWidth: true,
             ),
           ],
@@ -605,9 +606,9 @@ class _RevenueTabState extends State<RevenueTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.tc.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: TramColors.borderLight),
+              border: Border.all(color: context.tc.borderLight),
               boxShadow: const [
                 BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
               ],
@@ -624,7 +625,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     ),
                     Text(
                       range['label'],
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                     ),
                   ],
                 ),
@@ -642,13 +643,12 @@ class _RevenueTabState extends State<RevenueTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              Flexible(child: Text(
                 'Danh sách hóa đơn (${filtered.length})',
-                style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
+                style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
               Text(
                 'Chạm để xem chi tiết món',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
             ],
           ),
@@ -659,17 +659,17 @@ class _RevenueTabState extends State<RevenueTab> {
               padding: const EdgeInsets.symmetric(vertical: 36),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.tc.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: TramColors.borderLight),
+                border: Border.all(color: context.tc.borderLight),
               ),
               child: Column(
                 children: [
-                  const Icon(Icons.receipt_outlined, size: 48, color: Colors.grey),
+                  Icon(Icons.receipt_outlined, size: 48, color: context.tc.textHint),
                   const SizedBox(height: 8),
                   Text(
                     'Không có hóa đơn nào trong khoảng thời gian này',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: TramColors.textSecondary),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
                   ),
                 ],
               ),
@@ -691,9 +691,9 @@ class _RevenueTabState extends State<RevenueTab> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: context.tc.card,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: TramColors.borderLight),
+                      border: Border.all(color: context.tc.borderLight),
                     ),
                     child: Row(
                       children: [
@@ -702,12 +702,12 @@ class _RevenueTabState extends State<RevenueTab> {
                           height: 40,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: (isCash ? TramColors.success : TramColors.info).withValues(alpha: 0.12),
+                            color: (isCash ? context.tc.success : context.tc.info).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
                             isCash ? Icons.payments_outlined : Icons.qr_code_2,
-                            color: isCash ? TramColors.success : TramColors.info,
+                            color: isCash ? context.tc.success : context.tc.info,
                             size: 20,
                           ),
                         ),
@@ -727,14 +727,14 @@ class _RevenueTabState extends State<RevenueTab> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
+                                        color: context.tc.cardElevated,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         bill.tableName.isNotEmpty ? bill.tableName : 'Mang về',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: TramColors.brandPrimary),
+                                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.primary),
                                       ),
                                     ),
                                   ),
@@ -743,7 +743,7 @@ class _RevenueTabState extends State<RevenueTab> {
                               const SizedBox(height: 3),
                               Text(
                                 '$time • Thu ngân: ${bill.staffFullName.isNotEmpty ? bill.staffFullName : bill.staffUsername}',
-                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                                style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                               ),
                             ],
                           ),
@@ -753,12 +753,12 @@ class _RevenueTabState extends State<RevenueTab> {
                           children: [
                             Text(
                               FormatUtils.vnd(bill.finalAmount),
-                              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: TramColors.brandPrimary),
+                              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primary),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${bill.items.length} món',
-                              style: GoogleFonts.beVietnamPro(fontSize: 11, color: TramColors.textSecondary),
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                             ),
                           ],
                         ),
@@ -787,7 +787,7 @@ class _RevenueTabState extends State<RevenueTab> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? context.tc.card : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             boxShadow: isSelected
                 ? const [BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 2))]
@@ -798,7 +798,7 @@ class _RevenueTabState extends State<RevenueTab> {
             style: GoogleFonts.beVietnamPro(
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? TramColors.brandPrimary : TramColors.textSecondary,
+              color: isSelected ? context.tc.primary : context.tc.textSecondary,
             ),
           ),
         ),
@@ -817,9 +817,9 @@ class _RevenueTabState extends State<RevenueTab> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: TramColors.borderLight),
+        border: Border.all(color: context.tc.borderLight),
       ),
       child: Row(
         children: [
@@ -840,16 +840,16 @@ class _RevenueTabState extends State<RevenueTab> {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold, color: TramColors.textPrimary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
                 ),
                 Text(
                   title,
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.tc.textSecondary),
                 ),
                 if (subtitle != null && subtitle.isNotEmpty)
                   Text(
                     subtitle,
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: Colors.grey.shade500),
+                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textHint),
                   ),
               ],
             ),
@@ -897,7 +897,7 @@ class _RevenueTabState extends State<RevenueTab> {
                 if (val == 0) return const SizedBox.shrink();
                 return Text(
                   val >= 1000000 ? '${(val / 1000000).toStringAsFixed(1)}M' : '${(val / 1000).toInt()}k',
-                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: TramColors.textSecondary),
+                  style: GoogleFonts.beVietnamPro(fontSize: 9, color: context.tc.textSecondary),
                 );
               },
             ),
@@ -920,7 +920,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       data[idx]['label'],
-                      style: GoogleFonts.beVietnamPro(fontSize: 10, color: TramColors.textSecondary),
+                      style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.textSecondary),
                     ),
                   );
                 }
@@ -934,7 +934,7 @@ class _RevenueTabState extends State<RevenueTab> {
           drawVerticalLine: false,
           horizontalInterval: maxY / 4,
           getDrawingHorizontalLine: (value) => FlLine(
-            color: TramColors.borderLight,
+            color: context.tc.borderLight,
             strokeWidth: 1,
             dashArray: [4, 4],
           ),
@@ -947,7 +947,7 @@ class _RevenueTabState extends State<RevenueTab> {
             barRods: [
               BarChartRodData(
                 toY: rev,
-                color: TramColors.brandPrimary,
+                color: context.tc.primary,
                 width: _tab == RevenueTabType.month ? 6 : (_tab == RevenueTabType.day ? 8 : 16),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
               ),
@@ -965,10 +965,10 @@ class _RevenueTabState extends State<RevenueTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? TramColors.brandPrimary : Colors.white,
+          color: active ? context.tc.primary : context.tc.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: active ? TramColors.brandPrimary : TramColors.borderLight,
+            color: active ? context.tc.primary : context.tc.borderLight,
           ),
         ),
         child: Text(
@@ -976,7 +976,7 @@ class _RevenueTabState extends State<RevenueTab> {
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: active ? FontWeight.bold : FontWeight.w500,
-            color: active ? Colors.white : TramColors.textPrimary,
+            color: active ? Colors.white : context.tc.textPrimary,
           ),
         ),
       ),

@@ -374,3 +374,265 @@ describe("POS Trạm - Security Rules: bộ đếm, kho, khuyến mãi khi thanh
     await assertFails(db("cashier_uid").ref("stores/TRAM01/roles/cashier").set({ id: "cashier" }));
   });
 });
+
+describe("POS Trạm - Security Rules: điểm khách hàng & trừ kho thử lại", () => {
+  const C = "stores/TRAM01/customers/KH1";
+  const baseCustomer = { id: "KH1", ho_ten: "Khách 1", so_dien_thoai: "0900000001", diem_hien_tai: 50, currentPoints: 50, totalPoints: 80 };
+
+  async function seedLoyalty() {
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      await d.ref("stores/TRAM01/storeInfo").set({ storeName: "Trạm", pointEarnRate: 1, pointRedeemRate: 1000 });
+      await d.ref(C).set(baseCustomer);
+      await d.ref("stores/TRAM01/bills/award_bill").set({ id: "award_bill", billCode: "HD-9", status: "PAID", finalAmount: 2000000, subTotal: 2000000, customerId: "KH1" });
+      await d.ref("stores/TRAM01/bills/other_cust_bill").set({ id: "other_cust_bill", status: "PAID", finalAmount: 2000000, subTotal: 2000000, customerId: "KH2" });
+    });
+  }
+
+  it("LS1. Phục vụ không sửa được điểm; thu ngân không sửa điểm tùy ý / không xóa khách", async () => {
+    await seedLoyalty();
+    await assertFails(db("waiter_uid").ref(`${C}/currentPoints`).set(9999));
+    await assertFails(db("waiter_uid").ref(C).update({ diem_hien_tai: 9999, currentPoints: 9999 }));
+    const cashier = db("cashier_uid");
+    await assertFails(cashier.ref(C).update({ diem_hien_tai: 9999, currentPoints: 9999 }));
+    await assertFails(cashier.ref(C).update({ totalPoints: 5000 }));
+    await assertFails(cashier.ref(C).remove());
+    // Sửa thông tin không đụng điểm vẫn được
+    await assertSucceeds(cashier.ref(C).update({ ho_ten: "Khách Một" }));
+    await assertSucceeds(cashier.ref(C).set({ ...baseCustomer, ho_ten: "Khách Một" }));
+    // Quản lý điều chỉnh điểm được
+    await assertSucceeds(db("manager_uid").ref(C).update({ diem_hien_tai: 10, currentPoints: 10 }));
+  });
+
+  it("LS1b. Thu ngân tạo khách mới chỉ với 0 điểm (nhập số dư thật qua importCustomerToStore)", async () => {
+    await seedLoyalty();
+    const cashier = db("cashier_uid");
+    const fresh = { id: "KH_NEW", ho_ten: "Khách mới", so_dien_thoai: "0900000002" };
+    const N = "stores/TRAM01/customers/KH_NEW";
+    await assertFails(cashier.ref(N).set({ ...fresh, diem_hien_tai: 500, currentPoints: 500, totalPoints: 500 }));
+    await assertFails(cashier.ref(N).set({ ...fresh, diem_hien_tai: 0, currentPoints: 0, totalPoints: 900 }));
+    await assertFails(cashier.ref(N).set({ ...fresh, diem_hien_tai: 0, currentPoints: 0, diemHienTai: 900 }));
+    await assertFails(cashier.ref(N).set({ ...fresh, currentPoints: 0, loyaltyOps: { "x:award": 1 } }));
+    await assertFails(cashier.ref(N).set({ ...fresh, currentPoints: 0, lastLoyaltyOp: "award_bill:award" }));
+    await assertSucceeds(cashier.ref(N).set({ ...fresh, diem_hien_tai: 0, currentPoints: 0, totalPoints: 0 }));
+    // Không được thêm trường điểm cũ (diemHienTai / tongDiem) vào khách đã có
+    await assertFails(cashier.ref(C).update({ diemHienTai: 9999 }));
+    await assertFails(cashier.ref(C).update({ tongDiem: 9999 }));
+    // Quản lý tạo / đặt điểm tùy ý được
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/customers/KH_VIP").set({ ...fresh, id: "KH_VIP", diem_hien_tai: 800, currentPoints: 800, totalPoints: 800 }));
+    await assertSucceeds(db("manager_uid").ref(C).update({ diem_hien_tai: 999, currentPoints: 999, totalPoints: 999 }));
+  });
+
+  it("LS2. Thu ngân đổi điểm (giảm) kèm khóa thao tác và lastRedeem đúng", async () => {
+    await seedLoyalty();
+    const cashier = db("cashier_uid");
+    const redeem = {
+      ...baseCustomer,
+      diem_hien_tai: 30,
+      currentPoints: 30,
+      lastLoyaltyOp: "newbill:redeem",
+      lastLoyaltyBillId: "newbill",
+      lastLoyaltyType: "redeem",
+      lastRedeem: { billId: "newbill", points: 20 },
+    };
+    await assertFails(cashier.ref(C).set({ ...redeem, lastLoyaltyOp: "fake" }));
+    await assertFails(cashier.ref(C).set({ ...redeem, lastRedeem: { billId: "newbill", points: 5 } }));
+    await assertFails(cashier.ref(C).set({ ...redeem, diem_hien_tai: -10, currentPoints: -10, lastRedeem: { billId: "newbill", points: 60 } }));
+    await assertSucceeds(cashier.ref(C).set(redeem));
+    // Lặp lại cùng khóa thao tác bị chặn
+    await assertFails(cashier.ref(C).set({ ...redeem, diem_hien_tai: 20, currentPoints: 20, lastRedeem: { billId: "newbill", points: 10 } }));
+
+    // Hoàn điểm khi hóa đơn chưa PAID: tối đa đúng số đã đổi
+    const refund = { ...redeem, diem_hien_tai: 50, currentPoints: 50, lastLoyaltyOp: "newbill:refund", lastLoyaltyType: "refund" } as Record<string, unknown>;
+    delete refund.lastRedeem;
+    await assertFails(cashier.ref(C).set({ ...refund, diem_hien_tai: 90, currentPoints: 90 }));
+    await assertSucceeds(cashier.ref(C).set(refund));
+  });
+
+  it("LS3. Tích điểm chỉ cho hóa đơn PAID của đúng khách, có giới hạn theo tiền và chỉ 1 lần", async () => {
+    await seedLoyalty();
+    const cashier = db("cashier_uid");
+    // 2.000.000đ × 1% / 1000đ = 20 điểm
+    const award = { ...baseCustomer, diem_hien_tai: 70, currentPoints: 70, totalPoints: 100, lastLoyaltyOp: "award_bill:award", lastLoyaltyBillId: "award_bill", lastLoyaltyType: "award" };
+    await assertFails(cashier.ref(C).set({ ...award, diem_hien_tai: 500, currentPoints: 500, totalPoints: 530 }));
+    await assertFails(cashier.ref(C).set({ ...award, lastLoyaltyOp: "other_cust_bill:award", lastLoyaltyBillId: "other_cust_bill" }));
+    await assertFails(cashier.ref(C).set({ ...award, lastLoyaltyOp: "open_bill:award", lastLoyaltyBillId: "open_bill" }));
+    await assertFails(cashier.ref(C).set({ ...award, totalPoints: 999 }));
+    await assertSucceeds(cashier.ref(C).set(award));
+
+    // Sổ cái loyalty_applied: chỉ tạo mới; sau khi có thì không cộng lại được cho hóa đơn đó
+    const ledger = "stores/TRAM01/loyalty_applied/award_bill/award";
+    await assertFails(db("waiter_uid").ref(ledger).set({ customerId: "KH1", points: 20 }));
+    await assertFails(cashier.ref("stores/TRAM01/loyalty_applied/award_bill/bonus").set({ customerId: "KH1", points: 20 }));
+    await assertFails(cashier.ref(ledger).set({ customerId: "KH1" }));
+    await assertSucceeds(cashier.ref(ledger).set({ customerId: "KH1", points: 20, before: 50, after: 70, at: Date.now(), by: "thungan" }));
+    await assertFails(cashier.ref(ledger).set({ customerId: "KH1", points: 99 }));
+    await assertFails(cashier.ref(ledger).remove());
+    await assertFails(
+      cashier.ref(C).set({ ...award, diem_hien_tai: 90, currentPoints: 90, totalPoints: 120, lastLoyaltyOp: "award_bill:award" })
+    );
+    await assertSucceeds(db("manager_uid").ref(ledger).remove());
+  });
+
+  it("LS4. bill_stock_lines: marker từng dòng chỉ tạo 1 lần bởi thu ngân trở lên", async () => {
+    const cashier = db("cashier_uid");
+    const line = "stores/TRAM01/bill_stock_lines/b10/ITEM1";
+    await assertFails(db("waiter_uid").ref(line).set(10));
+    await assertFails(cashier.ref(line).set("10"));
+    await assertSucceeds(cashier.ref(line).set(10));
+    await assertFails(cashier.ref(line).set(20));
+    await assertFails(cashier.ref(line).remove());
+    // Ghi sổ kho + marker dòng trong cùng 1 lệnh multi-path
+    await assertSucceeds(
+      cashier.ref("stores/TRAM01").update({
+        "bill_stock_lines/b10/ITEM2": 5,
+        "stock_events/EVT_SALE_b10_ITEM2": { eventId: "EVT_SALE_b10_ITEM2", documentType: "SALE", documentId: "b10", itemId: "ITEM2", qtyDeltaBase: -5 },
+      })
+    );
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/bill_stock_lines/b10").remove());
+    // Marker tổng cũ vẫn giữ nguyên ngữ nghĩa chỉ tạo mới
+    await assertSucceeds(cashier.ref("stores/TRAM01/bill_stock_applied/b10").set(true));
+    await assertFails(cashier.ref("stores/TRAM01/bill_stock_applied/b10").set(true));
+  });
+
+  it("LS5. stock_retry_queue: thu ngân ghi/xóa được mục của hóa đơn, phục vụ bị chặn, dữ liệu hợp lệ", async () => {
+    const cashier = db("cashier_uid");
+    const q = "stores/TRAM01/stock_retry_queue/b11";
+    const entry = { billId: "b11", billCode: "HD-11", username: "thungan", attempts: 1, lastError: "offline", createdAt: Date.now(), updatedAt: Date.now(), plan: [{ itemId: "ITEM1", qty: 10 }] };
+    await assertFails(db("waiter_uid").ref(q).set(entry));
+    await assertFails(cashier.ref(q).set({ ...entry, billId: "khac" }));
+    await assertFails(cashier.ref(q).set({ ...entry, attempts: "1" }));
+    await assertSucceeds(cashier.ref(q).set(entry));
+    await assertSucceeds(cashier.ref(q).update({ attempts: 2, updatedAt: Date.now() }));
+    await assertSucceeds(cashier.ref("stores/TRAM01/stock_retry_queue").get());
+    await assertSucceeds(cashier.ref(q).remove());
+    await assertFails(cashier.ref("stores/TRAM01/stock_retry_queue").remove());
+  });
+
+  it("LS6. Tồn kho có vòng khóa recentSaleBills: thu ngân vẫn trừ được, không tăng được", async () => {
+    const cashier = db("cashier_uid");
+    const bal = "stores/TRAM01/stock_balances/TRAM01_ITEM1";
+    await assertSucceeds(
+      cashier.ref(bal).set({ balanceId: "TRAM01_ITEM1", itemId: "ITEM1", onHandQty: 990, inventoryValue: 495000, averageCostScaled: 50000, recentSaleBills: ["b12"] })
+    );
+    await assertFails(
+      cashier.ref(bal).set({ balanceId: "TRAM01_ITEM1", itemId: "ITEM1", onHandQty: 995, inventoryValue: 495000, averageCostScaled: 50000, recentSaleBills: [] })
+    );
+  });
+});
+
+describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (không lan quyền đọc từ stores/{s})", () => {
+  // Các nút mọi thành viên quán (kể cả Phục vụ / Bếp) cần đọc để vận hành POS
+  const memberReadable = [
+    "storeInfo", "users", "products", "categories", "product_notes", "zones", "tables", "bills", "history",
+    "kitchen_orders", "online_orders", "cash_shifts", "promotions", "campaigns", "vouchers", "voucher_lookup",
+    "campaign_counters", "customer_campaign_counters", "inventory", "catalog_items", "stock_balances",
+    "stock_events", "bill_stock_applied", "bill_stock_lines", "stock_retry_queue", "counters",
+    "inventory_documents", "supplier_ledger", "suppliers", "receipts", "loyalty_applied", "audit_logs",
+    "payment_events", "recipes", "migration_log", "roles",
+  ];
+
+  it("RC1. Phục vụ và Bếp đọc được các nút vận hành (bàn, món, danh mục, khu vực, bếp, hóa đơn...)", async () => {
+    for (const uid of ["waiter_uid", "kitchen_uid"]) {
+      for (const node of memberReadable) {
+        await assertSucceeds(db(uid).ref(`stores/TRAM01/${node}`).get());
+      }
+    }
+    await assertSucceeds(db("waiter_uid").ref("stores/TRAM01/bills/open_bill").get());
+    await assertSucceeds(db("waiter_uid").ref("stores/TRAM01/users/waiter_uid").get());
+  });
+
+  it("RC2. Phục vụ và Bếp KHÔNG đọc được customers (cả danh sách lẫn từng khách)", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("stores/TRAM01/customers/c1").set({ name: "Khách", phone: "0900000000", currentPoints: 10 });
+    });
+    for (const uid of ["waiter_uid", "kitchen_uid"]) {
+      await assertFails(db(uid).ref("stores/TRAM01/customers").get());
+      await assertFails(db(uid).ref("stores/TRAM01/customers/c1").get());
+      await assertFails(db(uid).ref("stores/TRAM01/customers/c1/currentPoints").get());
+    }
+    for (const uid of ["cashier_uid", "manager_uid", "owner_uid"]) {
+      await assertSucceeds(db(uid).ref("stores/TRAM01/customers").get());
+    }
+  });
+
+  it("RC3. Không ai đọc được cả nút stores/{s} (tránh lan quyền xuống customers / dữ liệu ẩn)", async () => {
+    for (const uid of ["waiter_uid", "cashier_uid", "manager_uid", "owner_uid"]) {
+      await assertFails(db(uid).ref("stores/TRAM01").get());
+    }
+  });
+
+  it("RC4. login_attempts (gốc mới và nhánh cũ trong store) bị chặn với mọi client, kể cả Chủ quán", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("login_attempts/TRAM01/thungan").set({ failedCount: 3, lastAttemptAt: Date.now() });
+      await context.database().ref("stores/TRAM01/login_attempts/thungan").set({ failedCount: 3, lastAttemptAt: Date.now() });
+    });
+    for (const uid of ["waiter_uid", "cashier_uid", "manager_uid", "owner_uid"]) {
+      await assertFails(db(uid).ref("login_attempts/TRAM01/thungan").get());
+      await assertFails(db(uid).ref("login_attempts/TRAM01").get());
+      await assertFails(db(uid).ref("stores/TRAM01/login_attempts").get());
+      await assertFails(db(uid).ref("stores/TRAM01/login_attempts/thungan").get());
+      await assertFails(db(uid).ref("login_attempts/TRAM01/thungan").set({ failedCount: 0 }));
+    }
+  });
+
+  it("RC5. Nút con vẫn chặn người ngoài quán, tài khoản bị khóa và người chưa đăng nhập", async () => {
+    for (const node of ["tables", "products", "storeInfo", "users", "customers"]) {
+      await assertFails(db("storeB_uid").ref(`stores/TRAM01/${node}`).get());
+      await assertFails(db("inactive_uid").ref(`stores/TRAM01/${node}`).get());
+      await assertFails(env().unauthenticatedContext().database().ref(`stores/TRAM01/${node}`).get());
+    }
+  });
+
+  it("RC6. Cấu trúc rules: stores/$storeCode không có .read; mọi nút con đều tự khai báo .read", () => {
+    const store = parsedRules.rules.stores.$storeCode;
+    expect(store[".read"]).toBeUndefined();
+    const children = Object.keys(store).filter((k) => !k.startsWith("."));
+    for (const child of children) {
+      expect(typeof store[child][".read"], `stores/$storeCode/${child} thiếu .read`).toBe("string");
+    }
+    // Danh sách test RC1 + customers phải phủ hết nút con (thêm nút mới → cập nhật test)
+    expect([...memberReadable, "customers"].sort()).toEqual(children.sort());
+    expect(children).not.toContain("login_attempts");
+  });
+
+  it("RC7. Quyền Thu ngân trở lên vẫn đọc được mọi nút vận hành; quyền nút con không bị nhầm sang nhau", async () => {
+    for (const uid of ["cashier_uid", "manager_uid", "owner_uid"]) {
+      for (const node of memberReadable) {
+        await assertSucceeds(db(uid).ref(`stores/TRAM01/${node}`).get());
+      }
+    }
+    // Truy vấn có sắp xếp trên nút con (app dùng orderByChild cho bills / audit_logs)
+    await assertSucceeds(db("waiter_uid").ref("stores/TRAM01/bills").orderByChild("status").equalTo("OPEN").get());
+    await assertFails(db("waiter_uid").ref("stores/TRAM01/customers").orderByChild("phone").equalTo("0900000000").get());
+  });
+});
+
+describe("POS Trạm - Security Rules: PIN duyệt quản lý", () => {
+  it("MP1. Không ai ghi được managerPin (bản rõ) vào storeInfo; storeInfo hợp lệ vẫn ghi được", async () => {
+    const owner = db("owner_uid");
+    await assertSucceeds(owner.ref("stores/TRAM01/storeInfo").set({ storeName: "Trạm", pointEarnRate: 1 }));
+    await assertFails(owner.ref("stores/TRAM01/storeInfo").set({ storeName: "Trạm", managerPin: "1234" }));
+    await assertFails(owner.ref("stores/TRAM01/storeInfo").update({ managerPin: "5678" }));
+    await assertFails(owner.ref("stores/TRAM01/storeInfo/managerPin").set("5678"));
+    await assertSucceeds(owner.ref("stores/TRAM01/storeInfo").update({ storeName: "Trạm 2" }));
+
+    // Dữ liệu cũ còn managerPin bản rõ: vẫn cập nhật được trường khác và xóa được PIN cũ
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("stores/TRAM01/storeInfo/managerPin").set("1234");
+    });
+    await assertSucceeds(owner.ref("stores/TRAM01/storeInfo").update({ storeName: "Trạm 3" }));
+    await assertFails(owner.ref("stores/TRAM01/storeInfo/managerPin").set("9999"));
+    await assertSucceeds(owner.ref("stores/TRAM01/storeInfo/managerPin").remove());
+  });
+
+  it("MP2. Băm PIN tại manager_pins/ chỉ Admin SDK truy cập được", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("manager_pins/TRAM01/manager_uid").set({ algo: "scrypt", salt: "00", hash: "00" });
+    });
+    for (const uid of ["owner_uid", "manager_uid", "cashier_uid"]) {
+      await assertFails(db(uid).ref("manager_pins/TRAM01/manager_uid").get());
+      await assertFails(db(uid).ref("manager_pins/TRAM01/manager_uid").set({ algo: "scrypt", salt: "11", hash: "11" }));
+    }
+  });
+});

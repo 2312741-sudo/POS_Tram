@@ -77,30 +77,30 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.tc.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Thêm danh mục', style: GoogleFonts.beVietnamPro(
-              color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+              color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
             Text('Chi nhánh: $_selectedStoreCode',
-              style: GoogleFonts.beVietnamPro(color: TramColors.brandPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+              style: GoogleFonts.beVietnamPro(color: context.tc.primary, fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
         content: TextField(
           controller: ctrl,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: const InputDecoration(
+          style: TextStyle(color: context.tc.textPrimary),
+          decoration: InputDecoration(
             labelText: 'Tên danh mục',
-            prefixIcon: Icon(Icons.category_outlined, color: AppColors.textSecondary),
+            prefixIcon: Icon(Icons.category_outlined, color: context.tc.textSecondary),
           ),
           autofocus: true,
           textCapitalization: TextCapitalization.words,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context),
-            child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary))),
+            child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary))),
           ElevatedButton(
             onPressed: () async {
               if (ctrl.text.trim().isNotEmpty) {
@@ -134,44 +134,44 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.surface,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Quản lý danh mục', style: GoogleFonts.beVietnamPro(
-          color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
       ),
       body: Column(
         children: [
           // Store Selector Bar
           Container(
-            color: AppColors.cardElevated,
+            color: context.tc.cardElevated,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.storefront, color: TramColors.brandPrimary, size: 20),
+                Icon(Icons.storefront, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.card,
+                      color: context.tc.card,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.tc.border),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _availableStores.any((s) => s.storeCode == _selectedStoreCode) ? _selectedStoreCode : null,
                         hint: Text(_selectedStoreCode),
                         isExpanded: true,
-                        dropdownColor: AppColors.card,
+                        dropdownColor: context.tc.card,
                         items: _availableStores.map((s) => DropdownMenuItem(
                           value: s.storeCode,
                           child: Text(
                             '${s.storeCode} • ${s.storeName}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textPrimary, fontWeight: FontWeight.w600),
                             overflow: TextOverflow.ellipsis,
                           ),
                         )).toList(),
@@ -207,9 +207,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _categories.length,
-                    onReorder: (oldIndex, newIndex) {
+                    // onReorderItem đã tự hiệu chỉnh newIndex sau khi bỏ phần tử ở oldIndex.
+                    onReorderItem: (oldIndex, newIndex) {
                       setState(() {
-                        if (newIndex > oldIndex) newIndex--;
                         final item = _categories.removeAt(oldIndex);
                         _categories.insert(newIndex, item);
                       });
@@ -218,28 +218,28 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       key: ValueKey(_categories[i].name),
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.card,
+                        color: context.tc.card,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.tc.border),
                       ),
                       child: ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withAlpha(26),
+                            color: context.tc.primary.withAlpha(26),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.category_outlined, color: AppColors.primary, size: 18),
+                          child: Icon(Icons.category_outlined, color: context.tc.primary, size: 18),
                         ),
                         title: Text(_categories[i].name, style: GoogleFonts.beVietnamPro(
-                          color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                          color: context.tc.textPrimary, fontWeight: FontWeight.w600)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.drag_handle, color: AppColors.textHint, size: 20),
+                            Icon(Icons.drag_handle, color: context.tc.textHint, size: 20),
                             const SizedBox(width: 8),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                              icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                               onPressed: () => _deleteCategory(_categories[i]),
                             ),
                           ],
@@ -254,7 +254,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         onPressed: _showAddDialog,
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text('Thêm danh mục vào [$_selectedStoreCode]', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
       ),
     );

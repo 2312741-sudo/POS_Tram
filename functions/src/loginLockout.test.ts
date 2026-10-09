@@ -10,6 +10,7 @@ import {
   applyFailure,
   buildLockoutMessage,
   isInvalidCredentialError,
+  loginAttemptPath,
 } from "./loginLockout";
 
 /** Mô phỏng 1 lần đăng nhập sai: giữ chỗ rồi ghi nhận thất bại */
@@ -75,5 +76,12 @@ describe("Khóa tạm đăng nhập (staffSignIn)", () => {
     expect(isInvalidCredentialError("INVALID_LOGIN_CREDENTIALS")).toBe(true);
     expect(isInvalidCredentialError("INVALID_PASSWORD : bad")).toBe(true);
     expect(isInvalidCredentialError("TOO_MANY_ATTEMPTS_TRY_LATER : x")).toBe(false);
+  });
+});
+
+describe("loginAttemptPath", () => {
+  it("lưu bộ đếm ở gốc login_attempts/{store}/{user}, KHÔNG nằm trong cây stores/{s}", () => {
+    expect(loginAttemptPath("TRAM01", "thungan")).toBe("login_attempts/TRAM01/thungan");
+    expect(loginAttemptPath("TRAM01", "thungan").startsWith("stores/")).toBe(false);
   });
 });

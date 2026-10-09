@@ -57,20 +57,20 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
   Widget build(BuildContext context) {
     final pendingCount = _pending.length;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: TramColors.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
+        backgroundColor: context.tc.surface,
+        foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Row(
           children: [
             Text('Đơn hàng online', style: GoogleFonts.beVietnamPro(
-              color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+              color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
             if (pendingCount > 0) ...[
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.danger,
+                  color: context.tc.danger,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text('$pendingCount', style: GoogleFonts.beVietnamPro(
@@ -148,14 +148,14 @@ class _OnlineOrderCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: context.tc.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isCallWaiter ? AppColors.warning.withAlpha(120) : AppColors.border,
+            color: isCallWaiter ? context.tc.warning.withAlpha(120) : context.tc.border,
             width: isCallWaiter ? 2 : 1,
           ),
           boxShadow: isCallWaiter ? [
-            BoxShadow(color: AppColors.warning.withAlpha(50), blurRadius: 12),
+            BoxShadow(color: context.tc.warning.withAlpha(50), blurRadius: 12),
           ] : null,
         ),
         child: Padding(
@@ -168,7 +168,7 @@ class _OnlineOrderCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: isCallWaiter ? AppColors.warning.withAlpha(30) : AppColors.primary.withAlpha(30),
+                      color: isCallWaiter ? context.tc.warning.withAlpha(30) : context.tc.primary.withAlpha(30),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -176,14 +176,14 @@ class _OnlineOrderCard extends StatelessWidget {
                       children: [
                         Icon(
                           isCallWaiter ? Icons.campaign_outlined : Icons.restaurant,
-                          color: isCallWaiter ? AppColors.warning : AppColors.primary,
+                          color: isCallWaiter ? context.tc.warning : context.tc.primary,
                           size: 14,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           isCallWaiter ? '🔔 Gọi nhân viên' : 'Đặt món',
                           style: GoogleFonts.beVietnamPro(
-                            color: isCallWaiter ? AppColors.warning : AppColors.primary,
+                            color: isCallWaiter ? context.tc.warning : context.tc.primary,
                             fontWeight: FontWeight.w700, fontSize: 12,
                           ),
                         ),
@@ -200,7 +200,7 @@ class _OnlineOrderCard extends StatelessWidget {
                             TextSpan(
                               text: 'Bàn ${order.tableName}',
                               style: GoogleFonts.beVietnamPro(
-                                color: AppColors.textPrimary,
+                                color: context.tc.textPrimary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               ),
@@ -209,7 +209,7 @@ class _OnlineOrderCard extends StatelessWidget {
                               TextSpan(
                                 text: ' • ${order.tableZone}',
                                 style: GoogleFonts.beVietnamPro(
-                                  color: AppColors.textSecondary,
+                                  color: context.tc.textSecondary,
                                   fontSize: 12,
                                 ),
                               ),
@@ -226,19 +226,19 @@ class _OnlineOrderCard extends StatelessWidget {
               if (!isCallWaiter && items.isNotEmpty) ...[
                 Text(
                   items.map((p) => '${p.name} x${p.quantity}').join(', '),
-                  style: GoogleFonts.beVietnamPro(color: AppColors.textSecondary, fontSize: 12),
+                  style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary, fontSize: 12),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
                 Text(FormatUtils.currency(total), style: GoogleFonts.beVietnamPro(
-                  color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
+                  color: context.tc.primary, fontWeight: FontWeight.w700, fontSize: 15)),
               ] else if (isCallWaiter)
                 Text('Khách đang chờ nhân viên phục vụ', style: GoogleFonts.beVietnamPro(
-                  color: AppColors.textSecondary, fontSize: 13)),
+                  color: context.tc.textSecondary, fontSize: 13)),
               const SizedBox(height: 4),
               Text(FormatUtils.dateTime(order.timestamp), style: GoogleFonts.beVietnamPro(
-                color: AppColors.textHint, fontSize: 11)),
+                color: context.tc.textHint, fontSize: 11)),
               if (showActions) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -247,8 +247,8 @@ class _OnlineOrderCard extends StatelessWidget {
                       child: OutlinedButton(
                         onPressed: onCancel,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.danger,
-                          side: const BorderSide(color: AppColors.danger),
+                          foregroundColor: context.tc.danger,
+                          side: BorderSide(color: context.tc.danger),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                         child: Text('Từ chối', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),

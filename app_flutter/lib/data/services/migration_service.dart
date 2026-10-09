@@ -1,6 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
 import '../../data/models/app_models.dart';
-import '../../data/models/campaign_models.dart';
 import '../../core/domain/promotion_migration.dart';
 
 class MigrationService {

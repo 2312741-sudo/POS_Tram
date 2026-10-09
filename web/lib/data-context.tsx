@@ -1,12 +1,24 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { db, auth } from "./firebase";
-import { ref, onValue, query, limitToLast, set, update, remove, get, push } from "firebase/database";
+import { ref, onValue, set, update, remove, get, push } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
-import { parseOrderJson, summarizeOrderLines } from "./order-math";
+import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
+import { CLEAR_PRE_PRINT, buildOrderItemsPayload, prePrintPayload } from "./table-status";
 import { errorMessage } from "./errors";
+import { approvalAuditFields, approvalSuffix, type ManagerApproval } from "./manager-approval";
+import {
+  buildMergePayloads,
+  buildTableOpUpdates,
+  buildTransferPayloads,
+  tableChanged,
+  validateMerge,
+  validateTransfer,
+  type TableActor,
+  type TableNode,
+} from "./table-ops";
 
 /**
  * Giá trị thô đọc từ RTDB snapshot. Dữ liệu do nhiều phiên bản Flutter/Web cũ ghi nên không có
@@ -15,6 +27,24 @@ import { errorMessage } from "./errors";
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ranh giới parse dữ liệu RTDB không schema
 type RtdbNode = any;
+
+/**
+ * Các nút con của stores/{code} mà Web Admin lắng nghe trực tiếp (processStoreDataMap dùng).
+ * Rules cấp quyền đọc theo TỪNG nút con (không đọc được cả stores/{code}), nên khi
+ * processStoreDataMap cần thêm nút mới thì phải thêm vào danh sách này.
+ */
+export const STORE_CHILD_NODES = [
+  "storeInfo",
+  "users",
+  "products",
+  "categories",
+  "tables",
+  "bills",
+  "history",
+  "audit_logs",
+  "online_orders",
+  "cash_shifts",
+] as const;
 
 /** Đơn hàng online (stores/{code}/online_orders) */
 export interface OnlineOrderItem {
@@ -124,6 +154,10 @@ export interface TableItem {
   actionLogs?: OrderActionLog[];
   orderStaff?: string;
   mergedIntoTable?: string | null;
+  /** Epoch ms khi in phiếu tạm tính (hợp đồng chung với Flutter) — có ⇒ "Chờ thanh toán" */
+  prePrintedAt?: number | null;
+  /** Username người in phiếu tạm tính */
+  prePrintedBy?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
@@ -204,6 +238,8 @@ export interface StoreItem {
   defaultVatRate?: number;
   allowStackPromotions?: boolean;
   allowStaffViewShiftDifference?: boolean;
+  pointEarnRate?: number;
+  pointRedeemRate?: number;
   active?: boolean;
   createdAt?: number | string;
   totalTables?: number;
@@ -259,6 +295,18 @@ interface DashboardContextType {
     storeCode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   deleteTable: (tableId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
+  /** Ghi lại danh sách món của bàn đang mở (giảm giá dòng / đổi số lượng); luôn xóa đánh dấu in tạm tính */
+  updateTableOrderItems: (
+    table: TableItem,
+    nextItems: RawOrderLine[],
+    log: { action: string; details: string; staffUsername?: string; staffFullName?: string; approval?: ManagerApproval | null }
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Chuyển toàn bộ đơn sang bàn trống (khớp Flutter transferTable); đọc lại 2 bàn từ DB, từ chối nếu đã đổi */
+  transferTable: (source: TableItem, target: TableItem, actor: TableActor) => Promise<{ success: boolean; error?: string }>;
+  /** Gộp đơn bàn nguồn vào bàn đích đang có khách (khớp Flutter mergeTables) */
+  mergeTables: (source: TableItem, target: TableItem, actor: TableActor) => Promise<{ success: boolean; error?: string }>;
+  /** Đánh dấu bàn đã in phiếu tạm tính (prePrintedAt/prePrintedBy) */
+  markTablePrePrinted: (table: TableItem, username?: string) => Promise<{ success: boolean; error?: string }>;
   saveProduct: (
     productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean },
     storeCode?: string
@@ -325,6 +373,10 @@ const DashboardContext = createContext<DashboardContextType>({
   cancelActiveTable: async () => ({ success: false }),
   saveTable: async () => ({ success: false }),
   deleteTable: async () => ({ success: false }),
+  updateTableOrderItems: async () => ({ success: false }),
+  transferTable: async () => ({ success: false }),
+  mergeTables: async () => ({ success: false }),
+  markTablePrePrinted: async () => ({ success: false }),
   saveProduct: async () => ({ success: false }),
   deleteProduct: async () => ({ success: false }),
   saveCategory: async () => ({ success: false }),
@@ -381,6 +433,8 @@ function parseActionLogs(table: TableItem): OrderActionLog[] {
 
 function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
   const mapItem = (it: RtdbNode): OrderItem => {
+    // Bỏ ảnh base64 (nặng) khỏi dòng món lịch sử
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { imageBase64, ...rest } = it;
     return {
       ...rest,
@@ -593,6 +647,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         defaultVatRate: (info.defaultVatRate === 8 || info.defaultVatRate === "8") ? 0 : (typeof info.defaultVatRate === "number" ? info.defaultVatRate : 0),
         allowStackPromotions: info.allowStackPromotions ?? true,
         allowStaffViewShiftDifference: info.allowStaffViewShiftDifference ?? true,
+        // Cấu hình tích / đổi điểm (trang Khách hàng)
+        pointEarnRate: typeof info.pointEarnRate === "number" ? info.pointEarnRate : undefined,
+        pointRedeemRate: typeof info.pointRedeemRate === "number" ? info.pointRedeemRate : undefined,
         active: info.active ?? true,
         createdAt: info.createdAt || Date.now(),
       });
@@ -742,6 +799,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     let isMounted = true;
     const storeListeners = new Map<string, () => void>();
     const storeDataMap: Record<string, RtdbNode> = {};
+    const pendingStores = new Set<string>();
 
     function updateStoreSubscriptions(storeCodes: string[]) {
       const uniqueCodes = Array.from(new Set(storeCodes.filter(Boolean)));
@@ -758,30 +816,63 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
       }
 
-      // 2. Thêm listener cho các store mới
+      // 2. Thêm listener cho các store mới.
+      // Rules KHÔNG cấp quyền đọc cả nút stores/{code} (quyền đọc ở nút cha sẽ lan xuống mọi nút con,
+      // kể cả customers chỉ dành cho Thu ngân+). Vì vậy lắng nghe riêng từng nút con cần dùng rồi gộp lại.
       uniqueCodes.forEach((code) => {
         if (!storeListeners.has(code)) {
-          const storeRef = ref(db, `stores/${code}`);
-          const unsub = onValue(
-            storeRef,
-            (snap) => {
-              if (!isMounted) return;
-              if (snap.exists()) {
-                storeDataMap[code] = snap.val();
-              } else {
-                delete storeDataMap[code];
-              }
-              processStoreDataMap(storeDataMap);
-            },
-            (error) => {
-              if (!isMounted) return;
-              console.warn(`[data-context] Không thể đọc stores/${code}:`, error.message);
+          const nodes: RtdbNode = {};
+          const pending = new Set<string>(STORE_CHILD_NODES);
+          pendingStores.add(code);
+
+          const publish = () => {
+            if (pending.size > 0) return; // Chờ mọi nút con trả về lần đầu để tránh nháy dữ liệu thiếu
+            pendingStores.delete(code);
+            if (Object.keys(nodes).length > 0) {
+              storeDataMap[code] = { ...nodes };
+            } else {
               delete storeDataMap[code];
-              processStoreDataMap(storeDataMap);
             }
+            scheduleProcess();
+          };
+
+          const unsubs = STORE_CHILD_NODES.map((child) =>
+            onValue(
+              ref(db, `stores/${code}/${child}`),
+              (snap) => {
+                if (!isMounted) return;
+                if (snap.exists()) nodes[child] = snap.val();
+                else delete nodes[child];
+                pending.delete(child);
+                publish();
+              },
+              (error) => {
+                if (!isMounted) return;
+                console.warn(`[data-context] Không thể đọc stores/${code}/${child}:`, error.message);
+                delete nodes[child];
+                pending.delete(child);
+                publish();
+              }
+            )
           );
-          storeListeners.set(code, unsub);
+          storeListeners.set(code, () => {
+            unsubs.forEach((u) => u());
+            pendingStores.delete(code);
+          });
         }
+      });
+      scheduleProcess();
+    }
+
+    // Gộp nhiều callback nút con thành 1 lần xử lý; chỉ xử lý khi mọi store đã tải xong lần đầu
+    let processScheduled = false;
+    function scheduleProcess() {
+      if (processScheduled) return;
+      processScheduled = true;
+      queueMicrotask(() => {
+        processScheduled = false;
+        if (!isMounted || pendingStores.size > 0) return;
+        processStoreDataMap(storeDataMap);
       });
     }
 
@@ -800,6 +891,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           unsub();
         }
         storeListeners.clear();
+        pendingStores.clear();
+        for (const code of Object.keys(storeDataMap)) delete storeDataMap[code];
         processStoreDataMap({});
         return;
       }
@@ -897,7 +990,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   // Compute products across all stores and scoped to currentStoreCode
   const allProducts = useMemo(() => {
     const list: ProductItem[] = [];
-    Object.entries(rawProductsMap).forEach(([code, pList]) => {
+    Object.values(rawProductsMap).forEach((pList) => {
       pList.forEach((p) => {
         list.push(p);
       });
@@ -914,7 +1007,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   // Compute categories across all stores and scoped to currentStoreCode
   const allCategories = useMemo(() => {
     const list: CategoryItem[] = [];
-    Object.entries(rawCategoriesMap).forEach(([code, cList]) => {
+    Object.values(rawCategoriesMap).forEach((cList) => {
       cList.forEach((c) => {
         list.push(c);
       });
@@ -1142,6 +1235,31 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   // Table operations (multi-store aware)
   // Thanh toán / hủy đơn được ghi bằng MỘT lệnh update() đa đường dẫn (bills + history + bàn + audit log)
   // để không bao giờ xảy ra trạng thái nửa vời (đã ghi hóa đơn nhưng bàn chưa trả, hoặc ngược lại).
+  // Chỉ ghi vào khóa bàn chuẩn {zone}_{name} nếu nút đó thực sự tồn tại (tránh tạo bàn "ma")
+  const tableKeysFor = useCallback(
+    (targetStoreCode: string, table: TableItem): string[] => {
+      const stdKey = `${table.zone}_${table.name}`;
+      const storeTables = rawTables[targetStoreCode] || [];
+      const keys = [table.id];
+      if (stdKey !== table.id && storeTables.some((t) => t.id === stdKey)) keys.push(stdKey);
+      return keys;
+    },
+    [rawTables]
+  );
+
+  const buildTableFieldUpdates = useCallback(
+    (targetStoreCode: string, table: TableItem, payload: Record<string, unknown>) => {
+      const updates: Record<string, unknown> = {};
+      for (const key of tableKeysFor(targetStoreCode, table)) {
+        for (const [field, value] of Object.entries(payload)) {
+          updates[`stores/${targetStoreCode}/tables/${key}/${field}`] = value;
+        }
+      }
+      return updates;
+    },
+    [tableKeysFor]
+  );
+
   const buildCloseTableUpdates = useCallback(
     (targetStoreCode: string, table: TableItem, prefix: Record<string, unknown>) => {
       const clearPayload: Record<string, unknown> = {
@@ -1153,21 +1271,17 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         currentOrderCode: null,
         mergedIntoTable: null,
         actionLogsJson: null,
+        ...CLEAR_PRE_PRINT,
       };
       const updates: Record<string, unknown> = { ...prefix };
-      // Chỉ ghi vào khóa bàn chuẩn {zone}_{name} nếu nút đó thực sự tồn tại (tránh tạo bàn "ma")
-      const stdKey = `${table.zone}_${table.name}`;
-      const storeTables = rawTables[targetStoreCode] || [];
-      const tableKeys = [table.id];
-      if (stdKey !== table.id && storeTables.some((t) => t.id === stdKey)) tableKeys.push(stdKey);
-      for (const key of tableKeys) {
+      for (const key of tableKeysFor(targetStoreCode, table)) {
         for (const [field, value] of Object.entries(clearPayload)) {
           updates[`stores/${targetStoreCode}/tables/${key}/${field}`] = value;
         }
       }
       return { updates, clearPayload };
     },
-    [rawTables]
+    [tableKeysFor]
   );
 
   const applyClosedTableLocally = useCallback(
@@ -1414,6 +1528,130 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       }
     },
     [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally]
+  );
+
+  const updateTableOrderItems = useCallback(
+    async (
+      table: TableItem,
+      nextItems: RawOrderLine[],
+      log: { action: string; details: string; staffUsername?: string; staffFullName?: string; approval?: ManagerApproval | null }
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        if (!table.inUse) return { success: false, error: "Bàn không còn mở" };
+        const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+        // Kiểm tra lạc quan: đơn trên server phải trùng với bản người dùng đang sửa
+        // (tránh ghi đè món vừa thêm/sửa từ POS Flutter)
+        const snap = await get(ref(db, `stores/${targetStoreCode}/tables/${table.id}/currentOrderJson`));
+        const serverJson = snap.exists() ? String(snap.val() ?? "") : "";
+        const prevItems = parseOrderJson(table.currentOrderJson);
+        if (JSON.stringify(parseOrderJson(serverJson)) !== JSON.stringify(prevItems)) {
+          return { success: false, error: "Đơn của bàn vừa thay đổi trên thiết bị khác. Vui lòng xem lại và thử lại." };
+        }
+        const payload = buildOrderItemsPayload(prevItems, nextItems);
+        if (!payload) return { success: true };
+
+        const now = Date.now();
+        const staffUsername = log.staffUsername || "admin_web";
+        const staffFullName = log.staffFullName || "Quản trị viên Web";
+        const actionLogs = parseActionLogs(table);
+        const suffix = approvalSuffix(log.approval);
+        actionLogs.push({ timestamp: now, staffUsername, staffFullName, action: log.action, details: `${log.details}${suffix}` });
+        const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
+        const updates = buildTableFieldUpdates(targetStoreCode, table, {
+          ...payload,
+          actionLogsJson: JSON.stringify(actionLogs),
+        });
+        updates[`stores/${targetStoreCode}/audit_logs/${logId}`] = {
+          timestamp: now,
+          username: staffUsername,
+          userFullName: staffFullName,
+          action: log.action,
+          targetType: "TABLE",
+          targetId: table.name,
+          storeCode: targetStoreCode,
+          details: `${log.details} (bàn ${table.name}) qua Web Admin${suffix}`,
+          ...approvalAuditFields(log.approval),
+        };
+        await update(ref(db), updates);
+        return { success: true };
+      } catch (e) {
+        console.error("updateTableOrderItems error:", e);
+        return { success: false, error: errorMessage(e, "Lỗi cập nhật món của bàn") };
+      }
+    },
+    [currentStoreCode, buildTableFieldUpdates]
+  );
+
+  // Chuyển / gộp bàn: đọc lại CẢ 2 bàn từ DB, từ chối nếu đã đổi so với bản người dùng đang xem,
+  // rồi ghi bàn nguồn + bàn đích + audit log trong MỘT update() đa đường dẫn.
+  const runTableOp = useCallback(
+    async (
+      kind: "TRANSFER" | "MERGE",
+      source: TableItem,
+      target: TableItem,
+      actor: TableActor
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const storeCode = source.storeCode || resolveWriteStoreCode(currentStoreCode);
+        if ((target.storeCode || storeCode) !== storeCode) {
+          return { success: false, error: "Chỉ chuyển/gộp bàn trong cùng một chi nhánh." };
+        }
+        const [sSnap, tSnap] = await Promise.all([
+          get(ref(db, `stores/${storeCode}/tables/${source.id}`)),
+          get(ref(db, `stores/${storeCode}/tables/${target.id}`)),
+        ]);
+        const sServer = sSnap.exists() ? ({ name: source.name, zone: source.zone, ...sSnap.val() } as TableNode) : null;
+        const tServer = tSnap.exists() ? ({ name: target.name, zone: target.zone, ...tSnap.val() } as TableNode) : null;
+        if (!sServer || !tServer || tableChanged(source, sServer) || tableChanged(target, tServer)) {
+          return { success: false, error: "Bàn vừa thay đổi trên thiết bị khác. Vui lòng xem lại và thử lại." };
+        }
+        const sameKey = source.id === target.id;
+        const invalid = kind === "TRANSFER" ? validateTransfer(sServer, tServer, sameKey) : validateMerge(sServer, tServer, sameKey);
+        if (invalid) return { success: false, error: invalid };
+
+        const now = Date.now();
+        const args = { source: sServer, target: tServer, actor, now, storeCode };
+        const payloads = kind === "TRANSFER" ? buildTransferPayloads(args) : buildMergePayloads(args);
+        const logId = `log_${now}_${Math.floor(Math.random() * 100000)}`;
+        const updates = buildTableOpUpdates({
+          storeCode,
+          sourceKeys: tableKeysFor(storeCode, source),
+          targetKeys: tableKeysFor(storeCode, target),
+          payloads,
+          logId,
+        });
+        await update(ref(db), updates);
+        return { success: true };
+      } catch (e) {
+        console.error(`${kind} table error:`, e);
+        return { success: false, error: errorMessage(e, kind === "TRANSFER" ? "Lỗi chuyển bàn" : "Lỗi gộp bàn") };
+      }
+    },
+    [currentStoreCode, tableKeysFor]
+  );
+
+  const transferTable = useCallback(
+    (source: TableItem, target: TableItem, actor: TableActor) => runTableOp("TRANSFER", source, target, actor),
+    [runTableOp]
+  );
+  const mergeTables = useCallback(
+    (source: TableItem, target: TableItem, actor: TableActor) => runTableOp("MERGE", source, target, actor),
+    [runTableOp]
+  );
+
+  const markTablePrePrinted = useCallback(
+    async (table: TableItem, username?: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        if (!table.inUse) return { success: false, error: "Bàn không còn mở" };
+        const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+        await update(ref(db), buildTableFieldUpdates(targetStoreCode, table, prePrintPayload(Date.now(), username)));
+        return { success: true };
+      } catch (e) {
+        console.error("markTablePrePrinted error:", e);
+        return { success: false, error: errorMessage(e, "Lỗi đánh dấu in tạm tính") };
+      }
+    },
+    [currentStoreCode, buildTableFieldUpdates]
   );
 
   const saveTable = useCallback(
@@ -1835,6 +2073,10 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       cancelActiveTable,
       saveTable,
       deleteTable,
+      updateTableOrderItems,
+      transferTable,
+      mergeTables,
+      markTablePrePrinted,
       saveProduct,
       deleteProduct,
       saveCategory,
@@ -1873,6 +2115,10 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       cancelActiveTable,
       saveTable,
       deleteTable,
+      updateTableOrderItems,
+      transferTable,
+      mergeTables,
+      markTablePrePrinted,
       saveProduct,
       deleteProduct,
       saveCategory,

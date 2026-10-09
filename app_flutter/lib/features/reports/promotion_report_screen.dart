@@ -17,9 +17,9 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tc.background,
       appBar: AppBar(
-        backgroundColor: TramColors.brandPrimary,
+        backgroundColor: context.tc.primary,
         title: const Text('Hiệu suất Khuyến mãi', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -74,10 +74,10 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: context.tc.textPrimary,
       ),
     );
   }
@@ -107,7 +107,7 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
         _buildMetricCard('Số CT đang chạy', activeCampaigns.length.toString(), Colors.blue),
         _buildMetricCard('Tổng ngân sách đã dùng', FormatUtils.currency(totalBudgetUsed), Colors.orange),
         _buildMetricCard('Tổng lượt áp dụng', totalUses.toString(), Colors.green),
-        _buildMetricCard('TB giảm/đơn', FormatUtils.currency(avgDiscount), TramColors.brandPrimary),
+        _buildMetricCard('TB giảm/đơn', FormatUtils.currency(avgDiscount), context.tc.primary),
       ],
     );
   }
@@ -116,15 +116,15 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.tc.card,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: context.tc.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(title, style: TextStyle(color: context.tc.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
         ],

@@ -7,6 +7,8 @@ import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
 import '../services/campaign_service.dart';
+import '../services/loyalty_service.dart';
+import '../../core/services/auth_service.dart';
 import 'seed_data.dart';
 
 class OrderRepository {
@@ -185,6 +187,9 @@ class OrderRepository {
     dst.openedAt = src.openedAt;
     dst.guestCount = src.guestCount;
     dst.actionLogsJson = src.actionLogsJson;
+    // Gán SAU currentOrderJson (setter có thể xóa cờ tạm tính khi món đổi).
+    dst.prePrintedAt = src.prePrintedAt;
+    dst.prePrintedBy = src.prePrintedBy;
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
@@ -198,6 +203,8 @@ class OrderRepository {
     final target = _copyTable(targetTable);
     target.inUse = true;
     target.currentOrderJson = jsonEncode(combined.map((e) => e.toMap()).toList());
+    // Đơn gộp đã khác phiếu tạm tính cũ → bàn đích quay về "Có khách".
+    target.clearPrePrint();
     final int combinedGuests = (target.guestCount ?? 0) + (sourceTable.guestCount ?? 0);
     target.guestCount = combinedGuests > 0 ? combinedGuests : null;
     if (target.openedAt == null || (sourceTable.openedAt != null && sourceTable.openedAt! < target.openedAt!)) {
@@ -250,6 +257,9 @@ class OrderRepository {
     target.currentBillId = sourceTable.currentBillId;
     target.currentOrderCode = sourceTable.currentOrderCode;
     target.actionLogsJson = sourceTable.actionLogsJson;
+    // Trạng thái "Chờ thanh toán" đi theo đơn sang bàn đích.
+    target.prePrintedAt = sourceTable.prePrintedAt;
+    target.prePrintedBy = sourceTable.prePrintedBy;
     target.addActionLog(OrderActionLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       staffUsername: staffUsername ?? 'staff',
@@ -364,11 +374,17 @@ class OrderRepository {
   ///    (ném [PromotionLimitExceededException] nếu vượt).
   /// 3. Ghi NGUYÊN TỬ 1 lệnh multi-path: bills/{id}, history/{id}, tables/{key}.
   ///    Lỗi được ném ra ([DataWriteException]) và lượt khuyến mãi được hoàn tác.
-  /// 4. Tác vụ phụ chạy nền (trừ kho, audit log) - lỗi được ghi audit log, không bị nuốt.
+  /// 2b. Đổi điểm khách (nếu có) bằng transaction trên customers/{id}, idempotent theo hóa đơn.
+  ///    Không đủ điểm → ném [InsufficientPointsException] TRƯỚC khi ghi hóa đơn
+  ///    (lượt khuyến mãi đã giữ được hoàn tác).
+  /// 4. Tác vụ phụ chạy nền (trừ kho, tích điểm, audit log) - lỗi được ghi audit log, không bị nuốt.
+  ///
+  /// [pointEarnRate] (% doanh thu) / [pointRedeemRate] (đ/điểm): cấu hình tích điểm; nếu không
+  /// truyền sẽ đọc từ storeInfo.
   ///
   /// Trả về true nếu server đã xác nhận, false nếu đang chờ đồng bộ (mất mạng,
   /// dữ liệu đã lưu cục bộ và sẽ tự đồng bộ).
-  Future<bool> closeAndPayBill(BillModel bill, TableModel table) async {
+  Future<bool> closeAndPayBill(BillModel bill, TableModel table, {double? pointEarnRate, int? pointRedeemRate}) async {
     final storeCode = _currentStoreCode;
     if (!BillCodeGenerator.isSequential(bill.billCode)) {
       bill.billCode = await allocateBillCode(storeCode: storeCode);
@@ -393,6 +409,31 @@ class OrderRepository {
 
     final promo = await _reservePromotions(bill, storeCode, onLate, lateProblems);
 
+    // Đổi điểm: phải thành công (hoặc đang chờ đồng bộ) trước khi ghi hóa đơn
+    final customerId = bill.customerId?.trim() ?? '';
+    bool pointsRedeemed = false;
+    if (customerId.isNotEmpty && bill.pointsUsed > 0) {
+      try {
+        await _loyalty.redeemForBill(
+          storeCode: storeCode,
+          customerId: customerId,
+          billId: bill.id,
+          billCode: bill.billCode,
+          points: bill.pointsUsed,
+          by: bill.staffUsername,
+          timeout: _txnTimeout,
+          onLate: (msg) => _logLoyaltyProblem(bill, msg),
+        );
+        pointsRedeemed = true;
+      } catch (e) {
+        final rollbackErrors = await _rollbackPromotions(promo, storeCode);
+        if (rollbackErrors.isNotEmpty) {
+          onLate('Hoàn tác khuyến mãi sau khi đổi điểm lỗi thất bại: ${rollbackErrors.join("; ")}');
+        }
+        rethrow;
+      }
+    }
+
     final storeName = await _resolveStoreName(storeCode);
     final record = BillRecordBuilder.build(bill, storeCode: storeCode, storeName: storeName, guestCount: table.guestCount);
     final cleared = _copyTable(table)..clearTable();
@@ -412,29 +453,148 @@ class OrderRepository {
       if (rollbackErrors.isNotEmpty) {
         onLate('Hoàn tác khuyến mãi sau khi ghi hóa đơn lỗi thất bại: ${rollbackErrors.join("; ")}');
       }
+      if (pointsRedeemed) {
+        try {
+          await _loyalty.refundRedeem(
+            storeCode: storeCode,
+            customerId: customerId,
+            billId: bill.id,
+            billCode: bill.billCode,
+            points: bill.pointsUsed,
+            by: bill.staffUsername,
+            timeout: _txnTimeout,
+            onLate: (msg) => _logLoyaltyProblem(bill, msg),
+          );
+        } catch (re) {
+          _logLoyaltyProblem(bill, 'Hoàn điểm đã đổi (${bill.pointsUsed}) sau khi ghi hóa đơn lỗi thất bại: $re');
+        }
+      }
       rethrow;
     }
     table.clearTable();
 
-    unawaited(_runPaymentFollowUps(bill, storeCode, [...promo.notes, ...lateProblems], synced));
+    unawaited(_runPaymentFollowUps(
+      bill,
+      storeCode,
+      [...promo.notes, ...lateProblems],
+      synced,
+      pointEarnRate: pointEarnRate,
+      pointRedeemRate: pointRedeemRate,
+    ));
     return synced;
   }
 
-  /// Trừ kho cho hóa đơn (idempotent - có thể gọi lại để thử lại khi lần trước lỗi).
+  late final LoyaltyService _loyalty = LoyaltyService(() => _root);
+
+  /// Lỗi điểm phát sinh muộn (khi đồng bộ) → audit log, không nuốt lỗi.
+  void _logLoyaltyProblem(BillModel bill, String msg) {
+    _safeLog(AuditLogModel(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      username: bill.staffUsername,
+      userFullName: bill.staffFullName,
+      userRole: 'CASHIER',
+      action: 'LOYALTY_SYNC_FAILED',
+      targetType: 'BILL',
+      targetId: bill.id,
+      details: 'Điểm khách của HĐ ${bill.billCode}: $msg',
+      isSuspicious: true,
+    ));
+  }
+
+  Future<({double earnRate, int redeemRate})> _loyaltyConfig(String storeCode, double? earnRate, int? redeemRate) async {
+    if (earnRate != null && redeemRate != null) return (earnRate: earnRate, redeemRate: redeemRate);
+    double e = earnRate ?? 1.0;
+    int r = redeemRate ?? 1000;
+    try {
+      final snap = await _root.child('stores/$storeCode/storeInfo').get().timeout(_readTimeout);
+      if (snap.value is Map) {
+        final m = snap.value as Map;
+        if (earnRate == null && m['pointEarnRate'] is num) e = (m['pointEarnRate'] as num).toDouble();
+        if (redeemRate == null && m['pointRedeemRate'] is num) r = (m['pointRedeemRate'] as num).toInt();
+      }
+    } catch (_) {}
+    return (earnRate: e, redeemRate: r);
+  }
+
+  /// Trừ kho cho hóa đơn (idempotent - gọi lại chỉ trừ các dòng còn thiếu).
+  /// Khi lỗi, hóa đơn được ghi vào stock_retry_queue để [retryPendingStock] chạy lại.
   Future<void> applyStockForBill(BillModel bill, {String? storeCode}) async {
     await InventoryService().consumeStockForBill(
       bill.items,
       bill.id,
       bill.staffUsername,
       storeCode: storeCode ?? _currentStoreCode,
+      billCode: bill.billCode,
     );
   }
 
-  Future<void> _runPaymentFollowUps(BillModel bill, String storeCode, List<String> problems, bool synced) async {
+  /// Chạy lại hàng đợi trừ kho (stock_retry_queue) của chi nhánh; ghi audit log kết quả.
+  Future<StockRetrySummary> retryPendingStock({String? storeCode, required String username, String? userFullName, String? userRole}) async {
+    final sc = storeCode ?? _currentStoreCode;
+    final summary = await InventoryService().retryPendingStock(storeCode: sc, username: username);
+    if (summary.succeeded.isNotEmpty) {
+      await _safeLog(AuditLogModel(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        username: username,
+        userFullName: userFullName ?? username,
+        userRole: userRole ?? 'CASHIER',
+        action: 'STOCK_RETRY_APPLIED',
+        targetType: 'INVENTORY',
+        targetId: sc,
+        details: 'Đã trừ kho bù cho ${summary.succeeded.length} hóa đơn: ${summary.succeeded.join(", ")}',
+      ));
+    }
+    if (summary.failed.isNotEmpty) {
+      await _safeLog(AuditLogModel(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        username: username,
+        userFullName: userFullName ?? username,
+        userRole: userRole ?? 'CASHIER',
+        action: 'STOCK_RETRY_FAILED',
+        targetType: 'INVENTORY',
+        targetId: sc,
+        details: 'Trừ kho bù còn lỗi: ${summary.failed.entries.map((e) => "${e.key}: ${e.value}").join(" | ")}',
+        isSuspicious: true,
+      ));
+    }
+    return summary;
+  }
+
+  Future<void> _runPaymentFollowUps(
+    BillModel bill,
+    String storeCode,
+    List<String> problems,
+    bool synced, {
+    double? pointEarnRate,
+    int? pointRedeemRate,
+  }) async {
     try {
       await applyStockForBill(bill, storeCode: storeCode);
     } catch (e) {
-      problems.add('Trừ kho chưa hoàn tất (gọi lại applyStockForBill để thử lại): $e');
+      problems.add('Trừ kho chưa hoàn tất (đã đưa vào hàng đợi stock_retry_queue để thử lại): $e');
+    }
+
+    // Tích điểm (idempotent theo hóa đơn) - lỗi được ghi vào PAY_BILL_FOLLOWUP_FAILED
+    final customerId = bill.customerId?.trim() ?? '';
+    if (customerId.isNotEmpty && bill.finalAmount > 0) {
+      try {
+        final cfg = await _loyaltyConfig(storeCode, pointEarnRate, pointRedeemRate);
+        final r = await _loyalty.awardForBill(
+          storeCode: storeCode,
+          customerId: customerId,
+          billId: bill.id,
+          billCode: bill.billCode,
+          billAmount: bill.finalAmount,
+          earnRatePercent: cfg.earnRate,
+          redeemRate: cfg.redeemRate,
+          by: bill.staffUsername,
+          timeout: const Duration(seconds: 10),
+          onLate: (msg) => _logLoyaltyProblem(bill, msg),
+        );
+        problems.addAll(r.notes);
+      } catch (e) {
+        problems.add('Tích điểm cho khách $customerId thất bại: $e');
+      }
     }
 
     await _safeLog(AuditLogModel(
@@ -987,15 +1147,25 @@ class OrderRepository {
     required TableModel table,
     required List<OrderItemModel> items,
     String? note,
+    String? orderedBy,
+    String? orderedByName,
   }) async {
     final unsent = items.where((i) => !i.isSentKitchen).toList();
     if (unsent.isEmpty) return;
 
+    final currentUser = AuthService().currentUser;
+    final staffUser = orderedBy ?? currentUser?.username;
+    final staffName = orderedByName ?? currentUser?.fullName;
+
     final kitchenOrder = KitchenOrderModel(
       tableName: table.name,
+      orderCode: table.currentOrderCode,
+      billCode: table.currentBillId,
       itemsJson: jsonEncode(unsent.map((e) => e.toMap()).toList()),
       timestamp: DateTime.now().millisecondsSinceEpoch,
       note: note,
+      orderedBy: staffUser,
+      orderedByName: staffName,
     );
 
     await sendKitchenOrder(kitchenOrder);
@@ -1007,7 +1177,41 @@ class OrderRepository {
   }
 
   Future<void> markKitchenOrderDone(String key) async {
-    await kitchenOrdersRef.child(key).child('isDone').set(true);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await kitchenOrdersRef.child(key).update({
+      'isDone': true,
+      'doneAt': now,
+      'pickedUp': false,
+    });
+  }
+
+  Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final staff = pickedUpBy ?? AuthService().currentUser?.fullName ?? AuthService().currentUser?.username;
+    await kitchenOrdersRef.child(key).update({
+      'pickedUp': true,
+      'pickedUpAt': now,
+      if (staff != null) 'pickedUpBy': staff,
+    });
+  }
+
+  /// Lắng nghe các đơn món bếp đã nấu xong và chưa được nhân viên mang ra bàn trong 1-2 tiếng qua.
+  Stream<List<KitchenOrderModel>> readyToServeKitchenOrdersStream({Duration maxAge = const Duration(hours: 2)}) {
+    return kitchenOrdersRef.onValue.map<List<KitchenOrderModel>>((event) {
+      if (!event.snapshot.exists || event.snapshot.value == null) return <KitchenOrderModel>[];
+      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final maxAgeMs = maxAge.inMilliseconds;
+      return map.entries
+          .map((e) => KitchenOrderModel.fromMap(Map<dynamic, dynamic>.from(e.value), key: e.key.toString()))
+          .where((o) {
+            if (!o.isDone || o.pickedUp) return false;
+            final itemTime = o.doneAt ?? o.timestamp;
+            return (now - itemTime) <= maxAgeMs;
+          })
+          .toList()
+        ..sort((a, b) => (b.doneAt ?? b.timestamp).compareTo(a.doneAt ?? a.timestamp));
+    }).handleError((_) => <KitchenOrderModel>[]);
   }
 
   Stream<List<OnlineOrderModel>> onlineOrdersStream() {
