@@ -84,3 +84,5 @@ migration_output/
 .env*
 firebase-debug.log
 *-debug.log
+# Cấu hình Firebase app phụ "chamcong" (project chamcongtram) — xem assets/config/*.example.json
+app_flutter/assets/config/chamcong_firebase_options.json

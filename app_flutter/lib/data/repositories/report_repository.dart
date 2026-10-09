@@ -114,7 +114,9 @@ class ReportRepository {
   }
 
   Future<void> saveStoreInfo(StoreInfoModel info) async {
-    await storeInfoRef.set(info.toMap());
+    // Dùng update() thay vì set(): giữ nguyên các trường do máy chủ / trường khác ghi mà
+    // model không quản lý (ownerId, chamCongStoreId, chamCongStoreName...).
+    await storeInfoRef.update(info.toMap());
   }
 
   Future<void> updateStoreShiftDifferenceSetting(bool allow, {String? storeCode}) async {

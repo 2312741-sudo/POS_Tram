@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/chamcong_auth_service.dart';
+import '../chamcong/chamcong_sign_in_sheet.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/theme_mode_selector.dart';
 import '../../data/services/firebase_service.dart';
@@ -32,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   int? _lockoutSecondsRemaining;
   Timer? _lockoutTimer;
+  // Chỉ hiện nút "Đăng nhập bằng Chấm Công Trạm" khi đã có cấu hình Firebase chamcongtram
+  bool _chamCongAvailable = false;
 
   @override
   void initState() {
@@ -41,6 +45,32 @@ class _LoginScreenState extends State<LoginScreen> {
     _initSavedStoreCode();
     _checkAutoLogin();
     _loadStores();
+    _checkChamCongConfig();
+  }
+
+  Future<void> _checkChamCongConfig() async {
+    final ok = await ChamCongAuthService().isConfigured();
+    if (mounted && ok) setState(() => _chamCongAvailable = true);
+  }
+
+  Future<void> _handleChamCongLogin() async {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
+    final user = await showChamCongSignInSheet<UserModel>(
+      context,
+      title: 'Đăng nhập bằng Chấm Công Trạm',
+      subtitle: 'Dùng tài khoản ứng dụng Chấm Công Trạm của bạn. Lần đầu đăng nhập, tài khoản POS sẽ được tạo tự động.',
+      onSubmit: (req) => ChamCongAuthService().signInToPos(
+        req,
+        pickStore: (stores) => pickPosStore(context, stores),
+      ),
+    );
+    if (user == null || !mounted) return;
+    if (user.mustChangePassword) {
+      _showMandatoryChangePassword();
+    } else {
+      _navigateAfterLogin();
+    }
   }
 
   @override
@@ -499,6 +529,44 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                             ),
                           ),
+
+                          // Đăng nhập bằng tài khoản Chấm Công Trạm (ẩn nếu chưa cấu hình)
+                          if (_chamCongAvailable) ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(child: Divider(color: context.tc.border)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  child: Text('hoặc',
+                                      style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12, color: context.tc.textSecondary)),
+                                ),
+                                Expanded(child: Divider(color: context.tc.border)),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: context.tc.primary,
+                                  backgroundColor: context.tc.primaryLight.withValues(alpha: 0.35),
+                                  side: BorderSide(color: context.tc.primary, width: 1.2),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: _isLoading ? null : _handleChamCongLogin,
+                                icon: const Icon(Icons.badge_outlined),
+                                label: Text(
+                                  'Đăng nhập bằng Chấm Công Trạm',
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 14, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

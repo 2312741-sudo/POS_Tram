@@ -18,6 +18,9 @@ class StoreInfoModel {
   final String ownerId;
   final int pointRedeemRate; // Tỷ lệ quy đổi điểm ra tiền chiết khấu (VD: 1.000đ/điểm)
   final double pointEarnRate; // Tỷ lệ tích điểm % trên doanh thu thực (VD: 1.0%)
+  // Chỉ để hiển thị — do máy chủ ghi khi liên kết Chấm Công Trạm; KHÔNG đưa vào toMap()
+  final String chamCongStoreId;
+  final String chamCongStoreName;
   // KHÔNG còn managerPin: PIN duyệt quản lý lưu băm phía máy chủ (manager_pins/…),
   // rules từ chối ghi storeInfo/managerPin.
 
@@ -40,7 +43,11 @@ class StoreInfoModel {
     this.autoPrintBill = true,
     this.pointRedeemRate = 1000,
     this.pointEarnRate = 1.0,
+    this.chamCongStoreId = '',
+    this.chamCongStoreName = '',
   });
+
+  bool get isChamCongLinked => chamCongStoreId.isNotEmpty;
 
   factory StoreInfoModel.fromMap(Map<dynamic, dynamic> map, String storeCode) {
     return StoreInfoModel(
@@ -62,6 +69,8 @@ class StoreInfoModel {
       autoPrintBill: map['autoPrintBill'] ?? true,
       pointRedeemRate: (map['pointRedeemRate'] as num?)?.toInt() ?? 1000,
       pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
+      chamCongStoreId: map['chamCongStoreId']?.toString() ?? '',
+      chamCongStoreName: map['chamCongStoreName']?.toString() ?? '',
     );
   }
 
@@ -124,6 +133,8 @@ class StoreInfoModel {
       autoPrintBill: autoPrintBill ?? this.autoPrintBill,
       pointRedeemRate: pointRedeemRate ?? this.pointRedeemRate,
       pointEarnRate: pointEarnRate ?? this.pointEarnRate,
+      chamCongStoreId: chamCongStoreId,
+      chamCongStoreName: chamCongStoreName,
     );
   }
 }

@@ -354,6 +354,22 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 if (v != null) setDlgState(() => selectedRole = v);
                               },
                       ),
+                      if (userToEdit?.isChamCongAccount ?? false) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: context.tc.infoLight,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Tài khoản Chấm Công: chỉ nâng được lên Thu ngân/Bếp… Vai trò Chủ quán/Quản lý sẽ bị máy chủ tự hạ '
+                            'mỗi lần đăng nhập — muốn làm Quản lý phải đổi vai trò bên Chấm Công.',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textPrimary),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 14),
 
                       // Khối phân quyền riêng lẻ bổ sung (Container card gọn gàng, co giãn linh hoạt)
@@ -1093,7 +1109,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           ),
                                         ),
                                       ),
-                                      if (user.mustChangePassword)
+                                      if (user.isChamCongAccount)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: context.tc.infoLight,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: context.tc.info.withValues(alpha: 0.5), width: 0.8),
+                                          ),
+                                          child: Text(
+                                            'Chấm Công',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: context.tc.info),
+                                          ),
+                                        ),
+                                      if (user.mustChangePassword && !user.isChamCongAccount)
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
@@ -1175,7 +1204,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 ),
 
                                 // Reset Password Action (Qua Cloud Function)
-                                if (!user.isRootOwner || (_auth.currentUser?.isRootOwner ?? false))
+                                // Ẩn với tài khoản Chấm Công: họ đăng nhập bằng tài khoản chấm công, không dùng mật khẩu POS
+                                if (!user.isChamCongAccount &&
+                                    (!user.isRootOwner || (_auth.currentUser?.isRootOwner ?? false)))
                                   IconButton(
                                     icon: const Icon(Icons.key_outlined, size: 20, color: Colors.purple),
                                     tooltip: 'Đặt lại mật khẩu',

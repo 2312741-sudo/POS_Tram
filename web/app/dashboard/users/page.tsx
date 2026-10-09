@@ -111,6 +111,8 @@ export interface DashboardUser {
   createdAt?: number;
   lastLoginAt?: number | null;
   mustChangePassword?: boolean;
+  /** "chamcong" = tài khoản tự tạo khi đăng nhập bằng Chấm Công Trạm (không có mật khẩu POS). */
+  authProvider?: string;
   totalSales?: number;
   totalOrders?: number;
 }
@@ -179,6 +181,7 @@ export default function UsersPage() {
         createdAt: u.createdAt,
         lastLoginAt: u.lastLoginAt,
         mustChangePassword: u.mustChangePassword,
+        authProvider: typeof u.authProvider === "string" ? u.authProvider : undefined,
       });
     });
     return map;
@@ -883,7 +886,16 @@ export default function UsersPage() {
                     >
                       @{u.username}
                     </span>
-                    {u.mustChangePassword && (
+                    {u.authProvider === "chamcong" && (
+                      <span
+                        className="badge badge-info"
+                        title="Tài khoản đăng nhập bằng Chấm Công Trạm"
+                        style={{ marginLeft: "6px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "3px" }}
+                      >
+                        <Clock size={11} aria-hidden="true" /> Chấm Công
+                      </span>
+                    )}
+                    {u.mustChangePassword && u.authProvider !== "chamcong" && (
                       <div style={{ fontSize: "10px", color: "var(--warning)", fontWeight: "600", marginTop: "2px" }}>
                         ⚡ Cần đổi MK lần đầu
                       </div>
@@ -1000,7 +1012,7 @@ export default function UsersPage() {
                       </button>
 
                       {/* Nút Đặt lại mật khẩu */}
-                      {(!u.isRootOwner || currentUser?.isRootOwner) && (
+                      {(!u.isRootOwner || currentUser?.isRootOwner) && u.authProvider !== "chamcong" && (
                         <button
                           title="Đặt lại mật khẩu nhân viên"
                           onClick={() => openResetPassword(u)}

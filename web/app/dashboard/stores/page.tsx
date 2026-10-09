@@ -17,6 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { useDashboardData, StoreItem } from "@/lib/data-context";
+import { useAuth } from "@/lib/auth";
+import ChamCongLinkCard from "@/components/ChamCongLinkCard";
 
 const BANK_OPTIONS = [
   { id: "MB", name: "MB Bank (Quân Đội)" },
@@ -38,6 +40,8 @@ export default function StoresManagementPage() {
     createStore,
     updateStore,
   } = useDashboardData();
+  const { user } = useAuth();
+  const isOwner = Boolean(user?.isRootOwner);
 
   const [search, setSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -293,6 +297,21 @@ export default function StoresManagementPage() {
           </div>
         </div>
       </div>
+
+      {/* Liên kết Chấm Công Trạm (chỉ Chủ quán, cần chọn 1 chi nhánh cụ thể) */}
+      {isOwner &&
+        (currentStoreCode && currentStoreCode !== "ALL" ? (
+          <ChamCongLinkCard
+            key={currentStoreCode}
+            storeCode={currentStoreCode}
+            storeName={stores.find((s) => s.storeCode === currentStoreCode)?.storeName}
+          />
+        ) : (
+          <div className="card" style={{ padding: "14px 20px", fontSize: "13px", color: "var(--subtext)" }}>
+            <strong style={{ color: "var(--text)" }}>Liên kết Chấm Công Trạm:</strong> chọn một chi nhánh cụ thể (nút
+            &quot;Chuyển sang chi nhánh này&quot; bên dưới) để xem và thiết lập liên kết.
+          </div>
+        ))}
 
       {/* Filter Toolbar */}
       <div className="card" style={{ padding: "16px 20px" }}>

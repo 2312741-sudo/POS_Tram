@@ -1,12 +1,17 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { Eye, EyeOff, LogIn, AlertCircle, Store, User as UserIcon, Lock } from "lucide-react";
+import { Eye, EyeOff, LogIn, AlertCircle, Store, User as UserIcon, Lock, Clock } from "lucide-react";
+import ChamCongSignInDialog, { type ChamCongStepResult } from "@/components/ChamCongSignInDialog";
+import { isChamCongConfigured, signOutChamCong } from "@/lib/chamcong-firebase";
+import type { ChamCongMethod } from "@/lib/chamcong";
+
+const noopSubscribe = () => () => {};
 
 export default function LoginPage() {
-  const { login, user, loading, storeCode: defaultStoreCode } = useAuth();
+  const { login, signInWithChamCong, user, loading, storeCode: defaultStoreCode } = useAuth();
   const router = useRouter();
 
   const [storeCode, setStoreCode] = useState(defaultStoreCode || "TRAM01");
@@ -15,6 +20,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showChamCong, setShowChamCong] = useState(false);
+  // Phương thức đã dùng ở bước 1 — chỉ cần lại nếu phiên Chấm Công trong bộ nhớ đã mất khi chọn chi nhánh.
+  const lastChamCongMethod = useRef<ChamCongMethod>("google");
+  // Chỉ hiện nút khi đã cấu hình biến môi trường; đánh giá phía client để tránh lệch hydrate.
+  const chamCongEnabled = useSyncExternalStore(noopSubscribe, isChamCongConfigured, () => false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -25,6 +35,33 @@ export default function LoginPage() {
       }
     }
   }, [user, loading, router]);
+
+  const goAfterLogin = useCallback(
+    (mustChangePassword?: boolean) => {
+      router.replace(mustChangePassword ? "/login/change-password" : "/dashboard");
+    },
+    [router]
+  );
+
+  const closeChamCong = useCallback(() => {
+    setShowChamCong(false);
+    void signOutChamCong();
+  }, []);
+
+  const handleChamCongMethod = async (method: ChamCongMethod, chosenStore?: string): Promise<ChamCongStepResult> => {
+    const res = await signInWithChamCong(method, chosenStore);
+    if (res.success) {
+      setShowChamCong(false);
+      goAfterLogin(res.mustChangePassword);
+      return;
+    }
+    if (res.chooseStore) {
+      return {
+        options: res.chooseStore.map((s) => ({ id: s.storeCode, label: s.storeName, sublabel: `Mã chi nhánh: ${s.storeCode}` })),
+      };
+    }
+    return { error: res.error };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,6 +365,30 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {chamCongEnabled && (
+          <>
+            <div
+              aria-hidden="true"
+              style={{ display: "flex", alignItems: "center", gap: "10px", margin: "20px 0 14px", color: "var(--muted)", fontSize: "12px" }}
+            >
+              <span style={{ flex: 1, height: "1px", background: "var(--border)" }} />
+              hoặc
+              <span style={{ flex: 1, height: "1px", background: "var(--border)" }} />
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={submitting}
+              onClick={() => setShowChamCong(true)}
+              aria-haspopup="dialog"
+              style={{ width: "100%", justifyContent: "center", minHeight: "46px", fontSize: "14px" }}
+            >
+              <Clock size={17} aria-hidden="true" style={{ color: "var(--primary)" }} />
+              Đăng nhập bằng Chấm Công Trạm
+            </button>
+          </>
+        )}
+
         <div
           style={{
             marginTop: "24px",
@@ -339,6 +400,21 @@ export default function LoginPage() {
           Hệ thống bảo vệ đa tầng &bull; Khóa tạm sau 5 lần nhập sai liên tiếp
         </div>
       </div>
+
+      {showChamCong && (
+        <ChamCongSignInDialog
+          title="Đăng nhập bằng Chấm Công Trạm"
+          description="Dùng tài khoản ứng dụng Chấm Công Trạm. Lần đầu đăng nhập, hệ thống tự tạo tài khoản POS cho bạn."
+          pickTitle="Chọn chi nhánh để đăng nhập"
+          onMethod={(m) => {
+            lastChamCongMethod.current = m;
+            return handleChamCongMethod(m);
+          }}
+          onPick={(storeCodeChoice) => handleChamCongMethod(lastChamCongMethod.current, storeCodeChoice)}
+          onClose={closeChamCong}
+          footer="Phiên Chấm Công chỉ dùng để xác thực và không được lưu lại trên trình duyệt này."
+        />
+      )}
     </div>
   );
 }

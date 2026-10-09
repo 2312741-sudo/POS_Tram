@@ -22,10 +22,27 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>chamcong-google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.476583007511-3iq54af0nd5t20hb1ae3d4eikk0lcboh</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>POS Trạm cần quyền truy cập Bluetooth để kết nối và in hóa đơn/phiếu bếp ra máy in nhiệt.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>POS Trạm cần kết nối Bluetooth với máy in nhiệt để in phiếu.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -45,9 +62,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>POS Trạm cần quyền truy cập Bluetooth để kết nối và in hóa đơn/phiếu bếp ra máy in nhiệt.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>POS Trạm cần kết nối Bluetooth với máy in nhiệt để in phiếu.</string>
 </dict>
 </plist>

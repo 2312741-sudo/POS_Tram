@@ -126,3 +126,9 @@ match /kmt_point_history/{id} { allow read: if request.auth != null; allow write
    - Deploy `verifyManagerPin` + `setManagerPin` (`firebase deploy --only functions`) **trước** khi phát hành app/web mới.
    - **Ngay khi deploy rules, xóa giá trị cũ** cho TỪNG cửa hàng: Firebase Console → Realtime Database → xóa nút `stores/{storeCode}/storeInfo/managerPin` (VD `stores/TRAM01/storeInfo/managerPin`), hoặc `firebase database:remove /stores/TRAM01/storeInfo/managerPin --project <project>`. Chừng nào nút này còn tồn tại, PIN cũ vẫn đọc được bởi nhân viên (cập nhật các trường khác của `storeInfo` vẫn chạy bình thường); lệnh `set()` toàn bộ storeInfo từ app Flutter mới sẽ tự bỏ trường này.
    - Mỗi Quản lý / Chủ quán phải **đặt lại PIN mới** (Flutter: Trung tâm Quản lý → menu ⋮ → "PIN duyệt của tôi"; web: hộp thoại đặt PIN duyệt). Không dùng lại PIN cũ. Không còn PIN mặc định/dự phòng (`1234`, `9999` đã bị gỡ khỏi app).
+
+## 5. Liên kết Chấm Công Trạm (`chamcong_links/**`)
+
+- Nút gốc `chamcong_links/` (`stores/{storeCode}`, `byChamCongStore/{chamCongStoreId}`, `users/{storeCode}/{chamCongUid}`) **không có rule riêng** → bị chặn bởi `.read/.write: false` ở gốc; chỉ Cloud Functions (`chamCongSignIn`, `linkChamCongStore`, `unlinkChamCongStore`, `getChamCongLinkStatus`) truy cập bằng Admin SDK. Test: `CC1` trong `tests/rules/rules.test.ts`.
+- Không đặt dữ liệu liên kết dưới `stores/{storeCode}` (quyền đọc của thành viên quán sẽ lan xuống). `storeInfo/chamCongStoreId`, `storeInfo/chamCongStoreName` chỉ để hiển thị — máy chủ không tin các trường này.
+- Hồ sơ nhân viên do SSO cấp nằm ở `stores/{storeCode}/users/cc_{chamCongUid}` (`authProvider: "chamcong"`), dùng chung rules `users` hiện có. Chi tiết: `docs/CHAMCONG_SSO.md`.

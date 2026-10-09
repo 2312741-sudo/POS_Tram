@@ -1,0 +1,45 @@
+{
+  "_comment": "MẪU cấu hình Firebase app phụ 'chamcong' (project chamcongtram). Sao chép thành chamcong_firebase_options.json (đã gitignore) cùng thư mục và điền giá trị THẬT của các app POS đã đăng ký trong project chamcongtram. Thiếu file thật hoặc còn giá trị YOUR_... => nút 'Đăng nhập bằng Chấm Công Trạm' bị ẩn.",
+  "googleServerClientId": "YOUR_CHAMCONGTRAM_WEB_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+  "android": {
+    "apiKey": "YOUR_ANDROID_API_KEY",
+    "appId": "1:000000000000:android:YOUR_POS_ANDROID_APP_ID",
+    "messagingSenderId": "000000000000",
+    "projectId": "chamcongtram",
+    "storageBucket": "chamcongtram.firebasestorage.app"
+  },
+  "ios": {
+    "apiKey": "YOUR_IOS_API_KEY",
+    "appId": "1:000000000000:ios:YOUR_POS_IOS_APP_ID",
+    "messagingSenderId": "000000000000",
+    "projectId": "chamcongtram",
+    "storageBucket": "chamcongtram.firebasestorage.app",
+    "iosClientId": "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com",
+    "iosBundleId": "YOUR_POS_BUNDLE_ID"
+  },
+  "macos": {
+    "apiKey": "YOUR_IOS_API_KEY",
+    "appId": "1:000000000000:ios:YOUR_POS_MACOS_APP_ID",
+    "messagingSenderId": "000000000000",
+    "projectId": "chamcongtram",
+    "storageBucket": "chamcongtram.firebasestorage.app",
+    "iosClientId": "YOUR_MACOS_CLIENT_ID.apps.googleusercontent.com",
+    "iosBundleId": "YOUR_POS_BUNDLE_ID"
+  },
+  "web": {
+    "apiKey": "YOUR_WEB_API_KEY",
+    "appId": "1:000000000000:web:YOUR_POS_WEB_APP_ID",
+    "messagingSenderId": "000000000000",
+    "projectId": "chamcongtram",
+    "authDomain": "chamcongtram.firebaseapp.com",
+    "storageBucket": "chamcongtram.firebasestorage.app"
+  },
+  "windows": {
+    "apiKey": "YOUR_WEB_API_KEY",
+    "appId": "1:000000000000:web:YOUR_POS_WINDOWS_APP_ID",
+    "messagingSenderId": "000000000000",
+    "projectId": "chamcongtram",
+    "authDomain": "chamcongtram.firebaseapp.com",
+    "storageBucket": "chamcongtram.firebasestorage.app"
+  }
+}

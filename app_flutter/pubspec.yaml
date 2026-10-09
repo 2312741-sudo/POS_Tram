@@ -16,6 +16,8 @@ dependencies:
   cloud_firestore: ^5.4.4
   firebase_database: ^11.1.4
   cloud_functions: ^5.1.3
+  # Đăng nhập bằng Chấm Công Trạm (Google trên app Firebase phụ "chamcong")
+  google_sign_in: ^6.2.1
 
   # State Management (simple, no code gen needed)
   flutter_riverpod: ^2.5.1
@@ -63,6 +65,8 @@ flutter:
   assets:
     - assets/images/
     - assets/images/products/
+    # Cấu hình Firebase Chấm Công Trạm: chamcong_firebase_options.json (gitignored, tùy chọn)
+    - assets/config/
 
 flutter_launcher_icons:
   android: "launcher_icon"

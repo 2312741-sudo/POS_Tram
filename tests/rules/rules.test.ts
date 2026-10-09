@@ -636,3 +636,32 @@ describe("POS Trạm - Security Rules: PIN duyệt quản lý", () => {
     }
   });
 });
+
+describe("POS Trạm - Security Rules: liên kết Chấm Công Trạm", () => {
+  it("CC1. chamcong_links/** (ở gốc) chỉ Admin SDK truy cập được — client đọc/ghi đều bị chặn", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("chamcong_links").set({
+        stores: { TRAM01: { chamCongStoreId: "S1", chamCongStoreName: "Trạm", linkedByUid: "owner_uid", linkedAt: 1 } },
+        byChamCongStore: { S1: "TRAM01" },
+        users: { TRAM01: { ccUser1: "cc_ccUser1" } },
+      });
+    });
+    const paths = [
+      "chamcong_links",
+      "chamcong_links/stores",
+      "chamcong_links/stores/TRAM01",
+      "chamcong_links/byChamCongStore/S1",
+      "chamcong_links/users/TRAM01",
+      "chamcong_links/users/TRAM01/ccUser1",
+    ];
+    for (const uid of ["owner_uid", "manager_uid", "cashier_uid", "waiter_uid", "cc_ccUser1"]) {
+      for (const p of paths) await assertFails(db(uid).ref(p).get());
+      await assertFails(db(uid).ref("chamcong_links/stores/TRAM01").set({ chamCongStoreId: "S9" }));
+      await assertFails(db(uid).ref("chamcong_links/byChamCongStore/S9").set("TRAM01"));
+      await assertFails(db(uid).ref("chamcong_links/users/TRAM01/attacker").set("owner_uid"));
+    }
+    const anon = env().unauthenticatedContext().database();
+    await assertFails(anon.ref("chamcong_links/stores").get());
+    await assertFails(anon.ref("chamcong_links/byChamCongStore/S1").set("TRAM02"));
+  });
+});

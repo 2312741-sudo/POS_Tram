@@ -263,7 +263,61 @@ class AuthService extends ChangeNotifier {
       throw AuthException('Đăng nhập thất bại: ${e.toString()}');
     }
 
-    final uid = credential.user?.uid;
+    return _completeSignIn(
+      rawUid: credential.user?.uid,
+      storeCode: cleanStore,
+      rememberStore: rememberStore,
+      loginDetails: 'Đăng nhập thành công vào cửa hàng $cleanStore',
+    );
+  }
+
+  /// Đăng nhập bằng Custom Token do máy chủ cấp (vd: chamCongSignIn — Đăng nhập bằng Chấm Công Trạm).
+  /// Dùng chung đường hậu đăng nhập với [login]: nạp hồ sơ, kiểm tra khóa, ghi nhớ cửa hàng, audit log.
+  Future<UserModel> loginWithCustomToken({
+    required String storeCode,
+    required String customToken,
+    bool? rememberStore,
+    String loginDetails = 'Đăng nhập bằng Chấm Công Trạm',
+  }) async {
+    final cleanStore = storeCode.trim().toUpperCase();
+    if (cleanStore.isEmpty) {
+      throw const AuthException('Máy chủ không trả về mã cửa hàng hợp lệ.');
+    }
+    final remember = rememberStore ?? await getRememberStoreOption();
+
+    _currentStoreCode = cleanStore;
+    _fb.switchStore(cleanStore);
+
+    UserCredential credential;
+    try {
+      credential = await _firebaseAuth.signInWithCustomToken(customToken).timeout(const Duration(seconds: 10));
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'network-request-failed') {
+        throw const AuthException('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng Internet và thử lại.');
+      }
+      throw AuthException('Đăng nhập thất bại: ${e.message ?? e.code}');
+    } on TimeoutException {
+      throw const AuthException('Kết nối đến máy chủ quá chậm hoặc gián đoạn. Vui lòng kiểm tra đường truyền và thử lại.');
+    }
+
+    return _completeSignIn(
+      rawUid: credential.user?.uid,
+      storeCode: cleanStore,
+      rememberStore: remember,
+      loginDetails: '$loginDetails vào cửa hàng $cleanStore',
+    );
+  }
+
+  /// Đường hậu đăng nhập dùng chung (sau khi signInWithCustomToken thành công):
+  /// nạp hồ sơ RTDB, kiểm tra khóa tài khoản, ghi lastLoginAt + audit log, lưu phiên.
+  Future<UserModel> _completeSignIn({
+    required String? rawUid,
+    required String storeCode,
+    required bool rememberStore,
+    required String loginDetails,
+  }) async {
+    final cleanStore = storeCode;
+    final uid = rawUid;
     if (uid == null || uid.isEmpty) {
       throw const AuthException('Không lấy được mã định danh người dùng từ hệ thống xác thực.');
     }
@@ -310,7 +364,7 @@ class AuthService extends ChangeNotifier {
       action: 'LOGIN',
       targetType: 'AUTH',
       targetId: userProfile.username,
-      details: 'Đăng nhập thành công vào cửa hàng $cleanStore',
+      details: loginDetails,
     )).catchError((_) {});
 
     // 9. Lưu phiên làm việc vào SharedPreferences

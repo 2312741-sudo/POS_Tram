@@ -15,6 +15,7 @@ import 'tabs/bills_tab.dart';
 import 'tabs/audit_tab.dart';
 import '../reports/reports_hub_screen.dart';
 import '../crm/customer_management_screen.dart';
+import '../chamcong/chamcong_link_screen.dart';
 
 class ManagerHubScreen extends StatefulWidget {
   final int initialTab;
@@ -269,6 +270,11 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     );
                   } else if (val == 'STORE') {
                     _showStoreSwitcherDialog();
+                  } else if (val == 'CHAMCONG_LINK') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ChamCongLinkScreen()),
+                    );
                   } else if (val == 'APPROVAL_PIN') {
                     showSetApprovalPinDialog(context);
                   } else if (val == 'THEME') {
@@ -319,6 +325,18 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                           Icon(Icons.pin_outlined, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('PIN duyệt của tôi'),
+                        ],
+                      ),
+                    ),
+                  // Chỉ Chủ quán được liên kết cửa hàng với ứng dụng Chấm Công Trạm
+                  if (_auth.isOwner)
+                    PopupMenuItem(
+                      value: 'CHAMCONG_LINK',
+                      child: Row(
+                        children: [
+                          Icon(Icons.badge_outlined, size: 18, color: context.tc.primary),
+                          const SizedBox(width: 8),
+                          const Text('Liên kết Chấm Công Trạm'),
                         ],
                       ),
                     ),

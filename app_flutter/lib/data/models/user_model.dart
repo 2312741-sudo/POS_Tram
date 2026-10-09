@@ -46,6 +46,27 @@ class UserModel {
   final bool mustChangePassword;
   final String password; // Giữ để tương thích ngược constructor cũ, tuyệt đối không lưu vào RTDB
 
+  /// Nguồn đăng nhập của tài khoản: '' / 'password' (mặc định) hoặc 'chamcong'
+  /// (tài khoản tự cấp từ Chấm Công Trạm — đăng nhập bằng tài khoản chấm công, không dùng mật khẩu POS).
+  final String authProvider;
+
+  /// Các trường do máy chủ ghi mà model không quản lý (vd: chamCongUid, chamCongStoreId...).
+  /// Được giữ nguyên khi lưu lại hồ sơ (saveUser dùng set()) để không làm mất liên kết.
+  final Map<String, dynamic> extraFields;
+
+  static const String authProviderChamCong = 'chamcong';
+
+  /// Các khóa model tự quản lý (không đưa vào extraFields)
+  static const Set<String> _knownKeys = {
+    'uid', 'username', 'fullName', 'password', 'roleId', 'isRootOwner', 'customPermissions',
+    'isActive', 'phone', 'createdAt', 'lastLoginAt', 'mustChangePassword', 'authProvider',
+  };
+
+  bool get isChamCongAccount => authProvider == authProviderChamCong;
+
+  /// Bị máy chủ tự khóa do không còn là thành viên đang hoạt động bên Chấm Công
+  bool get isRevokedByChamCong => extraFields['deactivatedBy']?.toString() == authProviderChamCong;
+
   UserModel({
     this.uid = '',
     required this.username,
@@ -59,6 +80,8 @@ class UserModel {
     this.createdAt,
     this.lastLoginAt,
     this.mustChangePassword = false,
+    this.authProvider = '',
+    this.extraFields = const {},
   });
 
   factory UserModel.fromMap(Map<dynamic, dynamic> map, [String? fallbackUid]) {
@@ -99,12 +122,18 @@ class UserModel {
       createdAt: createdAt,
       lastLoginAt: lastLoginAt,
       mustChangePassword: map['mustChangePassword'] == true,
+      authProvider: map['authProvider']?.toString() ?? '',
+      extraFields: {
+        for (final e in map.entries)
+          if (!_knownKeys.contains(e.key.toString())) e.key.toString(): e.value,
+      },
     );
   }
 
   /// Serialization tuân thủ 100% hợp đồng AUTH_CONTRACT:
   /// Tuyệt đối KHÔNG lưu trữ trường password trong Realtime Database
   Map<String, dynamic> toMap() => {
+    ...extraFields,
     'uid': uid,
     'username': username,
     'fullName': fullName,
@@ -116,6 +145,7 @@ class UserModel {
     if (createdAt != null) 'createdAt': createdAt,
     if (lastLoginAt != null) 'lastLoginAt': lastLoginAt,
     'mustChangePassword': mustChangePassword,
+    if (authProvider.isNotEmpty) 'authProvider': authProvider,
   };
 
   UserModel copyWith({
@@ -131,6 +161,8 @@ class UserModel {
     int? createdAt,
     int? lastLoginAt,
     bool? mustChangePassword,
+    String? authProvider,
+    Map<String, dynamic>? extraFields,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -145,6 +177,8 @@ class UserModel {
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+      authProvider: authProvider ?? this.authProvider,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
 

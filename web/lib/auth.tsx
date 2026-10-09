@@ -1,6 +1,14 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { db, auth, functions } from "./firebase";
+import {
+  chamCongNotAdminMessage,
+  mapChamCongError,
+  parseChamCongSignInResponse,
+  type ChamCongMethod,
+  type ChamCongStoreOption,
+} from "./chamcong";
+import { authenticateChamCong, getCurrentChamCongIdToken, signOutChamCong } from "./chamcong-firebase";
 import { ref, get, set, update } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import {
@@ -29,6 +37,11 @@ export interface User {
   mustChangePassword?: boolean;
 }
 
+export type ChamCongLoginResult =
+  | { success: true; mustChangePassword?: boolean }
+  | { success: false; error: string; chooseStore?: undefined }
+  | { success: false; error?: undefined; chooseStore: ChamCongStoreOption[] };
+
 export interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -39,6 +52,11 @@ export interface AuthContextType {
     username: string,
     password: string
   ) => Promise<{ success: boolean; error?: string; mustChangePassword?: boolean }>;
+  /**
+   * Đăng nhập bằng tài khoản Chấm Công Trạm. Nếu trả về `chooseStore`, hiển thị danh sách
+   * và gọi lại với `storeCode` (phiên Chấm Công được giữ trong bộ nhớ, không mở lại popup).
+   */
+  signInWithChamCong: (method: ChamCongMethod, storeCode?: string) => Promise<ChamCongLoginResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   changeCurrentPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
@@ -282,6 +300,7 @@ const AuthContext = createContext<AuthContextType>({
   storeCode: "TRAM01",
   setStoreCode: () => {},
   login: async () => ({ success: false }),
+  signInWithChamCong: async () => ({ success: false, error: "Chưa sẵn sàng" }),
   logout: async () => {},
   refreshUser: async () => {},
   changeCurrentPassword: async () => ({ success: false }),
@@ -367,15 +386,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Lắng nghe trạng thái Firebase Authentication
   useEffect(() => {
-    let savedStore = "TRAM01";
-    try {
-      const stored = localStorage.getItem("tram_store_code");
-      if (stored) {
-        savedStore = stored.trim().toUpperCase();
-      }
-    } catch {}
-
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      // Đọc mã chi nhánh tại thời điểm sự kiện để khớp với lần đăng nhập vừa thực hiện.
+      let savedStore = "TRAM01";
+      try {
+        const stored = localStorage.getItem("tram_store_code");
+        if (stored) {
+          savedStore = stored.trim().toUpperCase();
+        }
+      } catch {}
       if (fbUser) {
         try {
           const profile = await loadUserProfile(fbUser, savedStore);
@@ -397,6 +416,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, [loadUserProfile]);
+
+  /**
+   * Phần chung sau khi máy chủ cấp Custom Token (mật khẩu POS hoặc Chấm Công Trạm):
+   * đăng nhập Firebase, nạp hồ sơ, kiểm tra trạng thái & quyền Web Quản trị, ghi lastLoginAt + audit log.
+   */
+  const completeSignIn = useCallback(
+    async (
+      token: string,
+      cleanStore: string,
+      opts: { via: "password"; username: string } | { via: "chamcong"; isNewAccount: boolean }
+    ): Promise<{ success: boolean; error?: string; mustChangePassword?: boolean }> => {
+      // Ghi trước để onAuthStateChanged nạp hồ sơ đúng chi nhánh.
+      try {
+        localStorage.setItem("tram_store_code", cleanStore);
+      } catch {}
+
+      let cred;
+      try {
+        cred = await signInWithCustomToken(auth, token);
+      } catch (authError: unknown) {
+        return { success: false, error: mapStaffSignInError(authError) };
+      }
+
+      // 5. Nạp hồ sơ người dùng từ RTDB
+      const userProfile = await loadUserProfile(cred.user, cleanStore);
+      if (!userProfile) {
+        await signOut(auth);
+        return {
+          success: false,
+          error:
+            opts.via === "password"
+              ? `Không tìm thấy thông tin nhân viên @${opts.username} tại chi nhánh ${cleanStore}.`
+              : `Không tìm thấy hồ sơ nhân viên POS tại chi nhánh ${cleanStore}.`,
+        };
+      }
+
+      // 6. Kiểm tra trạng thái tài khoản
+      if (!userProfile.isActive) {
+        await signOut(auth);
+        return {
+          success: false,
+          error: "Tài khoản đã bị tạm khóa bởi chủ quán.",
+        };
+      }
+
+      // 7. Kiểm tra quyền truy cập Web Quản trị
+      if (!isWebAdminRole(userProfile.roleId, userProfile.isRootOwner)) {
+        await signOut(auth);
+        return {
+          success: false,
+          error:
+            opts.via === "chamcong"
+              ? chamCongNotAdminMessage(userProfile.roleId, opts.isNewAccount)
+              : `Tài khoản của bạn (${userProfile.roleId}) không có quyền đăng nhập Web Quản trị. Chỉ dành cho Chủ quán hoặc Quản lý.`,
+        };
+      }
+
+      // 8. Cập nhật lastLoginAt và ghi Audit Log
+      const nowMs = Date.now();
+      const username = opts.via === "password" ? opts.username : userProfile.username;
+      await update(ref(db, `stores/${cleanStore}/users/${cred.user.uid}`), {
+        lastLoginAt: nowMs,
+      }).catch(() => {});
+
+      const loginLogId = `LOG_${nowMs}_${Math.floor(Math.random() * 1000)}`;
+      await set(ref(db, `stores/${cleanStore}/audit_logs/${loginLogId}`), {
+        action: "LOGIN",
+        targetType: "USER",
+        targetId: cred.user.uid,
+        username,
+        userFullName: userProfile.fullName,
+        userRole: userProfile.roleId,
+        details:
+          opts.via === "chamcong"
+            ? `Đăng nhập Web Quản trị qua Chấm Công Trạm: ${userProfile.fullName} (@${username})`
+            : `Đăng nhập Web Quản trị thành công: ${userProfile.fullName} (@${username})`,
+        timestamp: nowMs,
+      }).catch(() => {});
+
+      // Lưu storeCode vào localStorage và context
+      // Tài khoản Chấm Công không có mật khẩu POS → không áp dụng bắt buộc đổi mật khẩu.
+      const mustChangePassword = opts.via === "password" ? userProfile.mustChangePassword : false;
+      setStoreCode(cleanStore);
+      setUser({ ...userProfile, lastLoginAt: nowMs, mustChangePassword });
+
+      return {
+        success: true,
+        mustChangePassword,
+      };
+    },
+    [loadUserProfile, setStoreCode]
+  );
 
   const login = useCallback(
     async (
@@ -424,82 +535,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 1-4. Xác thực phía máy chủ qua Cloud Function staffSignIn:
         //      kiểm tra khóa tạm (5 lần sai -> khóa 15 phút), xác minh mật khẩu,
         //      ghi bộ đếm login_attempts (chỉ Admin SDK) rồi trả về Custom Token.
-        let cred;
+        let token: string | undefined;
         try {
           const staffSignIn = httpsCallable<
             { storeCode: string; username: string; password: string },
             { token?: string }
           >(functions, "staffSignIn");
           const res = await staffSignIn({ storeCode: cleanStore, username: cleanUser, password: cleanPass });
-          const token = res.data?.token;
-          if (!token) {
-            return { success: false, error: "Máy chủ không trả về phiên đăng nhập hợp lệ. Vui lòng thử lại." };
-          }
-          cred = await signInWithCustomToken(auth, token);
+          token = res.data?.token;
         } catch (authError: unknown) {
           return { success: false, error: mapStaffSignInError(authError) };
         }
-
-        // 5. Nạp hồ sơ người dùng từ RTDB
-        const userProfile = await loadUserProfile(cred.user, cleanStore);
-        if (!userProfile) {
-          await signOut(auth);
-          return {
-            success: false,
-            error: `Không tìm thấy thông tin nhân viên @${cleanUser} tại chi nhánh ${cleanStore}.`,
-          };
+        if (!token) {
+          return { success: false, error: "Máy chủ không trả về phiên đăng nhập hợp lệ. Vui lòng thử lại." };
         }
 
-        // 6. Kiểm tra trạng thái tài khoản
-        if (!userProfile.isActive) {
-          await signOut(auth);
-          return {
-            success: false,
-            error: "Tài khoản đã bị tạm khóa bởi chủ quán.",
-          };
-        }
-
-        // 7. Kiểm tra quyền truy cập Web Quản trị
-        if (!isWebAdminRole(userProfile.roleId, userProfile.isRootOwner)) {
-          await signOut(auth);
-          return {
-            success: false,
-            error: `Tài khoản của bạn (${userProfile.roleId}) không có quyền đăng nhập Web Quản trị. Chỉ dành cho Chủ quán hoặc Quản lý.`,
-          };
-        }
-
-        // 8. Cập nhật lastLoginAt và ghi Audit Log
-        const nowMs = Date.now();
-        await update(ref(db, `stores/${cleanStore}/users/${cred.user.uid}`), {
-          lastLoginAt: nowMs,
-        }).catch(() => {});
-
-        const loginLogId = `LOG_${nowMs}_${Math.floor(Math.random() * 1000)}`;
-        await set(ref(db, `stores/${cleanStore}/audit_logs/${loginLogId}`), {
-          action: "LOGIN",
-          targetType: "USER",
-          targetId: cred.user.uid,
-          username: cleanUser,
-          userFullName: userProfile.fullName,
-          userRole: userProfile.roleId,
-          details: `Đăng nhập Web Quản trị thành công: ${userProfile.fullName} (@${cleanUser})`,
-          timestamp: nowMs,
-        }).catch(() => {});
-
-        // Lưu storeCode vào localStorage và context
-        setStoreCode(cleanStore);
-        setUser({ ...userProfile, lastLoginAt: nowMs });
-
-        return {
-          success: true,
-          mustChangePassword: userProfile.mustChangePassword,
-        };
+        return await completeSignIn(token, cleanStore, { via: "password", username: cleanUser });
       } catch (e: unknown) {
         const msg = (e as Error)?.message || "Lỗi kết nối máy chủ";
         return { success: false, error: msg };
       }
     },
-    [loadUserProfile, setStoreCode]
+    [completeSignIn]
+  );
+
+  const signInWithChamCong = useCallback(
+    async (method: ChamCongMethod, inputStoreCode?: string): Promise<ChamCongLoginResult> => {
+      const host = typeof window !== "undefined" ? window.location.host : undefined;
+      const chosenStore = inputStoreCode?.trim().toUpperCase() || undefined;
+      try {
+        // Bước chọn cửa hàng: dùng lại phiên Chấm Công trong bộ nhớ thay vì mở lại popup.
+        let idToken = chosenStore ? await getCurrentChamCongIdToken() : null;
+        if (!idToken) idToken = await authenticateChamCong(method);
+
+        const call = httpsCallable<{ idToken: string; storeCode?: string }, unknown>(functions, "chamCongSignIn");
+        const res = await call(chosenStore ? { idToken, storeCode: chosenStore } : { idToken });
+        const parsed = parseChamCongSignInResponse(res.data);
+        if (!parsed) {
+          await signOutChamCong();
+          return { success: false, error: "Máy chủ trả về phản hồi không hợp lệ. Vui lòng thử lại." };
+        }
+        if (parsed.status === "CHOOSE_STORE") {
+          return { success: false, chooseStore: parsed.stores };
+        }
+
+        await signOutChamCong();
+        const result = await completeSignIn(parsed.customToken, parsed.storeCode, {
+          via: "chamcong",
+          isNewAccount: parsed.isNewAccount,
+        });
+        if (result.success) return { success: true, mustChangePassword: result.mustChangePassword };
+        return { success: false, error: result.error || "Đăng nhập thất bại." };
+      } catch (err: unknown) {
+        await signOutChamCong();
+        return { success: false, error: mapChamCongError(err, host) };
+      }
+    },
+    [completeSignIn]
   );
 
   const logout = useCallback(async () => {
@@ -580,6 +672,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         storeCode,
         setStoreCode,
         login,
+        signInWithChamCong,
         logout,
         refreshUser,
         changeCurrentPassword,

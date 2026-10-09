@@ -603,3 +603,6 @@ export const mirrorCustomerToFirestore = onValueWritten(
 
 // Quản lý duyệt bằng PIN (xem managerPin.ts)
 export { verifyManagerPin, setManagerPin } from "./managerPin";
+
+// Đăng nhập bằng Chấm Công Trạm (xem chamCong.ts, docs/CHAMCONG_SSO.md)
+export { chamCongSignIn, linkChamCongStore, unlinkChamCongStore, getChamCongLinkStatus } from "./chamCong";
