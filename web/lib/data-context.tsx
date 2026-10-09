@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { db, auth } from "./firebase";
-import { ref, onValue, set, update, remove, get, push } from "firebase/database";
+import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
@@ -557,7 +557,18 @@ function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
 
 export function DashboardDataProvider({ children }: { children: React.ReactNode }) {
   // Store management state
-  const [stores, setStores] = useState<StoreItem[]>([]);
+  // Store management state: hydrat hóa từ sessionStorage để render tức thì 0ms không nháy trắng
+  const [stores, setStores] = useState<StoreItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = sessionStorage.getItem("tram_cached_stores");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [currentStoreCode, setCurrentStoreCodeState] = useState<string>(() => {
     if (typeof window === "undefined") return "ALL";
     try {
@@ -584,30 +595,41 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const [onlineOrders, setOnlineOrders] = useState<OnlineOrderItem[]>([]);
   const [rawCashShifts, setRawCashShifts] = useState<Record<string, CashShiftItem[]>>({});
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const cached = sessionStorage.getItem("tram_cached_stores");
+      if (cached && JSON.parse(cached).length > 0) return false;
+    } catch {}
+    return true;
+  });
   const [historyLoaded, setHistoryLoaded] = useState<boolean>(false);
 
   // Xử lý dữ liệu gom từ các chi nhánh được cấp quyền
   const processStoreDataMap = useCallback((dataMap: Record<string, RtdbNode>) => {
     const entries = Object.entries(dataMap);
     if (entries.length === 0) {
-      // Fallback default store nếu chưa có dữ liệu chi nhánh
-      setStores([
-        {
-          id: "TRAM01",
-          storeCode: "TRAM01",
-          storeName: "POS Trạm - Trụ sở 01 (Đà Lạt)",
-          address: "Số 123 Đường Ba Tháng Tư, Phường 3, TP. Đà Lạt",
-          phone: "0987654321",
-          bankId: "MB",
-          bankAccount: "0987654321",
-          accountName: "CHU CUA HANG TRAM FNB",
-          defaultVatRate: 0,
-          allowStackPromotions: true,
-          allowStaffViewShiftDifference: true,
-          active: true,
-        }
-      ]);
+      // Fallback default store nếu chưa có dữ liệu chi nhánh và chưa có cache
+      setStores((prev) =>
+        prev.length > 0
+          ? prev
+          : [
+              {
+                id: "TRAM01",
+                storeCode: "TRAM01",
+                storeName: "POS Trạm - Trụ sở 01 (Đà Lạt)",
+                address: "Số 123 Đường Ba Tháng Tư, Phường 3, TP. Đà Lạt",
+                phone: "0987654321",
+                bankId: "MB",
+                bankAccount: "0987654321",
+                accountName: "CHU CUA HANG TRAM FNB",
+                defaultVatRate: 0,
+                allowStackPromotions: true,
+                allowStaffViewShiftDifference: true,
+                active: true,
+              },
+            ]
+      );
       setAllHistory([]);
       setHistoryLoaded(true);
       setRawAuditLogs([]);
@@ -768,13 +790,19 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     });
 
     list.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
-    setStores(list);
+    if (list.length > 0) {
+      setStores(list);
+      try {
+        sessionStorage.setItem("tram_cached_stores", JSON.stringify(list));
+      } catch {}
+    }
     setRawCashShifts(shiftsMap);
     setRawProductsMap(prodsMap);
     setRawCategoriesMap(catsMap);
     setRawUsersMap(usersMap);
     setRawTables(branchTablesMap);
 
+    const hasHistoryData = historyList.length > 0 || entries.some(([_, v]) => v?.history || v?.bills);
     const dedupedHistory = deduplicateBills(historyList);
     dedupedHistory.sort((a, b) => {
       const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
@@ -782,7 +810,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       return tb - ta;
     });
     setAllHistory(dedupedHistory);
-    setHistoryLoaded(true);
+    if (hasHistoryData) {
+      setHistoryLoaded(true);
+    }
 
     logsList.sort((a, b) => {
       const ta = typeof a.timestamp === "number" ? a.timestamp : new Date(a.timestamp || 0).getTime();
@@ -794,12 +824,32 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     setLoading(false);
   }, []);
 
+  // Bộ hẹn giờ an toàn: Đảm bảo không bao giờ bị kẹt spinner loading vô tận
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+      setHistoryLoaded(true);
+    }, 2000);
+    return () => clearTimeout(safetyTimer);
+  }, []);
+
   // 1. Lắng nghe đa chi nhánh theo đúng phân quyền RBAC (stores/$storeCode)
+  // Progressive streaming: Cập nhật ngay từng phần khi từng nút con trả về, không chặn lẫn nhau
   useEffect(() => {
     let isMounted = true;
     const storeListeners = new Map<string, () => void>();
     const storeDataMap: Record<string, RtdbNode> = {};
-    const pendingStores = new Set<string>();
+
+    let processScheduled = false;
+    function scheduleProcess() {
+      if (processScheduled) return;
+      processScheduled = true;
+      queueMicrotask(() => {
+        processScheduled = false;
+        if (!isMounted) return;
+        processStoreDataMap(storeDataMap);
+      });
+    }
 
     function updateStoreSubscriptions(storeCodes: string[]) {
       const uniqueCodes = Array.from(new Set(storeCodes.filter(Boolean)));
@@ -817,17 +867,19 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       }
 
       // 2. Thêm listener cho các store mới.
-      // Rules KHÔNG cấp quyền đọc cả nút stores/{code} (quyền đọc ở nút cha sẽ lan xuống mọi nút con,
-      // kể cả customers chỉ dành cho Thu ngân+). Vì vậy lắng nghe riêng từng nút con cần dùng rồi gộp lại.
+      // Dùng progressive streaming: Mỗi node khi nhận dữ liệu sẽ cập nhật ngay vào storeDataMap
+      // và kích hoạt scheduleProcess() mà không phải đợi tất cả các node khác.
       uniqueCodes.forEach((code) => {
         if (!storeListeners.has(code)) {
-          const nodes: RtdbNode = {};
-          const pending = new Set<string>(STORE_CHILD_NODES);
-          pendingStores.add(code);
+          const nodes: RtdbNode = storeDataMap[code] || {};
 
-          const publish = () => {
-            if (pending.size > 0) return; // Chờ mọi nút con trả về lần đầu để tránh nháy dữ liệu thiếu
-            pendingStores.delete(code);
+          const publishChild = (child: string, val: unknown) => {
+            if (!isMounted) return;
+            if (val !== undefined && val !== null) {
+              nodes[child] = val;
+            } else {
+              delete nodes[child];
+            }
             if (Object.keys(nodes).length > 0) {
               storeDataMap[code] = { ...nodes };
             } else {
@@ -836,44 +888,34 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             scheduleProcess();
           };
 
-          const unsubs = STORE_CHILD_NODES.map((child) =>
-            onValue(
-              ref(db, `stores/${code}/${child}`),
+          const unsubs = STORE_CHILD_NODES.map((child) => {
+            // Giới hạn 150 mục mới nhất cho history và audit_logs để tránh tải hàng chục MB ảnh base64 qua WebSocket
+            const queryRef =
+              child === "history"
+                ? query(ref(db, `stores/${code}/${child}`), limitToLast(150))
+                : child === "audit_logs"
+                ? query(ref(db, `stores/${code}/${child}`), limitToLast(150))
+                : ref(db, `stores/${code}/${child}`);
+
+            return onValue(
+              queryRef,
               (snap) => {
-                if (!isMounted) return;
-                if (snap.exists()) nodes[child] = snap.val();
-                else delete nodes[child];
-                pending.delete(child);
-                publish();
+                publishChild(child, snap.exists() ? snap.val() : null);
               },
               (error) => {
                 if (!isMounted) return;
                 console.warn(`[data-context] Không thể đọc stores/${code}/${child}:`, error.message);
-                delete nodes[child];
-                pending.delete(child);
-                publish();
+                publishChild(child, null);
               }
-            )
-          );
+            );
+          });
+
           storeListeners.set(code, () => {
             unsubs.forEach((u) => u());
-            pendingStores.delete(code);
           });
         }
       });
       scheduleProcess();
-    }
-
-    // Gộp nhiều callback nút con thành 1 lần xử lý; chỉ xử lý khi mọi store đã tải xong lần đầu
-    let processScheduled = false;
-    function scheduleProcess() {
-      if (processScheduled) return;
-      processScheduled = true;
-      queueMicrotask(() => {
-        processScheduled = false;
-        if (!isMounted || pendingStores.size > 0) return;
-        processStoreDataMap(storeDataMap);
-      });
     }
 
     let unsubUserIndex: (() => void) | null = null;
@@ -891,11 +933,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           unsub();
         }
         storeListeners.clear();
-        pendingStores.clear();
         for (const code of Object.keys(storeDataMap)) delete storeDataMap[code];
         processStoreDataMap({});
         return;
       }
+
+      // Khởi tạo ngay chi nhánh mặc định/đã lưu để UI tải lập tức (0ms) không cần đợi userIndex roundtrip
+      const savedStore = typeof window !== "undefined" ? sessionStorage.getItem("tram_current_store") : null;
+      updateStoreSubscriptions(savedStore && savedStore !== "ALL" ? [savedStore, "TRAM01"] : ["TRAM01"]);
 
       // Đăng nhập: Đọc userIndex/{uid} để lấy danh sách cửa hàng được cấp quyền
       const userIndexRef = ref(db, `userIndex/${fbUser.uid}`);
@@ -904,7 +949,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         (indexSnap) => {
           if (!isMounted) return;
           const userIndexStores = indexSnap.exists() ? Object.keys(indexSnap.val() || {}) : [];
-          const candidateStores = Array.from(new Set([...userIndexStores, "TRAM01"]));
+          const candidateStores = userIndexStores.length > 0 ? userIndexStores : ["TRAM01"];
           updateStoreSubscriptions(candidateStores);
         },
         (error) => {
