@@ -182,11 +182,19 @@ class BillDetailSheet extends StatelessWidget {
                   child: Column(
                     children: [
                       _calcRow(context, 'Tiền hàng (Tạm tính):', FormatUtils.vnd(bill.subTotal)),
-                      if (bill.totalDiscount > 0) ...[
+                      if (bill.itemDiscountTotal > 0) ...[
                         const SizedBox(height: 8),
-                        _calcRow(context, 
-                          'Giảm giá / Voucher:',
-                          '- ${FormatUtils.vnd(bill.totalDiscount)}',
+                        _calcRow(context,
+                          'Giảm giá món:',
+                          '- ${FormatUtils.vnd(bill.itemDiscountTotal)}',
+                          valueColor: context.tc.danger,
+                        ),
+                      ],
+                      if (bill.orderLevelDiscount > 0) ...[
+                        const SizedBox(height: 8),
+                        _calcRow(context,
+                          'Giảm giá đơn / Voucher:',
+                          '- ${FormatUtils.vnd(bill.orderLevelDiscount)}',
                           valueColor: context.tc.danger,
                         ),
                       ],
@@ -226,6 +234,39 @@ class BillDetailSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // Món đã xóa khỏi đơn (có lý do)
+                if (bill.deletedItems.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.remove_shopping_cart_outlined, size: 20, color: context.tc.danger),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Món đã xóa (${bill.deletedItemsCount} món • ${FormatUtils.vnd(bill.deletedItemsAmount)})',
+                          style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ...bill.deletedItems.map((e) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${e.quantity} x ${e.name} — ${e.reason}\n${e.staffFullName.isNotEmpty ? e.staffFullName : e.staffUsername} • ${FormatUtils.dateTime(e.timestamp)}${e.sentToKitchen ? " • Đã gửi bếp" : ""}',
+                                style: GoogleFonts.beVietnamPro(fontSize: 12),
+                              ),
+                            ),
+                            Text('-${FormatUtils.vnd(e.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 20),
+                ],
 
                 // Action Logs (Nhật ký thao tác trên đơn)
                 if (bill.actionLogs.isNotEmpty) ...[
@@ -549,7 +590,7 @@ class BillDetailSheet extends StatelessWidget {
     if (status == 'PAID') {
       bg = context.tc.successLight;
       text = context.tc.success;
-      label = 'Đã thanh toán';
+      label = 'Hoàn thành';
     } else if (status == 'CANCELLED') {
       bg = context.tc.dangerLight;
       text = context.tc.danger;

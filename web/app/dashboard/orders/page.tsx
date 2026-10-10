@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-import { calculateCancellationReport, formatVND } from "@/lib/reports";
+import { billItemDiscount, billLevelDiscount, billStatusLabel, calculateCancellationReport, formatVND, isRevenueBill } from "@/lib/reports";
+import { billDeletedItems } from "@/lib/item-deletion";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
 import { buildOrderReceiptHtml } from "@/lib/print-html";
 
@@ -114,35 +115,35 @@ export default function OrdersPage() {
       const matchTable =
         !filterTable || (h.tableName || "").toLowerCase() === filterTable.toLowerCase();
       const matchStatus =
-        !filterStatus || (h.status || "PAID") === filterStatus;
+        !filterStatus || (h.status || "PAID").toUpperCase() === filterStatus;
 
       return matchSearch && matchDate && matchMethod && matchZone && matchTable && matchStatus;
     });
   }, [historyData, search, datePreset, filterDate, filterMethod, filterStatus, filterZone, filterTable]);
 
-  // Aggregate stats (Chỉ tính đơn hợp lệ, loại trừ đơn đã hủy)
+  // Aggregate stats: chỉ cộng tiền đơn đã thanh toán (đơn hủy vẫn hiển thị trong danh sách nhưng không tính doanh thu)
+  const revenueBills = useMemo(() => filtered.filter((h) => isRevenueBill(h)), [filtered]);
+  const cancelledCount = filtered.length - revenueBills.length;
   const totalAmount = useMemo(() => {
-    return filtered
-      .filter((h) => h.status !== "CANCELLED")
-      .reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
-  }, [filtered]);
+    return revenueBills.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
+  }, [revenueBills]);
 
   const takeawayOrders = useMemo(() => {
-    return filtered.filter(isTakeaway);
-  }, [filtered]);
+    return revenueBills.filter(isTakeaway);
+  }, [revenueBills]);
   const takeawayCount = takeawayOrders.length;
   const takeawayRevenue = useMemo(() => {
     return takeawayOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
   }, [takeawayOrders]);
 
   const cashOrders = useMemo(() => {
-    return filtered.filter(h => (h.paymentMethod || "").toLowerCase().includes("cash") || (h.paymentMethod || "").toLowerCase().includes("tiền mặt"));
-  }, [filtered]);
+    return revenueBills.filter(h => (h.paymentMethod || "").toLowerCase().includes("cash") || (h.paymentMethod || "").toLowerCase().includes("tiền mặt"));
+  }, [revenueBills]);
   const cashAmount = cashOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
 
   const transferOrders = useMemo(() => {
-    return filtered.filter(h => (h.paymentMethod || "").toLowerCase().includes("transfer") || (h.paymentMethod || "").toLowerCase().includes("chuyển"));
-  }, [filtered]);
+    return revenueBills.filter(h => (h.paymentMethod || "").toLowerCase().includes("transfer") || (h.paymentMethod || "").toLowerCase().includes("chuyển"));
+  }, [revenueBills]);
   const transferAmount = transferOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -280,7 +281,9 @@ export default function OrdersPage() {
             <div>
               <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(totalAmount)}</div>
               <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>Tổng doanh thu lọc</div>
-              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{filtered.length} hóa đơn</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>
+                {revenueBills.length} hóa đơn hoàn thành{cancelledCount > 0 ? ` • ${cancelledCount} đã hủy (không tính)` : ""}
+              </div>
             </div>
           </div>
         </div>
@@ -411,8 +414,8 @@ export default function OrdersPage() {
             onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "165px" }}
           >
-            <option value="">🏷️ Tất cả trạng thái</option>
-            <option value="PAID">✅ Đã thanh toán</option>
+            <option value="">🏷️ Trạng thái: Tất cả</option>
+            <option value="PAID">✅ Hoàn thành</option>
             <option value="CANCELLED">❌ Đã hủy</option>
           </select>
           {(search || filterDate || filterMethod || filterStatus || filterZone || filterTable) && (
@@ -468,7 +471,7 @@ export default function OrdersPage() {
                       {h.tableName || "—"}
                       {h.zone ? <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "4px" }}>({h.zone})</span> : null}
                     </td>
-                    <td style={{ fontWeight: "800", color: "var(--success)" }}>
+                    <td style={{ fontWeight: "800", color: isRevenueBill(h) ? "var(--success)" : "var(--muted)", textDecoration: isRevenueBill(h) ? undefined : "line-through" }}>
                       {formatVND(Number(h.totalAmount) || 0)}
                       {itemCount > 0 && (
                         <div style={{ fontSize: "11px", color: "var(--muted)", fontWeight: "normal" }}>
@@ -516,9 +519,11 @@ export default function OrdersPage() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${h.status === "CANCELLED" ? "badge-danger" : h.status === "PAID" || h.status === "paid" || h.status === "Đã thanh toán" ? "badge-success" : "badge-warning"}`}>
-                        {h.status === "CANCELLED" ? "Đã hủy" : (h.status || "Đã thanh toán")}
-                      </span>
+                      {(() => {
+                        const label = billStatusLabel(h.status);
+                        const cls = label === "Đã hủy" ? "badge-danger" : label === "Hoàn thành" ? "badge-success" : "badge-warning";
+                        return <span className={`badge ${cls}`}>{label}</span>;
+                      })()}
                     </td>
                     <td style={{ color: "var(--muted)", fontSize: "13px" }}>
                       {h.timestamp ? format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: vi }) : "—"}
@@ -701,7 +706,7 @@ export default function OrdersPage() {
                 </div>
                 {selectedOrder.discountAmount ? (
                   <div style={{ fontSize: "11px", color: "var(--success)", marginTop: "2px" }}>
-                    Đã giảm: {formatVND(selectedOrder.discountAmount)}
+                    Giảm giá món: {formatVND(billItemDiscount(selectedOrder))} • Giảm giá đơn: {formatVND(billLevelDiscount(selectedOrder))}
                   </div>
                 ) : (
                   <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
@@ -808,6 +813,47 @@ export default function OrdersPage() {
                 </table>
               </div>
             </div>
+
+            {/* Section 1b: Món đã xóa khỏi đơn */}
+            {billDeletedItems(selectedOrder).length > 0 && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                  <Trash2 size={18} style={{ color: "var(--danger)" }} />
+                  <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--text)", margin: 0 }}>
+                    Món đã xóa khỏi đơn ({billDeletedItems(selectedOrder).length})
+                  </h3>
+                </div>
+                <div style={{ overflowX: "auto", border: "1px solid var(--border-light)", borderRadius: "10px" }}>
+                  <table style={{ margin: 0 }}>
+                    <thead>
+                      <tr style={{ background: "var(--surface-muted)" }}>
+                        <th>Thời gian</th>
+                        <th>Tên món</th>
+                        <th style={{ textAlign: "center" }}>SL</th>
+                        <th style={{ textAlign: "right" }}>Giá trị</th>
+                        <th>Lý do</th>
+                        <th>Nhân viên</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billDeletedItems(selectedOrder).map((d, idx) => (
+                        <tr key={idx}>
+                          <td style={{ fontSize: "12px", color: "var(--muted)" }}>{d.timestamp ? format(new Date(d.timestamp), "HH:mm dd/MM") : "—"}</td>
+                          <td style={{ fontWeight: "700", color: "var(--text)" }}>
+                            {d.name}
+                            {d.sentToKitchen ? <div style={{ fontSize: "11px", color: "var(--warning)" }}>Đã gửi bếp</div> : null}
+                          </td>
+                          <td style={{ textAlign: "center", fontWeight: "700" }}>{d.quantity}</td>
+                          <td style={{ textAlign: "right", fontWeight: "700", color: "var(--danger)" }}>{formatVND(d.amount)}</td>
+                          <td style={{ fontSize: "12px" }}>{d.reason || "—"}</td>
+                          <td style={{ fontSize: "12px" }}>{d.staffFullName || d.staffUsername || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Section 2: Order Action Timeline */}
             <div>

@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../core/utils/format_utils.dart';
 import 'order_item_model.dart';
 import 'order_action_log_model.dart';
+import '../../core/domain/deleted_items.dart';
 
 // ==================== TABLE MODEL (KIOTVIET FNB) ====================
 class TableModel {
@@ -23,6 +24,11 @@ class TableModel {
   int? openedAt; // Thời điểm khách vào ngồi
   int? guestCount; // Số lượng khách tại bàn do nhân viên nhập
   String? actionLogsJson; // Lịch sử thao tác đơn hàng (Audit trail)
+
+  /// Món đã lưu bị xóa / giảm số lượng (JSON mảng [DeletedItemEntry]). Hợp đồng chung
+  /// với web: field `deletedItemsJson` trên node tables/{key}. Đi theo đơn khi chuyển
+  /// bàn, nối vào bàn đích khi gộp, chép vào hóa đơn khi thanh toán/hủy, xóa khi dọn bàn.
+  String? deletedItemsJson;
 
   // Trạng thái "Chờ thanh toán": đã in phiếu tạm tính (epoch ms) và người in (username).
   // Hợp đồng chung với web: field `prePrintedAt` / `prePrintedBy` trên node tables/{key}.
@@ -49,6 +55,7 @@ class TableModel {
     this.openedAt,
     this.guestCount,
     this.actionLogsJson,
+    this.deletedItemsJson,
     this.prePrintedAt,
     this.prePrintedBy,
   }) : _currentOrderJson = currentOrderJson;
@@ -182,6 +189,7 @@ class TableModel {
       openedAt: openedAt,
       guestCount: guestCount,
       actionLogsJson: map['actionLogsJson']?.toString(),
+      deletedItemsJson: map['deletedItemsJson']?.toString(),
       prePrintedAt: prePrintedAt,
       prePrintedBy: (prePrintedAt != null && prePrintedBy != null && prePrintedBy.isNotEmpty) ? prePrintedBy : null,
     );
@@ -204,6 +212,7 @@ class TableModel {
     if (openedAt != null) 'openedAt': openedAt,
     if (guestCount != null) 'guestCount': guestCount,
     if (actionLogsJson != null) 'actionLogsJson': actionLogsJson,
+    if (deletedItemsJson != null && deletedItemsJson!.isNotEmpty) 'deletedItemsJson': deletedItemsJson,
     if (prePrintedAt != null) 'prePrintedAt': prePrintedAt,
     if (prePrintedAt != null && prePrintedBy != null) 'prePrintedBy': prePrintedBy,
   };
@@ -222,6 +231,12 @@ class TableModel {
     final list = actionLogs;
     list.add(log);
     actionLogsJson = jsonEncode(list.map((e) => e.toMap()).toList());
+  }
+
+  List<DeletedItemEntry> get deletedItems => DeletedItemsLogic.decode(deletedItemsJson);
+
+  void addDeletedItem(DeletedItemEntry entry) {
+    deletedItemsJson = DeletedItemsLogic.append(deletedItemsJson, [entry]);
   }
 
   List<OrderItemModel> get currentItems {
@@ -273,6 +288,7 @@ class TableModel {
     currentOrderCode = null;
     mergedIntoTable = null;
     actionLogsJson = null;
+    deletedItemsJson = null;
     clearPrePrint();
   }
 }

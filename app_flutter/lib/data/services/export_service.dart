@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/app_models.dart';
+import '../../core/reports/bill_report_rows.dart';
 
 class ExportService {
   static String sanitizeFileName(String input) {
@@ -39,14 +40,17 @@ class ExportService {
     List<BillModel>? bills,
   }) async {
     try {
-      final actualHeaders = headers ?? ['Mã HĐ', 'Bàn', 'Khu vực', 'Thu ngân', 'Thời gian', 'Tiền hàng', 'Giảm giá', 'Điểm dùng', 'VAT', 'Tổng tiền', 'HTTT', 'Khách hàng', 'SĐT'];
+      final actualHeaders = headers ?? ['Mã HĐ', 'Bàn', 'Khu vực', 'Thu ngân', 'Thời gian', 'Trạng thái', 'Tiền hàng', 'Giảm giá món', 'Giảm giá đơn', 'Tổng giảm giá', 'Điểm dùng', 'VAT', 'Tổng tiền', 'HTTT', 'Khách hàng', 'SĐT', 'Số món xóa', 'Tiền xóa món'];
       final actualRows = rows ?? (bills?.map((b) => [
         b.billCode,
         b.tableName,
         b.zone,
         b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername,
         DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(b.createdAt)),
+        BillReportRows.statusLabel(b.status),
         b.subTotal,
+        b.itemDiscountTotal,
+        b.orderLevelDiscount,
         b.totalDiscount,
         b.pointsDiscount,
         b.vatAmount,
@@ -54,6 +58,8 @@ class ExportService {
         b.paymentMethod,
         b.customerName ?? '',
         b.customerPhone ?? '',
+        b.deletedItemsCount,
+        b.deletedItemsAmount,
       ]).toList() ?? []);
 
       final excel = Excel.createExcel();
@@ -90,6 +96,7 @@ class ExportService {
           TextCellValue('Ghi chú'),
           TextCellValue('Số lượng'),
           TextCellValue('Đơn giá (VNĐ)'),
+          TextCellValue('Giảm giá món (VNĐ)'),
           TextCellValue('Thành tiền (VNĐ)'),
           TextCellValue('Người nhận order món'),
           TextCellValue('Người thanh toán'),
@@ -109,11 +116,22 @@ class ExportService {
               TextCellValue(item.note),
               DoubleCellValue(item.quantity.toDouble()),
               DoubleCellValue(item.unitPrice.toDouble()),
+              DoubleCellValue(item.lineDiscountTotal.toDouble()),
               DoubleCellValue(item.itemTotal.toDouble()),
               TextCellValue(item.orderedByName.isNotEmpty ? item.orderedByName : b.orderStaffSummary),
               TextCellValue(b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername),
               TextCellValue(orderTime),
             ]);
+          }
+        }
+
+        // Sheet: Món đã xóa (có lý do)
+        final deletedRows = bills.expand(BillReportRows.deletedRows).toList();
+        if (deletedRows.isNotEmpty) {
+          final delSheet = excel['MonXoa'];
+          delSheet.appendRow(BillReportRows.deletedHeaders.map((h) => TextCellValue(h)).toList());
+          for (final row in deletedRows) {
+            delSheet.appendRow(row.map<CellValue?>((c) => c is num ? DoubleCellValue(c.toDouble()) : TextCellValue(c.toString())).toList());
           }
         }
 

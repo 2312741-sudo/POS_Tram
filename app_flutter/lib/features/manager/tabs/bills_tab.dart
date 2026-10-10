@@ -397,7 +397,7 @@ class _BillsTabState extends State<BillsTab> {
                           children: [
                             _buildStatusChip('Tất cả', 'ALL'),
                             const SizedBox(width: 6),
-                            _buildStatusChip('Đã thanh toán', 'PAID'),
+                            _buildStatusChip('Hoàn thành', 'PAID'),
                             const SizedBox(width: 6),
                             _buildStatusChip('Đã hủy', 'CANCELLED'),
                             const SizedBox(width: 8),

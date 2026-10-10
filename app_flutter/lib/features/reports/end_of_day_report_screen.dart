@@ -1041,6 +1041,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ['Tổng thu nộp tiền vào quỹ', ReportExportService.formatCurrency(t2.cashInTotal), 'VND'],
         ['Tổng chi rút tiền quỹ', ReportExportService.formatCurrency(t2.cashOutTotal), 'VND'],
         ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
+        ['Số hóa đơn đã hủy', t1.cancelledBillsCount, 'Đơn'],
+        ['Giá trị hóa đơn hủy', ReportExportService.formatCurrency(t1.cancelledBillsAmount), 'VND'],
+        ['Số món xóa', t1.deletedItemsCount, 'Món'],
+        ['Tổng tiền xóa món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
       ];
       final now = DateTime.now();
       final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
@@ -1106,6 +1110,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ['Tổng thu nộp tiền vào quỹ', ReportExportService.formatCurrency(t2.cashInTotal), 'VND'],
         ['Tổng chi rút tiền quỹ', ReportExportService.formatCurrency(t2.cashOutTotal), 'VND'],
         ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
+        ['Số hóa đơn đã hủy', t1.cancelledBillsCount, 'Đơn'],
+        ['Giá trị hóa đơn hủy', ReportExportService.formatCurrency(t1.cancelledBillsAmount), 'VND'],
+        ['Số món xóa', t1.deletedItemsCount, 'Món'],
+        ['Tổng tiền xóa món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
       ];
       final now = DateTime.now();
       final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
@@ -1286,10 +1294,28 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             _buildReportRow('Số lượng đơn hủy', _cancelledBills.length.toString()),
             _buildReportRow(
               'Giá trị hủy',
-              FormatUtils.vnd(_cancelledBills.fold(0, (s, b) => s + b.finalAmount)),
+              FormatUtils.vnd(_cancelledBills.fold(0, (s, b) => s + b.subTotal)),
             ),
           ],
         ),
+
+        const SizedBox(height: 12),
+
+        // 5. XÓA MÓN (món đã lưu bị xóa, từ HĐ hoàn thành + đã hủy)
+        Builder(builder: (context) {
+          final deleted = ReportCalculator.calculateDeletedItems(_rangeBills);
+          return _buildSectionCard(
+            title: 'XÓA MÓN',
+            rows: [
+              _buildReportRow('Số món xóa', deleted.count.toString()),
+              _buildReportRow(
+                'Tổng tiền xóa món',
+                FormatUtils.vnd(deleted.amount),
+                color: deleted.amount > 0 ? context.tc.danger : null,
+              ),
+            ],
+          );
+        }),
 
         const SizedBox(height: 24),
       ],

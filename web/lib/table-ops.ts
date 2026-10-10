@@ -20,6 +20,7 @@ import {
   type RawOrderLine,
 } from "./order-math";
 import { CLEAR_PRE_PRINT, prePrintedAtOf } from "./table-status";
+import { mergeDeletedItemsJson } from "./item-deletion";
 
 function int(v: unknown): number {
   const n = Number(v);
@@ -120,6 +121,8 @@ export interface TableNode {
   mergedIntoTable?: unknown;
   prePrintedAt?: unknown;
   prePrintedBy?: unknown;
+  /** Món đã xóa khỏi đơn đang mở (chuỗi JSON mảng — hợp đồng chung với Flutter) */
+  deletedItemsJson?: unknown;
   [key: string]: unknown;
 }
 
@@ -226,6 +229,7 @@ export const CLEARED_TABLE_FIELDS = {
   currentOrderCode: null,
   mergedIntoTable: null,
   actionLogsJson: null,
+  deletedItemsJson: null,
   ...CLEAR_PRE_PRINT,
 } as const;
 
@@ -282,6 +286,8 @@ export function buildTransferPayloads(args: {
       currentOrderCode: source.currentOrderCode ?? null,
       mergedIntoTable: null,
       actionLogsJson: JSON.stringify(logs),
+      // Món đã xóa đi theo đơn sang bàn đích
+      deletedItemsJson: typeof source.deletedItemsJson === "string" && source.deletedItemsJson ? source.deletedItemsJson : null,
       // "Chờ thanh toán" đi theo đơn sang bàn đích
       prePrintedAt: pre,
       prePrintedBy: pre != null && preBy ? preBy : null,
@@ -343,6 +349,8 @@ export function buildMergePayloads(args: {
       guestCount: guests > 0 ? guests : null,
       openedAt,
       actionLogsJson: JSON.stringify(logs),
+      // Món đã xóa của bàn nguồn nối vào bàn đích
+      deletedItemsJson: mergeDeletedItemsJson(target.deletedItemsJson, source.deletedItemsJson),
       // Đơn gộp khác phiếu tạm tính cũ → bàn đích quay về "Có khách"
       ...CLEAR_PRE_PRINT,
     },

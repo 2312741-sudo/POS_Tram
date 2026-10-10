@@ -664,4 +664,17 @@ describe("POS Trạm - Security Rules: liên kết Chấm Công Trạm", () => {
     await assertFails(anon.ref("chamcong_links/stores").get());
     await assertFails(anon.ref("chamcong_links/byChamCongStore/S1").set("TRAM02"));
   });
+
+  it("VR1. Thu ngân trả voucher REDEEMED về RELEASED chỉ khi hóa đơn dùng mã không tồn tại", async () => {
+    const cashier = db("cashier_uid");
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      await d.ref("stores/TRAM01/vouchers/CAM9/V_FAIL").set({ voucherId: "V_FAIL", campaignId: "CAM9", normalizedCode: "FAIL1", state: "REDEEMED", redeemedBillId: "BILL_MISSING" });
+      await d.ref("stores/TRAM01/vouchers/CAM9/V_PAID").set({ voucherId: "V_PAID", campaignId: "CAM9", normalizedCode: "PAID1", state: "REDEEMED", redeemedBillId: "BILL_REAL" });
+      await d.ref("stores/TRAM01/bills/BILL_REAL").set({ status: "PAID", finalAmount: 50000 });
+    });
+    await assertSucceeds(cashier.ref("stores/TRAM01/vouchers/CAM9/V_FAIL").set({ voucherId: "V_FAIL", campaignId: "CAM9", normalizedCode: "FAIL1", state: "RELEASED" }));
+    await assertFails(cashier.ref("stores/TRAM01/vouchers/CAM9/V_PAID").set({ voucherId: "V_PAID", campaignId: "CAM9", normalizedCode: "PAID1", state: "RELEASED" }));
+    await assertFails(db("waiter_uid").ref("stores/TRAM01/vouchers/CAM9/V_FAIL").set({ voucherId: "V_FAIL", campaignId: "CAM9", normalizedCode: "FAIL1", state: "RELEASED" }));
+  });
 });

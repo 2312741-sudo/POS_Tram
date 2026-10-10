@@ -1,10 +1,22 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Plus, Tag, Ticket } from "lucide-react";
-import { ref, onValue, set, update } from "firebase/database";
+import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
-import { useDashboardData } from "@/lib/data-context";
+import { useDashboardData, type ProductItem } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
+import {
+  CAMPAIGN_TYPE_LABELS, REWARD_BENEFIT_LABELS, buildBenefitFields, campaignToForm, describeCampaignBenefit,
+  emptyCampaignForm, normalizeCampaignType, validateCampaignForm,
+  type CampaignFormState, type RawBuyCondition, type RawTier, type RewardBenefit,
+  normalizeStackingMode,
+} from "@/lib/campaign-form";
+import {
+  buildVoucherCancelUpdate, buildVoucherCreateUpdates, canCancelVoucher, checkVoucher, filterVouchers,
+  generateRandomCodes, newVoucherId, normalizeVoucherCode, parseVoucherCodes, toVoucherView,
+  voucherStatusColor, voucherStatusText, voucherStats as computeVoucherStats, VOUCHER_CODE_RE,
+  type VoucherCheckResult, type VoucherView,
+} from "@/lib/campaign-vouchers";
 
 function formatVND(amount: number | undefined) {
   if (amount === undefined) return "—";
@@ -17,25 +29,12 @@ function formatDate(ts: number | undefined) {
   return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-// ==================== TYPES ====================
-// Bậc ưu đãi của chiến dịch (đồng bộ với Flutter PromotionModel)
-interface CampaignTier {
-  tierId?: string;
-  tierIndex?: number;
-  threshold?: number;
-  thresholdValue?: number;
-  thresholdType?: string;
-  conditionBasis?: string;
-  benefitType?: string;
-  benefitMode?: string;
-  benefitValue?: number;
-  value?: number;
-  maxBenefitValue?: number;
-  maxDiscountMoney?: number;
-  sortOrder?: number;
-  [key: string]: unknown;
+function formatDateTime(ts: number | undefined) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// ==================== TYPES ====================
 interface CampaignItem {
   campaignId: string;
   programCode: string;
@@ -55,8 +54,8 @@ interface CampaignItem {
   includedItemIds?: string[];
   includedGroupIds?: string[];
   excludedItemIds?: string[];
-  tiers: CampaignTier[];
-  buyConditions: Record<string, unknown>[];
+  tiers: RawTier[];
+  buyConditions: RawBuyCondition[];
   budgetMoney?: number;
   maxUses?: number;
   maxUsesPerCustomer?: number;
@@ -75,21 +74,7 @@ interface CampaignCounters {
   committedUseCount: number;
 }
 
-interface VoucherItem {
-  voucherId: string;
-  campaignId: string;
-  code: string;
-  status: string; // ISSUED, USED, CANCELLED
-  usedBy?: string;
-  usedAt?: number;
-}
-
-const typeLabels: Record<string, string> = {
-  BILLDISCOUNT: 'Giảm giá đơn hàng',
-  ORDERVALUEITEMBENEFIT: 'Giảm/tặng món theo GTĐ',
-  BUYXGETY: 'Mua X tặng Y',
-  ITEMPRICERULE: 'Đồng giá/đồng giảm giá',
-};
+const typeLabels: Record<string, string> = CAMPAIGN_TYPE_LABELS;
 
 // ==================== MAIN COMPONENT ====================
 export default function PromotionsPage() {
@@ -105,7 +90,7 @@ export default function PromotionsPage() {
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [countersMap, setCountersMap] = useState<Record<string, CampaignCounters>>({});
   // Danh sách voucher kèm campaignId đã nạp — danh sách hiển thị được suy ra bên dưới
-  const [voucherState, setVoucherState] = useState<{ campaignId: string; list: VoucherItem[] } | null>(null);
+  const [voucherState, setVoucherState] = useState<{ campaignId: string; list: VoucherView[] } | null>(null);
   // Mã chi nhánh đã nạp xong campaigns — loading được suy ra, không setState đồng bộ trong effect
   const [loadedStoreCode, setLoadedStoreCode] = useState<string | null>(null);
   // Mốc thời gian hiện tại cho trạng thái chiến dịch (không gọi Date.now() khi render), làm mới mỗi phút
@@ -122,20 +107,15 @@ export default function PromotionsPage() {
   const [formError, setFormError] = useState("");
 
   // Campaign form state
-  const [campaignForm, setCampaignForm] = useState({
-    name: "", programCode: "", description: "", campaignType: "BILLDISCOUNT",
-    active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
-    hasCodes: false, autoApply: true, requireStaffNote: false, stackingMode: "STACKABLE", priority: "0",
-    discountThreshold: "", discountType: "PERCENT" as "PERCENT" | "AMOUNT", discountValue: "", maxDiscount: "",
-    fixedPriceValue: "",
-    includedItemIds: [] as string[],
-    includedGroupIds: [] as string[],
-    daysOfWeek: [] as number[],
-    timeSlots: [] as { startTime: string; endTime: string }[]
-  });
+  const [campaignForm, setCampaignForm] = useState<CampaignFormState>(emptyCampaignForm);
 
-  // Voucher form state
-  const [voucherForm, setVoucherForm] = useState({ quantity: "10", prefix: "", customCode: "", isCustom: false });
+  // Voucher form state (dùng chung cho modal phát hành mã và khối "Phát hành mã" trong form KM)
+  const emptyVoucherForm = { mode: "LIST" as "LIST" | "RANDOM", codesText: "", quantity: "10", prefix: "" };
+  const [voucherForm, setVoucherForm] = useState(emptyVoucherForm);
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const [checkCode, setCheckCode] = useState("");
+  const [checkResult, setCheckResult] = useState<VoucherCheckResult | null>(null);
+  const [checking, setChecking] = useState(false);
 
   // Ở chế độ "ALL" dùng chi nhánh đầu tiên thực tế (không hardcode TRAM01)
   const targetStoreCode = currentStoreCode === "ALL" ? (stores[0]?.storeCode || "") : currentStoreCode;
@@ -165,7 +145,7 @@ export default function PromotionsPage() {
           requireStaffNote: v.requireStaffNote ?? false,
           tiers: v.tiers || [], buyConditions: v.buyConditions || [], budgetMoney: v.budgetMoney || 0,
           maxUses: v.maxUses || 0, maxUsesPerCustomer: v.maxUsesPerCustomer || 0, hasCodes: v.hasCodes ?? false,
-          autoApply: v.autoApply ?? false, stackingMode: v.stackingMode || "STACKABLE", priority: v.priority || 0,
+          autoApply: v.autoApply ?? false, stackingMode: normalizeStackingMode(v.stackingMode), priority: v.priority || 0,
           createdAt: v.createdAt || 0, updatedAt: v.updatedAt || 0, createdBy: v.createdBy || ""
         });
       });
@@ -191,24 +171,18 @@ export default function PromotionsPage() {
     if (activeTab === "vouchers" && selectedVoucherCampaign) {
       const vRef = ref(db, `stores/${targetStoreCode}/vouchers/${selectedVoucherCampaign}`);
       const unsub = onValue(vRef, (snap) => {
-        const vs: VoucherItem[] = [];
+        const vs: VoucherView[] = [];
         snap.forEach((child) => {
-          const val = child.val();
-          vs.push({
-            voucherId: child.key!, campaignId: selectedVoucherCampaign,
-            code: val.code || val.normalizedCode || "",
-            status: val.status || (val.state === "REDEEMED" ? "USED" : val.state === "CANCELLED" ? "CANCELLED" : "ISSUED"),
-            usedBy: val.usedBy || val.redeemedBy,
-            usedAt: val.usedAt || val.redeemedAt
-          });
+          vs.push(toVoucherView(child.key!, selectedVoucherCampaign, child.val()));
         });
+        vs.sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0) || x.code.localeCompare(y.code));
         setVoucherState({ campaignId: selectedVoucherCampaign, list: vs });
       });
       return () => unsub();
     }
   }, [activeTab, selectedVoucherCampaign, targetStoreCode]);
 
-  const vouchers = useMemo<VoucherItem[]>(() => {
+  const vouchers = useMemo<VoucherView[]>(() => {
     if (activeTab !== "vouchers" || !selectedVoucherCampaign) return [];
     return voucherState?.campaignId === selectedVoucherCampaign ? voucherState.list : [];
   }, [activeTab, selectedVoucherCampaign, voucherState]);
@@ -276,90 +250,91 @@ export default function PromotionsPage() {
   // Filtered campaigns
   const filteredCampaigns = useMemo(() => campaigns.filter((c) => {
     const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.programCode.toLowerCase().includes(search.toLowerCase());
-    const matchType = !filterType || c.campaignType === filterType;
+    const matchType = !filterType || normalizeCampaignType(c.campaignType) === filterType;
     const status = getCampaignStatus(c);
     const matchStatus = filterStatus === "ALL" || status === filterStatus;
     return matchSearch && matchType && matchStatus;
   }), [campaigns, search, filterType, filterStatus, getCampaignStatus]);
 
   // Vouchers stats
-  const voucherStats = useMemo(() => {
-    const total = vouchers.length;
-    let issued = 0, used = 0, cancelled = 0;
-    vouchers.forEach(v => {
-      if (v.status === "ISSUED") issued++;
-      else if (v.status === "USED") used++;
-      else if (v.status === "CANCELLED") cancelled++;
+  const voucherStats = useMemo(() => computeVoucherStats(vouchers), [vouchers]);
+  const visibleVouchers = useMemo(() => filterVouchers(vouchers, voucherSearch), [vouchers, voucherSearch]);
+
+  // Xem trước danh sách mã sẽ tạo (chỉ đối chiếu trùng với mã đã nạp; khi lưu sẽ kiểm tra lại trên server)
+  const voucherPreview = useMemo(() => {
+    if (voucherForm.mode !== "LIST") return null;
+    return parseVoucherCodes(voucherForm.codesText, vouchers.map((v) => v.code));
+  }, [voucherForm.mode, voucherForm.codesText, vouchers]);
+
+  /** Mã đã tồn tại trong chương trình (đọc server) hoặc đã được dùng ở chương trình khác (voucher_lookup). */
+  const findTakenCodes = async (campaignId: string, codes: string[]): Promise<Set<string>> => {
+    const taken = new Set<string>();
+    const camSnap = await get(ref(db, `stores/${targetStoreCode}/vouchers/${campaignId}`));
+    camSnap.forEach((child) => {
+      const v = toVoucherView(child.key!, campaignId, child.val());
+      if (v.code) taken.add(v.code);
     });
-    return { total, issued, used, cancelled };
-  }, [vouchers]);
+    const lookups = await Promise.all(
+      codes.filter((c) => !taken.has(c)).map(async (c) => [c, (await get(ref(db, `stores/${targetStoreCode}/voucher_lookup/${c}`))).exists()] as const),
+    );
+    for (const [c, exists] of lookups) if (exists) taken.add(c);
+    return taken;
+  };
+
+  /** Lấy danh sách mã từ voucherForm (dán danh sách hoặc sinh ngẫu nhiên), loại mã trùng. */
+  const collectVoucherCodes = async (campaignId: string): Promise<{ codes: string[]; error?: string; notes: string[] }> => {
+    const notes: string[] = [];
+    if (voucherForm.mode === "LIST") {
+      const parsed = parseVoucherCodes(voucherForm.codesText);
+      if (parsed.invalid.length) return { codes: [], notes, error: `Mã sai định dạng: ${parsed.invalid.slice(0, 10).join(", ")}${parsed.invalid.length > 10 ? "…" : ""} (chỉ gồm chữ không dấu, số, - hoặc _, 3–32 ký tự)` };
+      if (parsed.duplicateInInput.length) notes.push(`Bỏ qua ${parsed.duplicateInInput.length} mã lặp trong danh sách`);
+      if (parsed.codes.length === 0) return { codes: [], notes, error: "Vui lòng dán ít nhất 1 mã" };
+      const taken = await findTakenCodes(campaignId, parsed.codes);
+      const dup = parsed.codes.filter((c) => taken.has(c));
+      if (dup.length) return { codes: [], notes, error: `Các mã đã tồn tại, vui lòng bỏ ra: ${dup.slice(0, 10).join(", ")}${dup.length > 10 ? "…" : ""}` };
+      return { codes: parsed.codes, notes };
+    }
+    const qty = parseInt(voucherForm.quantity);
+    if (isNaN(qty) || qty <= 0 || qty > 1000) return { codes: [], notes, error: "Số lượng không hợp lệ (1 - 1000)" };
+    const prefix = normalizeVoucherCode(voucherForm.prefix);
+    if (prefix && !/^[A-Z0-9_-]{1,20}$/.test(prefix)) return { codes: [], notes, error: "Tiền tố chỉ gồm chữ không dấu, số, - hoặc _ (tối đa 20 ký tự)" };
+    let codes = generateRandomCodes(qty, prefix, vouchers.map((v) => v.code));
+    const taken = await findTakenCodes(campaignId, codes);
+    if (taken.size) {
+      codes = codes.filter((c) => !taken.has(c));
+      codes = codes.concat(generateRandomCodes(qty - codes.length, prefix, [...taken, ...codes]));
+    }
+    return { codes, notes };
+  };
+
+  const writeVoucherCodes = async (campaignId: string, codes: string[]) => {
+    const now = Date.now();
+    await update(ref(db, `stores/${targetStoreCode}`), buildVoucherCreateUpdates(campaignId, codes, now, (i) => newVoucherId(now, i)));
+  };
 
   // Handle Save Campaign
   const handleSaveCampaign = async () => {
-    if (!campaignForm.name.trim()) { setFormError("Tên chương trình là bắt buộc"); return; }
-    
-    if (campaignForm.campaignType === "BILLDISCOUNT") {
-      const val = Number(campaignForm.discountValue) || 0;
-      if (campaignForm.discountType === "PERCENT") {
-        if (val <= 0 || val > 100) {
-          setFormError("Tỷ lệ giảm giá (%) phải từ 1 đến 100");
-          return;
-        }
-      } else {
-        if (val <= 0) {
-          setFormError("Số tiền giảm (VND) phải lớn hơn 0");
-          return;
-        }
-      }
-    }
+    const err = validateCampaignForm(campaignForm);
+    if (err) { setFormError(err); return; }
+    const wantsCodes = campaignForm.hasCodes && (voucherForm.mode === "RANDOM" ? !!voucherForm.quantity.trim() && voucherForm.quantity.trim() !== "0" : !!voucherForm.codesText.trim());
 
     setSaving(true); setFormError("");
     try {
       const now = Date.now();
       const campaignId = editingCampaign?.campaignId || `CAM_${now}_${Math.random().toString(36).slice(2, 6)}`;
       const programCode = editingCampaign?.programCode || campaignForm.programCode.trim() || `KM${String(campaigns.length + 1).padStart(4, "0")}`;
-      
-      let tiers: CampaignTier[] = editingCampaign?.tiers ? [...editingCampaign.tiers] : [];
-      if (campaignForm.campaignType === "BILLDISCOUNT") {
-        const isPercent = campaignForm.discountType === "PERCENT";
-        const val = Number(campaignForm.discountValue) || 0;
-        const threshold = Number(campaignForm.discountThreshold) || 0;
-        const maxDisc = Number(campaignForm.maxDiscount) || 0;
-        tiers = [{
-          tierId: editingCampaign?.tiers?.[0]?.tierId || "TIER_1",
-          tierIndex: 0,
-          threshold,
-          thresholdValue: threshold,
-          thresholdType: "ORDER_VALUE",
-          conditionBasis: "TOTALAMOUNT",
-          benefitType: isPercent ? "DISCOUNT_PERCENT" : "DISCOUNT_AMOUNT",
-          benefitMode: isPercent ? "PERCENT" : "FIXED",
-          benefitValue: val,
-          value: isPercent ? Math.round(val * 100) : val,
-          maxBenefitValue: isPercent ? maxDisc : 0,
-          maxDiscountMoney: isPercent ? maxDisc : 0,
-          sortOrder: 1
-        }];
-      } else if (campaignForm.campaignType === "ITEMPRICERULE") {
-        const fixedVal = Number(campaignForm.fixedPriceValue) || 0;
-        tiers = [{
-          tierId: editingCampaign?.tiers?.[0]?.tierId || "TIER_1",
-          tierIndex: 0,
-          threshold: 0,
-          thresholdValue: 0,
-          thresholdType: "ORDER_VALUE",
-          conditionBasis: "TOTALAMOUNT",
-          benefitType: "FIXED_PRICE",
-          benefitMode: "FIXEDPRICE",
-          benefitValue: fixedVal,
-          value: fixedVal,
-          maxBenefitValue: 0,
-          maxDiscountMoney: 0,
-          sortOrder: 1
-        }];
+
+      // Kiểm tra mã trước khi ghi chương trình để không lưu dở dang
+      let codes: string[] = [];
+      if (wantsCodes) {
+        const res = await collectVoucherCodes(campaignId);
+        if (res.error) { setFormError(res.error); setSaving(false); return; }
+        codes = res.codes;
       }
 
-      const schedule: NonNullable<CampaignItem["schedule"]> = {};
+      const benefit = buildBenefitFields(campaignForm, editingCampaign ?? undefined);
+
+      const schedule: NonNullable<CampaignItem["schedule"]> & { timezone: string } = { timezone: "Asia/Ho_Chi_Minh" };
       if (campaignForm.startDate) schedule.absoluteStart = new Date(campaignForm.startDate).getTime();
       if (campaignForm.endDate) schedule.absoluteEnd = new Date(campaignForm.endDate).getTime();
       if (campaignForm.daysOfWeek.length > 0) schedule.daysOfWeek = campaignForm.daysOfWeek;
@@ -374,23 +349,27 @@ export default function PromotionsPage() {
         active: campaignForm.active,
         schedule,
         branchIds: editingCampaign?.branchIds?.length ? editingCampaign.branchIds : [targetStoreCode],
-        includedItemIds: campaignForm.includedItemIds,
-        includedGroupIds: campaignForm.includedGroupIds,
-        tiers,
-        buyConditions: editingCampaign?.buyConditions || [],
+        includedItemIds: benefit.includedItemIds,
+        includedGroupIds: benefit.includedGroupIds,
+        tiers: benefit.tiers,
+        buyConditions: benefit.buyConditions,
         budgetMoney: Number(campaignForm.budgetMoney) || 0,
         maxUses: Number(campaignForm.maxUses) || 0,
         hasCodes: campaignForm.hasCodes,
         autoApply: campaignForm.autoApply,
         requireStaffNote: campaignForm.requireStaffNote,
-        stackingMode: campaignForm.stackingMode,
+        stackingMode: normalizeStackingMode(campaignForm.stackingMode),
         priority: Number(campaignForm.priority) || 0,
         createdAt: editingCampaign?.createdAt || now,
         updatedAt: now,
         createdBy: editingCampaign?.createdBy || "Admin"
       };
 
-      await set(ref(db, `stores/${targetStoreCode}/campaigns/${campaignId}`), data);
+      const camRef = ref(db, `stores/${targetStoreCode}/campaigns/${campaignId}`);
+      // Sửa: update để giữ các trường do Flutter ghi mà web không quản lý (excludedItemIds, version...)
+      if (editingCampaign) await update(camRef, data);
+      else await set(camRef, data);
+      if (codes.length > 0) await writeVoucherCodes(campaignId, codes);
       setShowCampaignModal(false);
       setEditingCampaign(null);
     } catch (e) {
@@ -403,149 +382,58 @@ export default function PromotionsPage() {
     if (!selectedVoucherCampaign) { setFormError("Vui lòng chọn chương trình"); return; }
     setSaving(true); setFormError("");
     try {
-      const now = Date.now();
-      const updates: Record<string, unknown> = {};
-
-      if (voucherForm.isCustom) {
-        const cleanCode = voucherForm.customCode.trim().toUpperCase();
-        if (!cleanCode) {
-          setFormError("Vui lòng nhập mã Voucher cụ thể");
-          setSaving(false);
-          return;
-        }
-        const vId = `VOU_${now}_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-        const vData = {
-          voucherId: vId,
-          campaignId: selectedVoucherCampaign,
-          code: cleanCode,
-          normalizedCode: cleanCode,
-          status: "ISSUED",
-          state: "RELEASED",
-          tombstone: false,
-          createdAt: now,
-          version: 1,
-        };
-        updates[`vouchers/${selectedVoucherCampaign}/${vId}`] = vData;
-        updates[`voucher_lookup/${cleanCode}`] = {
-          campaignId: selectedVoucherCampaign,
-          voucherId: vId,
-        };
-      } else {
-        const qty = parseInt(voucherForm.quantity);
-        if (isNaN(qty) || qty <= 0) { setFormError("Số lượng không hợp lệ (tối thiểu 1)"); setSaving(false); return; }
-        const prefix = voucherForm.prefix.trim().toUpperCase();
-
-        for (let i = 0; i < qty; i++) {
-          const vId = `VOU_${now}_${Math.random().toString(36).slice(2, 8).toUpperCase()}_${i}`;
-          const code = `${prefix}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-          const vData = {
-            voucherId: vId,
-            campaignId: selectedVoucherCampaign,
-            code,
-            normalizedCode: code,
-            status: "ISSUED",
-            state: "RELEASED",
-            tombstone: false,
-            createdAt: now,
-            version: 1,
-          };
-          updates[`vouchers/${selectedVoucherCampaign}/${vId}`] = vData;
-          updates[`voucher_lookup/${code}`] = {
-            campaignId: selectedVoucherCampaign,
-            voucherId: vId,
-          };
-        }
-      }
-
-      // Đánh dấu chương trình này có phát hành mã (hasCodes = true)
-      updates[`campaigns/${selectedVoucherCampaign}/hasCodes`] = true;
-      updates[`campaigns/${selectedVoucherCampaign}/updatedAt`] = now;
-
-      await update(ref(db, `stores/${targetStoreCode}`), updates);
+      const res = await collectVoucherCodes(selectedVoucherCampaign);
+      if (res.error) { setFormError(res.error); setSaving(false); return; }
+      if (res.codes.length === 0) { setFormError("Không có mã nào để tạo"); setSaving(false); return; }
+      await writeVoucherCodes(selectedVoucherCampaign, res.codes);
       setShowVoucherModal(false);
     } catch (e) { setFormError(errorMessage(e) || "Lỗi tạo mã"); }
     setSaving(false);
   };
 
+  const handleCancelVoucher = async (v: VoucherView) => {
+    if (!window.confirm(`Hủy mã ${v.code}? Mã đã hủy không thể dùng lại.`)) return;
+    try {
+      await update(ref(db, `stores/${targetStoreCode}/vouchers/${v.campaignId}/${v.voucherId}`), buildVoucherCancelUpdate());
+    } catch (e) {
+      window.alert(errorMessage(e) || "Không hủy được mã");
+    }
+  };
+
+  const handleCheckCode = async () => {
+    const code = normalizeVoucherCode(checkCode);
+    const now = Date.now();
+    if (!code) { setCheckResult(null); return; }
+    if (!VOUCHER_CODE_RE.test(code)) { setCheckResult(checkVoucher(code, null, null, now)); return; }
+    setChecking(true);
+    try {
+      const lookup = await get(ref(db, `stores/${targetStoreCode}/voucher_lookup/${code}`));
+      let voucher: VoucherView | null = null;
+      if (lookup.exists()) {
+        const { campaignId, voucherId } = lookup.val() as { campaignId: string; voucherId: string };
+        const vs = await get(ref(db, `stores/${targetStoreCode}/vouchers/${campaignId}/${voucherId}`));
+        if (vs.exists()) voucher = toVoucherView(voucherId, campaignId, vs.val());
+      }
+      const cam = voucher ? campaigns.find((c) => c.campaignId === voucher.campaignId) ?? null : null;
+      setCheckResult(checkVoucher(code, voucher, cam, now));
+    } catch (e) {
+      setCheckResult({ kind: "NOT_FOUND", ok: false, message: errorMessage(e) || "Lỗi kiểm tra mã" });
+    }
+    setChecking(false);
+  };
+
   const openEditCampaign = (cam: CampaignItem) => {
     setEditingCampaign(cam);
-    const startStr = cam.schedule?.absoluteStart ? new Date(cam.schedule.absoluteStart).toISOString().slice(0, 16) : "";
-    const endStr = cam.schedule?.absoluteEnd ? new Date(cam.schedule.absoluteEnd).toISOString().slice(0, 16) : "";
-    
-    let discountThreshold = "";
-    let discountType: "PERCENT" | "AMOUNT" = "PERCENT";
-    let discountValue = "";
-    let maxDiscount = "";
-    let fixedPriceValue = "";
-
-    if (cam.tiers && cam.tiers.length > 0) {
-      const tier = cam.tiers[0];
-      const isPercent = tier.benefitMode === "PERCENT" || tier.benefitType === "DISCOUNT_PERCENT" || tier.benefitType === "PERCENT";
-      discountType = isPercent ? "PERCENT" : "AMOUNT";
-      const rawVal = tier.value ?? tier.benefitValue ?? 0;
-      const val = isPercent ? (rawVal > 100 ? rawVal / 100 : rawVal) : rawVal;
-      discountValue = val > 0 ? String(val) : "";
-      discountThreshold = String(tier.threshold ?? tier.thresholdValue ?? "");
-      maxDiscount = String(tier.maxDiscountMoney ?? tier.maxBenefitValue ?? "");
-      fixedPriceValue = String(rawVal > 0 ? rawVal : "");
-    }
-
-    setCampaignForm({
-      name: cam.name,
-      programCode: cam.programCode,
-      description: cam.description || "",
-      campaignType: cam.campaignType || "BILLDISCOUNT",
-      active: cam.active,
-      startDate: startStr,
-      endDate: endStr,
-      budgetMoney: String(cam.budgetMoney || ""),
-      maxUses: String(cam.maxUses || ""),
-      hasCodes: cam.hasCodes ?? false,
-      autoApply: cam.autoApply ?? true,
-      requireStaffNote: cam.requireStaffNote ?? false,
-      stackingMode: cam.stackingMode || "STACKABLE",
-      priority: String(cam.priority || 0),
-      discountThreshold,
-      discountType,
-      discountValue,
-      maxDiscount,
-      fixedPriceValue,
-      includedItemIds: Array.isArray(cam.includedItemIds) ? [...cam.includedItemIds] : [],
-      includedGroupIds: Array.isArray(cam.includedGroupIds) ? [...cam.includedGroupIds] : [],
-      daysOfWeek: Array.isArray(cam.schedule?.daysOfWeek) ? [...cam.schedule.daysOfWeek] : [],
-      timeSlots: Array.isArray(cam.schedule?.timeSlots) ? [...cam.schedule.timeSlots] : []
-    });
+    setCampaignForm(campaignToForm(cam));
+    setVoucherForm(emptyVoucherForm);
     setFormError("");
     setShowCampaignModal(true);
   };
 
   const openAddCampaign = () => {
     setEditingCampaign(null);
-    setCampaignForm({
-      name: "",
-      programCode: "",
-      description: "",
-      campaignType: "BILLDISCOUNT",
-      active: true,
-      startDate: "",
-      endDate: "",
-      budgetMoney: "",
-      maxUses: "",
-      hasCodes: false,
-      autoApply: true,
-      requireStaffNote: false,
-      stackingMode: "STACKABLE",
-      priority: "0",
-      discountThreshold: "",
-      discountType: "PERCENT",
-      discountValue: "",
-      maxDiscount: "",
-      fixedPriceValue: "",
-      includedItemIds: [],
-      includedGroupIds: [],
-      daysOfWeek: [],
-      timeSlots: []
-    });
+    setCampaignForm(emptyCampaignForm());
+    setVoucherForm(emptyVoucherForm);
     setFormError("");
     setShowCampaignModal(true);
   };
@@ -553,6 +441,50 @@ export default function PromotionsPage() {
   const toggleCampaignActive = async (cam: CampaignItem) => {
     await update(ref(db, `stores/${targetStoreCode}/campaigns/${cam.campaignId}`), { active: !cam.active, updatedAt: Date.now() });
   };
+
+  // Ô nhập mã: dán danh sách hoặc sinh ngẫu nhiên (dùng trong form KM và modal thêm mã)
+  const renderVoucherCodeInputs = () => (
+    <div>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+        {([["LIST", "📋 Dán danh sách mã"], ["RANDOM", "⚡ Sinh mã ngẫu nhiên"]] as const).map(([mode, label]) => {
+          const on = voucherForm.mode === mode;
+          return (
+            <button key={mode} type="button" onClick={() => setVoucherForm({ ...voucherForm, mode })}
+              aria-pressed={on}
+              style={{
+                flex: 1, padding: "8px 12px", borderRadius: "8px", fontSize: "13px", cursor: "pointer",
+                border: on ? "2px solid var(--primary)" : "1px solid #ddd",
+                background: on ? "#fdf2f2" : "var(--surface)", color: on ? "var(--primary)" : "var(--subtext)", fontWeight: on ? 700 : 500,
+              }}>{label}</button>
+          );
+        })}
+      </div>
+      {voucherForm.mode === "LIST" ? (
+        <div>
+          <label style={labelStyle} htmlFor="voucher-codes-text">Danh sách mã (mỗi dòng 1 mã, hoặc cách nhau bằng dấu phẩy)</label>
+          <textarea id="voucher-codes-text" value={voucherForm.codesText}
+            onChange={(e) => setVoucherForm({ ...voucherForm, codesText: e.target.value })}
+            rows={6} placeholder={"CHAOBAN20\nGIAM10K\nTRAMVIP"}
+            style={{ ...inputStyle, fontFamily: "monospace", resize: "vertical" }} />
+          {voucherPreview && voucherForm.codesText.trim() && (
+            <div style={{ fontSize: "12px", marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+              <span style={{ color: "#15803d", fontWeight: 600 }}>✔ {voucherPreview.codes.length} mã mới</span>
+              {voucherPreview.duplicateInInput.length > 0 && <span style={{ color: "#a16207" }}>Lặp trong danh sách: {voucherPreview.duplicateInInput.join(", ")}</span>}
+              {voucherPreview.existing.length > 0 && <span style={{ color: "var(--danger)" }}>Đã tồn tại: {voucherPreview.existing.join(", ")}</span>}
+              {voucherPreview.invalid.length > 0 && <span style={{ color: "var(--danger)" }}>Sai định dạng: {voucherPreview.invalid.join(", ")}</span>}
+            </div>
+          )}
+          <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>Mã được chuyển thành chữ in hoa; chỉ gồm chữ không dấu, số, - hoặc _ (3–32 ký tự).</div>
+        </div>
+      ) : (
+        <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <FormField label="Số lượng mã *" value={voucherForm.quantity} onChange={(v) => setVoucherForm({ ...voucherForm, quantity: v })} type="number" />
+          <FormField label="Tiền tố mã (VD: TRAM)" value={voucherForm.prefix} onChange={(v) => setVoucherForm({ ...voucherForm, prefix: v.toUpperCase() })} />
+          <div style={{ gridColumn: "1 / -1", fontSize: "12px", color: "var(--subtext)" }}>Mã được tạo ngẫu nhiên theo định dạng: <b>{normalizeVoucherCode(voucherForm.prefix)}XXXXXX</b></div>
+        </div>
+      )}
+    </div>
+  );
 
   const tabs = [
     { key: "campaigns" as const, label: "Chương trình KM", icon: Tag, count: campaigns.length },
@@ -682,10 +614,7 @@ export default function PromotionsPage() {
                         const cColor = getStatusColor(status);
                         const counters = countersMap[cam.campaignId] || { spentMoney: 0, committedUseCount: 0 };
                         const budgetProgress = cam.budgetMoney ? (counters.spentMoney / cam.budgetMoney) * 100 : 0;
-                        const tier = cam.tiers?.[0];
-                        const isPercent = tier?.benefitMode === "PERCENT" || tier?.benefitType === "DISCOUNT_PERCENT" || tier?.benefitType === "PERCENT";
-                        const tierVal = tier?.value ?? tier?.benefitValue ?? 0;
-                        const displayVal = isPercent ? (tierVal > 100 ? tierVal / 100 : tierVal) : tierVal;
+                        const benefitText = describeCampaignBenefit(cam);
 
                         return (
                           <tr key={cam.campaignId} style={{ borderBottom: "1px solid var(--border-light)" }}>
@@ -708,11 +637,9 @@ export default function PromotionsPage() {
                             </td>
                             <td style={tdStyle}>
                               <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                <span style={badgeStyle("#8b5cf6")}>{typeLabels[cam.campaignType] || cam.campaignType}</span>
-                                {displayVal > 0 && (
-                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--danger)" }}>
-                                    {isPercent ? `Giảm ${displayVal}%` : `Giảm ${formatVND(displayVal)}`}
-                                  </span>
+                                <span style={badgeStyle("#8b5cf6")}>{typeLabels[normalizeCampaignType(cam.campaignType)] || cam.campaignType}</span>
+                                {benefitText && (
+                                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--danger)" }}>{benefitText}</span>
                                 )}
                               </div>
                             </td>
@@ -794,19 +721,40 @@ export default function PromotionsPage() {
 
           {activeTab === "vouchers" && (
             <div>
-              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", alignItems: "center" }}>
-                <select value={selectedVoucherCampaign} onChange={(e) => setSelectedVoucherCampaign(e.target.value)}
-                  style={{ padding: "10px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", flex: 1, fontWeight: "600" }}>
+              {/* Kiểm tra mã nhanh (tra toàn cửa hàng) */}
+              <div style={{ background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "12px", padding: "12px 14px", marginBottom: "16px" }}>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>🔎 Kiểm tra mã</div>
+                <form onSubmit={(e) => { e.preventDefault(); void handleCheckCode(); }} style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <input value={checkCode} onChange={(e) => { setCheckCode(e.target.value.toUpperCase()); setCheckResult(null); }}
+                    placeholder="Nhập mã voucher, VD: TRAM8K2D"
+                    aria-label="Mã voucher cần kiểm tra"
+                    style={{ ...inputStyle, flex: 1, minWidth: "180px", fontFamily: "monospace", letterSpacing: "1px" }} />
+                  <button type="submit" disabled={checking || !checkCode.trim()} style={btnPrimary}>{checking ? "Đang kiểm tra..." : "Kiểm tra"}</button>
+                </form>
+                {checkResult && (
+                  <div role="status" style={{
+                    marginTop: "8px", padding: "8px 12px", borderRadius: "8px", fontSize: "13px", fontWeight: "600",
+                    background: checkResult.ok ? "var(--success-bg)" : "var(--danger-bg)",
+                    color: checkResult.ok ? "#15803d" : "var(--danger)",
+                  }}>
+                    {checkResult.ok ? "✅ " : "⛔ "}{checkResult.message}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "12px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
+                <select value={selectedVoucherCampaign} onChange={(e) => { setSelectedVoucherCampaign(e.target.value); setVoucherSearch(""); }}
+                  style={{ padding: "10px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", flex: 1, minWidth: "220px", fontWeight: "600" }}>
                   <option value="">-- Chọn chương trình khuyến mãi để quản lý mã --</option>
                   {campaigns.map(c => (
                     <option key={c.campaignId} value={c.campaignId}>{c.programCode} - {c.name} {c.hasCodes ? "(Đã có mã)" : ""}</option>
                   ))}
                 </select>
                 <button onClick={() => {
-                  setVoucherForm({ quantity: "10", prefix: "", customCode: "", isCustom: false });
+                  setVoucherForm(emptyVoucherForm);
                   setFormError(""); setShowVoucherModal(true);
                 }} style={btnPrimary} disabled={!selectedVoucherCampaign}>
-                  <Plus size={16} /> Tạo mã voucher
+                  <Plus size={16} /> Thêm mã voucher
                 </button>
               </div>
 
@@ -815,11 +763,11 @@ export default function PromotionsPage() {
                   <div className="grid-2-sm" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "20px" }}>
                     <div style={{ background: "var(--surface-muted)", padding: "16px", borderRadius: "12px", border: "1px solid var(--border)" }}>
                       <div style={{ fontSize: "13px", color: "var(--muted)", fontWeight: "600" }}>Tổng mã</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#0f172a" }}>{voucherStats.total}</div>
+                      <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)" }}>{voucherStats.total}</div>
                     </div>
                     <div style={{ background: "var(--success-bg)", padding: "16px", borderRadius: "12px", border: "1px solid #bbf7d0" }}>
-                      <div style={{ fontSize: "13px", color: "#166534", fontWeight: "600" }}>Đã phát hành</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#15803d" }}>{voucherStats.issued}</div>
+                      <div style={{ fontSize: "13px", color: "#166534", fontWeight: "600" }}>Chưa dùng</div>
+                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#15803d" }}>{voucherStats.unused}</div>
                     </div>
                     <div style={{ background: "var(--warning-bg)", padding: "16px", borderRadius: "12px", border: "1px solid #fef08a" }}>
                       <div style={{ fontSize: "13px", color: "#854d0e", fontWeight: "600" }}>Đã dùng</div>
@@ -831,37 +779,48 @@ export default function PromotionsPage() {
                     </div>
                   </div>
 
+                  <div style={{ position: "relative", marginBottom: "12px" }}>
+                    <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
+                    <input value={voucherSearch} onChange={(e) => setVoucherSearch(e.target.value)}
+                      placeholder="Tìm mã voucher hoặc mã đơn..."
+                      aria-label="Tìm mã voucher"
+                      style={{ width: "100%", padding: "10px 12px 10px 36px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", boxSizing: "border-box" }} />
+                  </div>
+
                   <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "var(--surface-muted)" }}>
-                          {["Mã Voucher", "Trạng thái", "Người dùng", "Ngày dùng", "Thao tác"].map((h) => (
+                          {["Mã Voucher", "Trạng thái", "Đơn hàng", "Bàn", "Nhân viên", "Thời gian dùng", "Thao tác"].map((h) => (
                             <th key={h} style={thStyle}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {vouchers.map(v => (
-                          <tr key={v.voucherId} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                            <td style={tdStyle}><span style={{ fontFamily: "monospace", fontSize: "14px", fontWeight: "700", letterSpacing: "1px", color: "var(--primary)" }}>{v.code}</span></td>
-                            <td style={tdStyle}>
-                              <span style={badgeStyle(v.status === "ISSUED" ? "#10b981" : v.status === "USED" ? "#f59e0b" : "#94a3b8")}>
-                                {v.status === "ISSUED" ? "Đã phát hành" : v.status === "USED" ? "Đã dùng" : "Đã hủy"}
-                              </span>
-                            </td>
-                            <td style={tdStyle}>{v.usedBy || "—"}</td>
-                            <td style={tdStyle}>{v.usedAt ? formatDate(v.usedAt) : "—"}</td>
-                            <td style={tdStyle}>
-                              {v.status === "ISSUED" && (
-                                <button onClick={async () => {
-                                  await update(ref(db, `stores/${targetStoreCode}/vouchers/${selectedVoucherCampaign}/${v.voucherId}`), { status: "CANCELLED" });
-                                }} style={{ padding: "4px 8px", fontSize: "12px", borderRadius: "4px", background: "var(--danger-bg)", color: "#ef4444", border: "none", cursor: "pointer" }}>Hủy</button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                        {vouchers.length === 0 && (
-                          <tr><td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "var(--muted)" }}>Chưa có mã voucher nào.</td></tr>
+                        {visibleVouchers.map(v => {
+                          const used = v.state === "REDEEMED";
+                          return (
+                            <tr key={v.voucherId} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                              <td style={tdStyle}><span style={{ fontFamily: "monospace", fontSize: "14px", fontWeight: "700", letterSpacing: "1px", color: "var(--primary)" }}>{v.code}</span></td>
+                              <td style={tdStyle}>
+                                <span style={badgeStyle(voucherStatusColor(v, nowTs))}>{voucherStatusText(v, nowTs)}</span>
+                                {v.state === "CANCELLED" && v.cancelledAt ? <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{formatDateTime(v.cancelledAt)}</div> : null}
+                              </td>
+                              <td style={tdStyle}>{used ? <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{v.billRef || "—"}</span> : "—"}</td>
+                              <td style={tdStyle}>{used ? (v.tableName || "—") : "—"}</td>
+                              <td style={tdStyle}>{used ? (v.redeemedBy || "—") : "—"}</td>
+                              <td style={tdStyle}>{used ? formatDateTime(v.redeemedAt) : "—"}</td>
+                              <td style={tdStyle}>
+                                {canCancelVoucher(v, nowTs) && (
+                                  <button onClick={() => handleCancelVoucher(v)}
+                                    style={{ padding: "4px 8px", fontSize: "12px", borderRadius: "4px", background: "var(--danger-bg)", color: "#ef4444", border: "none", cursor: "pointer" }}>Hủy mã</button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {visibleVouchers.length === 0 && (
+                          <tr><td colSpan={7} style={{ textAlign: "center", padding: "24px", color: "var(--muted)" }}>{vouchers.length === 0 ? "Chưa có mã voucher nào." : "Không tìm thấy mã phù hợp."}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -885,7 +844,7 @@ export default function PromotionsPage() {
             <FormField label="Mã KM (tự động nếu để trống)" value={campaignForm.programCode} onChange={(v) => setCampaignForm({ ...campaignForm, programCode: v })} disabled={!!editingCampaign} placeholder="VD: KM0001" />
             <div>
               <label style={labelStyle}>Loại KM</label>
-              <select value={campaignForm.campaignType} onChange={(e) => setCampaignForm({ ...campaignForm, campaignType: e.target.value })} style={inputStyle} disabled={!!editingCampaign}>
+              <select value={campaignForm.campaignType} onChange={(e) => setCampaignForm({ ...campaignForm, campaignType: normalizeCampaignType(e.target.value) })} style={inputStyle} disabled={!!editingCampaign}>
                 {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
@@ -894,7 +853,10 @@ export default function PromotionsPage() {
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
               <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "var(--primary)" }}>🎁 Cấu hình Ưu đãi & Giảm giá</div>
               {campaignForm.campaignType === "BILLDISCOUNT" && (
-                <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "var(--surface-muted)", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
+                <div className="grid-stack-sm" style={benefitBox}>
+                  <div style={{ gridColumn: "1 / -1", fontSize: "12px", color: "var(--subtext)" }}>
+                    Áp dụng cho toàn bộ hóa đơn (không cần chọn hàng hóa).
+                  </div>
                   <div>
                     <label style={labelStyle}>Hình thức giảm *</label>
                     <select value={campaignForm.discountType} onChange={(e) => setCampaignForm({ ...campaignForm, discountType: e.target.value as "PERCENT" | "AMOUNT" })} style={inputStyle}>
@@ -907,21 +869,19 @@ export default function PromotionsPage() {
                     value={campaignForm.discountValue}
                     onChange={(v) => setCampaignForm({ ...campaignForm, discountValue: v })}
                     type="number"
-                    placeholder={campaignForm.discountType === "PERCENT" ? "1 - 100" : "VD: 20000"}
+                    placeholder={campaignForm.discountType === "PERCENT" ? "VD: 10 (có thể 2.5)" : "VD: 20000"}
                   />
-                  {campaignForm.discountType === "PERCENT" ? (
-                    <FormField
-                      label="Trần giảm tối đa (VND - để trống nếu không giới hạn)"
-                      value={campaignForm.maxDiscount}
-                      onChange={(v) => setCampaignForm({ ...campaignForm, maxDiscount: v })}
-                      type="number"
-                      placeholder="VD: 50000"
-                    />
-                  ) : <div />}
                   <FormField
-                    label="Ngưỡng đơn hàng tối thiểu (VND - để trống nếu 0đ)"
-                    value={campaignForm.discountThreshold}
-                    onChange={(v) => setCampaignForm({ ...campaignForm, discountThreshold: v })}
+                    label="Giảm tối đa (VND — để trống nếu không giới hạn)"
+                    value={campaignForm.maxDiscount}
+                    onChange={(v) => setCampaignForm({ ...campaignForm, maxDiscount: v })}
+                    type="number"
+                    placeholder="VD: 50000"
+                  />
+                  <FormField
+                    label="Đơn hàng từ (VND — để trống nếu mọi đơn)"
+                    value={campaignForm.threshold}
+                    onChange={(v) => setCampaignForm({ ...campaignForm, threshold: v })}
                     type="number"
                     placeholder="VD: 100000"
                   />
@@ -932,9 +892,54 @@ export default function PromotionsPage() {
                   <FormField label="Giá đồng giá (VND) *" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" placeholder="VD: 25000" />
                 </div>
               )}
+              {campaignForm.campaignType === "ORDERVALUEITEMBENEFIT" && (
+                <div className="grid-stack-sm" style={benefitBox}>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <FormField
+                      label="Áp dụng khi đơn hàng từ (VND) *"
+                      value={campaignForm.threshold}
+                      onChange={(v) => setCampaignForm({ ...campaignForm, threshold: v })}
+                      type="number"
+                      placeholder="VD: 200000"
+                    />
+                  </div>
+                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} title="Món được tặng/giảm giá" />
+                </div>
+              )}
+              {campaignForm.campaignType === "BUYXGETY" && (
+                <div className="grid-stack-sm" style={benefitBox}>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <ItemMultiPicker
+                      label={`🛒 Món mua X (${campaignForm.buyItemIds.length}) *`}
+                      color="#1e40af"
+                      products={products}
+                      selected={campaignForm.buyItemIds}
+                      onChange={(ids) => setCampaignForm(prev => ({ ...prev, buyItemIds: ids }))}
+                      emptyText="Chưa chọn món X"
+                    />
+                  </div>
+                  <FormField label="Số lượng X cần mua *" value={campaignForm.buyQty} onChange={(v) => setCampaignForm({ ...campaignForm, buyQty: v })} type="number" placeholder="VD: 2" />
+                  <div />
+                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} title="Món Y được tặng/giảm giá" />
+                  <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={campaignForm.multiplyByBundle}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, multiplyByBundle: e.target.checked })}
+                      style={{ marginTop: "3px", width: "16px", height: "16px" }} />
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>Áp dụng số món Y tặng theo số món X bán ra</div>
+                      <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                        {campaignForm.multiplyByBundle
+                          ? `Đang tích: cứ mỗi ${campaignForm.buyQty || "?"} X sẽ được ${campaignForm.rewardQty || "?"} Y (mua gấp đôi X → được gấp đôi Y).`
+                          : `Bỏ tích: mua ${campaignForm.buyQty || "?"} hay nhiều X hơn cũng chỉ được tặng/giảm ${campaignForm.rewardQty || "?"} Y trên mỗi hóa đơn.`}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
             </div>
 
-            {/* 2. Phạm vi áp dụng món & nhóm hàng */}
+            {/* 2. Phạm vi áp dụng món & nhóm hàng — chỉ cho Đồng giá (Giảm giá đơn hàng áp dụng toàn bộ hóa đơn) */}
+            {campaignForm.campaignType === "ITEMPRICERULE" && (
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
               <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1e3a8a" }}>📦 Phạm vi áp dụng món / nhóm hàng</div>
               <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>
@@ -988,55 +993,16 @@ export default function PromotionsPage() {
               </div>
 
               {/* Món hàng */}
-              <div style={{ background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                <label style={{ ...labelStyle, color: "#b45309" }}>📦 Món hàng áp dụng ({campaignForm.includedItemIds.length})</label>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
-                  <select
-                    style={{ ...inputStyle, flex: 1 }}
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value && !campaignForm.includedItemIds.includes(String(e.target.value))) {
-                        setCampaignForm(prev => ({ ...prev, includedItemIds: [...prev.includedItemIds, String(e.target.value)] }));
-                      }
-                    }}
-                  >
-                    <option value="">-- Bấm để thêm món áp dụng --</option>
-                    {products.filter(p => !campaignForm.includedItemIds.includes(String(p.id))).map(p => (
-                      <option key={p.id} value={String(p.id)}>{p.name} {p.price ? `(${formatVND(p.price)})` : ""} {p.category ? `• ${p.category}` : ""}</option>
-                    ))}
-                  </select>
-                  {campaignForm.includedItemIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setCampaignForm(prev => ({ ...prev, includedItemIds: [] }))}
-                      style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "6px", background: "var(--surface)", cursor: "pointer", color: "var(--muted)" }}
-                    >
-                      Bỏ chọn tất cả
-                    </button>
-                  )}
-                </div>
-                {campaignForm.includedItemIds.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", maxHeight: "120px", overflowY: "auto" }}>
-                    {campaignForm.includedItemIds.map(id => {
-                      const prod = products.find(p => String(p.id) === String(id));
-                      const name = prod ? prod.name : id;
-                      return (
-                        <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--warning-bg)", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
-                          📦 {name}
-                          <button
-                            type="button"
-                            onClick={() => setCampaignForm(prev => ({ ...prev, includedItemIds: prev.includedItemIds.filter(x => x !== id) }))}
-                            style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}
-                          >×</button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>Tất cả món hàng (mặc định)</div>
-                )}
-              </div>
+              <ItemMultiPicker
+                label={`📦 Món hàng áp dụng (${campaignForm.includedItemIds.length})`}
+                color="#b45309"
+                products={products}
+                selected={campaignForm.includedItemIds}
+                onChange={(ids) => setCampaignForm(prev => ({ ...prev, includedItemIds: ids }))}
+                emptyText="Tất cả món hàng (mặc định)"
+              />
             </div>
+            )}
 
             {/* 3. Lịch trình, Ngày trong tuần & Happy Hours */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
@@ -1251,7 +1217,7 @@ export default function PromotionsPage() {
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: "24px", flexWrap: "wrap" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }}>
                 <input type="checkbox" checked={campaignForm.hasCodes} onChange={(e) => setCampaignForm({ ...campaignForm, hasCodes: e.target.checked })} />
-                Yêu cầu mã Voucher
+                Phát hành mã (khách nhập mã voucher)
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }}>
                 <input type="checkbox" checked={campaignForm.autoApply} onChange={(e) => setCampaignForm({ ...campaignForm, autoApply: e.target.checked })} />
@@ -1263,6 +1229,25 @@ export default function PromotionsPage() {
               </label>
             </div>
             
+            {campaignForm.hasCodes && (
+              <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🎫 Mã voucher của chương trình</div>
+                  {editingCampaign && (
+                    <button type="button" onClick={() => { setShowCampaignModal(false); setSelectedVoucherCampaign(editingCampaign.campaignId); setActiveTab("vouchers"); }}
+                      style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", color: "var(--primary)", fontWeight: 600 }}>
+                      Xem danh sách mã đã phát hành →
+                    </button>
+                  )}
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--subtext)", marginBottom: "8px" }}>
+                  {editingCampaign ? "Thêm mã mới (để trống nếu không thêm). " : "Có thể để trống và thêm mã sau ở tab Mã Voucher. "}
+                  Mã trùng với mã đã có sẽ bị từ chối.
+                </div>
+                {renderVoucherCodeInputs()}
+              </div>
+            )}
+
             <div style={{ gridColumn: "1 / -1" }}>
               <FormField label="Mô tả" value={campaignForm.description} onChange={(v) => setCampaignForm({ ...campaignForm, description: v })} placeholder="Ghi chú nội bộ về chương trình..." />
             </div>
@@ -1277,65 +1262,8 @@ export default function PromotionsPage() {
 
       {/* Generate Vouchers Modal */}
       {showVoucherModal && (
-        <Modal title="Phát hành mã Voucher" onClose={() => setShowVoucherModal(false)}>
-          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", borderBottom: "1px solid #eee", paddingBottom: "12px" }}>
-            <button
-              type="button"
-              onClick={() => setVoucherForm({ ...voucherForm, isCustom: false })}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: !voucherForm.isCustom ? "2px solid var(--primary)" : "1px solid #ddd",
-                background: !voucherForm.isCustom ? "#fdf2f2" : "var(--surface)",
-                color: !voucherForm.isCustom ? "var(--primary)" : "var(--subtext)",
-                fontWeight: !voucherForm.isCustom ? "700" : "500",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              ⚡ Tự động sinh hàng loạt
-            </button>
-            <button
-              type="button"
-              onClick={() => setVoucherForm({ ...voucherForm, isCustom: true })}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: voucherForm.isCustom ? "2px solid var(--primary)" : "1px solid #ddd",
-                background: voucherForm.isCustom ? "#fdf2f2" : "var(--surface)",
-                color: voucherForm.isCustom ? "var(--primary)" : "var(--subtext)",
-                fontWeight: voucherForm.isCustom ? "700" : "500",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              🏷️ Nhập 1 mã cụ thể
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gap: "12px" }}>
-            {voucherForm.isCustom ? (
-              <div>
-                <FormField
-                  label="Mã Voucher cụ thể *"
-                  value={voucherForm.customCode}
-                  onChange={(v) => setVoucherForm({ ...voucherForm, customCode: v.toUpperCase() })}
-                  placeholder="VD: CHAOBAN20, GIAM10K, TRAMVIP"
-                />
-                <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
-                  Mã sẽ được kích hoạt ngay lập tức và áp dụng tại máy POS.
-                </div>
-              </div>
-            ) : (
-              <>
-                <FormField label="Số lượng mã *" value={voucherForm.quantity} onChange={(v) => setVoucherForm({ ...voucherForm, quantity: v })} type="number" />
-                <FormField label="Tiền tố mã (VD: TRAM)" value={voucherForm.prefix} onChange={(v) => setVoucherForm({ ...voucherForm, prefix: v })} />
-                <div style={{ fontSize: "12px", color: "var(--subtext)" }}>Mã sẽ được tạo ngẫu nhiên theo định dạng: <b>{voucherForm.prefix.toUpperCase()}XXXXXX</b></div>
-              </>
-            )}
-          </div>
+        <Modal title="Thêm mã Voucher" onClose={() => setShowVoucherModal(false)}>
+          {renderVoucherCodeInputs()}
           {formError && <div style={{ color: "#ef4444", fontSize: "13px", marginTop: "8px" }}>{formError}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
             <button onClick={() => setShowVoucherModal(false)} style={btnSecondary}>Hủy</button>
@@ -1348,6 +1276,95 @@ export default function PromotionsPage() {
 }
 
 // ==================== UI HELPERS ====================
+/** Chọn nhiều món (select + chip). */
+function ItemMultiPicker({ label, color, products, selected, onChange, emptyText }: {
+  label: string; color: string; products: ProductItem[]; selected: string[];
+  onChange: (ids: string[]) => void; emptyText: string;
+}) {
+  return (
+    <div style={{ background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+      <label style={{ ...labelStyle, color }}>{label}</label>
+      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+        <select
+          style={{ ...inputStyle, flex: 1 }}
+          value=""
+          aria-label={label}
+          onChange={(e) => {
+            const id = String(e.target.value);
+            if (id && !selected.includes(id)) onChange([...selected, id]);
+          }}
+        >
+          <option value="">-- Bấm để thêm món --</option>
+          {products.filter(p => !selected.includes(String(p.id))).map(p => (
+            <option key={p.id} value={String(p.id)}>{p.name} {p.price ? `(${formatVND(p.price)})` : ""} {p.category ? `• ${p.category}` : ""}</option>
+          ))}
+        </select>
+        {selected.length > 0 && (
+          <button type="button" onClick={() => onChange([])}
+            style={{ padding: "6px 12px", fontSize: "12px", border: "1px solid var(--border)", borderRadius: "6px", background: "var(--surface)", cursor: "pointer", color: "var(--muted)" }}>
+            Bỏ chọn tất cả
+          </button>
+        )}
+      </div>
+      {selected.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", maxHeight: "120px", overflowY: "auto" }}>
+          {selected.map(id => {
+            const prod = products.find(p => String(p.id) === String(id));
+            return (
+              <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--warning-bg)", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+                📦 {prod ? prod.name : id}
+                <button type="button" aria-label={`Bỏ ${prod ? prod.name : id}`} onClick={() => onChange(selected.filter(x => x !== id))}
+                  style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}>×</button>
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+/** Món thưởng Y + số lượng + hình thức (tặng / giảm % / giảm tiền) — dùng cho GTĐ và Mua X. */
+function RewardEditor({ form, setForm, products, title }: {
+  form: CampaignFormState;
+  setForm: React.Dispatch<React.SetStateAction<CampaignFormState>>;
+  products: ProductItem[];
+  title: string;
+}) {
+  return (
+    <>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <ItemMultiPicker
+          label={`🎁 ${title} (${form.rewardItemIds.length}) *`}
+          color="#b45309"
+          products={products}
+          selected={form.rewardItemIds}
+          onChange={(ids) => setForm(prev => ({ ...prev, rewardItemIds: ids }))}
+          emptyText="Chưa chọn món"
+        />
+      </div>
+      <FormField label="Số lượng món được tặng/giảm *" value={form.rewardQty} onChange={(v) => setForm(prev => ({ ...prev, rewardQty: v }))} type="number" placeholder="VD: 1" />
+      <div>
+        <label style={labelStyle}>Hình thức ưu đãi *</label>
+        <select value={form.rewardBenefit} onChange={(e) => setForm(prev => ({ ...prev, rewardBenefit: e.target.value as RewardBenefit }))} style={inputStyle}>
+          {(Object.keys(REWARD_BENEFIT_LABELS) as RewardBenefit[]).map(k => <option key={k} value={k}>{REWARD_BENEFIT_LABELS[k]}</option>)}
+        </select>
+      </div>
+      {form.rewardBenefit !== "FREEITEM" && (
+        <FormField
+          label={form.rewardBenefit === "PERCENT" ? "Giảm (%) mỗi món *" : "Giảm (VND) mỗi món *"}
+          value={form.rewardValue}
+          onChange={(v) => setForm(prev => ({ ...prev, rewardValue: v }))}
+          type="number"
+          placeholder={form.rewardBenefit === "PERCENT" ? "VD: 50" : "VD: 10000"}
+        />
+      )}
+    </>
+  );
+}
+
 function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: string }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
@@ -1405,3 +1422,7 @@ const badgeStyle = (color: string): React.CSSProperties => ({
   display: "inline-block", padding: "2px 8px", borderRadius: "6px", fontSize: "11px",
   fontWeight: "700", background: `${color}15`, color: color, whiteSpace: "nowrap",
 });
+const benefitBox: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "var(--surface-muted)",
+  padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3",
+};

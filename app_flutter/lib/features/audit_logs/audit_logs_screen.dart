@@ -113,6 +113,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                               DropdownMenuItem(value: 'MANUAL_DISCOUNT', child: Text('Bớt tiền thủ công')),
                               DropdownMenuItem(value: 'SEND_KITCHEN', child: Text('Gửi bếp')),
                               DropdownMenuItem(value: 'CANCEL_KITCHEN_ITEM', child: Text('Hủy món đã gửi bếp')),
+                              DropdownMenuItem(value: 'DELETE_ITEM', child: Text('Xóa món (có lý do)')),
                               DropdownMenuItem(value: 'MERGE_TABLE', child: Text('Ghép bàn')),
                               DropdownMenuItem(value: 'SPLIT_BILL', child: Text('Tách bill')),
                               DropdownMenuItem(value: 'CHANGE_PERMISSION', child: Text('Phân quyền')),
@@ -215,6 +216,9 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     if (log.isSuspicious || log.action == 'CANCEL_BILL' || log.action == 'CANCEL_KITCHEN_ITEM' || log.action == 'MANUAL_DISCOUNT') {
       badgeColor = context.tc.danger;
       badgeBg = context.tc.dangerLight;
+    } else if (log.action == 'DELETE_ITEM') {
+      badgeColor = context.tc.warning;
+      badgeBg = context.tc.warningLight;
     } else if (log.action == 'APPLY_DISCOUNT' || log.action == 'CHANGE_PERMISSION' || log.action == 'MERGE_TABLE') {
       badgeColor = context.tc.warning;
       badgeBg = context.tc.warningLight;
@@ -224,6 +228,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     }
 
     final hasSnapshot = log.beforeState != null || log.afterState != null;
+    final String? deleteReason = log.action == 'DELETE_ITEM' ? (log.extra?['reason'])?.toString() : null;
 
     return Card(
       child: ExpansionTile(
@@ -244,10 +249,27 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(6)),
               child: Text(
-                log.action,
+                log.action == 'DELETE_ITEM' ? 'XÓA MÓN' : log.action,
                 style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: badgeColor),
               ),
             ),
+            if (deleteReason != null && deleteReason.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 140),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: badgeColor),
+                ),
+                child: Text(
+                  deleteReason,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: badgeColor),
+                ),
+              ),
+            ],
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -291,6 +313,20 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           ),
           const SizedBox(height: 8),
           Text(log.details, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+          if (log.action == 'DELETE_ITEM' && log.extra != null) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                if (log.extra!['tableName'] != null) Text('Bàn: ${log.extra!['tableName']}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                if ((log.extra!['orderCode']?.toString() ?? '').isNotEmpty) Text('Mã đơn: ${log.extra!['orderCode']}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                if (log.extra!['quantity'] != null) Text('SL: ${log.extra!['quantity']}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                if (log.extra!['amount'] is num) Text('Giá trị: ${FormatUtils.vnd((log.extra!['amount'] as num).toInt())}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                if (deleteReason != null) Text('Lý do: $deleteReason', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
 
           // Before and After Snapshot diff
           if (hasSnapshot) ...[

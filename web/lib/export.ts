@@ -21,7 +21,14 @@ import {
   itemLineDiscount,
   formatVND,
   formatNumber,
+  billStatusLabel,
+  billSubTotal,
+  billItemDiscount,
+  billLevelDiscount,
 } from "./reports";
+import { lineUnitPrice, type RawOrderLine } from "./order-math";
+import { billDeletedItems, type DeletionReport } from "./item-deletion";
+import type { CampaignReport } from "./promotion-report";
 
 export interface ReportStoreInfo {
   storeName?: string;
@@ -836,6 +843,91 @@ export function exportCancellationReport(data: CancellationReportResult, storeIn
   };
 }
 
+// 9b. BÁO CÁO XÓA MÓN (lý do bắt buộc)
+export function exportDeletionReport(data: DeletionReport, storeInfo?: ReportStoreInfo, dateText?: string) {
+  const headers = ["Thời gian", "Bàn", "Mã đơn", "Tên món", "Số lượng", "Giá trị xóa (VNĐ)", "Lý do", "Đã gửi bếp", "Nhân viên"];
+  const rows: (string | number)[][] = data.rows.map((r) => [
+    r.timestamp ? format(new Date(r.timestamp), "dd/MM/yyyy HH:mm") : "—",
+    r.tableName || "—",
+    r.billCode || "—",
+    r.name,
+    r.quantity,
+    r.amount,
+    r.reason || "—",
+    r.sentToKitchen ? "Có" : "Không",
+    r.staffFullName || r.staffUsername || "—",
+  ]);
+  rows.push(["TỔNG CỘNG", "—", "—", `${data.entries} lần xóa`, data.quantity, data.amount, "—", "—", "—"]);
+  rows.push([]);
+  rows.push(["TỔNG HỢP THEO LÝ DO", "", "", "Lý do", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
+  data.byReason.forEach((g) => rows.push(["", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
+  rows.push([]);
+  rows.push(["TỔNG HỢP THEO NHÂN VIÊN", "", "", "Nhân viên", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
+  data.byStaff.forEach((g) => rows.push(["", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
+
+  const opts: ExportReportOptions = {
+    reportCode: "BC_XOAMON",
+    reportTitle: "Báo cáo Xóa món",
+    storeName: storeInfo?.storeName,
+    storeAddress: storeInfo?.address,
+    storePhone: storeInfo?.phone,
+    storeCode: storeInfo?.storeCode,
+    dateRangeText: dateText,
+    headers,
+    rows,
+  };
+  return {
+    toExcel: () => exportStandardReportExcel(opts),
+    toPDF: () => printStandardReportPDF(opts),
+  };
+}
+
+// 8b. BÁO CÁO KHUYẾN MÃI THEO CHIẾN DỊCH (2 sheet: tổng hợp + chi tiết hóa đơn)
+export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: ReportStoreInfo, dateText?: string, range?: { start?: Date | string | null; end?: Date | string | null }) {
+  const wb = XLSX.utils.book_new();
+  const head = (title: string): (string | number)[][] => [
+    [(storeInfo?.storeName || "POS TRẠM").toUpperCase()],
+    [title.toUpperCase()],
+    [dateText || `Kỳ báo cáo: ${format(new Date(), "dd/MM/yyyy")}`],
+    [`Ngày giờ xuất: ${format(new Date(), "dd/MM/yyyy HH:mm:ss", { locale: vi })} (UTC+7)`],
+    [],
+  ];
+
+  const summaryHeaders = ["Chương trình", "Mã chương trình", "Loại", "Số hóa đơn", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Mã voucher đã dùng"];
+  const summaryAoa = [
+    ...head("Báo cáo khuyến mãi theo chương trình"),
+    summaryHeaders,
+    ...data.campaigns.map((c) => [c.name, c.code || "—", c.typeLabel, c.billCount, c.totalDiscount, c.revenue, c.vouchersUsed, c.voucherCodes.join(", ")]),
+    ["TỔNG CỘNG", "—", "—", data.billCount, data.totalDiscount, data.revenue, data.vouchersUsed, ""],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryAoa);
+  ws1["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp chương trình");
+
+  const detailHeaders = ["Chương trình", "Mã chương trình", "Mã hóa đơn", "Thời gian", "Bàn", "Mã voucher", "Giảm giá (VNĐ)", "Tổng tiền HĐ (VNĐ)", "Nhân viên"];
+  const detailRows: (string | number)[][] = [];
+  data.campaigns.forEach((c) =>
+    c.bills.forEach((b) =>
+      detailRows.push([
+        c.name,
+        c.code || "—",
+        b.billCode,
+        b.timestamp ? format(new Date(b.timestamp), "dd/MM/yyyy HH:mm") : "—",
+        b.tableName || "—",
+        b.voucherCode || "—",
+        b.discount,
+        b.finalAmount,
+        b.staff || "—",
+      ])
+    )
+  );
+  const ws2 = XLSX.utils.aoa_to_sheet([...head("Chi tiết hóa đơn áp dụng khuyến mãi"), detailHeaders, ...detailRows]);
+  ws2["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết hóa đơn");
+
+  downloadWorkbook(wb, formatReportFileName("BC_KHUYENMAI_CT", storeInfo?.storeCode, range?.start, range?.end, "xlsx"));
+}
+
 // 10. BÁO CÁO BÀN GIAO CA & CHÊNH LỆCH KÉT
 export function exportCashShiftReport(items: CashShiftAuditItem[], storeInfo?: ReportStoreInfo, dateText?: string) {
   const headers = [
@@ -1068,6 +1160,10 @@ export function exportEndOfDayZReport(data: EndOfDayReportData, storeInfo?: Repo
     ["1. TỔNG HỢP", "Số hóa đơn hoàn tất", data.tab1_tongHop.paidBillsCount],
     ["1. TỔNG HỢP", "Tổng số lượt khách", data.tab1_tongHop.totalGuests],
     ["1. TỔNG HỢP", "Giá trị trung bình / đơn", data.tab1_tongHop.avgRevenuePerBill],
+    ["1. TỔNG HỢP", "Số hóa đơn đã hủy (không tính doanh thu)", data.tab1_tongHop.cancelledBillsCount],
+    ["1. TỔNG HỢP", "Giá trị hóa đơn đã hủy", data.tab1_tongHop.cancelledBillsAmount],
+    ["1. TỔNG HỢP", "Số món xóa", data.tab1_tongHop.deletedItemsCount],
+    ["1. TỔNG HỢP", "Tổng tiền xóa món", data.tab1_tongHop.deletedItemsAmount],
 
     ["2. THU CHI", "Doanh số Tiền mặt", data.tab2_thuChi.cashSales],
     ["2. THU CHI", "Doanh số Chuyển khoản QR", data.tab2_thuChi.transferSales],
@@ -1153,9 +1249,12 @@ export function exportHistory(data: HistoryOrder[]) {
       "Mã đặt món": item.orderCode || item.billCode || "",
       "Bàn": item.tableName || "",
       "Khu vực": item.zone || "",
+      "Tạm tính (VNĐ)": billSubTotal(item),
+      "Giảm giá món (VNĐ)": billItemDiscount(item),
+      "Giảm giá đơn (VNĐ)": billLevelDiscount(item),
       "Tổng tiền (VNĐ)": Number(item.totalAmount) || 0,
       "Phương thức TT": item.paymentMethod || "",
-      "Trạng thái": item.status || "PAID",
+      "Trạng thái": billStatusLabel(item.status),
       "Người nhận order": item.orderStaff || item.staffFullName || "—",
       "Người thanh toán": item.cashierName || item.staffFullName || "—",
       "Thời gian tạo": item.createdAt ? format(new Date(createdTs), "dd/MM/yyyy HH:mm", { locale: vi }) : "—",
@@ -1165,8 +1264,8 @@ export function exportHistory(data: HistoryOrder[]) {
   });
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
   wsSummary["!cols"] = [
-    { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 16 },
-    { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }
+    { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+    { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }
   ];
   XLSX.utils.book_append_sheet(wb, wsSummary, "Tổng hợp Hóa đơn");
 
@@ -1179,25 +1278,29 @@ export function exportHistory(data: HistoryOrder[]) {
     const cashier = item.cashierName || item.staffFullName || "—";
     const ts = typeof item.timestamp === "number" ? item.timestamp : new Date(item.timestamp || 0).getTime();
     const billClosedTime = item.timestamp ? format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: vi }) : "—";
+    const statusText = billStatusLabel(item.status);
 
     if (Array.isArray(item.items) && item.items.length > 0) {
       item.items.forEach((it: OrderItem) => {
         const orderTime = it.orderedAt
           ? format(new Date(typeof it.orderedAt === "number" ? it.orderedAt : new Date(it.orderedAt).getTime()), "dd/MM/yyyy HH:mm", { locale: vi })
           : billClosedTime;
-        const unitPrice = Number(it.price) || 0;
+        const unitPrice = lineUnitPrice(it as unknown as RawOrderLine);
         const qty = Number(it.quantity) || 1;
-        const total = unitPrice * qty;
+        const lineDiscount = itemLineDiscount(it);
+        const total = Math.max(0, unitPrice * qty - lineDiscount);
 
         itemRows.push({
           "Mã HĐ": billCode,
           "Mã đặt món": orderCode,
           "Bàn": tableName,
+          "Trạng thái": statusText,
           "Tên món": it.name || "",
-          "Tùy chọn (Size/Đường/Đá)": it.optionsSummary || it.selectedSize ? `Size ${it.selectedSize || ""}` : "Chuẩn",
+          "Tùy chọn (Size/Đường/Đá)": it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn"),
           "Ghi chú": it.note || "",
           "Số lượng": qty,
           "Đơn giá (VNĐ)": unitPrice,
+          "Giảm giá món (VNĐ)": lineDiscount,
           "Thành tiền (VNĐ)": total,
           "Người nhận order món": it.orderedByName || item.orderStaff || "—",
           "Thời gian gọi món": orderTime,
@@ -1210,10 +1313,38 @@ export function exportHistory(data: HistoryOrder[]) {
   if (itemRows.length > 0) {
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
     wsItems["!cols"] = [
-      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
-      { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
+      { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
     ];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món & Người nhận");
+  }
+
+  // 2b. Sheet Món đã xóa khỏi đơn (lý do bắt buộc — hợp đồng chung với Flutter)
+  const deletedRows: Array<Record<string, unknown>> = [];
+  data.forEach((item) => {
+    const billCode = item.billCode || item.orderCode || item.id?.slice(0, 8) || "";
+    billDeletedItems(item).forEach((d) => {
+      deletedRows.push({
+        "Mã HĐ": billCode,
+        "Bàn": item.tableName || "",
+        "Trạng thái HĐ": billStatusLabel(item.status),
+        "Thời gian xóa": d.timestamp ? format(new Date(d.timestamp), "dd/MM/yyyy HH:mm", { locale: vi }) : "—",
+        "Tên món": d.name,
+        "Số lượng": d.quantity,
+        "Đơn giá (VNĐ)": d.unitPrice,
+        "Giá trị xóa (VNĐ)": d.amount,
+        "Lý do": d.reason,
+        "Đã gửi bếp": d.sentToKitchen ? "Có" : "Không",
+        "Nhân viên": d.staffFullName || d.staffUsername || "—",
+      });
+    });
+  });
+  if (deletedRows.length > 0) {
+    const wsDeleted = XLSX.utils.json_to_sheet(deletedRows);
+    wsDeleted["!cols"] = [
+      { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 22 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsDeleted, "Món đã xóa");
   }
 
   // 3. Sheet Lịch sử Thao tác (Action Logs / Timeline)

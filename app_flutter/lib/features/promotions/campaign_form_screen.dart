@@ -8,6 +8,8 @@ import '../../data/models/category_model.dart';
 import '../../data/services/campaign_service.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/services/auth_service.dart';
+import 'voucher_check.dart';
+import 'voucher_management_screen.dart';
 
 class CampaignFormScreen extends StatefulWidget {
   final CampaignModel? campaign;
@@ -60,6 +62,9 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   List<CampaignTier> _tiers = [];
   List<CampaignBuyCondition> _buyConditions = [];
 
+  // Danh sách mã voucher chủ quán tự định nghĩa (khi bật "Phát hành mã")
+  final TextEditingController _codesController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +87,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _autoApply = widget.campaign!.autoApply;
       _hasCodes = widget.campaign!.hasCodes;
       _requireStaffNote = widget.campaign!.requireStaffNote;
-      _stackingMode = widget.campaign!.stackingMode == 'ENABLED';
+      _stackingMode = widget.campaign!.isStackable;
       _active = widget.campaign!.active;
       _tiers = List.from(widget.campaign!.tiers);
       _buyConditions = List.from(widget.campaign!.buyConditions);
@@ -92,7 +97,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _daysOfWeek = List.from(widget.campaign!.schedule.daysOfWeek);
       _timeSlots = List.from(widget.campaign!.schedule.timeSlots);
 
-      if (_tiers.isNotEmpty) {
+      if (_tiers.isNotEmpty && _campaignType == CampaignType.billDiscount) {
         final tier = _tiers.first;
         final isPercent = tier.benefitMode == BenefitMode.percent.toMap() || tier.benefitMode == 'PERCENT';
         _discountType = isPercent ? 'PERCENT' : 'AMOUNT';
@@ -149,11 +154,30 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     _thresholdController.dispose();
     _discountValueController.dispose();
     _maxDiscountController.dispose();
+    _codesController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_campaignType == CampaignType.orderValueItemBenefit &&
+        (_tiers.isEmpty || _tiers.any((t) => t.rewardItemIds.isEmpty))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng thêm ít nhất 1 mức ưu đãi và chọn món được tặng/giảm')));
+      return;
+    }
+    if (_campaignType == CampaignType.buyXGetY &&
+        (_buyConditions.isEmpty || _buyConditions.any((c) => c.buyItemIds.isEmpty || c.rewardItemIds.isEmpty))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng thêm điều kiện: chọn món mua (X) và món được tặng/giảm (Y)')));
+      return;
+    }
+    final parsedCodes = parseVoucherCodes(_codesController.text);
+    if (_hasCodes && parsedCodes.invalid.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Mã không hợp lệ (chỉ dùng A-Z, 0-9, "-", "_", 3-32 ký tự): ${parsedCodes.invalid.join(", ")}')));
+      return;
+    }
 
     try {
       final schedule = CampaignSchedule(
@@ -178,13 +202,21 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             threshold: threshold,
             benefitMode: isPercent ? BenefitMode.percent.toMap() : BenefitMode.fixed.toMap(),
             value: isPercent ? val * 100 : val, // basis points cho %
-            maxDiscountMoney: isPercent ? maxDisc : 0,
+            maxDiscountMoney: maxDisc,
             maxRewardQty: 0,
             rewardItemIds: const [],
             sortOrder: 1,
           )
         ];
+      } else if (_campaignType == CampaignType.buyXGetY) {
+        finalTiers = [];
+      } else if (_campaignType == CampaignType.orderValueItemBenefit) {
+        finalTiers = [
+          for (int i = 0; i < _tiers.length; i++) _tiers[i].copyWith(sortOrder: i + 1),
+        ];
       }
+      // Giảm giá đơn hàng / theo giá trị hóa đơn: áp dụng toàn bộ hóa đơn (không chọn món/nhóm)
+      final scoped = _campaignType == CampaignType.itemPriceRule;
 
       final model = CampaignModel(
         campaignId: widget.campaign?.campaignId ?? _campaignService.generateCampaignId(),
@@ -196,17 +228,17 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         branchIds: widget.campaign?.branchIds ?? [],
         includedCustomerIds: widget.campaign?.includedCustomerIds ?? [],
         excludedCustomerIds: widget.campaign?.excludedCustomerIds ?? [],
-        includedItemIds: _includedItemIds,
-        includedGroupIds: _includedGroupIds,
+        includedItemIds: scoped ? _includedItemIds : const [],
+        includedGroupIds: scoped ? _includedGroupIds : const [],
         excludedItemIds: widget.campaign?.excludedItemIds ?? [],
         tiers: finalTiers,
-        buyConditions: _buyConditions,
+        buyConditions: _campaignType == CampaignType.buyXGetY ? _buyConditions : const [],
         budgetMoney: int.tryParse(_budgetController.text),
         maxUses: int.tryParse(_maxUsesController.text),
         maxUsesPerCustomer: int.tryParse(_maxUsesPerCustomerController.text),
         warnRepeatedCustomer: false,
         hasCodes: _hasCodes,
-        autoApply: _autoApply,
+        autoApply: _hasCodes ? false : _autoApply,
         requireStaffNote: _requireStaffNote,
         stackingMode: _stackingMode ? 'ENABLED' : 'DISABLED',
         priority: int.tryParse(_priorityController.text) ?? 1,
@@ -219,8 +251,15 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
 
       await _campaignService.saveCampaign(model);
 
+      String codeMsg = '';
+      if (_hasCodes && parsedCodes.valid.isNotEmpty) {
+        final r = await _campaignService.createVouchers(model.campaignId, parsedCodes.valid, autoRelease: true);
+        codeMsg = ' Đã tạo ${r.created.length} mã.';
+        if (r.existing.isNotEmpty) codeMsg += ' Bỏ qua ${r.existing.length} mã đã tồn tại: ${r.existing.take(10).join(", ")}';
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lưu thành công!')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lưu thành công!$codeMsg')));
         Navigator.pop(context);
       }
     } catch (e) {
@@ -278,9 +317,12 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     );
   }
 
-  void _showProductSelector() {
+  void _showProductSelector() => _pickProducts('Chọn món hàng áp dụng', _includedItemIds, () => setState(() {}));
+
+  /// Hộp chọn nhiều món, cập nhật trực tiếp [selected]
+  Future<void> _pickProducts(String title, List<String> selected, VoidCallback onChanged) {
     String searchKeyword = '';
-    showDialog(
+    return showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -290,7 +332,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             }).toList();
 
             return AlertDialog(
-              title: const Text('Chọn món hàng áp dụng'),
+              title: Text(title),
               content: SizedBox(
                 width: 400,
                 height: 450,
@@ -317,7 +359,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                               itemCount: filteredProds.length,
                               itemBuilder: (context, i) {
                                 final p = filteredProds[i];
-                                final isChecked = _includedItemIds.contains(p.id.toString());
+                                final isChecked = selected.contains(p.id.toString());
                                 return CheckboxListTile(
                                   title: Text(p.name),
                                   subtitle: Text('${FormatUtils.vnd(p.price)} • ${p.category}'),
@@ -325,12 +367,12 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                                   onChanged: (val) {
                                     setDlgState(() {
                                       if (val == true) {
-                                        _includedItemIds.add(p.id.toString());
+                                        selected.add(p.id.toString());
                                       } else {
-                                        _includedItemIds.remove(p.id.toString());
+                                        selected.remove(p.id.toString());
                                       }
                                     });
-                                    setState(() {});
+                                    onChanged();
                                   },
                                 );
                               },
@@ -432,14 +474,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   activeColor: context.tc.primary,
                 ),
                 RadioListTile<CampaignType>(
-                  title: const Text('Tặng món theo GTĐ'),
-                  subtitle: const Text('Tặng món khi hóa đơn đạt ngưỡng'),
+                  title: const Text('Giảm/tặng món theo giá trị hóa đơn'),
+                  subtitle: const Text('Tặng hoặc giảm giá món khi hóa đơn đạt ngưỡng'),
                   value: CampaignType.orderValueItemBenefit,
                   activeColor: context.tc.primary,
                 ),
                 RadioListTile<CampaignType>(
-                  title: const Text('Mua X tặng Y'),
-                  subtitle: const Text('Mua đủ số lượng sẽ được tặng món'),
+                  title: const Text('Mua X tặng/giảm giá Y'),
+                  subtitle: const Text('Mua đủ số lượng món X được tặng hoặc giảm giá món Y'),
                   value: CampaignType.buyXGetY,
                   activeColor: context.tc.primary,
                 ),
@@ -456,6 +498,11 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               const SizedBox(height: 16),
               _buildSectionTitle('Cấu hình mức giảm giá'),
               _buildCard([
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Áp dụng cho toàn bộ hóa đơn (không cần chọn món).',
+                      style: TextStyle(fontSize: 12, color: context.tc.textHint, fontStyle: FontStyle.italic)),
+                ),
                 RadioGroup<String>(
                   groupValue: _discountType,
                   onChanged: (v) => setState(() => _discountType = v!),
@@ -501,7 +548,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   TextFormField(
                     controller: _maxDiscountController,
                     decoration: const InputDecoration(
-                      labelText: 'Trần tiền giảm tối đa (VND)',
+                      labelText: 'Giảm tối đa (VND)',
                       hintText: 'Bỏ trống = Không giới hạn',
                       suffixText: 'đ',
                       border: OutlineInputBorder(),
@@ -513,8 +560,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 TextFormField(
                   controller: _thresholdController,
                   decoration: const InputDecoration(
-                    labelText: 'Ngưỡng giá trị đơn tối thiểu (VND)',
-                    hintText: 'Bỏ trống = Không yêu cầu đơn tối thiểu',
+                    labelText: 'Đơn hàng từ (VND)',
+                    hintText: 'Bỏ trống = Áp dụng mọi hóa đơn',
                     suffixText: 'đ',
                     border: OutlineInputBorder(),
                   ),
@@ -523,6 +570,19 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               ]),
             ],
 
+            if (_campaignType == CampaignType.orderValueItemBenefit) ...[
+              const SizedBox(height: 16),
+              _buildSectionTitle('Mức ưu đãi theo giá trị hóa đơn'),
+              _buildOrderValueTiers(),
+            ],
+
+            if (_campaignType == CampaignType.buyXGetY) ...[
+              const SizedBox(height: 16),
+              _buildSectionTitle('Điều kiện Mua X tặng/giảm giá Y'),
+              _buildBuyConditions(),
+            ],
+
+            if (_campaignType == CampaignType.itemPriceRule) ...[
             const SizedBox(height: 16),
             _buildSectionTitle('Phạm vi áp dụng (Nhóm & Món)'),
             _buildCard([
@@ -588,6 +648,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   }).toList(),
                 ),
             ]),
+            ],
 
             const SizedBox(height: 16),
             _buildSectionTitle('Khung giờ & Ngày áp dụng'),
@@ -741,14 +802,18 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 title: const Text('Có phát hành mã (Voucher)'),
                 subtitle: const Text('Khách cần nhập mã để được áp dụng'),
                 value: _hasCodes,
-                onChanged: (val) => setState(() => _hasCodes = val),
+                onChanged: (val) => setState(() {
+                  _hasCodes = val;
+                  if (val) _autoApply = false;
+                }),
                 activeThumbColor: context.tc.primary,
               ),
+              if (_hasCodes) _buildCodesEditor(),
               SwitchListTile(
                 title: const Text('Tự động áp dụng'),
-                subtitle: const Text('Tự động tính giảm giá cho bill hợp lệ'),
-                value: _autoApply,
-                onChanged: (val) => setState(() => _autoApply = val),
+                subtitle: Text(_hasCodes ? 'Không áp dụng khi chương trình dùng mã' : 'Tự động tính giảm giá cho bill hợp lệ'),
+                value: _hasCodes ? false : _autoApply,
+                onChanged: _hasCodes ? null : (val) => setState(() => _autoApply = val),
                 activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
@@ -789,6 +854,386 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         ),
       ),
     );
+  }
+
+  // ==================== MÃ VOUCHER ====================
+
+  Widget _buildCodesEditor() {
+    final parsed = parseVoucherCodes(_codesController.text);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _codesController,
+            minLines: 3,
+            maxLines: 8,
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: widget.campaign == null ? 'Danh sách mã' : 'Thêm mã mới',
+              hintText: 'Mỗi dòng 1 mã hoặc cách nhau bởi dấu phẩy\nVD: TRAM10K, CHAOBAN20',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${parsed.valid.length} mã hợp lệ'
+            '${parsed.duplicated.isNotEmpty ? " • trùng: ${parsed.duplicated.join(", ")}" : ""}'
+            '${parsed.invalid.isNotEmpty ? " • KHÔNG hợp lệ: ${parsed.invalid.join(", ")}" : ""}',
+            style: TextStyle(fontSize: 12, color: parsed.invalid.isNotEmpty ? Colors.red : context.tc.textHint),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                onPressed: _showRandomCodesDialog,
+                icon: const Icon(Icons.casino_outlined, size: 16),
+                label: const Text('Tạo mã ngẫu nhiên'),
+              ),
+              if (widget.campaign != null)
+                TextButton.icon(
+                  onPressed: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => VoucherManagementScreen(campaign: widget.campaign!))),
+                  icon: const Icon(Icons.list_alt, size: 16),
+                  label: const Text('Xem danh sách mã đã tạo'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRandomCodesDialog() async {
+    final qtyCtrl = TextEditingController(text: '10');
+    final prefixCtrl = TextEditingController();
+    final lenCtrl = TextEditingController(text: '6');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tạo mã ngẫu nhiên'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Số lượng mã (1-1000)')),
+            TextField(controller: prefixCtrl, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Tiền tố (VD: TRAM)')),
+            TextField(controller: lenCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Độ dài phần ngẫu nhiên (4-12)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Tạo')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final qty = (int.tryParse(qtyCtrl.text.trim()) ?? 0).clamp(1, 1000);
+    final len = (int.tryParse(lenCtrl.text.trim()) ?? 6).clamp(4, 12);
+    final codes = generateRandomVoucherCodes(qty, prefix: prefixCtrl.text, length: len);
+    setState(() {
+      final cur = _codesController.text.trim();
+      _codesController.text = [if (cur.isNotEmpty) cur, ...codes].join('\n');
+    });
+  }
+
+  // ==================== CẤU HÌNH ƯU ĐÃI MÓN ====================
+
+  static const _benefitModes = {
+    'FREEITEM': 'Tặng (100%)',
+    'PERCENT': 'Giảm %',
+    'FIXED': 'Giảm số tiền',
+  };
+
+  String _modeKey(String mode) {
+    final u = mode.toUpperCase().replaceAll('_', '');
+    if (u == 'FREEITEM' || u == 'FREE' || u == 'GIFT') return 'FREEITEM';
+    if (u == 'PERCENT' || u == 'DISCOUNTPERCENT') return 'PERCENT';
+    return 'FIXED';
+  }
+
+  String _benefitText(String mode, int value) {
+    switch (_modeKey(mode)) {
+      case 'FREEITEM':
+        return 'Tặng';
+      case 'PERCENT':
+        return 'Giảm ${value ~/ 100}%';
+      default:
+        return 'Giảm ${FormatUtils.vnd(value)}';
+    }
+  }
+
+  String _productNames(List<String> ids) {
+    if (ids.isEmpty) return '(chưa chọn)';
+    return ids.map((id) => _allProducts.where((p) => p.id.toString() == id).firstOrNull?.name ?? 'Món #$id').join(', ');
+  }
+
+  /// Ô nhập + chọn cách tính ưu đãi dùng chung cho 2 loại
+  List<Widget> _benefitInputs(
+    String mode,
+    TextEditingController valueCtrl,
+    void Function(String) onMode,
+  ) {
+    return [
+      DropdownButtonFormField<String>(
+        initialValue: _modeKey(mode),
+        decoration: const InputDecoration(labelText: 'Ưu đãi cho món', border: OutlineInputBorder()),
+        items: _benefitModes.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+        onChanged: (v) => onMode(v ?? 'FREEITEM'),
+      ),
+      if (_modeKey(mode) != 'FREEITEM') ...[
+        const SizedBox(height: 8),
+        TextField(
+          controller: valueCtrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: _modeKey(mode) == 'PERCENT' ? 'Giảm (%) mỗi món' : 'Giảm số tiền mỗi món (VND)',
+            suffixText: _modeKey(mode) == 'PERCENT' ? '%' : 'đ',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  int _valueFromInput(String mode, String text) {
+    final n = int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    switch (_modeKey(mode)) {
+      case 'FREEITEM':
+        return 0;
+      case 'PERCENT':
+        return n.clamp(0, 100) * 100; // basis points
+      default:
+        return n;
+    }
+  }
+
+  String _valueToInput(String mode, int value) {
+    if (_modeKey(mode) == 'PERCENT') return value > 0 ? '${value ~/ 100}' : '';
+    if (_modeKey(mode) == 'FIXED') return value > 0 ? '$value' : '';
+    return '';
+  }
+
+  Widget _buildOrderValueTiers() {
+    return _buildCard([
+      if (_tiers.isEmpty)
+        Text('Chưa có mức ưu đãi nào', style: TextStyle(color: context.tc.textHint, fontStyle: FontStyle.italic)),
+      ..._tiers.asMap().entries.map((e) {
+        final t = e.value;
+        final qty = t.maxRewardQty > 0 ? t.maxRewardQty : 1;
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.card_giftcard),
+          title: Text('Đơn hàng từ ${FormatUtils.vnd(t.threshold)}'),
+          subtitle: Text('${_benefitText(t.benefitMode, t.value)} tối đa $qty món: ${_productNames(t.rewardItemIds)}'),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editTier(e.key)),
+            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => setState(() => _tiers.removeAt(e.key))),
+          ]),
+        );
+      }),
+      TextButton.icon(onPressed: () => _editTier(null), icon: const Icon(Icons.add), label: const Text('Thêm mức ưu đãi')),
+      Text('Món được tặng/giảm phải có trong hóa đơn (nhân viên thêm món vào đơn). Đơn đạt nhiều mức sẽ lấy mức cao nhất.',
+          style: TextStyle(fontSize: 12, color: context.tc.textHint)),
+    ]);
+  }
+
+  Future<void> _editTier(int? index) async {
+    final old = index != null ? _tiers[index] : null;
+    final thresholdCtrl = TextEditingController(text: old != null && old.threshold > 0 ? '${old.threshold}' : '');
+    String mode = old?.benefitMode ?? 'FREEITEM';
+    final valueCtrl = TextEditingController(text: old != null ? _valueToInput(old.benefitMode, old.value) : '');
+    final qtyCtrl = TextEditingController(text: '${old != null && old.maxRewardQty > 0 ? old.maxRewardQty : 1}');
+    final rewardIds = List<String>.from(old?.rewardItemIds ?? const []);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Text('Mức ưu đãi'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: thresholdCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Áp dụng khi đơn hàng từ', suffixText: 'đ', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                ..._benefitInputs(mode, valueCtrl, (m) => setDlg(() => mode = m)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Số lượng món tối đa được tặng/giảm', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Món được tặng/giảm'),
+                  subtitle: Text(_productNames(rewardIds)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickProducts('Chọn món được tặng/giảm', rewardIds, () => setDlg(() {})),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            ElevatedButton(
+              onPressed: () {
+                if (rewardIds.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn món được tặng/giảm')));
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final tier = CampaignTier(
+      tierId: old?.tierId ?? 'TIER_${DateTime.now().millisecondsSinceEpoch}',
+      conditionBasis: ConditionBasis.totalAmount.toMap(),
+      threshold: int.tryParse(thresholdCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+      benefitMode: _modeKey(mode),
+      value: _valueFromInput(mode, valueCtrl.text),
+      maxDiscountMoney: 0,
+      maxRewardQty: (int.tryParse(qtyCtrl.text.trim()) ?? 1).clamp(1, 999),
+      rewardItemIds: rewardIds,
+      sortOrder: (index ?? _tiers.length) + 1,
+    );
+    setState(() {
+      if (index != null) {
+        _tiers[index] = tier;
+      } else {
+        _tiers.add(tier);
+      }
+    });
+  }
+
+  Widget _buildBuyConditions() {
+    return _buildCard([
+      if (_buyConditions.isEmpty)
+        Text('Chưa có điều kiện nào', style: TextStyle(color: context.tc.textHint, fontStyle: FontStyle.italic)),
+      ..._buyConditions.asMap().entries.map((e) {
+        final c = e.value;
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.shopping_basket_outlined),
+          title: Text('Mua ${c.requiredBuyQty}: ${_productNames(c.buyItemIds)}'),
+          subtitle: Text('${_benefitText(c.benefitMode, c.value)} ${c.rewardQty}: ${_productNames(c.rewardItemIds)}'
+              '${c.multiplyByBundle ? "\n(Nhân theo số món X bán ra)" : ""}'),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editCondition(e.key)),
+            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => setState(() => _buyConditions.removeAt(e.key))),
+          ]),
+        );
+      }),
+      TextButton.icon(onPressed: () => _editCondition(null), icon: const Icon(Icons.add), label: const Text('Thêm điều kiện')),
+      Text('Món Y phải có trong hóa đơn; ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
+    ]);
+  }
+
+  Future<void> _editCondition(int? index) async {
+    final old = index != null ? _buyConditions[index] : null;
+    final buyIds = List<String>.from(old?.buyItemIds ?? const []);
+    final rewardIds = List<String>.from(old?.rewardItemIds ?? const []);
+    final buyQtyCtrl = TextEditingController(text: '${old != null && old.requiredBuyQty > 0 ? old.requiredBuyQty : 1}');
+    final rewardQtyCtrl = TextEditingController(text: '${old != null && old.rewardQty > 0 ? old.rewardQty : 1}');
+    // Điều kiện cũ có thể lưu PERCENT/0 mặc định -> hiển thị là Tặng
+    String mode = old == null || (_modeKey(old.benefitMode) != 'FREEITEM' && old.value <= 0) ? 'FREEITEM' : old.benefitMode;
+    final valueCtrl = TextEditingController(text: old != null ? _valueToInput(old.benefitMode, old.value) : '');
+    bool multiply = old?.multiplyByBundle ?? true;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: const Text('Điều kiện Mua X tặng/giảm giá Y'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Hàng mua (X)'),
+                  subtitle: Text(_productNames(buyIds)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickProducts('Chọn hàng mua (X)', buyIds, () => setDlg(() {})),
+                ),
+                TextField(
+                  controller: buyQtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Số lượng X cần mua', border: OutlineInputBorder()),
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Hàng được tặng/giảm giá (Y)'),
+                  subtitle: Text(_productNames(rewardIds)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickProducts('Chọn hàng được tặng/giảm (Y)', rewardIds, () => setDlg(() {})),
+                ),
+                TextField(
+                  controller: rewardQtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Số lượng Y được tặng/giảm', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                ..._benefitInputs(mode, valueCtrl, (m) => setDlg(() => mode = m)),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: multiply,
+                  onChanged: (v) => setDlg(() => multiply = v ?? false),
+                  title: const Text('Áp dụng số món Y tặng theo số món X bán ra'),
+                  subtitle: Text(multiply
+                      ? 'VD: mua 1 tặng 1, bán 5 X → 5 Y được ưu đãi'
+                      : 'Mua bao nhiêu X cũng chỉ ưu đãi đúng số lượng Y đã nhập (1 lần)'),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            ElevatedButton(
+              onPressed: () {
+                if (buyIds.isEmpty || rewardIds.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn hàng mua (X) và hàng tặng/giảm (Y)')));
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final cond = CampaignBuyCondition(
+      conditionId: old?.conditionId ?? 'BC_${DateTime.now().millisecondsSinceEpoch}',
+      buyItemIds: buyIds,
+      requiredBuyQty: (int.tryParse(buyQtyCtrl.text.trim()) ?? 1).clamp(1, 999),
+      rewardItemIds: rewardIds,
+      rewardQty: (int.tryParse(rewardQtyCtrl.text.trim()) ?? 1).clamp(1, 999),
+      benefitMode: _modeKey(mode),
+      value: _valueFromInput(mode, valueCtrl.text),
+      multiplyByBundle: multiply,
+    );
+    setState(() {
+      if (index != null) {
+        _buyConditions[index] = cond;
+      } else {
+        _buyConditions.add(cond);
+      }
+    });
   }
 
   Widget _buildSectionTitle(String title) {

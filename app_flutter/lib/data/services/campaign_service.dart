@@ -164,15 +164,28 @@ class CampaignService {
     });
   }
 
-  /// Tạo danh sách voucher - mặc định tự động RELEASED để sử dụng được ngay
-  Future<void> createVouchers(String campaignId, List<String> codes, {bool autoRelease = true}) async {
+  /// Tạo danh sách voucher - mặc định tự động RELEASED để sử dụng được ngay.
+  /// Bỏ qua mã đã tồn tại (ở bất kỳ chương trình nào) hoặc trùng trong danh sách.
+  Future<VoucherCreateResult> createVouchers(String campaignId, List<String> codes, {bool autoRelease = true}) async {
     final Map<String, dynamic> updates = {};
     final now = DateTime.now().millisecondsSinceEpoch;
-    
+    final created = <String>[];
+    final existing = <String>[];
+
+    // Đọc 1 lần toàn bộ bảng tra cứu để phát hiện mã đã tồn tại
+    final lookupSnap = await _storeRef.child('voucher_lookup').get();
+    final taken = lookupSnap.value is Map ? (lookupSnap.value as Map).keys.map((k) => k.toString()).toSet() : <String>{};
+
+    int seq = 0;
     for (String code in codes) {
       final normalized = code.trim().toUpperCase();
-      if (normalized.isEmpty) continue;
-      final voucherId = generateVoucherId();
+      if (normalized.isEmpty || created.contains(normalized) || existing.contains(normalized)) continue;
+      if (taken.contains(normalized)) {
+        existing.add(normalized);
+        continue;
+      }
+      final voucherId = '${generateVoucherId()}_${seq++}';
+      created.add(normalized);
       
       final voucher = VoucherModel(
         voucherId: voucherId,
@@ -197,6 +210,7 @@ class CampaignService {
       updates['campaigns/$campaignId/updatedAt'] = now;
       await _storeRef.update(updates);
     }
+    return VoucherCreateResult(created, existing);
   }
 
   /// Phát hành danh sách voucher
@@ -220,6 +234,7 @@ class CampaignService {
     await _storeRef.child('vouchers/$campaignId/$voucherId').update({
       'state': VoucherState.cancelled.toMap(),
       'cancelledAt': now,
+      'status': 'CANCELLED',
     });
   }
 
@@ -245,6 +260,9 @@ class CampaignService {
   TransactionHandler _redeemVoucherHandler({
     required String billId,
     required String username,
+    String? billCode,
+    String? tableName,
+    String? staffName,
     String? staffNote,
     required void Function(String reason) onReject,
   }) {
@@ -276,7 +294,13 @@ class CampaignService {
       m['state'] = VoucherState.redeemed.toMap();
       m['redeemedAt'] = now;
       m['redeemedBillId'] = billId;
+      m['redeemedBillCode'] = (billCode != null && billCode.isNotEmpty) ? billCode : billId;
       m['redeemedBy'] = username;
+      m['usedBy'] = username;
+      m['usedAt'] = now;
+      m['status'] = 'USED';
+      if (staffName != null && staffName.isNotEmpty) m['redeemedByName'] = staffName;
+      if (tableName != null && tableName.isNotEmpty) m['tableName'] = tableName;
       m['holdId'] = null;
       m['holdExpiresAt'] = null;
       m['version'] = ((m['version'] as num?)?.toInt() ?? 0) + 1;
@@ -429,6 +453,9 @@ class CampaignService {
     String? staffNote,
     required String billId,
     required String username,
+    String? billCode,
+    String? tableName,
+    String? staffName,
     String? storeCode,
     Duration timeout = const Duration(seconds: 4),
     void Function(String message)? onLateFailure,
@@ -477,7 +504,15 @@ class CampaignService {
         String? reason;
         final ok = await _runTxn(
           store.child('vouchers/${r.voucherCampaignId}/${r.voucherId}'),
-          _redeemVoucherHandler(billId: billId, username: username, staffNote: staffNote, onReject: (x) => reason = x),
+          _redeemVoucherHandler(
+            billId: billId,
+            username: username,
+            billCode: billCode,
+            tableName: tableName,
+            staffName: staffName,
+            staffNote: staffNote,
+            onReject: (x) => reason = x,
+          ),
           timeout: timeout,
           offline: offline,
           label: 'Đổi voucher ${r.voucherCode} (HĐ $billId)',
@@ -599,7 +634,13 @@ class CampaignService {
           m['state'] = VoucherState.released.toMap();
           m['redeemedAt'] = null;
           m['redeemedBillId'] = null;
+          m['redeemedBillCode'] = null;
           m['redeemedBy'] = null;
+          m['redeemedByName'] = null;
+          m['tableName'] = null;
+          m['usedBy'] = null;
+          m['usedAt'] = null;
+          m['status'] = 'ISSUED';
           m['version'] = ((m['version'] as num?)?.toInt() ?? 0) + 1;
           return Transaction.success(m);
         });
@@ -640,6 +681,13 @@ class CampaignService {
     }
     return result;
   }
+}
+
+/// Kết quả tạo mã voucher hàng loạt
+class VoucherCreateResult {
+  final List<String> created;
+  final List<String> existing; // mã đã tồn tại, bị bỏ qua
+  const VoucherCreateResult(this.created, this.existing);
 }
 
 /// Kết quả giữ lượt dùng khuyến mãi cho 1 hóa đơn (dùng để hoàn tác nếu ghi hóa đơn lỗi)

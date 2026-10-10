@@ -662,13 +662,20 @@ export default function EndOfDayReportPage() {
                 }}
               >
                 <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--subtext)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>
-                  HÓA ĐƠN ĐÃ HỦY (KIỂM TOÁN THẤT THOÁT)
+                  HỦY ĐƠN & XÓA MÓN (KIỂM TOÁN THẤT THOÁT)
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   <ReportRow label="Số lượng đơn hủy" value={`${cancellationReport.cancelledBillsCount} đơn`} />
                   <ReportRow
-                    label="Giá trị thất thoát"
+                    label="Giá trị đơn hủy"
                     value={formatVND(cancellationReport.totalLossValue)}
+                    valueColor="#C93B2B"
+                    isBold
+                  />
+                  <ReportRow label="Số món xóa" value={`${zReport.tab1_tongHop.deletedItemsCount} món`} />
+                  <ReportRow
+                    label="Tổng tiền xóa món"
+                    value={formatVND(zReport.tab1_tongHop.deletedItemsAmount)}
                     valueColor="#C93B2B"
                     isBold
                   />

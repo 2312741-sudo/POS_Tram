@@ -244,7 +244,8 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     pathname.startsWith("/dashboard/end-of-day") ||
     pathname.startsWith("/dashboard/shifts") ||
     pathname.startsWith("/dashboard/customers") ||
-    pathname.startsWith("/dashboard/product-sales")
+    pathname.startsWith("/dashboard/product-sales") ||
+    pathname.startsWith("/dashboard/reports/promotions")
   ) {
     return hasPermission(user, "VIEW_REPORTS");
   }

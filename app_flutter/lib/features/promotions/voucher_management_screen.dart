@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/campaign_service.dart';
+import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../manager/widgets/bill_detail_sheet.dart';
+import 'voucher_check.dart';
 
 class VoucherManagementScreen extends StatefulWidget {
   final CampaignModel campaign;
@@ -109,7 +111,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
             child: ElevatedButton.icon(
               onPressed: draftCount > 0 ? () => _releaseAll(vouchers) : null,
               icon: const Icon(Icons.send),
-              label: Text('Phát hành (${draftCount})'),
+              label: Text('Phát hành ($draftCount)'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
@@ -236,8 +238,13 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
             v.normalizedCode,
             style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          subtitle: v.state == VoucherState.redeemed.toMap() && v.redeemedAt != null
-              ? Text('Dùng bởi ${v.redeemedBy ?? "?"} lúc ${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.redeemedAt!))}\\nBill: ${v.redeemedBillId}')
+          onTap: v.state == VoucherState.redeemed.toMap() && v.redeemedBillId != null ? () => _openBill(v) : null,
+          subtitle: v.state == VoucherState.redeemed.toMap()
+              ? Text(
+                  'Đơn ${v.redeemedBillCode ?? v.redeemedBillId ?? "?"}${(v.tableName ?? "").isNotEmpty ? " • ${v.tableName}" : ""}\n'
+                  'Lúc ${v.redeemedAt != null ? DateFormat("dd/MM/yyyy HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.redeemedAt!)) : "?"}'
+                  ' • NV: ${v.redeemedByName ?? v.redeemedBy ?? "?"}',
+                )
               : Text('Tạo lúc ${DateFormat("dd/MM HH:mm").format(DateTime.fromMillisecondsSinceEpoch(v.createdAt))}'),
           trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: (stateColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: stateColor)), child: Text(stateText, style: TextStyle(color: stateColor, fontSize: 12, fontWeight: FontWeight.bold))),
         ),
@@ -245,11 +252,21 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
     );
   }
 
+  /// Mở chi tiết hóa đơn đã dùng mã
+  Future<void> _openBill(VoucherModel v) async {
+    final bill = await FirebaseService().getBill(v.redeemedBillId!);
+    if (!mounted) return;
+    if (bill == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không tìm thấy hóa đơn ${v.redeemedBillCode ?? v.redeemedBillId}')));
+      return;
+    }
+    await BillDetailSheet.show(context, bill);
+  }
+
   Future<void> _releaseAll(List<VoucherModel> vouchers) async {
     try {
-      // Gọi service logic
-      // ignore: unused_local_variable
-      final count = await _campaignService.releaseVouchers(widget.campaign.campaignId, vouchers.where((v) => v.state == VoucherState.draft.toMap()).map((v) => v.voucherId).toList());
+      await _campaignService.releaseVouchers(widget.campaign.campaignId, vouchers.where((v) => v.state == VoucherState.draft.toMap()).map((v) => v.voucherId).toList());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã phát hành tất cả mã draft')));
       }
@@ -262,7 +279,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
 
   void _showGenerateDialog() {
     bool isCustom = false;
-    String customCode = '';
+    String customCodes = '';
     int qty = 10;
     String prefix = '';
     int length = 6;
@@ -296,7 +313,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: ChoiceChip(
-                              label: const Text('Mã cụ thể'),
+                              label: const Text('Tự nhập mã'),
                               selected: isCustom,
                               onSelected: (val) {
                                 if (val) setDialogState(() => isCustom = true);
@@ -309,21 +326,27 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                       const SizedBox(height: 16),
                       if (isCustom) ...[
                         TextFormField(
+                          minLines: 4,
+                          maxLines: 10,
                           decoration: const InputDecoration(
-                            labelText: 'Mã Voucher cụ thể *',
-                            hintText: 'VD: CHAOBAN20, GIAM10K',
+                            labelText: 'Danh sách mã *',
+                            hintText: 'Mỗi dòng 1 mã hoặc cách nhau bởi dấu phẩy\nVD: CHAOBAN20, GIAM10K',
                             border: OutlineInputBorder(),
                           ),
                           textCapitalization: TextCapitalization.characters,
                           validator: (val) {
-                            if (val == null || val.trim().isEmpty) return 'Vui lòng nhập mã';
+                            final parsed = parseVoucherCodes(val ?? '');
+                            if (parsed.valid.isEmpty && parsed.invalid.isEmpty) return 'Vui lòng nhập mã';
+                            if (parsed.invalid.isNotEmpty) {
+                              return 'Mã không hợp lệ (A-Z, 0-9, -, _; 3-32 ký tự): ${parsed.invalid.join(", ")}';
+                            }
                             return null;
                           },
-                          onSaved: (val) => customCode = (val ?? '').trim().toUpperCase(),
+                          onSaved: (val) => customCodes = val ?? '',
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Mã sẽ được kích hoạt ngay và dùng được trên cả POS lẫn Web.',
+                          'Mã sẽ được kích hoạt ngay và dùng được trên cả POS lẫn Web. Mã đã tồn tại sẽ bị bỏ qua.',
                           style: TextStyle(fontSize: 12, color: context.tc.textHint),
                         ),
                       ] else ...[
@@ -368,7 +391,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
                       formKey.currentState!.save();
                       Navigator.pop(context);
                       if (isCustom) {
-                        await _createCustomCode(customCode);
+                        await _createCodes(parseVoucherCodes(customCodes).valid);
                       } else {
                         await _generateCodes(qty, prefix, length);
                       }
@@ -385,11 +408,12 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
     );
   }
 
-  Future<void> _createCustomCode(String code) async {
+  Future<void> _createCodes(List<String> codes) async {
     try {
-      await _campaignService.createVouchers(widget.campaign.campaignId, [code], autoRelease: true);
+      final r = await _campaignService.createVouchers(widget.campaign.campaignId, codes, autoRelease: true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã tạo thành công mã $code!')));
+        final skipped = r.existing.isNotEmpty ? ' Bỏ qua ${r.existing.length} mã đã tồn tại: ${r.existing.take(10).join(", ")}' : '';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã tạo ${r.created.length} mã.$skipped')));
       }
     } catch (e) {
       if (mounted) {
@@ -398,26 +422,6 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
     }
   }
 
-  Future<void> _generateCodes(int qty, String prefix, int length) async {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random();
-    
-    List<String> codes = [];
-    for (int i = 0; i < qty; i++) {
-      String suffix = String.fromCharCodes(Iterable.generate(
-        length, (_) => chars.codeUnitAt(random.nextInt(chars.length))));
-      codes.add('$prefix$suffix');
-    }
-
-    try {
-      await _campaignService.createVouchers(widget.campaign.campaignId, codes, autoRelease: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tạo thành công $qty mã!')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi tạo mã: $e')));
-      }
-    }
-  }
+  Future<void> _generateCodes(int qty, String prefix, int length) =>
+      _createCodes(generateRandomVoucherCodes(qty, prefix: prefix, length: length));
 }

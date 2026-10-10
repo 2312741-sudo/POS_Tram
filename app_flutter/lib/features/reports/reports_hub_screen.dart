@@ -5,12 +5,14 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/reports/bill_report_rows.dart';
 import '../../core/reports/report_calculator.dart';
 import '../../core/reports/report_date_utils.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/reports/report_models.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 
@@ -23,6 +25,10 @@ enum ReportKind {
   hourly('BC_KHUNGGIO', 'Khung giờ bán hàng', Icons.access_time_outlined),
   paymentMethods('BC_PTTT', 'Hình thức thanh toán', Icons.payment_outlined),
   promotions('BC_KHUYENMAI', 'Khuyến mãi & Voucher', Icons.discount_outlined),
+  campaigns('BC_CTKM', 'Theo chương trình KM', Icons.campaign_outlined),
+  bills('BC_HOADON', 'Danh sách hóa đơn', Icons.receipt_long_outlined),
+  billItems('BC_CHITIET_MON', 'Chi tiết món theo HĐ', Icons.list_alt_outlined),
+  deletedItems('BC_XOAMON', 'Món bị xóa', Icons.remove_shopping_cart_outlined),
   cancellations('BC_HUYMON', 'Hủy món & Hủy đơn', Icons.cancel_presentation_outlined),
   cashShifts('BC_CAKET', 'Ca két & Chênh lệch', Icons.account_balance_wallet_outlined),
   grossProfit('BC_LOINHUAN', 'Lợi nhuận gộp & COGS', Icons.trending_up_outlined),
@@ -85,6 +91,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   // Sort & search for product report
   String _productSearchQuery = '';
   String _productSort = 'REV_DESC'; // REV_DESC, QTY_DESC, NAME_ASC
+
+  // Lọc trạng thái cho báo cáo hóa đơn: ALL | PAID (Hoàn thành) | CANCELLED (Đã hủy)
+  String _billStatusFilter = 'ALL';
 
   @override
   void initState() {
@@ -331,6 +340,14 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         return ['Hình thức thanh toán', 'Số giao dịch', 'Doanh thu gộp', 'Giảm giá', 'Tiền VAT', 'Thực thu'];
       case ReportKind.promotions:
         return ['Mã CT / Voucher', 'Tên chương trình', 'Loại hình', 'Lượt áp dụng', 'Chi phí giảm giá'];
+      case ReportKind.campaigns:
+        return ['Tên chương trình', 'Mã CT', 'Loại', 'Số hóa đơn', 'Tổng giảm giá', 'Doanh thu HĐ', 'Lượt dùng voucher'];
+      case ReportKind.bills:
+        return BillReportRows.summaryHeaders;
+      case ReportKind.billItems:
+        return BillReportRows.itemHeaders;
+      case ReportKind.deletedItems:
+        return BillReportRows.deletedHeaders;
       case ReportKind.cancellations:
         return ['Thời điểm hủy', 'Mã hóa đơn', 'Bàn / Khu vực', 'Nhân viên', 'Lý do hủy', 'Chi tiết món', 'Giá trị thất thoát'];
       case ReportKind.cashShifts:
@@ -466,6 +483,26 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         }
         return rows;
 
+      case ReportKind.campaigns:
+        return ReportCalculator.calculateCampaignReport(bills).map((c) => [
+          c.name,
+          c.code,
+          c.type,
+          c.billCount,
+          ReportExportService.formatCurrency(c.discountAmount),
+          ReportExportService.formatCurrency(c.revenue),
+          c.voucherCodesUsed,
+        ]).toList();
+
+      case ReportKind.bills:
+        return BillReportRows.filterByStatus(bills, _billStatusFilter).map(BillReportRows.summaryRow).toList();
+
+      case ReportKind.billItems:
+        return BillReportRows.filterByStatus(bills, _billStatusFilter).expand(BillReportRows.itemRows).toList();
+
+      case ReportKind.deletedItems:
+        return BillReportRows.filterByStatus(bills, _billStatusFilter).expand(BillReportRows.deletedRows).toList();
+
       case ReportKind.cancellations:
         final c = ReportCalculator.calculateCancellationReport(bills);
         return c.bills.map((b) => [
@@ -526,6 +563,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           ['Tiền mặt thu được', ReportExportService.formatCurrency(z.tab2ThuChi.cashSales), 'Thu ngân chốt'],
           ['Chuyển khoản QR thu được', ReportExportService.formatCurrency(z.tab2ThuChi.transferSales), 'VietQR ngân hàng'],
           ['Tổng sản phẩm bán ra', z.tab3HangHoa.totalItemsSold, 'Ly / Đĩa'],
+          ['Số hóa đơn đã hủy', z.tab1TongHop.cancelledBillsCount, ReportExportService.formatCurrency(z.tab1TongHop.cancelledBillsAmount)],
+          ['Số món xóa', z.tab1TongHop.deletedItemsCount, 'Món đã lưu bị xóa'],
+          ['Tổng tiền xóa món', ReportExportService.formatCurrency(z.tab1TongHop.deletedItemsAmount), 'Từ HĐ hoàn thành + đã hủy'],
         ];
     }
   }
@@ -1227,6 +1267,21 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               ],
             ),
           ],
+          if (_selectedKind == ReportKind.bills || _selectedKind == ReportKind.billItems || _selectedKind == ReportKind.deletedItems) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: const [('ALL', 'Tất cả'), ('PAID', 'Hoàn thành'), ('CANCELLED', 'Đã hủy')].map((e) {
+                final selected = _billStatusFilter == e.$1;
+                return ChoiceChip(
+                  label: Text(e.$2, style: GoogleFonts.beVietnamPro(fontSize: 11, color: selected ? Colors.white : context.tc.textPrimary)),
+                  selected: selected,
+                  selectedColor: e.$1 == 'CANCELLED' ? context.tc.danger : context.tc.primary,
+                  onSelected: (_) => setState(() => _billStatusFilter = e.$1),
+                );
+              }).toList(),
+            ),
+          ],
           const SizedBox(height: 12),
           if (rows.isEmpty)
             _buildEmptyState()
@@ -1256,8 +1311,42 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                 ],
               ),
             ),
+          if (_selectedKind == ReportKind.campaigns && rows.isNotEmpty) _buildCampaignDrilldown(),
         ],
       ),
+    );
+  }
+
+  /// Danh sách hóa đơn theo từng chương trình (bấm để mở rộng).
+  Widget _buildCampaignDrilldown() {
+    final campaigns = ReportCalculator.calculateCampaignReport(_currentBills);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 14),
+        Text('HÓA ĐƠN THEO CHƯƠNG TRÌNH', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary)),
+        const SizedBox(height: 6),
+        ...campaigns.map((c) => Card(
+              margin: const EdgeInsets.only(bottom: 6),
+              child: ExpansionTile(
+                title: Text(c.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  '${c.code.isNotEmpty ? "${c.code} • " : ""}${c.billCount} HĐ • Giảm ${ReportExportService.formatCurrency(c.discountAmount)}',
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                ),
+                children: c.bills.map((b) => ListTile(
+                      dense: true,
+                      title: Text('${b.billCode} • ${b.tableName}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                        '${FormatUtils.dateTime(b.time)}${b.voucherCode.isNotEmpty ? " • Voucher: ${b.voucherCode}" : ""}',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11),
+                      ),
+                      trailing: Text('-${ReportExportService.formatCurrency(b.discount)}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                    )).toList(),
+              ),
+            )),
+      ],
     );
   }
 

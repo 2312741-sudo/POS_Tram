@@ -8,7 +8,7 @@ enum CampaignType {
   /// P-05: Giảm/tặng món theo giá trị đơn
   orderValueItemBenefit,
   
-  /// P-06: Mua X tặng Y
+  /// P-06: Mua X tặng/giảm giá Y
   buyXGetY,
   
   /// P-07: Đồng giá/đồng giảm giá
@@ -127,6 +127,13 @@ enum StackingMode {
       orElse: () => disabled,
     );
   }
+}
+
+/// Chuẩn hóa chế độ cộng dồn: web cũ lưu "STACKABLE" (mọi kiểu chữ) = ENABLED
+String normalizeStackingMode(String? raw) {
+  final u = (raw ?? '').trim().toUpperCase();
+  if (u == 'ENABLED' || u == 'STACKABLE' || u == 'TRUE' || u == 'YES') return StackingMode.enabled.toMap();
+  return StackingMode.disabled.toMap();
 }
 
 /// Bậc điều kiện của chương trình khuyến mãi
@@ -513,6 +520,8 @@ class CampaignModel {
     this.legacyPromotionId,
   });
 
+  bool get isStackable => normalizeStackingMode(stackingMode) == StackingMode.enabled.toMap();
+
   bool get isUpcoming {
     if (schedule.absoluteStart == null) return false;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -536,9 +545,9 @@ class CampaignModel {
       case CampaignType.billDiscount:
         return 'Giảm giá đơn hàng';
       case CampaignType.orderValueItemBenefit:
-        return 'Giảm/tặng món theo giá trị đơn';
+        return 'Giảm/tặng món theo giá trị hóa đơn';
       case CampaignType.buyXGetY:
-        return 'Mua X tặng Y';
+        return 'Mua X tặng/giảm giá Y';
       case CampaignType.itemPriceRule:
         return 'Đồng giá/đồng giảm giá';
     }
@@ -648,7 +657,7 @@ class CampaignModel {
       hasCodes: map['hasCodes'] ?? false,
       autoApply: map['autoApply'] ?? false,
       requireStaffNote: map['requireStaffNote'] ?? false,
-      stackingMode: map['stackingMode'] ?? StackingMode.disabled.toMap(),
+      stackingMode: normalizeStackingMode(map['stackingMode']?.toString()),
       priority: map['priority']?.toInt() ?? 0,
       active: map['active'] ?? false,
       createdAt: map['createdAt']?.toInt() ?? 0,
@@ -843,7 +852,10 @@ class VoucherModel {
   final String? holdId; // Current hold reference
   final int? holdExpiresAt; // Hold TTL
   final String? redeemedBillId; // Bill that used this code
+  final String? redeemedBillCode; // Mã hóa đơn hiển thị (HD-...)
   final String? redeemedBy; // Username
+  final String? redeemedByName; // Họ tên nhân viên
+  final String? tableName; // Bàn của hóa đơn đã dùng mã
   final bool tombstone; // Cannot reuse code
   final int createdAt;
   final int version;
@@ -860,7 +872,10 @@ class VoucherModel {
     this.holdId,
     this.holdExpiresAt,
     this.redeemedBillId,
+    this.redeemedBillCode,
     this.redeemedBy,
+    this.redeemedByName,
+    this.tableName,
     required this.tombstone,
     required this.createdAt,
     required this.version,
@@ -893,7 +908,10 @@ class VoucherModel {
       'holdId': holdId,
       'holdExpiresAt': holdExpiresAt,
       'redeemedBillId': redeemedBillId,
+      'redeemedBillCode': redeemedBillCode,
       'redeemedBy': redeemedBy,
+      'redeemedByName': redeemedByName,
+      'tableName': tableName,
       'usedBy': redeemedBy,
       'tombstone': tombstone,
       'createdAt': createdAt,
@@ -917,7 +935,7 @@ class VoucherModel {
     }
 
     final codeVal = (map['normalizedCode'] ?? map['code'] ?? '').toString();
-    final redeemedTime = (map['redeemedAt'] ?? map['usedAt'] as num?)?.toInt();
+    final redeemedTime = ((map['redeemedAt'] ?? map['usedAt']) as num?)?.toInt();
     final userVal = (map['redeemedBy'] ?? map['usedBy'])?.toString();
 
     return VoucherModel(
@@ -932,7 +950,10 @@ class VoucherModel {
       holdId: map['holdId']?.toString(),
       holdExpiresAt: (map['holdExpiresAt'] as num?)?.toInt(),
       redeemedBillId: map['redeemedBillId']?.toString(),
+      redeemedBillCode: map['redeemedBillCode']?.toString(),
       redeemedBy: userVal,
+      redeemedByName: map['redeemedByName']?.toString(),
+      tableName: map['tableName']?.toString(),
       tombstone: map['tombstone'] ?? false,
       createdAt: (map['createdAt'] as num?)?.toInt() ?? 0,
       version: (map['version'] as num?)?.toInt() ?? 0,
@@ -951,7 +972,10 @@ class VoucherModel {
     String? holdId,
     int? holdExpiresAt,
     String? redeemedBillId,
+    String? redeemedBillCode,
     String? redeemedBy,
+    String? redeemedByName,
+    String? tableName,
     bool? tombstone,
     int? createdAt,
     int? version,
@@ -968,7 +992,10 @@ class VoucherModel {
       holdId: holdId ?? this.holdId,
       holdExpiresAt: holdExpiresAt ?? this.holdExpiresAt,
       redeemedBillId: redeemedBillId ?? this.redeemedBillId,
+      redeemedBillCode: redeemedBillCode ?? this.redeemedBillCode,
       redeemedBy: redeemedBy ?? this.redeemedBy,
+      redeemedByName: redeemedByName ?? this.redeemedByName,
+      tableName: tableName ?? this.tableName,
       tombstone: tombstone ?? this.tombstone,
       createdAt: createdAt ?? this.createdAt,
       version: version ?? this.version,
@@ -986,6 +1013,7 @@ class LineBenefit {
   final int effectivePrice; // Giá sau giảm
   final bool isGift; // Là món tặng
   final String? giftSourceCampaignId;
+  final int quantity; // Số phần được thưởng (0 = cả dòng / không xác định)
 
   LineBenefit({
     required this.lineId,
@@ -996,6 +1024,7 @@ class LineBenefit {
     required this.effectivePrice,
     required this.isGift,
     this.giftSourceCampaignId,
+    this.quantity = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -1008,6 +1037,7 @@ class LineBenefit {
       'effectivePrice': effectivePrice,
       'isGift': isGift,
       'giftSourceCampaignId': giftSourceCampaignId,
+      if (quantity > 0) 'quantity': quantity,
     };
   }
 
@@ -1021,6 +1051,7 @@ class LineBenefit {
       effectivePrice: map['effectivePrice']?.toInt() ?? 0,
       isGift: map['isGift'] ?? false,
       giftSourceCampaignId: map['giftSourceCampaignId'],
+      quantity: (map['quantity'] as num?)?.toInt() ?? 0,
     );
   }
   
@@ -1033,6 +1064,7 @@ class LineBenefit {
     int? effectivePrice,
     bool? isGift,
     String? giftSourceCampaignId,
+    int? quantity,
   }) {
     return LineBenefit(
       lineId: lineId ?? this.lineId,
@@ -1043,6 +1075,7 @@ class LineBenefit {
       effectivePrice: effectivePrice ?? this.effectivePrice,
       isGift: isGift ?? this.isGift,
       giftSourceCampaignId: giftSourceCampaignId ?? this.giftSourceCampaignId,
+      quantity: quantity ?? this.quantity,
     );
   }
 }
@@ -1153,7 +1186,8 @@ class PriceQuoteModel {
   final int netMoney; // Sau giảm, trước thuế
 
   // Details
-  final List<LineBenefit> lineBenefits;
+  final List<LineBenefit> lineBenefits; // Tổng hợp mỗi dòng 1 phần tử
+  final List<LineBenefit> rewardBenefits; // Chi tiết món được tặng/giảm theo từng KM (Mua X tặng/giảm Y, theo giá trị HĐ)
   final List<BillBenefit> billBenefits;
   final List<String> appliedCampaignIds;
   final List<QuoteReason> reasons; // Why campaigns didn't apply
@@ -1176,6 +1210,7 @@ class PriceQuoteModel {
     required this.totalDiscountMoney,
     required this.netMoney,
     required this.lineBenefits,
+    this.rewardBenefits = const [],
     required this.billBenefits,
     required this.appliedCampaignIds,
     required this.reasons,
@@ -1198,6 +1233,7 @@ class PriceQuoteModel {
       'totalDiscountMoney': totalDiscountMoney,
       'netMoney': netMoney,
       'lineBenefits': lineBenefits.map((e) => e.toMap()).toList(),
+      'rewardBenefits': rewardBenefits.map((e) => e.toMap()).toList(),
       'billBenefits': billBenefits.map((e) => e.toMap()).toList(),
       'appliedCampaignIds': appliedCampaignIds,
       'reasons': reasons.map((e) => e.toMap()).toList(),
@@ -1221,6 +1257,7 @@ class PriceQuoteModel {
       totalDiscountMoney: map['totalDiscountMoney']?.toInt() ?? 0,
       netMoney: map['netMoney']?.toInt() ?? 0,
       lineBenefits: List<LineBenefit>.from((map['lineBenefits'] ?? []).map((e) => LineBenefit.fromMap(e))),
+      rewardBenefits: List<LineBenefit>.from((map['rewardBenefits'] ?? []).map((e) => LineBenefit.fromMap(e))),
       billBenefits: List<BillBenefit>.from((map['billBenefits'] ?? []).map((e) => BillBenefit.fromMap(e))),
       appliedCampaignIds: List<String>.from(map['appliedCampaignIds'] ?? []),
       reasons: List<QuoteReason>.from((map['reasons'] ?? []).map((e) => QuoteReason.fromMap(e))),
@@ -1243,6 +1280,7 @@ class PriceQuoteModel {
     int? totalDiscountMoney,
     int? netMoney,
     List<LineBenefit>? lineBenefits,
+    List<LineBenefit>? rewardBenefits,
     List<BillBenefit>? billBenefits,
     List<String>? appliedCampaignIds,
     List<QuoteReason>? reasons,
@@ -1263,6 +1301,7 @@ class PriceQuoteModel {
       totalDiscountMoney: totalDiscountMoney ?? this.totalDiscountMoney,
       netMoney: netMoney ?? this.netMoney,
       lineBenefits: lineBenefits ?? this.lineBenefits,
+      rewardBenefits: rewardBenefits ?? this.rewardBenefits,
       billBenefits: billBenefits ?? this.billBenefits,
       appliedCampaignIds: appliedCampaignIds ?? this.appliedCampaignIds,
       reasons: reasons ?? this.reasons,

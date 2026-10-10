@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'order_item_model.dart';
 import 'order_action_log_model.dart';
 import 'promotion_model.dart';
+import '../../core/domain/deleted_items.dart';
 
 // ==================== PAYMENT SPLIT MODEL (MULTI-METHOD) ====================
 class PaymentSplitModel {
@@ -61,6 +62,8 @@ class BillModel {
   String? customerPhone;
   String? shiftId;
   List<OrderActionLogModel> actionLogs;
+  /// Món đã lưu bị xóa trước khi chốt đơn (ghi cả với HĐ PAID và CANCELLED).
+  List<DeletedItemEntry> deletedItems;
 
   BillModel({
     required this.id,
@@ -92,6 +95,7 @@ class BillModel {
     this.customerPhone,
     this.shiftId,
     this.actionLogs = const [],
+    this.deletedItems = const [],
   });
 
   factory BillModel.fromMap(Map<dynamic, dynamic> map, String id) {
@@ -186,7 +190,20 @@ class BillModel {
       customerPhone: map['customerPhone']?.toString(),
       shiftId: map['shiftId']?.toString(),
       actionLogs: actionLogs,
+      deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
     );
+  }
+
+  int get deletedItemsCount => DeletedItemsLogic.summarize(deletedItems).count;
+  int get deletedItemsAmount => DeletedItemsLogic.summarize(deletedItems).amount;
+
+  /// Tổng giảm giá theo món (lineDiscountTotal) của hóa đơn.
+  int get itemDiscountTotal => items.fold(0, (s, i) => s + i.lineDiscountTotal);
+
+  /// Giảm giá cấp đơn = tổng giảm − giảm theo món (gồm voucher/CTKM + đổi điểm).
+  int get orderLevelDiscount {
+    final v = totalDiscount - itemDiscountTotal;
+    return v < 0 ? 0 : v;
   }
 
   String get note => notes;
@@ -238,6 +255,9 @@ class BillModel {
     if (shiftId != null) 'shiftId': shiftId,
     'actionLogs': actionLogs.map((e) => e.toMap()).toList(),
     'actionLogsJson': jsonEncode(actionLogs.map((e) => e.toMap()).toList()),
+    'deletedItems': deletedItems.map((e) => e.toMap()).toList(),
+    'deletedItemsCount': deletedItemsCount,
+    'deletedItemsAmount': deletedItemsAmount,
   };
 
   void recalculateTotals() {

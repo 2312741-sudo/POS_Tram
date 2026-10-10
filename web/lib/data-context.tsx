@@ -8,6 +8,13 @@ import { generateBillCode } from "./bill-code";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT, buildOrderItemsPayload, prePrintPayload } from "./table-status";
 import { errorMessage } from "./errors";
+import {
+  appendDeletedItemsJson,
+  billDeletionFields,
+  buildDeletionAuditLog,
+  parseDeletedItems,
+  type DeletedItemEntry,
+} from "./item-deletion";
 import { approvalAuditFields, approvalSuffix, type ManagerApproval } from "./manager-approval";
 import {
   buildMergePayloads,
@@ -158,6 +165,8 @@ export interface TableItem {
   prePrintedAt?: number | null;
   /** Username người in phiếu tạm tính */
   prePrintedBy?: string | null;
+  /** Món đã xóa khỏi đơn đang mở (chuỗi JSON mảng DeletedItemEntry — hợp đồng chung với Flutter) */
+  deletedItemsJson?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
@@ -272,6 +281,18 @@ export interface CashShiftItem {
   [key: string]: unknown;
 }
 
+/** Nhật ký kèm theo khi ghi lại danh sách món của bàn */
+export interface TableOrderLog {
+  action: string;
+  details: string;
+  staffUsername?: string;
+  staffFullName?: string;
+  staffRole?: string;
+  approval?: ManagerApproval | null;
+  /** Xóa món / giảm số lượng: mỗi bản ghi → nối vào deletedItemsJson + 1 audit log DELETE_ITEM */
+  deletions?: DeletedItemEntry[];
+}
+
 interface DashboardContextType {
   stores: StoreItem[];
   currentStoreCode: string; // 'ALL' or specific storeCode (e.g. 'TRAM01')
@@ -299,7 +320,7 @@ interface DashboardContextType {
   updateTableOrderItems: (
     table: TableItem,
     nextItems: RawOrderLine[],
-    log: { action: string; details: string; staffUsername?: string; staffFullName?: string; approval?: ManagerApproval | null }
+    log: TableOrderLog
   ) => Promise<{ success: boolean; error?: string }>;
   /** Chuyển toàn bộ đơn sang bàn trống (khớp Flutter transferTable); đọc lại 2 bàn từ DB, từ chối nếu đã đổi */
   transferTable: (source: TableItem, target: TableItem, actor: TableActor) => Promise<{ success: boolean; error?: string }>;
@@ -1316,6 +1337,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         currentOrderCode: null,
         mergedIntoTable: null,
         actionLogsJson: null,
+        deletedItemsJson: null,
         ...CLEAR_PRE_PRINT,
       };
       const updates: Record<string, unknown> = { ...prefix };
@@ -1328,6 +1350,16 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     },
     [tableKeysFor]
   );
+
+  /** Món đã xóa của bàn — đọc từ server (tránh bản cục bộ cũ), lỗi thì dùng bản cục bộ */
+  const readTableDeletedItems = useCallback(async (targetStoreCode: string, table: TableItem): Promise<DeletedItemEntry[]> => {
+    try {
+      const snap = await get(ref(db, `stores/${targetStoreCode}/tables/${table.id}/deletedItemsJson`));
+      return parseDeletedItems(snap.exists() ? snap.val() : null);
+    } catch {
+      return parseDeletedItems(table.deletedItemsJson);
+    }
+  }, []);
 
   const applyClosedTableLocally = useCallback(
     (targetStoreCode: string, table: TableItem, clearPayload: Record<string, unknown>) => {
@@ -1417,6 +1449,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           orderStaff: table.orderStaff || "POS Staff",
           items: items as unknown as OrderItem[],
           actionLogs: actionLogs,
+          ...billDeletionFields(await readTableDeletedItems(targetStoreCode, table)),
         };
 
         const rawHistoryMap = {
@@ -1462,7 +1495,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi khi thanh toán trả bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems]
   );
 
   const cancelActiveTable = useCallback(
@@ -1526,6 +1559,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           orderStaff: table.orderStaff || "POS Staff",
           items: items as unknown as OrderItem[],
           actionLogs: actionLogs,
+          ...billDeletionFields(await readTableDeletedItems(targetStoreCode, table)),
         };
 
         const rawCancelMap = {
@@ -1572,14 +1606,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi khi hủy đơn bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems]
   );
 
   const updateTableOrderItems = useCallback(
     async (
       table: TableItem,
       nextItems: RawOrderLine[],
-      log: { action: string; details: string; staffUsername?: string; staffFullName?: string; approval?: ManagerApproval | null }
+      log: TableOrderLog
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         if (!table.inUse) return { success: false, error: "Bàn không còn mở" };
@@ -1601,22 +1635,39 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const actionLogs = parseActionLogs(table);
         const suffix = approvalSuffix(log.approval);
         actionLogs.push({ timestamp: now, staffUsername, staffFullName, action: log.action, details: `${log.details}${suffix}` });
-        const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
-        const updates = buildTableFieldUpdates(targetStoreCode, table, {
-          ...payload,
-          actionLogsJson: JSON.stringify(actionLogs),
-        });
-        updates[`stores/${targetStoreCode}/audit_logs/${logId}`] = {
-          timestamp: now,
-          username: staffUsername,
-          userFullName: staffFullName,
-          action: log.action,
-          targetType: "TABLE",
-          targetId: table.name,
-          storeCode: targetStoreCode,
-          details: `${log.details} (bàn ${table.name}) qua Web Admin${suffix}`,
-          ...approvalAuditFields(log.approval),
-        };
+        const deletions = log.deletions || [];
+        const tableFields: Record<string, unknown> = { ...payload, actionLogsJson: JSON.stringify(actionLogs) };
+        if (deletions.length > 0) {
+          // Nối vào danh sách món đã xóa trên server (không ghi đè bản Flutter vừa thêm)
+          const delSnap = await get(ref(db, `stores/${targetStoreCode}/tables/${table.id}/deletedItemsJson`));
+          tableFields.deletedItemsJson = appendDeletedItemsJson(delSnap.exists() ? delSnap.val() : null, deletions);
+        }
+        const updates = buildTableFieldUpdates(targetStoreCode, table, tableFields);
+        if (deletions.length > 0) {
+          deletions.forEach((entry, i) => {
+            updates[`stores/${targetStoreCode}/audit_logs/log_${now}_del${i}_${Math.floor(Math.random() * 100000)}`] = buildDeletionAuditLog({
+              entry,
+              tableName: table.name,
+              orderCode: table.currentOrderCode || table.currentBillId || "",
+              storeCode: targetStoreCode,
+              userRole: log.staffRole,
+              extra: approvalAuditFields(log.approval),
+            });
+          });
+        } else {
+          const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
+          updates[`stores/${targetStoreCode}/audit_logs/${logId}`] = {
+            timestamp: now,
+            username: staffUsername,
+            userFullName: staffFullName,
+            action: log.action,
+            targetType: "TABLE",
+            targetId: table.name,
+            storeCode: targetStoreCode,
+            details: `${log.details} (bàn ${table.name}) qua Web Admin${suffix}`,
+            ...approvalAuditFields(log.approval),
+          };
+        }
         await update(ref(db), updates);
         return { success: true };
       } catch (e) {

@@ -338,6 +338,10 @@ void main() {
       expect(tab1.paidBillsCount, equals(expTab1['paidBillsCount']));
       expect(tab1.avgRevenuePerBill, equals(expTab1['avgRevenuePerBill']));
       expect(tab1.totalGuests, equals(expTab1['totalGuests']));
+      expect(tab1.deletedItemsCount, equals(expTab1['deletedItemsCount']));
+      expect(tab1.deletedItemsAmount, equals(expTab1['deletedItemsAmount']));
+      expect(tab1.cancelledBillsCount, equals(expTab1['cancelledBillsCount']));
+      expect(tab1.cancelledBillsAmount, equals(expTab1['cancelledBillsAmount']));
 
       // Tab 2: Thu chi
       final tab2 = zReport.tab2ThuChi;

@@ -4,6 +4,7 @@
  * Pure TypeScript functions, độc lập hoàn toàn với React, có thể kiểm thử 100%.
  */
 import { lineGross as rawLineGross, type RawOrderLine } from "./order-math";
+import { deletionReportFromBills } from "./item-deletion";
 
 export interface OrderItem {
   id?: number | string;
@@ -405,6 +406,14 @@ export interface EndOfDayReportData {
     paidBillsCount: number;
     avgRevenuePerBill: number;
     totalGuests: number;
+    /** Số hóa đơn đã hủy (không tính doanh thu) */
+    cancelledBillsCount: number;
+    /** Giá trị hóa đơn đã hủy (theo subTotal — §2.7) */
+    cancelledBillsAmount: number;
+    /** Tổng số PHẦN món bị xóa khỏi đơn (deletedItems của hóa đơn PAID + CANCELLED) */
+    deletedItemsCount: number;
+    /** Tổng tiền món bị xóa (amount đã trừ phần giảm giá dòng) */
+    deletedItemsAmount: number;
   };
   tab2_thuChi: {
     cashSales: number;
@@ -569,6 +578,51 @@ export function extractBillItems(bill: HistoryOrder): OrderItem[] {
     } catch {}
   }
   return [];
+}
+
+/** Trạng thái chuẩn hóa của hóa đơn (thiếu = PAID) */
+export function billStatusOf(bill: HistoryOrder): string {
+  return String(bill.status || "PAID").toUpperCase();
+}
+
+/** Nhãn trạng thái hiển thị / xuất Excel: PAID → "Hoàn thành", CANCELLED → "Đã hủy" */
+export function billStatusLabel(status?: string | null): string {
+  const s = String(status || "PAID").toUpperCase();
+  if (s === "PAID" || s === "ĐÃ THANH TOÁN") return "Hoàn thành";
+  if (s === "CANCELLED" || s === "CANCELED") return "Đã hủy";
+  if (s === "REFUNDED") return "Đã hoàn tiền";
+  if (s === "OPEN" || s === "PENDING" || s === "ACTIVE") return "Đang mở";
+  return String(status);
+}
+
+/** Hóa đơn có được tính doanh thu không (chỉ PAID — đơn hủy vẫn hiển thị nhưng không cộng tiền) */
+export function isRevenueBill(bill: HistoryOrder): boolean {
+  return billStatusOf(bill) === "PAID";
+}
+
+/** Tạm tính (doanh thu gộp) của hóa đơn */
+export function billSubTotal(bill: HistoryOrder): number {
+  if (bill.subTotal != null) return Number(bill.subTotal) || 0;
+  const items = extractBillItems(bill);
+  if (items.length > 0) return items.reduce((s, it) => s + rawLineGross(it as unknown as RawOrderLine), 0);
+  return Number(bill.totalAmount || 0);
+}
+
+/** Tổng giảm giá theo món của hóa đơn (ưu tiên itemDiscounts lưu trên bill) */
+export function billItemDiscount(bill: HistoryOrder): number {
+  if (bill.itemDiscounts != null) return Math.max(0, Number(bill.itemDiscounts) || 0);
+  return extractBillItems(bill).reduce((s, it) => s + itemLineDiscount(it), 0);
+}
+
+/** Tổng giảm giá của hóa đơn (totalDiscount → discountAmount) */
+export function billTotalDiscount(bill: HistoryOrder): number {
+  const v = bill.totalDiscount != null ? bill.totalDiscount : bill.discountAmount;
+  return Math.max(0, Number(v || 0));
+}
+
+/** Giảm giá cấp ĐƠN (voucher / chiến dịch / điểm / thủ công) = tổng giảm − giảm theo món, không âm */
+export function billLevelDiscount(bill: HistoryOrder): number {
+  return Math.max(0, billTotalDiscount(bill) - billItemDiscount(bill));
 }
 
 // ==================== CÁC HÀM TÍNH TOÁN BÁO CÁO THUẦN ====================
@@ -1486,6 +1540,9 @@ export function generateEndOfDayZReport(
   // Tab 1: Tổng hợp
   const overview = calculateOverviewReport(bills);
 
+  // Món bị xóa khỏi đơn (PAID + CANCELLED)
+  const deletions = deletionReportFromBills(deduped);
+
   // Tab 2: Thu chi
   const paymentMethods = calculatePaymentMethodsReport(bills);
   const cashSales = paymentMethods.CASH?.finalAmount || 0;
@@ -1537,6 +1594,10 @@ export function generateEndOfDayZReport(
       paidBillsCount: overview.paidBillsCount,
       avgRevenuePerBill: overview.avgRevenuePerPaidBill,
       totalGuests: overview.totalGuests,
+      cancelledBillsCount: overview.cancelledBillsCount,
+      cancelledBillsAmount: overview.cancelledTotalValue,
+      deletedItemsCount: deletions.quantity,
+      deletedItemsAmount: deletions.amount,
     },
     tab2_thuChi: {
       cashSales,

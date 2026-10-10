@@ -14,6 +14,12 @@ class AuditLogModel {
   final bool isSuspicious;
   final String? storeCode;
 
+  /// Trường cấu trúc bổ sung, ghi phẳng vào bản ghi (VD DELETE_ITEM: productName,
+  /// quantity, amount, reason, tableName, orderCode).
+  final Map<String, dynamic>? extra;
+
+  static const List<String> extraKeys = ['productName', 'quantity', 'amount', 'reason', 'tableName', 'orderCode'];
+
   AuditLogModel({
     this.logId,
     required this.timestamp,
@@ -28,6 +34,7 @@ class AuditLogModel {
     this.afterState,
     this.isSuspicious = false,
     this.storeCode,
+    this.extra,
   });
 
   factory AuditLogModel.fromMap(Map<dynamic, dynamic> map, {String? logId}) {
@@ -54,6 +61,13 @@ class AuditLogModel {
       afterState: after,
       isSuspicious: map['isSuspicious'] == true,
       storeCode: map['storeCode']?.toString(),
+      extra: () {
+        final e = <String, dynamic>{
+          for (final k in extraKeys)
+            if (map[k] != null) k: map[k],
+        };
+        return e.isEmpty ? null : e;
+      }(),
     );
   }
 
@@ -70,6 +84,7 @@ class AuditLogModel {
     if (afterState != null) 'afterState': afterState,
     'isSuspicious': isSuspicious,
     if (storeCode != null) 'storeCode': storeCode,
+    if (extra != null) ...extra!,
   };
 
   DateTime get dateTime => DateTime.fromMillisecondsSinceEpoch(timestamp);

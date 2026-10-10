@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_integrity.dart';
+import '../../core/domain/deleted_items.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
@@ -187,6 +188,7 @@ class OrderRepository {
     dst.openedAt = src.openedAt;
     dst.guestCount = src.guestCount;
     dst.actionLogsJson = src.actionLogsJson;
+    dst.deletedItemsJson = src.deletedItemsJson;
     // Gán SAU currentOrderJson (setter có thể xóa cờ tạm tính khi món đổi).
     dst.prePrintedAt = src.prePrintedAt;
     dst.prePrintedBy = src.prePrintedBy;
@@ -205,6 +207,10 @@ class OrderRepository {
     target.currentOrderJson = jsonEncode(combined.map((e) => e.toMap()).toList());
     // Đơn gộp đã khác phiếu tạm tính cũ → bàn đích quay về "Có khách".
     target.clearPrePrint();
+    // Món đã xóa của bàn nguồn được nối vào bàn đích (vẫn được tính khi chốt đơn).
+    if (sourceTable.deletedItems.isNotEmpty) {
+      target.deletedItemsJson = DeletedItemsLogic.append(target.deletedItemsJson, sourceTable.deletedItems);
+    }
     final int combinedGuests = (target.guestCount ?? 0) + (sourceTable.guestCount ?? 0);
     target.guestCount = combinedGuests > 0 ? combinedGuests : null;
     if (target.openedAt == null || (sourceTable.openedAt != null && sourceTable.openedAt! < target.openedAt!)) {
@@ -257,6 +263,7 @@ class OrderRepository {
     target.currentBillId = sourceTable.currentBillId;
     target.currentOrderCode = sourceTable.currentOrderCode;
     target.actionLogsJson = sourceTable.actionLogsJson;
+    target.deletedItemsJson = sourceTable.deletedItemsJson;
     // Trạng thái "Chờ thanh toán" đi theo đơn sang bàn đích.
     target.prePrintedAt = sourceTable.prePrintedAt;
     target.prePrintedBy = sourceTable.prePrintedBy;
@@ -391,6 +398,9 @@ class OrderRepository {
     }
     bill.status = 'PAID';
     bill.closedAt = DateTime.now().millisecondsSinceEpoch;
+    if (bill.deletedItems.isEmpty && table.deletedItems.isNotEmpty) {
+      bill.deletedItems = table.deletedItems;
+    }
 
     final lateProblems = <String>[];
     void onLate(String msg) {
@@ -674,6 +684,9 @@ class OrderRepository {
             staffNote: d.staffNote,
             billId: bill.id,
             username: bill.staffUsername,
+            billCode: bill.billCode,
+            tableName: bill.tableName,
+            staffName: bill.staffFullName,
             storeCode: storeCode,
             timeout: _txnTimeout,
             onLateFailure: onLate,
@@ -756,6 +769,8 @@ class OrderRepository {
     final orderCode = table.currentOrderCode ?? FormatUtils.orderCode();
     final now = DateTime.now().millisecondsSinceEpoch;
     final cancelBillId = 'BILL_CANCELLED_$now';
+    final deleted = table.deletedItems;
+    final deletedSummary = DeletedItemsLogic.summarize(deleted);
     final cancelLog = OrderActionLogModel(
       timestamp: now,
       staffUsername: staffUsername,
@@ -788,8 +803,11 @@ class OrderRepository {
       'orderStaff': staffFullName,
       'items': items.map((i) => i.toMap()).toList(),
       'itemsJson': jsonEncode(items.map((i) => i.toMap()).toList()),
-      'actionLogs': [cancelLog],
-      'actionLogsJson': jsonEncode([cancelLog]),
+      'actionLogs': [...table.actionLogs.map((l) => l.toMap()), cancelLog],
+      'actionLogsJson': jsonEncode([...table.actionLogs.map((l) => l.toMap()), cancelLog]),
+      'deletedItems': deleted.map((e) => e.toMap()).toList(),
+      'deletedItemsCount': deletedSummary.count,
+      'deletedItemsAmount': deletedSummary.amount,
     };
     final cleared = _copyTable(table)..clearTable();
 

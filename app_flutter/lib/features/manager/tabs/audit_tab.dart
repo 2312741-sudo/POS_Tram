@@ -39,14 +39,15 @@ class _AuditTabState extends State<AuditTab> {
   }
 
   int get _suspiciousCount => _logs.where((l) => l.isSuspicious).length;
-  int get _cancelItemCount => _logs.where((l) => l.action.contains('CANCEL') || l.action.contains('HỦY')).length;
+  static bool _isCancelLike(String action) => action.contains('CANCEL') || action.contains('HỦY') || action == 'DELETE_ITEM';
+  int get _cancelItemCount => _logs.where((l) => _isCancelLike(l.action)).length;
   int get _discountCount => _logs.where((l) => l.action.contains('DISCOUNT') || l.action.contains('GIẢM')).length;
 
   List<AuditLogModel> get _filteredLogs {
     return _logs.where((l) {
       // Category filter
       if (_categoryFilter == 'SUSPICIOUS' && !l.isSuspicious) return false;
-      if (_categoryFilter == 'CANCEL' && !l.action.contains('CANCEL') && !l.action.contains('HỦY')) return false;
+      if (_categoryFilter == 'CANCEL' && !_isCancelLike(l.action)) return false;
       if (_categoryFilter == 'PAYMENT' && !l.action.contains('PAY') && !l.action.contains('BILL') && !l.action.contains('DISCOUNT')) return false;
       if (_categoryFilter == 'TABLE' && !l.action.contains('TABLE') && !l.action.contains('BÀN')) return false;
       if (_categoryFilter == 'SHIFT' && !l.action.contains('SHIFT') && !l.action.contains('CA')) return false;
@@ -326,7 +327,7 @@ class _AuditTabState extends State<AuditTab> {
     Color iconColor;
     IconData iconData;
 
-    if (log.action.contains('CANCEL') || log.action.contains('HỦY')) {
+    if (_isCancelLike(log.action)) {
       iconColor = context.tc.danger;
       iconData = Icons.cancel_outlined;
     } else if (log.action.contains('DISCOUNT') || log.action.contains('GIẢM')) {

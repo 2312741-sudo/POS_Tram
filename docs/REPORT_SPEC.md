@@ -89,6 +89,8 @@ Hệ thống phân tách chiết khấu thành 4 tầng rõ rệt:
    - **Tuyệt đối KHÔNG cộng** vào Doanh thu gộp, Doanh thu thuần hay Tổng số lượng ly bán ra.
    - Được gom riêng vào **Báo cáo Hủy món & Hủy đơn hàng** để quản lý thất thoát và kiểm toán gian lận.
    - Giá trị thất thoát đơn hủy ghi nhận theo `b.subTotal`.
+   - **Lịch sử hóa đơn / xuất Excel** vẫn liệt kê đơn hủy với cột *Trạng thái* (`PAID` → "Hoàn thành", `CANCELLED` → "Đã hủy") và bộ lọc trạng thái; mọi tổng tiền trên màn hình chỉ cộng đơn `PAID`.
+   - **Giảm giá đơn** (cột "Giảm giá đơn" của Tổng hợp đơn hàng) $= \max(0, \text{totalDiscount} - \text{ItemDiscounts})$, trong đó $\text{ItemDiscounts}$ = `b.itemDiscounts` nếu có, ngược lại $\sum$ `lineDiscountTotal` của các dòng. Cột "Giảm giá món" của Chi tiết món = `lineDiscountTotal` của dòng.
 2. **Đơn hoàn tiền (`status == 'REFUNDED'`):**
    - Tiền hoàn trả khách ghi nhận tại trường `b.refundAmount`.
    - Được thể hiện là một dòng giảm trừ doanh thu hoặc chi hoàn trả trong Báo cáo Thu chi và Báo cáo Cuối ngày.
@@ -365,6 +367,15 @@ Mỗi báo cáo dưới đây được đặc tả tường minh gồm: Mục đ
 
 ---
 
+### BÁO CÁO 8b: BÁO CÁO KHUYẾN MÃI THEO CHƯƠNG TRÌNH (CAMPAIGN REPORT)
+- **Nguồn:** `b.discounts[]` của hóa đơn `PAID` (đơn hủy bỏ qua). Mỗi dòng: `campaignId, campaignName, programCode, campaignType, voucherCode, amount`; dữ liệu cũ chỉ có `promoId / promoCode / promoName / description`.
+- **Khóa nhóm:** `campaignId` → `promoId` → mã (`programCode/promoCode`) → tên (`campaignName/promoName/name/description`).
+- **Cột:** Tên, Mã, Loại (`BILL_DISCOUNT` Giảm giá đơn hàng, `ORDER_VALUE_ITEM_BENEFIT` Tặng/giảm món theo giá trị đơn, `BUY_X_GET_Y` Mua X tặng Y, `ITEM_PRICE_RULE` Đồng giá/đồng giảm), Số hóa đơn (không trùng), Tổng giảm $= \sum \text{amount}$, Doanh thu các HĐ $= \sum b.\text{finalAmount}$ (mỗi HĐ một lần), Lượt dùng voucher (số dòng có `voucherCode`).
+- **Chi tiết (drill-down):** Mã HĐ, Thời gian, Bàn, Mã voucher, Giảm giá, Tổng tiền HĐ, Nhân viên.
+- **TypeScript:** `calculateCampaignReport(bills)` — `web/lib/promotion-report.ts`.
+
+---
+
 ### BÁO CÁO 9: BÁO CÁO HỦY MÓN & HỦY ĐƠN HÀNG (CANCELLATIONS & AUDIT)
 - **Mục đích:** Chống gian lận và kiểm soát thất thoát nguyên vật liệu khi hủy món đã gửi bếp hoặc hủy đơn đã in bill.
 - **Bộ lọc:** Cửa hàng, Khoảng ngày, Nhân viên thực hiện, Lý do hủy.
@@ -379,6 +390,16 @@ Mỗi báo cáo dưới đây được đặc tả tường minh gồm: Mục đ
 - **Hợp đồng hàm thuần đề xuất:**
   - **Dart:** `CancellationReportResult calculateCancellationReport(List<BillModel> bills)`
   - **TypeScript:** `calculateCancellationReport(bills: HistoryOrder[]): CancellationReportResult`
+
+---
+
+### BÁO CÁO 9b: BÁO CÁO XÓA MÓN (DELETED ITEMS)
+- **Hợp đồng dữ liệu (chung Flutter/Web):** xóa dòng / giảm số lượng món của đơn đã lưu trên bàn **bắt buộc lý do**: `Khách đổi món`, `Khách hủy món`, `Nhập sai`, `Hết món/hết nguyên liệu`, `Khác` (+ nội dung bắt buộc, lưu dạng `Khác: …`). Món đã gửi bếp vẫn cần quyền `CANCEL_KITCHEN_ITEM` / PIN quản lý.
+  - Bản ghi: `{name, productId, quantity, unitPrice (gồm size/topping), amount (sau phần giảm giá dòng), reason, staffUsername, staffFullName, timestamp, sentToKitchen}`.
+  - Bàn: `deletedItemsJson` (chuỗi JSON mảng). Thanh toán & hủy đơn ghi lên bill + history: `deletedItems`, `deletedItemsCount` (tổng số phần), `deletedItemsAmount`; trả bàn xóa `deletedItemsJson`; chuyển bàn mang theo; gộp bàn nối thêm. Xóa hết món đã lưu của bàn ⇒ ghi hóa đơn `CANCELLED` với lý do `Xóa hết món — {reason}` (kèm `deletedItems`) và trả bàn.
+  - Audit log mỗi lần xóa: `action = "DELETE_ITEM"`, `targetType = "ORDER_ITEM"`, `details = "Xóa {qty} x {name} ({amount}đ) bàn {table} — Lý do: {reason}"`, kèm `productName, quantity, amount, reason, tableName, orderCode`.
+- **Tổng hợp:** danh sách + nhóm theo lý do (gộp `Khác: …` về `Khác`) và theo nhân viên: số lần, số phần, giá trị.
+- **TypeScript:** `deletionReportFromBills(bills)` (PAID + CANCELLED), `deletionReportFromAuditLogs(logs)` — `web/lib/item-deletion.ts`.
 
 ---
 
@@ -437,6 +458,9 @@ Mỗi báo cáo dưới đây được đặc tả tường minh gồm: Mục đ
     - Hoàn trả: $\sum \text{refundAmount}$.
     - Doanh thu thực thu cuối ngày: $\text{NetRevenue} - \text{RefundAmount}$.
     - Số hóa đơn hoàn tất, Số lượt khách, Giá trị TB/đơn.
+    - Số hóa đơn đã hủy (`cancelledBillsCount`) và giá trị đơn hủy (`cancelledBillsAmount` $= \sum_{b \in \text{CANCELLED}} b.\text{subTotal}$) — hiển thị riêng, **không** cộng doanh thu.
+    - **Số món xóa** (`deletedItemsCount`) $= \sum_{b \in \text{PAID} \cup \text{CANCELLED}} \sum_{d \in b.\text{deletedItems}} d.\text{quantity}$ (tổng số PHẦN).
+    - **Tổng tiền xóa món** (`deletedItemsAmount`) $= \sum d.\text{amount}$ (giá trị sau phần giảm giá dòng tương ứng). Đọc từ mảng `deletedItems` của hóa đơn (không dùng `deletedItemsCount/Amount` lưu sẵn để tránh lệch dữ liệu cũ).
   - **Tab 2 - Thu chi:**
     - Doanh số Tiền mặt, Chuyển khoản QR, Thẻ POS.
     - Tổng tiền nộp thêm vào két trong ngày (`cashIn`).

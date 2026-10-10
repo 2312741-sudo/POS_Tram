@@ -24,9 +24,11 @@ import {
   Copy,
   Check,
   Printer,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { exportAuditLogs, exportCancellationReport } from "@/lib/export";
+import { exportAuditLogs, exportCancellationReport, exportDeletionReport } from "@/lib/export";
+import { deletionReportFromAuditLogs } from "@/lib/item-deletion";
 import { useDashboardData, AuditLogItem } from "@/lib/data-context";
 import { calculateCancellationReport, formatVND } from "@/lib/reports";
 
@@ -38,7 +40,7 @@ interface ActionConfig {
   color: string;
   bg: string;
   border: string;
-  category: "ALL" | "ORDER" | "PAYMENT" | "TABLE_MGMT" | "CANCEL" | "SHIFT" | "AUTH" | "SUSPICIOUS";
+  category: "ALL" | "ORDER" | "PAYMENT" | "TABLE_MGMT" | "CANCEL" | "DELETE_ITEM" | "SHIFT" | "AUTH" | "SUSPICIOUS";
 }
 
 const ACTION_CONFIGS: Record<string, ActionConfig> = {
@@ -113,6 +115,15 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
     bg: "#FFE4E6",
     border: "#FECDD3",
     category: "CANCEL",
+  },
+  DELETE_ITEM: {
+    label: "Xóa món khỏi đơn",
+    shortLabel: "🗑️ Xóa món",
+    icon: Trash2,
+    color: "#BE123C",
+    bg: "#FFE4E6",
+    border: "#FDA4AF",
+    category: "DELETE_ITEM",
   },
   CANCEL_KITCHEN_ITEM: {
     label: "Hủy món đã gửi bếp",
@@ -189,6 +200,9 @@ function getActionMeta(action: string): ActionConfig {
 
 // Trích xuất Bàn hoặc Đối tượng từ targetId hoặc details nếu chưa có
 function extractTarget(log: AuditLogItem): { label: string; isTable: boolean } {
+  if (log.action === "DELETE_ITEM" && typeof log.tableName === "string" && log.tableName) {
+    return { label: log.tableName, isTable: true };
+  }
   if (log.targetId && log.targetId.trim().length > 0) {
     const isTable = log.targetType === "TABLE" || log.targetId.toLowerCase().includes("bàn") || /^[A-Z0-9_\-\s]+$/.test(log.targetId);
     return { label: log.targetId, isTable };
@@ -225,6 +239,8 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
   const [copied, setCopied] = useState(false);
+  // "Báo cáo xóa món": tổng hợp theo lý do / nhân viên từ audit log DELETE_ITEM
+  const [showDeletionReport, setShowDeletionReport] = useState(false);
 
   const cancellationReport = useMemo(() => {
     return calculateCancellationReport(historyData);
@@ -294,6 +310,7 @@ export default function AuditPage() {
     let paymentCount = 0;
     let tableMgmtCount = 0;
     let cancelCount = 0;
+    let deleteItemCount = 0;
     let shiftCount = 0;
     let suspiciousCount = 0;
 
@@ -303,12 +320,16 @@ export default function AuditPage() {
       if (meta.category === "PAYMENT") paymentCount++;
       if (meta.category === "TABLE_MGMT") tableMgmtCount++;
       if (meta.category === "CANCEL") cancelCount++;
+      if (meta.category === "DELETE_ITEM") deleteItemCount++;
       if (meta.category === "SHIFT") shiftCount++;
       if (l.isSuspicious || SUSPICIOUS_ACTIONS.includes(l.action)) suspiciousCount++;
     });
 
-    return { orderCount, paymentCount, tableMgmtCount, cancelCount, shiftCount, suspiciousCount };
+    return { orderCount, paymentCount, tableMgmtCount, cancelCount, deleteItemCount, shiftCount, suspiciousCount };
   }, [logs]);
+
+  // Báo cáo xóa món theo bộ lọc hiện tại (nhân viên / tìm kiếm)
+  const deletionReport = useMemo(() => deletionReportFromAuditLogs(filtered), [filtered]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -361,7 +382,24 @@ export default function AuditPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {categoryFilter === "CANCEL" ? (
+          {categoryFilter === "DELETE_ITEM" ? (
+            <>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowDeletionReport((v) => !v)}
+                aria-pressed={showDeletionReport}
+              >
+                <Trash2 size={16} /> {showDeletionReport ? "Xem nhật ký" : "Báo cáo xóa món"}
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: "#107C41" }}
+                onClick={() => exportDeletionReport(deletionReport, targetStoreInfo).toExcel()}
+              >
+                <Download size={16} /> Xuất Báo cáo Xóa món (Excel)
+              </button>
+            </>
+          ) : categoryFilter === "CANCEL" ? (
             <>
               <button
                 className="btn-primary"
@@ -468,6 +506,24 @@ export default function AuditPage() {
         </div>
 
         <div
+          onClick={() => { setCategoryFilter("DELETE_ITEM"); setPage(1); }}
+          className="card"
+          role="button"
+          aria-pressed={categoryFilter === "DELETE_ITEM"}
+          style={{
+            padding: "14px 16px",
+            cursor: "pointer",
+            border: categoryFilter === "DELETE_ITEM" ? "2px solid #BE123C" : "1px solid var(--border)",
+            background: categoryFilter === "DELETE_ITEM" ? "#FFE4E6" : "var(--surface)",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "#BE123C", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}>
+            <Trash2 size={14} /> Xóa món
+          </div>
+          <div style={{ fontSize: "20px", fontWeight: "800", color: "#BE123C", marginTop: "4px" }}>{stats.deleteItemCount}</div>
+        </div>
+
+        <div
           onClick={() => { setCategoryFilter("SUSPICIOUS"); setPage(1); }}
           className="card"
           style={{
@@ -508,6 +564,100 @@ export default function AuditPage() {
               <div style={{ fontSize: "12px", color: "var(--danger)" }}>
                 Tổng giá trị thất thoát tài chính từ các đơn hủy: <strong>{formatVND(cancellationReport.totalLossValue)}</strong>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categoryFilter === "DELETE_ITEM" && (
+        <div className="card" style={{ padding: "16px 20px", display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: 600 }}>Số lần xóa</div>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--text)" }}>{deletionReport.entries}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: 600 }}>Số món xóa</div>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--text)" }}>{deletionReport.quantity}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "12px", color: "var(--subtext)", fontWeight: 600 }}>Tổng tiền xóa món</div>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--danger)" }}>{formatVND(deletionReport.amount)}</div>
+          </div>
+        </div>
+      )}
+
+      {categoryFilter === "DELETE_ITEM" && showDeletionReport && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: "16px" }}>
+          {([
+            { title: "Theo lý do", groups: deletionReport.byReason, head: "Lý do" },
+            { title: "Theo nhân viên", groups: deletionReport.byStaff, head: "Nhân viên" },
+          ] as const).map((sec) => (
+            <div key={sec.title} className="card" style={{ padding: "16px 20px" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", margin: "0 0 10px" }}>Báo cáo xóa món — {sec.title}</h3>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{sec.head}</th>
+                      <th style={{ textAlign: "right" }}>Số lần</th>
+                      <th style={{ textAlign: "right" }}>Số món</th>
+                      <th style={{ textAlign: "right" }}>Giá trị</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sec.groups.length === 0 ? (
+                      <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--muted)", padding: "20px" }}>Chưa có dữ liệu xóa món</td></tr>
+                    ) : (
+                      sec.groups.map((g) => (
+                        <tr key={g.key}>
+                          <td style={{ fontWeight: 600 }}>{g.label}</td>
+                          <td style={{ textAlign: "right" }}>{g.count}</td>
+                          <td style={{ textAlign: "right" }}>{g.quantity}</td>
+                          <td style={{ textAlign: "right", fontWeight: 700, color: "var(--danger)" }}>{formatVND(g.amount)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+          <div className="card" style={{ padding: "16px 20px", gridColumn: "1 / -1" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", margin: "0 0 10px" }}>Danh sách món đã xóa</h3>
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Bàn</th>
+                    <th>Món</th>
+                    <th style={{ textAlign: "right" }}>SL</th>
+                    <th style={{ textAlign: "right" }}>Giá trị</th>
+                    <th>Lý do</th>
+                    <th>Nhân viên</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deletionReport.rows.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: "center", color: "var(--muted)", padding: "20px" }}>Chưa có dữ liệu xóa món</td></tr>
+                  ) : (
+                    deletionReport.rows.map((r, i) => (
+                      <tr key={`${r.timestamp}-${i}`}>
+                        <td style={{ fontSize: "12px" }}>{r.timestamp ? format(new Date(r.timestamp), "HH:mm dd/MM/yyyy", { locale: vi }) : "—"}</td>
+                        <td style={{ fontWeight: 600 }}>{r.tableName || "—"}</td>
+                        <td>
+                          {r.name}
+                          {r.sentToKitchen ? <div style={{ fontSize: "11px", color: "var(--warning)" }}>Đã gửi bếp</div> : null}
+                        </td>
+                        <td style={{ textAlign: "right" }}>{r.quantity}</td>
+                        <td style={{ textAlign: "right", fontWeight: 700, color: "var(--danger)" }}>{formatVND(r.amount)}</td>
+                        <td style={{ fontSize: "12px" }}>{r.reason || "—"}</td>
+                        <td style={{ fontSize: "12px" }}>{r.staffFullName || r.staffUsername || "—"}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -576,6 +726,7 @@ export default function AuditPage() {
       </div>
 
       {/* Main Table */}
+      {!(categoryFilter === "DELETE_ITEM" && showDeletionReport) && (
       <div className="table-wrapper">
         <table>
           <thead>
@@ -750,8 +901,10 @@ export default function AuditPage() {
         </table>
       </div>
 
+      )}
+
       {/* Pagination */}
-      {totalPages > 1 && (
+      {totalPages > 1 && !(categoryFilter === "DELETE_ITEM" && showDeletionReport) && (
         <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", alignItems: "center", justifyContent: "space-between", marginTop: "8px" }}>
           <div style={{ fontSize: "13px", color: "var(--subtext)" }}>
             Hiển thị <strong>{paginated.length}</strong> / <strong>{filtered.length}</strong> bản ghi
@@ -927,6 +1080,24 @@ export default function AuditPage() {
                 </div>
               </div>
             </div>
+
+            {selectedLog.action === "DELETE_ITEM" && (
+              <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+                {[
+                  ["Món", String(selectedLog.productName ?? "—")],
+                  ["Số lượng", String(selectedLog.quantity ?? "—")],
+                  ["Giá trị xóa", formatVND(Number(selectedLog.amount) || 0)],
+                  ["Lý do", String(selectedLog.reason ?? "—")],
+                  ["Bàn", String(selectedLog.tableName ?? "—")],
+                  ["Mã đơn", String(selectedLog.orderCode || "—")],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ background: "var(--bg)", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--subtext)", textTransform: "uppercase" }}>{k}</div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", marginTop: "2px", wordBreak: "break-word" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Chi tiết đầy đủ */}
             <div style={{ marginBottom: "20px" }}>

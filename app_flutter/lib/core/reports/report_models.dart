@@ -38,6 +38,7 @@ class ReportBillModel extends BillModel {
     super.customerPhone,
     super.shiftId,
     super.actionLogs,
+    super.deletedItems,
     this.guestCount = 1,
     this.refundAmount = 0,
     this.cancelReason,
@@ -75,6 +76,7 @@ class ReportBillModel extends BillModel {
       customerPhone: base.customerPhone,
       shiftId: base.shiftId,
       actionLogs: base.actionLogs,
+      deletedItems: base.deletedItems,
       guestCount: (map['guestCount'] as num?)?.toInt() ?? 1,
       refundAmount: (map['refundAmount'] as num?)?.toInt() ?? 0,
       cancelReason: map['cancelReason']?.toString(),
@@ -118,6 +120,7 @@ class ReportBillModel extends BillModel {
       customerPhone: base.customerPhone,
       shiftId: base.shiftId,
       actionLogs: base.actionLogs,
+      deletedItems: base.deletedItems,
       guestCount: guestCount,
       refundAmount: refundAmount,
       cancelReason: cancelReason,
@@ -694,6 +697,12 @@ class EndOfDayTab1TongHop {
   final int paidBillsCount;
   final int avgRevenuePerBill;
   final int totalGuests;
+  /// Món đã lưu bị xóa (từ deletedItems của HĐ PAID + CANCELLED trong kỳ)
+  final int deletedItemsCount;
+  final int deletedItemsAmount;
+  /// Hóa đơn hủy trong kỳ (giá trị = tổng tiền hàng subTotal)
+  final int cancelledBillsCount;
+  final int cancelledBillsAmount;
 
   const EndOfDayTab1TongHop({
     required this.grossRevenue,
@@ -708,6 +717,10 @@ class EndOfDayTab1TongHop {
     required this.paidBillsCount,
     required this.avgRevenuePerBill,
     required this.totalGuests,
+    this.deletedItemsCount = 0,
+    this.deletedItemsAmount = 0,
+    this.cancelledBillsCount = 0,
+    this.cancelledBillsAmount = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -723,6 +736,10 @@ class EndOfDayTab1TongHop {
     'paidBillsCount': paidBillsCount,
     'avgRevenuePerBill': avgRevenuePerBill,
     'totalGuests': totalGuests,
+    'deletedItemsCount': deletedItemsCount,
+    'deletedItemsAmount': deletedItemsAmount,
+    'cancelledBillsCount': cancelledBillsCount,
+    'cancelledBillsAmount': cancelledBillsAmount,
   };
 }
 
@@ -828,5 +845,76 @@ class EndOfDayReportData {
     'tab2_thuChi': tab2ThuChi.toMap(),
     'tab3_hangHoa': tab3HangHoa.toMap(),
     'tab4_phongBan': tab4PhongBan.toMap(),
+  };
+}
+
+/// 13. BÁO CÁO THEO CHƯƠNG TRÌNH KHUYẾN MÃI (CAMPAIGN REPORT)
+/// Gom theo campaignId (dữ liệu cũ: promoId → promoCode → tên).
+class CampaignBillRef {
+  final String billId;
+  final String billCode;
+  final int time;
+  final String tableName;
+  final String voucherCode;
+  final int discount;
+  final int billFinalAmount;
+
+  const CampaignBillRef({
+    required this.billId,
+    required this.billCode,
+    required this.time,
+    required this.tableName,
+    required this.voucherCode,
+    required this.discount,
+    required this.billFinalAmount,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'billId': billId,
+    'billCode': billCode,
+    'time': time,
+    'tableName': tableName,
+    'voucherCode': voucherCode,
+    'discount': discount,
+    'billFinalAmount': billFinalAmount,
+  };
+}
+
+class CampaignReportItem {
+  final String key;
+  final String campaignId;
+  final String name;
+  final String code;
+  final String type;
+  final int billCount;
+  final int discountAmount;
+  final int revenue;
+  final int voucherCodesUsed;
+  final List<CampaignBillRef> bills;
+
+  const CampaignReportItem({
+    required this.key,
+    required this.campaignId,
+    required this.name,
+    required this.code,
+    required this.type,
+    required this.billCount,
+    required this.discountAmount,
+    required this.revenue,
+    required this.voucherCodesUsed,
+    required this.bills,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'key': key,
+    'campaignId': campaignId,
+    'name': name,
+    'code': code,
+    'type': type,
+    'billCount': billCount,
+    'discountAmount': discountAmount,
+    'revenue': revenue,
+    'voucherCodesUsed': voucherCodesUsed,
+    'bills': bills.map((e) => e.toMap()).toList(),
   };
 }

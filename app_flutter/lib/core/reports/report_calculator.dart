@@ -2,6 +2,7 @@
 // Không import Flutter framework, phục vụ kiểm thử và tính toán độc lập
 
 import '../../data/models/bill_model.dart';
+import '../domain/deleted_items.dart';
 import '../../data/models/order_item_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/shift_model.dart';
@@ -735,6 +736,98 @@ class ReportCalculator {
     );
   }
 
+  /// Món đã lưu bị xóa trong kỳ: gom `deletedItems` của HĐ PAID và CANCELLED.
+  static DeletedItemsSummary calculateDeletedItems(List<BillModel> rawBills) {
+    final bills = deduplicateBills(rawBills).where((b) => b.status == 'PAID' || b.status == 'CANCELLED');
+    return DeletedItemsLogic.summarize(bills.expand((b) => b.deletedItems));
+  }
+
+  /// BÁO CÁO 12: HIỆU QUẢ THEO CHƯƠNG TRÌNH KHUYẾN MÃI (chỉ HĐ PAID).
+  /// Gom theo campaignId; dữ liệu cũ không có campaignId → promoId → promoCode → mô tả.
+  /// Đọc trường mới (campaignId, campaignName, programCode, campaignType, voucherCode)
+  /// qua toMap() để tương thích cả bản ghi cũ.
+  static List<CampaignReportItem> calculateCampaignReport(
+    List<BillModel> rawBills, {
+    Map<String, String>? campaignNames,
+  }) {
+    String str(Object? v) => v?.toString().trim() ?? '';
+    final paidBills = deduplicateBills(rawBills).where((b) => b.status == 'PAID');
+    final Map<String, _CampaignReportAccumulator> map = {};
+
+    for (final b in paidBills) {
+      final seenInBill = <String>{};
+      for (final d in b.discounts) {
+        final m = d.toMap();
+        final campaignId = str(m['campaignId']);
+        final promoId = str(m['promoId']);
+        final promoCode = str(m['promoCode']);
+        final programCode = str(m['programCode']);
+        final voucherCode = str(m['voucherCode']);
+        final description = str(m['description']);
+        final key = campaignId.isNotEmpty
+            ? campaignId
+            : promoId.isNotEmpty
+                ? promoId
+                : promoCode.isNotEmpty
+                    ? promoCode
+                    : (description.isNotEmpty ? description : 'KHAC');
+        final name = str(m['campaignName']).isNotEmpty
+            ? str(m['campaignName'])
+            : (campaignNames?[key] ??
+                campaignNames?[promoCode] ??
+                defaultCampaignNames[promoId] ??
+                defaultCampaignNames[promoCode] ??
+                (description.isNotEmpty ? description : key));
+        final acc = map.putIfAbsent(
+          key,
+          () => _CampaignReportAccumulator(
+            key: key,
+            campaignId: campaignId.isNotEmpty ? campaignId : promoId,
+            name: name,
+            code: programCode.isNotEmpty ? programCode : promoCode,
+            type: str(m['campaignType']),
+          ),
+        );
+        final amount = (m['amount'] as num?)?.toInt() ?? d.amount;
+        acc.discountAmount += amount;
+        if (voucherCode.isNotEmpty) acc.voucherCodesUsed += 1;
+        if (seenInBill.add(key)) {
+          acc.billCount += 1;
+          acc.revenue += b.finalAmount;
+        }
+        acc.bills.add(CampaignBillRef(
+          billId: b.id,
+          billCode: b.billCode,
+          time: b.closedAt ?? b.createdAt,
+          tableName: b.tableName,
+          voucherCode: voucherCode,
+          discount: amount,
+          billFinalAmount: b.finalAmount,
+        ));
+      }
+    }
+
+    final list = map.values
+        .map((a) => CampaignReportItem(
+              key: a.key,
+              campaignId: a.campaignId,
+              name: a.name,
+              code: a.code,
+              type: a.type,
+              billCount: a.billCount,
+              discountAmount: a.discountAmount,
+              revenue: a.revenue,
+              voucherCodesUsed: a.voucherCodesUsed,
+              bills: (a.bills..sort((x, y) => y.time.compareTo(x.time))),
+            ))
+        .toList();
+    list.sort((x, y) {
+      final c = y.discountAmount.compareTo(x.discountAmount);
+      return c != 0 ? c : x.name.compareTo(y.name);
+    });
+    return list;
+  }
+
   /// BÁO CÁO 11: BÁO CÁO CUỐI NGÀY (END-OF-DAY Z-REPORT)
   static EndOfDayReportData generateEndOfDayZReport({
     required List<BillModel> bills,
@@ -755,6 +848,7 @@ class ReportCalculator {
     // Tab 1: Tổng hợp
     // billDiscounts trong Tab 1 Z-Report gồm Bill Voucher + Points Discount (30k + 10k = 40k)
     final billDiscountsWithPoints = overview.billDiscounts + overview.pointsDiscounts;
+    final deleted = calculateDeletedItems(bills);
     final tab1 = EndOfDayTab1TongHop(
       grossRevenue: overview.grossRevenue,
       itemDiscounts: overview.itemDiscounts,
@@ -768,6 +862,10 @@ class ReportCalculator {
       paidBillsCount: overview.paidBillsCount,
       avgRevenuePerBill: overview.avgRevenuePerPaidBill,
       totalGuests: overview.totalGuests,
+      deletedItemsCount: deleted.count,
+      deletedItemsAmount: deleted.amount,
+      cancelledBillsCount: overview.cancelledBillsCount,
+      cancelledBillsAmount: overview.cancelledTotalValue,
     );
 
     // Tab 2: Thu chi
@@ -916,4 +1014,25 @@ class _ZoneAccumulator {
   int netRevenue = 0;
 
   _ZoneAccumulator({required this.zone});
+}
+
+class _CampaignReportAccumulator {
+  final String key;
+  final String campaignId;
+  final String name;
+  final String code;
+  final String type;
+  int billCount = 0;
+  int discountAmount = 0;
+  int revenue = 0;
+  int voucherCodesUsed = 0;
+  final List<CampaignBillRef> bills = [];
+
+  _CampaignReportAccumulator({
+    required this.key,
+    required this.campaignId,
+    required this.name,
+    required this.code,
+    required this.type,
+  });
 }

@@ -90,6 +90,8 @@ import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, setL
 import { deriveTableStatus, prePrintedAtOf, TABLE_STATUS_META, TABLE_STATUS_ORDER, type TableStatus } from "@/lib/table-status";
 import { hasPermission, useAuth } from "@/lib/auth";
 import LineDiscountDialog from "@/components/LineDiscountDialog";
+import DeleteItemDialog from "@/components/DeleteItemDialog";
+import { applyLineRemoval, buildDeletionEntry, deletionDetails, type DeletedItemEntry } from "@/lib/item-deletion";
 import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinDialog";
 import TableTransferDialog from "@/components/TableTransferDialog";
 import {
@@ -166,6 +168,8 @@ export default function TablesPage() {
     onApproved: (a: ManagerApproval) => void;
   } | null>(null);
   const [showSetPin, setShowSetPin] = useState(false);
+  // Xóa món / giảm số lượng (bắt buộc lý do — hợp đồng chung với Flutter)
+  const [removalTarget, setRemovalTarget] = useState<{ table: Table; orderJson: string; index: number; initialQty: number } | null>(null);
   // Chuyển / gộp bàn
   const [tableOp, setTableOp] = useState<{ kind: "TRANSFER" | "MERGE"; source: Table } | null>(null);
   const [tableOpBusy, setTableOpBusy] = useState(false);
@@ -464,14 +468,17 @@ export default function TablesPage() {
     nextItems: RawOrderLine[],
     action: string,
     details: string,
-    approval?: ManagerApproval | null
+    approval?: ManagerApproval | null,
+    deletions?: DeletedItemEntry[]
   ): Promise<string | null> => {
     const res = await updateTableOrderItems({ ...table, currentOrderJson: orderJson }, nextItems, {
       action,
       details,
       staffUsername: user?.username,
       staffFullName: user?.fullName,
+      staffRole: user?.roleId || user?.role,
       approval: approval ?? null,
+      deletions,
     });
     const err = res.success ? null : res.error || "Không lưu được thay đổi";
     setLineError(err || "");
@@ -528,55 +535,97 @@ export default function TablesPage() {
     if (!err) closeLineDiscount();
   };
 
-  const handleChangeLineQuantity = async (
-    table: Table,
-    index: number,
-    delta: number,
-    approval?: ManagerApproval,
-    snapshotJson?: string
-  ) => {
-    const orderJson = snapshotJson ?? (table.currentOrderJson || "");
+  /** Tăng 1 phần (món chưa gửi bếp); giảm → mở hộp thoại xóa món bắt buộc lý do */
+  const handleChangeLineQuantity = async (table: Table, index: number, delta: number) => {
+    const orderJson = table.currentOrderJson || "";
     const items = parseOrderItems(orderJson) as unknown as RawOrderLine[];
     const line = items[index];
     if (!line) return;
-    const qty = lineQuantity(line);
-    const sent = line.isSentKitchen === true;
     if (delta < 0) {
-      if (qty <= 1) return;
-      const needsPin = sent && !canCancelKitchenItem;
-      if (needsPin && approval) {
-        if (!isApprovalValid(approval, "CANCEL_KITCHEN_ITEM")) {
-          alert("Lần duyệt PIN đã hết hạn. Vui lòng thử lại.");
-          return;
-        }
-      } else {
-        if (sent && !confirm(`Giảm "${String(line.name ?? "")}" từ ${qty} xuống ${qty - 1} (món đã gửi bếp)?`)) return;
-        if (needsPin) {
-          // Thiếu CANCEL_KITCHEN_ITEM → nhờ Quản lý duyệt bằng PIN rồi thực hiện trên đúng bản đơn đã chụp
-          requestManagerPin(table, "CANCEL_KITCHEN_ITEM", `Giảm "${String(line.name ?? "")}" ${qty} → ${qty - 1} tại ${table.name}`, (a) => {
-            void handleChangeLineQuantity(table, index, delta, a, orderJson);
-          });
-          return;
-        }
-      }
-    } else if (sent) {
-      // Web không gửi phiếu bếp — thêm phần cho món đã gửi bếp phải làm trên POS
+      openRemoval(table, index, 1);
       return;
     }
+    // Web không gửi phiếu bếp — thêm phần cho món đã gửi bếp phải làm trên POS
+    if (line.isSentKitchen === true) return;
+    const qty = lineQuantity(line);
     const nextLine = setLineQuantity(line, qty + delta);
     const nextItems = items.map((it, i) => (i === index ? nextLine : it));
-    const action = delta < 0 && sent ? "CANCEL_KITCHEN_ITEM" : "UPDATE_ITEM_QTY";
     setLineSaving(true);
     const err = await writeOrderLines(
       table,
       orderJson,
       nextItems,
-      action,
-      `Đổi số lượng "${String(line.name ?? "")}" ${qty} → ${lineQuantity(nextLine)}`,
-      approval ?? null
+      "UPDATE_ITEM_QTY",
+      `Đổi số lượng "${String(line.name ?? "")}" ${qty} → ${lineQuantity(nextLine)}`
     );
     setLineSaving(false);
     if (err) alert(err);
+  };
+
+  const openRemoval = (table: Table, index: number, initialQty: number) => {
+    setLineError("");
+    setRemovalTarget({ table, orderJson: table.currentOrderJson || "", index, initialQty });
+  };
+
+  /** Xóa removeQty phần của dòng trên đúng bản đơn đã chụp; món đã gửi bếp thiếu quyền → Quản lý duyệt PIN */
+  const confirmRemoval = (removeQty: number, reason: string) => {
+    const target = removalTarget;
+    if (!target) return;
+    const { table, orderJson, index } = target;
+    const items = parseOrderItems(orderJson) as unknown as RawOrderLine[];
+    const line = items[index];
+    if (!line) return;
+    const sent = line.isSentKitchen === true;
+    const commit = async (approval: ManagerApproval | null) => {
+      if (approval && !isApprovalValid(approval, "CANCEL_KITCHEN_ITEM")) {
+        setLineError("Lần duyệt PIN đã hết hạn. Vui lòng thử lại.");
+        return;
+      }
+      const entry = buildDeletionEntry({
+        line,
+        removeQty,
+        reason,
+        staffUsername: user?.username,
+        staffFullName: user?.fullName,
+        now: Date.now(),
+      });
+      const nextItems = applyLineRemoval(items, index, entry.quantity, setLineQuantity);
+      setLineSaving(true);
+      const err = await writeOrderLines(
+        table,
+        orderJson,
+        nextItems,
+        sent ? "CANCEL_KITCHEN_ITEM" : "DELETE_ITEM",
+        deletionDetails(entry, table.name),
+        approval,
+        [entry]
+      );
+      if (!err && nextItems.length === 0) {
+        // Xóa hết món đã lưu → ghi hóa đơn CANCELLED (kèm deletedItems) và trả bàn — giống Flutter
+        const res = await cancelActiveTable(
+          { ...table, currentOrderJson: JSON.stringify(nextItems) },
+          `Xóa hết món — ${reason}`,
+          user?.fullName
+        );
+        setLineSaving(false);
+        if (!res.success) {
+          setLineError(res.error || "Đã xóa món nhưng không hủy được đơn của bàn");
+          return;
+        }
+        setRemovalTarget(null);
+        setSelectedTableForOrder(null);
+        return;
+      }
+      setLineSaving(false);
+      if (!err) setRemovalTarget(null);
+    };
+    if (sent && !canCancelKitchenItem) {
+      requestManagerPin(table, "CANCEL_KITCHEN_ITEM", `Xóa ${removeQty} x "${String(line.name ?? "")}" tại ${table.name}`, (a) => {
+        void commit(a);
+      });
+      return;
+    }
+    void commit(null);
   };
 
   const openTableOp = (kind: "TRANSFER" | "MERGE", source: Table) => {
@@ -1854,7 +1903,7 @@ export default function TablesPage() {
                         <th style={{ padding: "10px 14px", textAlign: "right" }}>Đơn giá</th>
                         <th style={{ padding: "10px 14px", textAlign: "right" }}>Thành tiền</th>
                         <th style={{ padding: "10px 8px", textAlign: "center" }}>
-                          <span className="sr-only">Giảm giá</span>
+                          <span className="sr-only">Giảm giá / Xóa món</span>
                         </th>
                       </tr>
                     </thead>
@@ -1899,13 +1948,13 @@ export default function TablesPage() {
                                   type="button"
                                   aria-label={`Giảm số lượng ${item.name}`}
                                   title={
-                                    qty <= 1
-                                      ? "Số lượng tối thiểu là 1"
-                                      : item.isSentKitchen && !canCancelKitchenItem
-                                        ? "Món đã gửi bếp — cần Quản lý duyệt bằng PIN"
-                                        : "Giảm 1 phần"
+                                    item.isSentKitchen && !canCancelKitchenItem
+                                      ? "Món đã gửi bếp — cần Quản lý duyệt bằng PIN"
+                                      : qty <= 1
+                                        ? "Xóa món (cần lý do)"
+                                        : "Giảm 1 phần (cần lý do)"
                                   }
-                                  disabled={lineSaving || qty <= 1}
+                                  disabled={lineSaving}
                                   onClick={() => handleChangeLineQuantity(selectedTableForOrder, idx, -1)}
                                   style={qtyBtnStyle}
                                 >
@@ -1931,6 +1980,7 @@ export default function TablesPage() {
                               {formatVND(lineTotal)}đ
                             </td>
                             <td style={{ padding: "12px 8px", textAlign: "center" }}>
+                              <div style={{ display: "inline-flex", gap: "6px" }}>
                               <button
                                 type="button"
                                 aria-label={`Giảm giá ${item.name}`}
@@ -1946,6 +1996,17 @@ export default function TablesPage() {
                               >
                                 <Percent size={14} />
                               </button>
+                              <button
+                                type="button"
+                                aria-label={`Xóa món ${item.name}`}
+                                title={item.isSentKitchen && !canCancelKitchenItem ? "Xóa món đã gửi bếp — cần Quản lý duyệt bằng PIN" : "Xóa món (cần lý do)"}
+                                disabled={lineSaving}
+                                onClick={() => openRemoval(selectedTableForOrder, idx, qty)}
+                                style={{ ...qtyBtnStyle, width: "32px", height: "32px", color: "var(--danger)" }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2178,6 +2239,26 @@ export default function TablesPage() {
             approval={canDiscountItem ? null : discountApproval}
             onCancel={closeLineDiscount}
             onSave={(next) => handleSaveLineDiscount(selectedTableForOrder, next)}
+          />
+        );
+      })()}
+
+      {removalTarget && (() => {
+        const line = (parseOrderItems(removalTarget.orderJson) as unknown as RawOrderLine[])[removalTarget.index];
+        if (!line) return null;
+        return (
+          <DeleteItemDialog
+            key={`${removalTarget.index}-${removalTarget.orderJson.length}`}
+            line={line}
+            tableName={removalTarget.table.name}
+            initialQty={removalTarget.initialQty}
+            saving={lineSaving}
+            error={lineError}
+            needsPin={line.isSentKitchen === true && !canCancelKitchenItem}
+            onCancel={() => {
+              if (!lineSaving) setRemovalTarget(null);
+            }}
+            onConfirm={confirmRemoval}
           />
         );
       })()}

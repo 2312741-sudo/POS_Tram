@@ -179,7 +179,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         children: [
                           _buildFilterChip('Tất cả', 'ALL', filtered.length),
                           const SizedBox(width: 6),
-                          _buildFilterChip('Đã thanh toán', 'PAID', paidBills.length),
+                          _buildFilterChip('Hoàn thành', 'PAID', paidBills.length),
                           const SizedBox(width: 6),
                           _buildFilterChip('Đã hủy', 'CANCELLED', cancelledBills.length),
                         ],
@@ -328,8 +328,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 decoration: isCancelled ? TextDecoration.lineThrough : null,
               ),
             ),
-            if (isCancelled)
-              Text('Đã hủy', style: GoogleFonts.beVietnamPro(fontSize: 10, color: context.tc.danger, fontWeight: FontWeight.bold)),
+            Text(
+              isCancelled ? 'Đã hủy' : (bill.status == 'PAID' ? 'Hoàn thành' : bill.status),
+              style: GoogleFonts.beVietnamPro(fontSize: 10, color: isCancelled ? context.tc.danger : context.tc.success, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         children: [
@@ -358,6 +360,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(FormatUtils.vnd(bill.subTotal), style: GoogleFonts.beVietnamPro(fontSize: 12)),
             ],
           ),
+          if (bill.itemDiscountTotal > 0)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Giảm giá món:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                Text('-${FormatUtils.vnd(bill.itemDiscountTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success)),
+              ],
+            ),
           if (bill.discounts.isNotEmpty) ...[
             ...bill.discounts.map((d) => Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -375,6 +385,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 Text('+${FormatUtils.vnd(bill.vatAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
               ],
             ),
+          if (bill.deletedItems.isNotEmpty) ...[
+            const Divider(),
+            Text('Món đã xóa (${bill.deletedItemsCount} món • ${FormatUtils.vnd(bill.deletedItemsAmount)}):',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+            ...bill.deletedItems.map((e) => Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '• ${e.quantity} x ${e.name} (${FormatUtils.vnd(e.amount)}) — ${e.reason} • ${e.staffFullName.isNotEmpty ? e.staffFullName : e.staffUsername}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
+                  ),
+                )),
+          ],
           const SizedBox(height: 12),
 
           // Action buttons: Cancel / Delete and Reprint

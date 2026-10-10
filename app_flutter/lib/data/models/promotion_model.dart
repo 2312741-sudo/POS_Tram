@@ -209,21 +209,44 @@ class BillDiscountModel {
   final int amount;
   final String? staffNote;
 
+  // Thông tin chương trình khuyến mãi (CampaignModel) - dùng cho báo cáo.
+  // promoId/promoCode giữ nguyên để tương thích dữ liệu cũ.
+  final String? campaignId;
+  final String? campaignName;
+  final String? programCode;
+  final String? campaignType;
+  final String? voucherCode;
+
   BillDiscountModel({
     this.promoId,
     this.promoCode,
     required this.description,
     required this.amount,
     this.staffNote,
+    this.campaignId,
+    this.campaignName,
+    this.programCode,
+    this.campaignType,
+    this.voucherCode,
   });
 
   factory BillDiscountModel.fromMap(Map<dynamic, dynamic> map) {
+    String? str(String k) {
+      final v = map[k]?.toString();
+      return (v == null || v.isEmpty) ? null : v;
+    }
+
     return BillDiscountModel(
       promoId: map['promoId']?.toString(),
       promoCode: map['promoCode']?.toString(),
       description: map['description']?.toString() ?? '',
       amount: (map['amount'] as num?)?.toInt() ?? 0,
       staffNote: map['staffNote']?.toString(),
+      campaignId: str('campaignId'),
+      campaignName: str('campaignName'),
+      programCode: str('programCode'),
+      campaignType: str('campaignType'),
+      voucherCode: str('voucherCode'),
     );
   }
 
@@ -233,5 +256,23 @@ class BillDiscountModel {
     'description': description,
     'amount': amount,
     if (staffNote != null) 'staffNote': staffNote,
+    if (campaignId != null) 'campaignId': campaignId,
+    if (campaignName != null) 'campaignName': campaignName,
+    if (programCode != null) 'programCode': programCode,
+    if (campaignType != null) 'campaignType': campaignType,
+    if (voucherCode != null) 'voucherCode': voucherCode,
   };
+
+  BillDiscountModel copyWith({int? amount, String? description, String? campaignName}) => BillDiscountModel(
+        promoId: promoId,
+        promoCode: promoCode,
+        description: description ?? this.description,
+        amount: amount ?? this.amount,
+        staffNote: staffNote,
+        campaignId: campaignId,
+        campaignName: campaignName ?? this.campaignName,
+        programCode: programCode,
+        campaignType: campaignType,
+        voucherCode: voucherCode,
+      );
 }

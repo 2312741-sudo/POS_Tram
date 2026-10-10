@@ -21,6 +21,7 @@ import {
   ShoppingCart,
   Warehouse,
   Tag,
+  BadgePercent,
 } from "lucide-react";
 
 const navItems = [
@@ -36,6 +37,7 @@ const navItems = [
   { href: "/dashboard/products", label: "Thực đơn & Sản phẩm", icon: Package },
   { href: "/dashboard/inventory", label: "Kho hàng & NVL", icon: Warehouse },
   { href: "/dashboard/promotions", label: "Khuyến mãi & Voucher", icon: Tag },
+  { href: "/dashboard/reports/promotions", label: "Báo cáo khuyến mãi", icon: BadgePercent },
   { href: "/dashboard/reports/inventory", label: "Báo cáo Kho hàng", icon: ClipboardCheck },
   { href: "/dashboard/users", label: "Nhân viên và phân quyền", icon: Users },
   { href: "/dashboard/audit", label: "Nhật ký Kiểm soát", icon: Shield },

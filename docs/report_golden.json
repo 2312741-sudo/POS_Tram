@@ -263,7 +263,23 @@
       "vatRate": 8.0,
       "vatAmount": 3760,
       "finalAmount": 50760,
-      "cogs": 18000
+      "cogs": 18000,
+      "deletedItems": [
+        {
+          "name": "Cà phê sữa đá",
+          "productId": 3,
+          "quantity": 1,
+          "unitPrice": 22000,
+          "amount": 22000,
+          "reason": "Khách đổi món",
+          "staffUsername": "phucvu1",
+          "staffFullName": "Lê Văn Phục",
+          "timestamp": 1791078000000,
+          "sentToKitchen": false
+        }
+      ],
+      "deletedItemsCount": 1,
+      "deletedItemsAmount": 22000
     },
     {
       "id": "BILL_261004_003",
@@ -1179,7 +1195,23 @@
       "vatRate": 0.0,
       "vatAmount": 0,
       "finalAmount": 0,
-      "cogs": 30000
+      "cogs": 30000,
+      "deletedItems": [
+        {
+          "name": "Trà đào cam sả",
+          "productId": 2,
+          "quantity": 2,
+          "unitPrice": 30000,
+          "amount": 54000,
+          "reason": "Hết món/hết nguyên liệu",
+          "staffUsername": "thungan1",
+          "staffFullName": "Nguyễn Thu Ngân",
+          "timestamp": 1791115560000,
+          "sentToKitchen": true
+        }
+      ],
+      "deletedItemsCount": 2,
+      "deletedItemsAmount": 54000
     },
     {
       "id": "BILL_261004_016",
@@ -2155,7 +2187,11 @@
         "netRevenueWithoutRefund": 1157560,
         "paidBillsCount": 17,
         "avgRevenuePerBill": 70856,
-        "totalGuests": 39
+        "totalGuests": 39,
+        "deletedItemsCount": 3,
+        "deletedItemsAmount": 76000,
+        "cancelledBillsCount": 2,
+        "cancelledBillsAmount": 120000
       },
       "tab2_thuChi": {
         "cashSales": 588960,

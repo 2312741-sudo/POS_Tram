@@ -283,6 +283,11 @@ describe("POS Trạm - Core Reports Pure Functions vs docs/report_golden.json", 
     expect(eod.tab1_tongHop.paidBillsCount).toBe(expected.tab1_tongHop.paidBillsCount);
     expect(eod.tab1_tongHop.avgRevenuePerBill).toBe(expected.tab1_tongHop.avgRevenuePerBill);
     expect(eod.tab1_tongHop.totalGuests).toBe(expected.tab1_tongHop.totalGuests);
+    // Đơn hủy & xóa món (REPORT_SPEC §5 BC12 / BC9b)
+    expect(eod.tab1_tongHop.cancelledBillsCount).toBe(expected.tab1_tongHop.cancelledBillsCount);
+    expect(eod.tab1_tongHop.cancelledBillsAmount).toBe(expected.tab1_tongHop.cancelledBillsAmount);
+    expect(eod.tab1_tongHop.deletedItemsCount).toBe(expected.tab1_tongHop.deletedItemsCount);
+    expect(eod.tab1_tongHop.deletedItemsAmount).toBe(expected.tab1_tongHop.deletedItemsAmount);
 
     // Tab 2: Thu chi
     expect(eod.tab2_thuChi.cashSales).toBe(expected.tab2_thuChi.cashSales);

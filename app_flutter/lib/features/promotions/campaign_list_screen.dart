@@ -368,9 +368,9 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
       case CampaignType.billDiscount:
         return 'Giảm giá đơn hàng';
       case CampaignType.orderValueItemBenefit:
-        return 'Tặng món theo giá trị đơn';
+        return 'Giảm/tặng món theo giá trị hóa đơn';
       case CampaignType.buyXGetY:
-        return 'Mua X tặng Y';
+        return 'Mua X tặng/giảm giá Y';
       case CampaignType.itemPriceRule:
         return 'Đồng giá/Đồng giảm giá';
     }
