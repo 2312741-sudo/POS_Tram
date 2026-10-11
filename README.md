@@ -14,6 +14,8 @@
 - **Tích Hợp Phần Cứng Chuyên Dụng**:
   - Tự động sinh mã VietQR Napas 24/7 theo từng hóa đơn.
   - In phiếu thanh toán và phiếu báo bếp qua mạng LAN (cổng 9100) hoặc Bluetooth SPP với chuẩn ESC/POS.
+- **Gọi Món Trên Web (dự phòng khi app POS sự cố)**: mở bàn, thêm món, gửi phiếu bếp ngay từ Web Admin; thao tác nhạy cảm (hủy món đã gửi bếp, giảm giá món) cần PIN duyệt của Quản lý nếu nhân viên thiếu quyền.
+- **CRM & Điểm Khách Hàng**: cấu hình điểm theo hạng, thêm khách mới, Chủ/Quản lý chỉnh điểm (có lý do + nhật ký), báo cáo lịch sử dùng điểm, điểm dùng chung toàn hệ thống (Chủ xác nhận).
 - **Bảo Mật & Phân Quyền Vai Trò (RBAC)**: Phân quyền chi tiết cho Admin, Quản lý, Thu ngân, Phục vụ và Bếp cùng cơ chế quyền tối thượng cho Chủ quán.
 
 ---

@@ -15,6 +15,8 @@ import {
   parseDeletedItems,
   type DeletedItemEntry,
 } from "./item-deletion";
+import { buildWebOrderUpdates, type OrderActor } from "./web-order";
+import { normalizeTiers, parseSharedLoyalty, type LoyaltyTier, type SharedLoyaltyConfig } from "./loyalty";
 import { approvalAuditFields, approvalSuffix, type ManagerApproval } from "./manager-approval";
 import {
   buildMergePayloads,
@@ -249,6 +251,10 @@ export interface StoreItem {
   allowStaffViewShiftDifference?: boolean;
   pointEarnRate?: number;
   pointRedeemRate?: number;
+  /** Điểm tích lũy tối thiểu cho từng hạng (storeInfo.loyaltyTiers); luôn có giá trị (mặc định nếu chưa cấu hình) */
+  loyaltyTiers?: LoyaltyTier[];
+  /** Điểm dùng chung toàn hệ thống — Chủ quán xác nhận (storeInfo.sharedLoyalty) */
+  sharedLoyalty?: SharedLoyaltyConfig;
   active?: boolean;
   createdAt?: number | string;
   totalTables?: number;
@@ -322,6 +328,15 @@ interface DashboardContextType {
     nextItems: RawOrderLine[],
     log: TableOrderLog
   ) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Bấm đơn trên web (dự phòng khi app POS sự cố): mở bàn trống nếu cần, thêm món vào đơn và
+   * (tùy chọn) gửi phiếu bếp — đọc lại bàn từ DB để không ghi đè món vừa gọi từ POS.
+   */
+  submitWebOrder: (
+    table: TableItem,
+    newLines: RawOrderLine[],
+    opts: { sendKitchen: boolean; guestCount?: number; kitchenNote?: string; actor: OrderActor }
+  ) => Promise<{ success: boolean; error?: string; sentCount?: number; orderCode?: string }>;
   /** Chuyển toàn bộ đơn sang bàn trống (khớp Flutter transferTable); đọc lại 2 bàn từ DB, từ chối nếu đã đổi */
   transferTable: (source: TableItem, target: TableItem, actor: TableActor) => Promise<{ success: boolean; error?: string }>;
   /** Gộp đơn bàn nguồn vào bàn đích đang có khách (khớp Flutter mergeTables) */
@@ -395,6 +410,7 @@ const DashboardContext = createContext<DashboardContextType>({
   saveTable: async () => ({ success: false }),
   deleteTable: async () => ({ success: false }),
   updateTableOrderItems: async () => ({ success: false }),
+  submitWebOrder: async () => ({ success: false }),
   transferTable: async () => ({ success: false }),
   mergeTables: async () => ({ success: false }),
   markTablePrePrinted: async () => ({ success: false }),
@@ -693,6 +709,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         // Cấu hình tích / đổi điểm (trang Khách hàng)
         pointEarnRate: typeof info.pointEarnRate === "number" ? info.pointEarnRate : undefined,
         pointRedeemRate: typeof info.pointRedeemRate === "number" ? info.pointRedeemRate : undefined,
+        loyaltyTiers: normalizeTiers(info.loyaltyTiers),
+        sharedLoyalty: parseSharedLoyalty(info.sharedLoyalty),
         active: info.active ?? true,
         createdAt: info.createdAt || Date.now(),
       });
@@ -1678,6 +1696,52 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     [currentStoreCode, buildTableFieldUpdates]
   );
 
+  const submitWebOrder = useCallback(
+    async (
+      table: TableItem,
+      newLines: RawOrderLine[],
+      opts: { sendKitchen: boolean; guestCount?: number; kitchenNote?: string; actor: OrderActor }
+    ): Promise<{ success: boolean; error?: string; sentCount?: number; orderCode?: string }> => {
+      try {
+        const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+        const snap = await get(ref(db, `stores/${targetStoreCode}/tables/${table.id}`));
+        if (!snap.exists()) return { success: false, error: "Không tìm thấy bàn trên máy chủ" };
+        const fresh = snap.val() as Record<string, unknown>;
+        if (fresh.isReserved === true && fresh.inUse !== true) {
+          return { success: false, error: "Bàn đang được đặt trước — hãy nhận bàn (check-in) trước khi gọi món" };
+        }
+        const res = buildWebOrderUpdates({
+          storeCode: targetStoreCode,
+          tableKeys: tableKeysFor(targetStoreCode, table),
+          table: {
+            name: table.name,
+            zone: table.zone,
+            inUse: fresh.inUse === true,
+            openedAt: fresh.openedAt,
+            guestCount: typeof fresh.guestCount === "number" ? fresh.guestCount : undefined,
+            currentOrderCode: typeof fresh.currentOrderCode === "string" ? fresh.currentOrderCode : null,
+            currentBillId: typeof fresh.currentBillId === "string" ? fresh.currentBillId : null,
+            actionLogsJson: typeof fresh.actionLogsJson === "string" ? fresh.actionLogsJson : null,
+          },
+          existingLines: fresh.inUse === true ? parseOrderJson(typeof fresh.currentOrderJson === "string" ? fresh.currentOrderJson : "") : [],
+          newLines,
+          sendKitchen: opts.sendKitchen,
+          guestCount: opts.guestCount,
+          kitchenNote: opts.kitchenNote,
+          actor: opts.actor,
+          now: Date.now(),
+        });
+        if (!res.ok) return { success: false, error: res.error };
+        await update(ref(db), res.updates);
+        return { success: true, sentCount: res.sentCount, orderCode: res.orderCode };
+      } catch (e) {
+        console.error("submitWebOrder error:", e);
+        return { success: false, error: errorMessage(e, "Lỗi lưu đơn trên Web") };
+      }
+    },
+    [currentStoreCode, tableKeysFor]
+  );
+
   // Chuyển / gộp bàn: đọc lại CẢ 2 bàn từ DB, từ chối nếu đã đổi so với bản người dùng đang xem,
   // rồi ghi bàn nguồn + bàn đích + audit log trong MỘT update() đa đường dẫn.
   const runTableOp = useCallback(
@@ -2170,6 +2234,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       saveTable,
       deleteTable,
       updateTableOrderItems,
+      submitWebOrder,
       transferTable,
       mergeTables,
       markTablePrePrinted,
@@ -2212,6 +2277,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       saveTable,
       deleteTable,
       updateTableOrderItems,
+      submitWebOrder,
       transferTable,
       mergeTables,
       markTablePrePrinted,

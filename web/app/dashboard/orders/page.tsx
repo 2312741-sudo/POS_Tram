@@ -23,15 +23,21 @@ import {
 } from "lucide-react";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-import { billItemDiscount, billLevelDiscount, billStatusLabel, calculateCancellationReport, formatVND, isRevenueBill } from "@/lib/reports";
+import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
 import { billDeletedItems } from "@/lib/item-deletion";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
 import { buildOrderReceiptHtml } from "@/lib/print-html";
+import { useAuth } from "@/lib/auth";
+import { canAdjustPoints as isOwnerOrManager } from "@/lib/customers";
+import SampleDataDialog from "@/components/SampleDataDialog";
 
 const PAGE_SIZE = 20;
 
 export default function OrdersPage() {
   const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder } = useDashboardData();
+  const { user } = useAuth();
+  const [showSamples, setShowSamples] = useState(false);
+  const canManageSamples = isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && currentStoreCode !== "ALL";
   const loading = !historyLoaded && historyData.length === 0;
   const [search, setSearch] = useState("");
   const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("ALL");
@@ -238,10 +244,17 @@ export default function OrdersPage() {
               </button>
             </>
           ) : (
+            <>
+            {canManageSamples && (
+              <button className="btn-secondary" onClick={() => setShowSamples(true)}>
+                Dữ liệu mẫu
+              </button>
+            )}
             <button className="btn-primary" onClick={handleExportAll}>
               <Download size={16} />
               Xuất Toàn bộ Excel (3 Sheets)
             </button>
+            </>
           )}
         </div>
       </div>
@@ -713,6 +726,12 @@ export default function OrdersPage() {
                     Giá gốc: {formatVND(selectedOrder.subTotal || selectedOrder.totalAmount || 0)}
                   </div>
                 )}
+                {billPointsUsed(selectedOrder) > 0 ? (
+                  <div style={{ fontSize: "11px", color: "var(--primary)", marginTop: "2px", fontWeight: 600 }}>
+                    Đổi điểm: {formatNumber(billPointsUsed(selectedOrder))} điểm = −{formatVND(billPointsDiscount(selectedOrder))}
+                    {selectedOrder.customerName ? ` (${selectedOrder.customerName})` : ""}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1034,6 +1053,15 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showSamples && currentStoreCode !== "ALL" && (
+        <SampleDataDialog
+          storeCode={currentStoreCode}
+          storeName={stores.find((x) => x.storeCode === currentStoreCode)?.storeName || currentStoreCode}
+          actor={{ username: user?.username || "admin_web", fullName: user?.fullName }}
+          onClose={() => setShowSamples(false)}
+        />
       )}
     </div>
   );

@@ -19,6 +19,8 @@ import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData } from "@/lib/data-context";
 import { useAuth, hasPermission } from "@/lib/auth";
+import { buildStockAdjustment, collectItemGroups } from "@/lib/stock-adjust";
+import { canAdjustPoints as isOwnerOrManager } from "@/lib/customers";
 import * as XLSX from "xlsx";
 import { errorMessage } from "@/lib/errors";
 
@@ -191,6 +193,8 @@ export default function InventoryPage() {
   const { user } = useAuth();
 
   const canStockIn = user?.isRootOwner || hasPermission(user, "INVENTORY_STOCK_IN") || hasPermission(user, "CREATE_RECEIPT");
+  // Rules: chỉ Chủ quán / Quản lý ghi được stock_balances
+  const canSetOnHand = isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && (user?.isRootOwner || hasPermission(user, "INVENTORY_STOCK_IN") || hasPermission(user, "CREATE_RECEIPT"));
   const canStockOut = user?.isRootOwner || hasPermission(user, "INVENTORY_STOCK_OUT") || hasPermission(user, "CREATE_INTERNAL_USE");
   const canWaste = user?.isRootOwner || hasPermission(user, "INVENTORY_WASTE") || hasPermission(user, "CREATE_WASTE");
   const canCompleteDoc = user?.isRootOwner || hasPermission(user, "COMPLETE_RECEIPT") || hasPermission(user, "INVENTORY_STOCK_IN");
@@ -198,6 +202,13 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<"catalog" | "stock" | "documents" | "suppliers">("catalog");
   const [search, setSearch] = useState("");
   const [filterKind, setFilterKind] = useState("");
+  const [filterGroup, setFilterGroup] = useState("");
+  // Nhập / điều chỉnh số lượng tồn của một hàng (kiểm kê, tồn đầu kỳ)
+  const [stockEditItem, setStockEditItem] = useState<CatalogItem | null>(null);
+  const [stockQtyInput, setStockQtyInput] = useState("");
+  const [stockReason, setStockReason] = useState("");
+  const [stockBusy, setStockBusy] = useState(false);
+  const [stockError, setStockError] = useState("");
   const [filterDocType, setFilterDocType] = useState("");
   const [filterDocStatus, setFilterDocStatus] = useState("");
 
@@ -419,9 +430,12 @@ export default function InventoryPage() {
         i.sku.toLowerCase().includes(search.toLowerCase()) ||
         (i.managementGroup && i.managementGroup.toLowerCase().includes(search.toLowerCase()));
       const matchKind = !filterKind || i.kind === filterKind;
-      return matchSearch && matchKind;
+      const matchGroup = !filterGroup || i.managementGroup === filterGroup || i.groupIds.includes(filterGroup);
+      return matchSearch && matchKind && matchGroup;
     });
-  }, [catalogItems, search, filterKind]);
+  }, [catalogItems, search, filterKind, filterGroup]);
+
+  const itemGroups = useMemo(() => collectItemGroups(catalogItems), [catalogItems]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
@@ -452,6 +466,40 @@ export default function InventoryPage() {
   }, [stockBalances]);
 
   // Save Single Catalog Item
+  const openStockEdit = (item: CatalogItem) => {
+    setStockEditItem(item);
+    setStockQtyInput(String(balanceMap[item.itemId]?.onHandQty ?? 0));
+    setStockReason("");
+    setStockError("");
+  };
+
+  const handleSaveStock = async () => {
+    if (!stockEditItem) return;
+    const res = buildStockAdjustment({
+      storeCode: targetStoreCode,
+      item: stockEditItem,
+      current: balanceMap[stockEditItem.itemId],
+      newQty: stockQtyInput.trim() === "" ? NaN : Number(stockQtyInput),
+      reason: stockReason,
+      actor: { username: user?.username || "admin", fullName: user?.fullName, role: user?.roleId || user?.role },
+      now: Date.now(),
+    });
+    if (!res.ok) {
+      setStockError(res.error);
+      return;
+    }
+    setStockBusy(true);
+    setStockError("");
+    try {
+      await update(ref(db), res.updates);
+      setStockEditItem(null);
+    } catch (e) {
+      setStockError(errorMessage(e) || "Lỗi lưu số lượng tồn");
+    } finally {
+      setStockBusy(false);
+    }
+  };
+
   const handleSaveItem = async () => {
     if (!itemForm.name.trim()) {
       setFormError("Tên hàng là bắt buộc");
@@ -473,6 +521,7 @@ export default function InventoryPage() {
         name: itemForm.name.trim(),
         kind: itemForm.kind,
         managementGroup: itemForm.managementGroup.trim(),
+        groupIds: itemForm.managementGroup.trim() ? [itemForm.managementGroup.trim()] : [],
         baseUnitId: itemForm.baseUnitId.trim(),
         trackStock: itemForm.trackStock,
         costPrice: parseInt(itemForm.costPrice) || 0,
@@ -1344,6 +1393,20 @@ export default function InventoryPage() {
             style={{ width: "100%", padding: "10px 12px 10px 36px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px" }}
           />
         </div>
+        {activeTab === "catalog" && itemGroups.length > 0 && (
+          <select
+            value={filterGroup}
+            onChange={(e) => setFilterGroup(e.target.value)}
+            style={{ padding: "10px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "13px", minWidth: "160px" }}
+          >
+            <option value="">Tất cả nhóm hàng</option>
+            {itemGroups.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        )}
         {activeTab === "catalog" && (
           <select
             value={filterKind}
@@ -1392,13 +1455,37 @@ export default function InventoryPage() {
       ) : (
         <>
           {activeTab === "catalog" && <CatalogTable items={filteredCatalog} balanceMap={balanceMap} onEdit={openEditItem} />}
-          {activeTab === "stock" && <StockTable items={catalogItems.filter((i) => i.trackStock)} balanceMap={balanceMap} />}
+          {activeTab === "stock" && (
+            <StockTable
+              items={catalogItems.filter((i) => i.trackStock)}
+              balanceMap={balanceMap}
+              onAdjust={canSetOnHand ? openStockEdit : undefined}
+            />
+          )}
           {activeTab === "documents" && <DocumentsTable docs={filteredDocs} onSelectDoc={setViewingDoc} />}
           {activeTab === "suppliers" && <SuppliersTable suppliers={filteredSuppliers} onEdit={openEditSupplier} />}
         </>
       )}
 
       {/* Add/Edit Item Modal */}
+      {stockEditItem && (
+        <Modal title={`Nhập số lượng tồn — ${stockEditItem.name}`} onClose={() => setStockEditItem(null)}>
+          <div style={{ fontSize: "13px", color: "var(--subtext)", marginBottom: "12px" }}>
+            Mã {stockEditItem.sku} • Tồn hiện tại: <strong>{balanceMap[stockEditItem.itemId]?.onHandQty ?? 0}</strong> {stockEditItem.baseUnitId}
+          </div>
+          <FormField label={`Số lượng tồn thực tế (${stockEditItem.baseUnitId})`} value={stockQtyInput} onChange={setStockQtyInput} type="number" />
+          <div style={{ height: "10px" }} />
+          <FormField label="Lý do / ghi chú kiểm kê *" value={stockReason} onChange={setStockReason} placeholder="VD: Tồn đầu kỳ, kiểm kê cuối tháng" />
+          {stockError && <div style={{ color: "#ef4444", fontSize: "13px", marginTop: "8px" }}>{stockError}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "16px" }}>
+            <button onClick={() => setStockEditItem(null)} style={btnSecondary}>Hủy</button>
+            <button onClick={handleSaveStock} disabled={stockBusy} style={btnPrimary}>
+              {stockBusy ? "Đang lưu..." : "Lưu tồn kho"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {showItemModal && (
         <Modal title={editingItem ? "Sửa hàng hóa" : "Thêm hàng hóa"} onClose={() => setShowItemModal(false)}>
           <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -1414,7 +1501,21 @@ export default function InventoryPage() {
                 ))}
               </select>
             </div>
-            <FormField label="Nhóm quản lý" value={itemForm.managementGroup} onChange={(v) => setItemForm({ ...itemForm, managementGroup: v })} />
+            <div>
+              <label style={labelStyle}>Nhóm hàng (chọn hoặc gõ nhóm mới)</label>
+              <input
+                list="inventory-group-options"
+                value={itemForm.managementGroup}
+                onChange={(e) => setItemForm({ ...itemForm, managementGroup: e.target.value })}
+                placeholder="VD: Sữa, Trà, Topping, Bao bì..."
+                style={inputStyle}
+              />
+              <datalist id="inventory-group-options">
+                {itemGroups.map((g) => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+            </div>
             <FormField label="Đơn vị cơ bản *" value={itemForm.baseUnitId} onChange={(v) => setItemForm({ ...itemForm, baseUnitId: v })} placeholder="g, ml, cái, chai..." />
             <FormField label="Giá vốn (VND)" value={itemForm.costPrice} onChange={(v) => setItemForm({ ...itemForm, costPrice: v })} type="number" />
             <FormField label="Tồn tối thiểu" value={itemForm.minStock} onChange={(v) => setItemForm({ ...itemForm, minStock: v })} type="number" />
@@ -2341,7 +2442,15 @@ function CatalogTable({
   );
 }
 
-function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: Record<string, StockBalanceItem> }) {
+function StockTable({
+  items,
+  balanceMap,
+  onAdjust,
+}: {
+  items: CatalogItem[];
+  balanceMap: Record<string, StockBalanceItem>;
+  onAdjust?: (item: CatalogItem) => void;
+}) {
   if (items.length === 0)
     return (
       <EmptyState
@@ -2355,7 +2464,7 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "var(--surface-muted)" }}>
-            {["Mã", "Tên hàng", "ĐVT", "Tồn kho", "Đang giữ", "Có thể bán", "Giá vốn TB", "Giá trị tồn"].map((h) => (
+            {["Mã", "Tên hàng", "ĐVT", "Tồn kho", "Đang giữ", "Có thể bán", "Giá vốn TB", "Giá trị tồn", ...(onAdjust ? [""] : [])].map((h) => (
               <th key={h} style={thStyle}>
                 {h}
               </th>
@@ -2395,6 +2504,16 @@ function StockTable({ items, balanceMap }: { items: CatalogItem[]; balanceMap: R
                 <td style={{ ...tdStyle, textAlign: "right", fontWeight: "600" }}>
                   {bal?.inventoryValue ? formatVND(bal.inventoryValue) : "—"}
                 </td>
+                {onAdjust && (
+                  <td style={{ ...tdStyle, textAlign: "center" }}>
+                    <button
+                      onClick={() => onAdjust(item)}
+                      style={{ padding: "5px 10px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--primary)", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                    >
+                      Nhập tồn
+                    </button>
+                  </td>
+                )}
               </tr>
             );
           })}

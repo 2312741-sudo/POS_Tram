@@ -29,6 +29,8 @@ import {
   ArrowRightLeft,
   GitMerge,
   KeyRound,
+  Settings2,
+  ChefHat,
 } from "lucide-react";
 
 interface OrderItem {
@@ -94,6 +96,9 @@ import DeleteItemDialog from "@/components/DeleteItemDialog";
 import { applyLineRemoval, buildDeletionEntry, deletionDetails, type DeletedItemEntry } from "@/lib/item-deletion";
 import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinDialog";
 import TableTransferDialog from "@/components/TableTransferDialog";
+import ZoneSetupDialog from "@/components/ZoneSetupDialog";
+import WebOrderDialog from "@/components/WebOrderDialog";
+import { canAdjustPoints as canManageLayout } from "@/lib/customers";
 import {
   approverOptions,
   canUserApprove,
@@ -115,6 +120,8 @@ export default function TablesPage() {
     saveTable,
     deleteTable,
     updateTableOrderItems,
+    submitWebOrder,
+    products,
     transferTable,
     mergeTables,
     markTablePrePrinted,
@@ -128,6 +135,9 @@ export default function TablesPage() {
   // Giống Flutter: chuyển bàn = CHANGE_TABLE ("Đổi bàn / Chuyển khu vực"), gộp bàn = MERGE_SPLIT_TABLE
   const canTransferTable = hasPermission(user, "CHANGE_TABLE");
   const canMergeTable = hasPermission(user, "MERGE_SPLIT_TABLE");
+  // Bấm đơn trên web (dự phòng POS): mở bàn/gọi món = OPEN_TABLE, gửi bếp = SEND_KITCHEN
+  const canOrderOnWeb = hasPermission(user, "OPEN_TABLE");
+  const canSendKitchenFromWeb = hasPermission(user, "SEND_KITCHEN");
   // Quản lý / chủ quán có thể tự đặt PIN duyệt
   const canSetApprovalPin = !!user && canUserApprove({ ...user }, "DISCOUNT_ITEM");
   const loading = ctxLoading && tables.length === 0;
@@ -168,6 +178,10 @@ export default function TablesPage() {
     onApproved: (a: ManagerApproval) => void;
   } | null>(null);
   const [showSetPin, setShowSetPin] = useState(false);
+  const [showZoneSetup, setShowZoneSetup] = useState(false);
+  const [orderTarget, setOrderTarget] = useState<Table | null>(null);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderError, setOrderError] = useState("");
   // Xóa món / giảm số lượng (bắt buộc lý do — hợp đồng chung với Flutter)
   const [removalTarget, setRemovalTarget] = useState<{ table: Table; orderJson: string; index: number; initialQty: number } | null>(null);
   // Chuyển / gộp bàn
@@ -628,6 +642,52 @@ export default function TablesPage() {
     void commit(null);
   };
 
+  const orderActor = {
+    username: user?.username || "admin_web",
+    fullName: user?.fullName,
+    role: user?.roleId || user?.role,
+  };
+
+  const orderableProducts = useMemo(
+    () =>
+      orderTarget
+        ? products
+            .filter((p) => (p.storeCode || currentStoreCode) === (orderTarget.storeCode || currentStoreCode))
+            .map((p) => ({ id: p.id, name: p.name, price: p.price, category: p.category, unit: p.unit, isTopping: p.isTopping }))
+        : [],
+    [products, orderTarget, currentStoreCode]
+  );
+
+  const openOrderDialog = (t: Table) => {
+    setOrderError("");
+    setOrderTarget(t);
+  };
+
+  const handleSubmitWebOrder = async (
+    lines: RawOrderLine[],
+    opts: { sendKitchen: boolean; guestCount: number; kitchenNote: string }
+  ) => {
+    if (!orderTarget) return;
+    setOrderSaving(true);
+    setOrderError("");
+    const res = await submitWebOrder(orderTarget, lines, {
+      sendKitchen: opts.sendKitchen && canSendKitchenFromWeb,
+      guestCount: opts.guestCount,
+      kitchenNote: opts.kitchenNote,
+      actor: orderActor,
+    });
+    setOrderSaving(false);
+    if (!res.success) {
+      setOrderError(res.error || "Không lưu được đơn");
+      return;
+    }
+    setOrderTarget(null);
+    setCheckoutToast(
+      res.sentCount ? `Đã lưu đơn ${orderTarget.name} và gửi ${res.sentCount} dòng món cho bếp` : `Đã lưu đơn ${orderTarget.name}`
+    );
+    setTimeout(() => setCheckoutToast(null), 4000);
+  };
+
   const openTableOp = (kind: "TRANSFER" | "MERGE", source: Table) => {
     setTableOpError("");
     setTableOp({ kind, source });
@@ -774,6 +834,17 @@ export default function TablesPage() {
             <button className="btn-secondary" onClick={() => setShowSetPin(true)} title="Đặt PIN để duyệt thao tác cho nhân viên">
               <KeyRound size={16} />
               PIN duyệt
+            </button>
+          )}
+          {canManageLayout(user?.roleId || user?.role, user?.isRootOwner) && (
+            <button
+              className="btn-secondary"
+              onClick={() => setShowZoneSetup(true)}
+              disabled={currentStoreCode === "ALL"}
+              title={currentStoreCode === "ALL" ? "Chọn 1 chi nhánh cụ thể để thiết lập khu vực" : "Thêm / xóa khu vực bàn"}
+            >
+              <Settings2 size={16} />
+              Thiết lập khu vực
             </button>
           )}
           <button className="btn-primary" onClick={openAdd}>
@@ -1499,6 +1570,16 @@ export default function TablesPage() {
                           gap: "8px",
                         }}
                       >
+                        {canOrderOnWeb && (
+                          <button
+                            className="btn-primary"
+                            style={{ padding: "6px 12px", fontSize: "12px" }}
+                            onClick={() => openOrderDialog(t)}
+                          >
+                            <ChefHat size={14} />
+                            Gọi món
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(t)}
                           style={{
@@ -2161,8 +2242,19 @@ export default function TablesPage() {
               </div>
 
               {/* Actions */}
-              {(canTransferTable || canMergeTable) && (
+              {(canTransferTable || canMergeTable || canOrderOnWeb) && (
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
+                  {canOrderOnWeb && (
+                    <button
+                      className="btn-primary"
+                      onClick={() => openOrderDialog(selectedTableForOrder)}
+                      disabled={completingPayment}
+                      style={{ flex: 1, minWidth: "130px", justifyContent: "center" }}
+                    >
+                      <ChefHat size={16} />
+                      Thêm món
+                    </button>
+                  )}
                   {canTransferTable && (
                     <button
                       className="btn-secondary"
@@ -2225,6 +2317,31 @@ export default function TablesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {orderTarget && (
+        <WebOrderDialog
+          tableName={orderTarget.name}
+          zone={orderTarget.zone}
+          opening={!orderTarget.inUse}
+          existingCount={parseOrderItems(orderTarget.currentOrderJson).length}
+          products={orderableProducts}
+          actor={orderActor}
+          canSendKitchen={canSendKitchenFromWeb}
+          saving={orderSaving}
+          error={orderError}
+          onCancel={() => setOrderTarget(null)}
+          onSubmit={handleSubmitWebOrder}
+        />
+      )}
+
+      {showZoneSetup && currentStoreCode !== "ALL" && (
+        <ZoneSetupDialog
+          storeCode={currentStoreCode}
+          tables={tables.filter((t) => (t.storeCode || currentStoreCode) === currentStoreCode)}
+          actor={{ username: user?.username || "admin_web", fullName: user?.fullName, role: user?.roleId || user?.role }}
+          onClose={() => setShowZoneSetup(false)}
+        />
       )}
 
       {selectedTableForOrder && discountTarget && (() => {

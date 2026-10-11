@@ -1,0 +1,12 @@
+{
+  "name": "seed-demo-accounts",
+  "version": "1.0.0",
+  "description": "Tạo / gỡ tài khoản mẫu theo bộ phận (Chủ, Quản lý, Bán hàng, Bếp)",
+  "main": "seed.js",
+  "scripts": {
+    "test": "node --test accounts.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Users,
   Search,
@@ -11,20 +11,40 @@ import {
   Coins,
   RefreshCw,
   Check,
+  UserPlus,
+  Award,
+  History,
+  Globe2,
 } from "lucide-react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
 import { db } from "@/lib/firebase";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, update } from "firebase/database";
 import { exportCustomersList, CustomerExportItem } from "@/lib/export";
 import { formatVND, formatNumber } from "@/lib/reports";
 import {
-  CUSTOMER_TIERS,
   StoreCustomer,
+  canAdjustPoints,
   canEditPointConfig,
   canReadCustomers,
   parseStoreCustomers,
 } from "@/lib/customers";
+import {
+  DEFAULT_LOYALTY_TIERS,
+  buildNewCustomerNode,
+  buildPointAdjustment,
+  buildSharedLoyaltyUpdates,
+  poolCustomersByPhone,
+  validateTiers,
+  type AdjustMode,
+  type LoyaltyTier,
+} from "@/lib/loyalty";
+import { errorMessage } from "@/lib/errors";
+import CustomerFormDialog from "@/components/CustomerFormDialog";
+import PointAdjustDialog from "@/components/PointAdjustDialog";
+import LoyaltyTierDialog from "@/components/LoyaltyTierDialog";
+import ModalShell, { btnGhost, btnPrimary } from "@/components/ModalShell";
 
 const DEFAULT_REDEEM_RATE = 1000;
 const DEFAULT_EARN_RATE = 1.0;
@@ -34,7 +54,7 @@ export default function CustomersPage() {
   const { stores, currentStoreCode, updateStore } = useDashboardData();
 
   // Dữ liệu khách theo từng chi nhánh: stores/{code}/customers (lắng nghe realtime)
-  const [customersByStore, setCustomersByStore] = useState<Record<string, StoreCustomer[]>>({});
+  const [rawByStore, setRawByStore] = useState<Record<string, unknown>>({});
   const [loadedStores, setLoadedStores] = useState<Record<string, true>>({});
   const [deniedStores, setDeniedStores] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState<number>(0);
@@ -42,6 +62,13 @@ export default function CustomersPage() {
   const [selectedTier, setSelectedTier] = useState<string>("ALL");
 
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [showTierDialog, setShowTierDialog] = useState(false);
+  const [showPoolDialog, setShowPoolDialog] = useState(false);
+  const [adjustTarget, setAdjustTarget] = useState<StoreCustomer | null>(null);
+  const [opSaving, setOpSaving] = useState(false);
+  const [opError, setOpError] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
   const [editingRedeemRate, setEditingRedeemRate] = useState<string>(String(DEFAULT_REDEEM_RATE));
   const [editingEarnRate, setEditingEarnRate] = useState<string>(String(DEFAULT_EARN_RATE));
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
@@ -50,6 +77,11 @@ export default function CustomersPage() {
   const canRead = canReadCustomers(user?.roleId || user?.role, user?.isRootOwner);
   // Rules: chỉ Chủ quán ghi storeInfo; cần chọn 1 chi nhánh cụ thể để lưu
   const canEditConfig = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && currentStoreCode !== "ALL";
+  const isOwner = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner);
+  // Rules: chỉ Chủ quán / Quản lý ghi trực tiếp số dư điểm
+  const canAdjust = canAdjustPoints(user?.roleId || user?.role, user?.isRootOwner);
+  const specificStore = currentStoreCode !== "ALL" && !!currentStoreCode;
+  const sharedEnabled = stores.some((s) => s.sharedLoyalty?.enabled);
 
   // Chi nhánh cần đọc: "ALL" → mọi chi nhánh truy cập được; ngược lại chỉ chi nhánh đang chọn
   const targetCodes = useMemo(() => {
@@ -69,6 +101,12 @@ export default function CustomersPage() {
     });
     return map;
   }, [stores]);
+  const tiersByStore = useMemo(() => {
+    const map: Record<string, LoyaltyTier[]> = {};
+    stores.forEach((s) => (map[s.storeCode] = s.loyaltyTiers || DEFAULT_LOYALTY_TIERS));
+    return map;
+  }, [stores]);
+  const tiersOf = useCallback((storeCode: string) => tiersByStore[storeCode] || DEFAULT_LOYALTY_TIERS, [tiersByStore]);
   const redeemRateOf = (storeCode: string) => ratesByStore[storeCode]?.redeem ?? DEFAULT_REDEEM_RATE;
   const displayRates = currentStoreCode !== "ALL"
     ? ratesByStore[currentStoreCode] || { redeem: DEFAULT_REDEEM_RATE, earn: DEFAULT_EARN_RATE }
@@ -81,13 +119,13 @@ export default function CustomersPage() {
       onValue(
         ref(db, `stores/${code}/customers`),
         (snap) => {
-          setCustomersByStore((prev) => ({ ...prev, [code]: parseStoreCustomers(code, snap.val()) }));
+          setRawByStore((prev) => ({ ...prev, [code]: snap.val() }));
           setLoadedStores((prev) => (prev[code] ? prev : { ...prev, [code]: true }));
           setDeniedStores((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : prev));
         },
         (error) => {
           console.warn(`[customers] Không thể đọc stores/${code}/customers:`, error.message);
-          setCustomersByStore((prev) => ({ ...prev, [code]: [] }));
+          setRawByStore((prev) => ({ ...prev, [code]: null }));
           setLoadedStores((prev) => (prev[code] ? prev : { ...prev, [code]: true }));
           setDeniedStores((prev) => (prev.includes(code) ? prev : [...prev, code]));
         }
@@ -98,11 +136,20 @@ export default function CustomersPage() {
 
   const loading = canRead && targetCodes.some((c) => !loadedStores[c]);
 
+  // Phân tích dữ liệu thô theo cấu hình hạng của từng chi nhánh
   const customers = useMemo(() => {
     const list: StoreCustomer[] = [];
-    targetCodes.forEach((code) => list.push(...(customersByStore[code] || [])));
+    targetCodes.forEach((code) => list.push(...parseStoreCustomers(code, rawByStore[code], tiersByStore[code] || DEFAULT_LOYALTY_TIERS)));
     return list.sort((a, b) => b.diemHienTai - a.diemHienTai);
-  }, [customersByStore, targetCodes]);
+  }, [rawByStore, targetCodes, tiersByStore]);
+
+  const tierNames = useMemo(() => {
+    const names: string[] = [];
+    targetCodes.forEach((code) => tiersOf(code).forEach((t) => !names.includes(t.name) && names.push(t.name)));
+    return names;
+  }, [targetCodes, tiersOf]);
+
+  const pooled = useMemo(() => (sharedEnabled ? poolCustomersByPhone(customers) : []), [sharedEnabled, customers]);
 
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
@@ -128,9 +175,13 @@ export default function CustomersPage() {
       (sum, c) => sum + c.diemHienTai * (ratesByStore[c.storeCode]?.redeem ?? DEFAULT_REDEEM_RATE),
       0
     );
-    const vipCount = customers.filter((c) => c.diemHienTai >= 200).length;
+    // "VIP" = khách ở hạng cao nhất của chi nhánh
+    const vipCount = customers.filter((c) => {
+      const t = tiersOf(c.storeCode);
+      return t.length > 1 && c.hangThanhVien === t[t.length - 1].name;
+    }).length;
     return { totalCustomers, totalPoints, totalPointValue, vipCount };
-  }, [customers, ratesByStore]);
+  }, [customers, ratesByStore, tiersOf]);
 
   // Export Excel
   const handleExportExcel = () => {
@@ -178,9 +229,107 @@ export default function CustomersPage() {
     }
   };
 
-  const tiers = ["ALL", ...CUSTOMER_TIERS];
+  const tiers = ["ALL", ...tierNames];
   const showStoreColumn = currentStoreCode === "ALL";
-  const columnCount = showStoreColumn ? 9 : 8;
+  const columnCount = (showStoreColumn ? 9 : 8) + (canAdjust ? 1 : 0);
+
+  const actor = {
+    username: user?.username || "admin_web",
+    fullName: user?.fullName,
+    role: user?.roleId || user?.role,
+  };
+
+  const flash = (msg: string) => {
+    setNotice(msg);
+    setTimeout(() => setNotice(null), 3500);
+  };
+
+  const handleCreateCustomer = async (v: { name: string; phone: string; gender: string; birthday: string }) => {
+    if (!specificStore) return;
+    setOpSaving(true);
+    setOpError("");
+    try {
+      const now = Date.now();
+      const id = `CUST_${now}`;
+      await update(ref(db), {
+        [`stores/${currentStoreCode}/customers/${id}`]: buildNewCustomerNode(id, v, now),
+        [`stores/${currentStoreCode}/audit_logs/log_${now}_cust`]: {
+          timestamp: now,
+          username: actor.username,
+          userFullName: actor.fullName || actor.username,
+          userRole: actor.role || "",
+          action: "CUSTOMER_CREATE",
+          targetType: "CUSTOMER",
+          targetId: id,
+          storeCode: currentStoreCode,
+          details: `Tạo khách hàng ${v.name} (${v.phone}) qua Web Admin`,
+        },
+      });
+      setShowCustomerForm(false);
+      flash(`Đã thêm khách hàng ${v.name}`);
+    } catch (e) {
+      setOpError(errorMessage(e, "Không tạo được khách hàng"));
+    } finally {
+      setOpSaving(false);
+    }
+  };
+
+  const handleAdjustPoints = async (mode: AdjustMode, value: number, reason: string) => {
+    if (!adjustTarget) return;
+    const res = buildPointAdjustment({
+      storeCode: adjustTarget.storeCode,
+      customer: adjustTarget,
+      mode,
+      value,
+      reason,
+      actor,
+      tiers: tiersOf(adjustTarget.storeCode),
+      now: Date.now(),
+    });
+    if (!res.ok) {
+      setOpError(res.error);
+      return;
+    }
+    setOpSaving(true);
+    setOpError("");
+    try {
+      await update(ref(db), res.updates);
+      flash(`Đã chỉnh điểm ${adjustTarget.hoTen}: ${adjustTarget.diemHienTai} → ${res.after}`);
+      setAdjustTarget(null);
+    } catch (e) {
+      setOpError(errorMessage(e, "Không chỉnh được điểm"));
+    } finally {
+      setOpSaving(false);
+    }
+  };
+
+  const handleSaveTiers = async (next: LoyaltyTier[]) => {
+    const err = validateTiers(next);
+    if (err) return alert(err);
+    setOpSaving(true);
+    const res = await updateStore(currentStoreCode, { loyaltyTiers: next });
+    setOpSaving(false);
+    if (!res.success) return alert(res.error || "Không lưu được cấu hình hạng");
+    setShowTierDialog(false);
+    flash("Đã lưu cấu hình điểm theo hạng");
+  };
+
+  const handleTogglePool = async (enabled: boolean) => {
+    setOpSaving(true);
+    setOpError("");
+    try {
+      await update(
+        ref(db),
+        buildSharedLoyaltyUpdates({ storeCodes: stores.map((s) => s.storeCode), enabled, actor, now: Date.now() })
+      );
+      setShowPoolDialog(false);
+      flash(enabled ? "Chủ quán đã xác nhận dùng chung điểm toàn hệ thống" : "Đã tắt dùng chung điểm");
+    } catch (e) {
+      setOpError(errorMessage(e, "Không lưu được cấu hình dùng chung"));
+    } finally {
+      setOpSaving(false);
+    }
+  };
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: "1280px", margin: "0 auto" }}>
@@ -241,6 +390,41 @@ export default function CustomersPage() {
             >
               <RefreshCw size={15} /> Làm mới
             </button>
+            <button
+              onClick={() => {
+                setOpError("");
+                setShowCustomerForm(true);
+              }}
+              disabled={!specificStore || !canRead}
+              title={specificStore ? "Thêm khách hàng mới" : "Chọn 1 chi nhánh cụ thể để thêm khách"}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--primary)", color: "#FFFFFF",
+                border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "600",
+                cursor: specificStore ? "pointer" : "not-allowed", opacity: specificStore ? 1 : 0.5,
+              }}
+            >
+              <UserPlus size={15} /> Thêm khách hàng
+            </button>
+            <Link
+              href="/dashboard/reports/loyalty"
+              style={{
+                display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--bg)",
+                border: "1px solid var(--border)", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "var(--primary)",
+              }}
+            >
+              <History size={15} /> Lịch sử điểm
+            </Link>
+            {canEditConfig && (
+              <button
+                onClick={() => setShowTierDialog(true)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--bg)",
+                  border: "1px solid var(--border)", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "var(--primary)", cursor: "pointer",
+                }}
+              >
+                <Award size={15} /> Điểm theo hạng
+              </button>
+            )}
             {canEditConfig && (
               <button
                 onClick={openConfigModal}
@@ -299,6 +483,66 @@ export default function CustomersPage() {
         </div>
       )}
 
+      {notice && (
+        <div style={{ background: "var(--success-bg)", color: "#137333", borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+          <Check size={14} style={{ verticalAlign: "-2px" }} /> {notice}
+        </div>
+      )}
+
+      {stores.length > 1 && (isOwner || sharedEnabled) && (
+        <div
+          style={{
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <Globe2 size={18} color="var(--primary)" />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                Điểm dùng chung toàn hệ thống: {sharedEnabled ? "ĐÃ BẬT" : "đang tắt"}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--subtext)" }}>
+                {sharedEnabled
+                  ? `Chủ quán ${stores.find((s) => s.sharedLoyalty?.enabled)?.sharedLoyalty?.confirmedBy || ""} đã xác nhận. Khách được gộp theo SĐT ở chế độ "Tất cả chi nhánh" (${pooled.length} khách).`
+                  : "Gộp điểm của khách theo số điện thoại giữa các chi nhánh. Cần Chủ quán bấm xác nhận."}
+              </div>
+            </div>
+          </div>
+          {isOwner && (
+            <button style={btnPrimary} onClick={() => { setOpError(""); setShowPoolDialog(true); }}>
+              {sharedEnabled ? "Tắt dùng chung" : "Xác nhận bật dùng chung"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {sharedEnabled && currentStoreCode === "ALL" && pooled.length > 0 && (
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16, overflowX: "auto" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Điểm toàn hệ thống theo số điện thoại (top 10)</div>
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: "var(--subtext)" }}>
+                <th style={{ padding: "4px 8px" }}>SĐT</th>
+                <th style={{ padding: "4px 8px" }}>Khách</th>
+                <th style={{ padding: "4px 8px", textAlign: "right" }}>Tổng điểm hiện có</th>
+                <th style={{ padding: "4px 8px" }}>Theo chi nhánh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pooled.slice(0, 10).map((p) => (
+                <tr key={p.phone} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{p.phone}</td>
+                  <td style={{ padding: "4px 8px" }}>{p.hoTen}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700 }}>{formatNumber(p.totalCurrent)}</td>
+                  <td style={{ padding: "4px 8px", color: "var(--subtext)" }}>{p.perStore.map((x) => `${x.storeCode}: ${x.points}`).join(" • ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: "16px", marginBottom: "20px" }}>
         <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "18px 20px", border: "1px solid var(--border)" }}>
@@ -312,7 +556,7 @@ export default function CustomersPage() {
             {formatNumber(kpiStats.totalCustomers)}
           </div>
           <div style={{ fontSize: "12px", color: "#8A5B00", marginTop: "4px" }}>
-            {kpiStats.vipCount} khách hàng VIP (≥200 điểm)
+            {kpiStats.vipCount} khách hạng cao nhất
           </div>
         </div>
 
@@ -457,6 +701,7 @@ export default function CustomersPage() {
                 <th style={{ padding: "12px 14px", textAlign: "right" }}>Giá trị đổi thưởng</th>
                 <th style={{ padding: "12px 14px", textAlign: "center" }}>Hạng</th>
                 <th style={{ padding: "12px 14px", textAlign: "center" }}>Ngày tham gia</th>
+                {canAdjust && <th style={{ padding: "12px 14px", textAlign: "center" }}>Thao tác</th>}
               </tr>
             </thead>
             <tbody>
@@ -539,6 +784,25 @@ export default function CustomersPage() {
                       <td style={{ padding: "12px 14px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
                         {c.ngayTao || "—"}
                       </td>
+                      {canAdjust && (
+                        <td style={{ padding: "8px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() => {
+                              setOpError("");
+                              setAdjustTarget(c);
+                            }}
+                            style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6 }}
+                          >
+                            Sửa điểm
+                          </button>
+                          <Link
+                            href={`/dashboard/reports/loyalty?store=${encodeURIComponent(c.storeCode)}&customer=${encodeURIComponent(c.id)}`}
+                            style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)" }}
+                          >
+                            Lịch sử
+                          </Link>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -547,6 +811,57 @@ export default function CustomersPage() {
           </table>
         </div>
       </div>
+
+      {showCustomerForm && specificStore && (
+        <CustomerFormDialog
+          storeCode={currentStoreCode}
+          existing={customers.filter((c) => c.storeCode === currentStoreCode)}
+          saving={opSaving}
+          error={opError}
+          onCancel={() => setShowCustomerForm(false)}
+          onSave={handleCreateCustomer}
+        />
+      )}
+      {adjustTarget && (
+        <PointAdjustDialog
+          customer={adjustTarget}
+          saving={opSaving}
+          error={opError}
+          onCancel={() => setAdjustTarget(null)}
+          onSave={handleAdjustPoints}
+        />
+      )}
+      {showTierDialog && canEditConfig && (
+        <LoyaltyTierDialog
+          storeCode={currentStoreCode}
+          tiers={tiersOf(currentStoreCode)}
+          saving={opSaving}
+          onCancel={() => setShowTierDialog(false)}
+          onSave={handleSaveTiers}
+        />
+      )}
+      {showPoolDialog && (
+        <ModalShell
+          title={sharedEnabled ? "Tắt dùng chung điểm?" : "Xác nhận dùng chung điểm toàn hệ thống"}
+          icon={<Globe2 size={18} color="var(--primary)" />}
+          onClose={() => setShowPoolDialog(false)}
+          footer={
+            <>
+              <button style={btnGhost} onClick={() => setShowPoolDialog(false)}>Hủy</button>
+              <button style={btnPrimary} disabled={opSaving} onClick={() => handleTogglePool(!sharedEnabled)}>
+                {opSaving ? "Đang lưu..." : sharedEnabled ? "Tắt" : "Chủ quán xác nhận"}
+              </button>
+            </>
+          }
+        >
+          <p style={{ fontSize: 13, color: "var(--text)", margin: 0 }}>
+            {sharedEnabled
+              ? "Điểm của từng chi nhánh sẽ không còn được gộp theo số điện thoại."
+              : `Điểm của cùng một số điện thoại ở ${stores.length} chi nhánh sẽ được tính là một nguồn điểm chung. Thao tác này được ghi vào Nhật ký kiểm soát với tên của bạn.`}
+          </p>
+          {opError && <p style={{ color: "var(--danger, #B3261E)", fontSize: 13 }}>{opError}</p>}
+        </ModalShell>
+      )}
 
       {/* Modal Configure Point Conversion Rate */}
       {showConfigModal && (

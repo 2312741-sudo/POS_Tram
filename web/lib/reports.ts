@@ -66,6 +66,9 @@ export interface HistoryOrder {
   billDiscounts?: number;
   pointsDiscount?: number;
   pointsUsed?: number;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
   vatRate?: number;
   vatAmount?: number;
   refundAmount?: number;
@@ -623,6 +626,22 @@ export function billTotalDiscount(bill: HistoryOrder): number {
 /** Giảm giá cấp ĐƠN (voucher / chiến dịch / điểm / thủ công) = tổng giảm − giảm theo món, không âm */
 export function billLevelDiscount(bill: HistoryOrder): number {
   return Math.max(0, billTotalDiscount(bill) - billItemDiscount(bill));
+}
+
+/** Số điểm khách đã đổi trên hóa đơn */
+export function billPointsUsed(bill: HistoryOrder): number {
+  return Math.max(0, Math.trunc(Number(bill.pointsUsed || 0)) || 0);
+}
+
+/** Giảm giá do ĐỔI ĐIỂM (VNĐ) trên hóa đơn, chặn không vượt giảm giá cấp đơn */
+export function billPointsDiscount(bill: HistoryOrder): number {
+  const v = Math.max(0, Number(bill.pointsDiscount || 0) || 0);
+  return Math.min(v, billLevelDiscount(bill));
+}
+
+/** Giảm giá cấp đơn KHÔNG tính phần đổi điểm (voucher / chiến dịch / thủ công) */
+export function billOtherOrderDiscount(bill: HistoryOrder): number {
+  return Math.max(0, billLevelDiscount(bill) - billPointsDiscount(bill));
 }
 
 // ==================== CÁC HÀM TÍNH TOÁN BÁO CÁO THUẦN ====================

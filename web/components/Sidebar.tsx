@@ -22,6 +22,8 @@ import {
   Warehouse,
   Tag,
   BadgePercent,
+  ListChecks,
+  History,
 } from "lucide-react";
 
 const navItems = [
@@ -38,10 +40,12 @@ const navItems = [
   { href: "/dashboard/inventory", label: "Kho hàng & NVL", icon: Warehouse },
   { href: "/dashboard/promotions", label: "Khuyến mãi & Voucher", icon: Tag },
   { href: "/dashboard/reports/promotions", label: "Báo cáo khuyến mãi", icon: BadgePercent },
+  { href: "/dashboard/reports/loyalty", label: "Lịch sử điểm khách", icon: History },
   { href: "/dashboard/reports/inventory", label: "Báo cáo Kho hàng", icon: ClipboardCheck },
   { href: "/dashboard/users", label: "Nhân viên và phân quyền", icon: Users },
   { href: "/dashboard/audit", label: "Nhật ký Kiểm soát", icon: Shield },
   { href: "/dashboard/analytics", label: "Phân tích Kinh doanh", icon: BarChart3 },
+  { href: "/dashboard/action-codes", label: "Bộ mã hành động", icon: ListChecks },
 ];
 
 type SidebarProps = {

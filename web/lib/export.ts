@@ -25,6 +25,9 @@ import {
   billSubTotal,
   billItemDiscount,
   billLevelDiscount,
+  billOtherOrderDiscount,
+  billPointsDiscount,
+  billPointsUsed,
 } from "./reports";
 import { lineUnitPrice, type RawOrderLine } from "./order-math";
 import { billDeletedItems, type DeletionReport } from "./item-deletion";
@@ -1252,6 +1255,10 @@ export function exportHistory(data: HistoryOrder[]) {
       "Tạm tính (VNĐ)": billSubTotal(item),
       "Giảm giá món (VNĐ)": billItemDiscount(item),
       "Giảm giá đơn (VNĐ)": billLevelDiscount(item),
+      "Giảm giá voucher/khác (VNĐ)": billOtherOrderDiscount(item),
+      "Điểm đã đổi": billPointsUsed(item),
+      "Giảm giá đổi điểm (VNĐ)": billPointsDiscount(item),
+      "Khách hàng": item.customerName || item.customerPhone || "",
       "Tổng tiền (VNĐ)": Number(item.totalAmount) || 0,
       "Phương thức TT": item.paymentMethod || "",
       "Trạng thái": billStatusLabel(item.status),
@@ -1265,7 +1272,7 @@ export function exportHistory(data: HistoryOrder[]) {
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
   wsSummary["!cols"] = [
     { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
-    { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }
+    { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 22 }, { wch: 12 }, { wch: 22 }, { wch: 22 }
   ];
   XLSX.utils.book_append_sheet(wb, wsSummary, "Tổng hợp Hóa đơn");
 
@@ -1395,6 +1402,10 @@ export function exportSingleBillExcel(order: HistoryOrder) {
     { "Thuộc tính": "Mã đặt món", "Giá trị": orderCode },
     { "Thuộc tính": "Tên bàn", "Giá trị": order.tableName || "—" },
     { "Thuộc tính": "Khu vực", "Giá trị": order.zone || "—" },
+    { "Thuộc tính": "Khách hàng", "Giá trị": order.customerName || order.customerPhone || "—" },
+    { "Thuộc tính": "Điểm đã đổi", "Giá trị": billPointsUsed(order) },
+    { "Thuộc tính": "Giảm giá đổi điểm", "Giá trị": new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(billPointsDiscount(order)) },
+    { "Thuộc tính": "Giảm giá voucher/khác", "Giá trị": new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(billOtherOrderDiscount(order)) },
     { "Thuộc tính": "Tổng thanh toán", "Giá trị": `${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(order.totalAmount || 0)}` },
     { "Thuộc tính": "Phương thức thanh toán", "Giá trị": order.paymentMethod || "Tiền mặt" },
     { "Thuộc tính": "Trạng thái", "Giá trị": order.status || "Đã thanh toán" },

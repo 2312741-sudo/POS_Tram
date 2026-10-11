@@ -423,6 +423,36 @@ describe("POS Trạm - Security Rules: điểm khách hàng & trừ kho thử l�
     await assertSucceeds(db("manager_uid").ref(C).update({ diem_hien_tai: 999, currentPoints: 999, totalPoints: 999 }));
   });
 
+  it("PH1. point_history: chỉ Chủ/Quản lý tạo mới (không sửa/xóa); thu ngân đọc được, phục vụ không", async () => {
+    await seedLoyalty();
+    const entry = { customerId: "KH1", customerName: "Khách 1", type: "ADJUST", mode: "ADD", delta: 10, before: 50, after: 60, reason: "Tặng sinh nhật", by: "manager1", at: 1700000000000 };
+    const P = "stores/TRAM01/point_history/adj_1";
+    await assertFails(db("cashier_uid").ref(P).set(entry));
+    await assertFails(db("waiter_uid").ref(P).set(entry));
+    await assertFails(db("manager_uid").ref(P).set({ ...entry, reason: "" }));
+    await assertFails(db("manager_uid").ref(P).set({ ...entry, after: -1 }));
+    await assertFails(db("manager_uid").ref(P).set({ ...entry, type: "AWARD" }));
+    await assertSucceeds(db("manager_uid").ref(P).set(entry));
+    await assertFails(db("manager_uid").ref(P).set({ ...entry, delta: 99 }));
+    await assertFails(db("owner_uid").ref(P).remove());
+    await assertSucceeds(db("cashier_uid").ref(P).get());
+    await assertFails(db("waiter_uid").ref(P).get());
+  });
+
+  it("PH2. Chỉnh điểm bằng một multi-path update (điểm + point_history + audit) chỉ Quản lý/Chủ làm được", async () => {
+    await seedLoyalty();
+    const now = Date.now();
+    const updates = {
+      "stores/TRAM01/customers/KH1/diem_hien_tai": 70,
+      "stores/TRAM01/customers/KH1/currentPoints": 70,
+      "stores/TRAM01/customers/KH1/totalPoints": 100,
+      [`stores/TRAM01/point_history/adj_${now}`]: { customerId: "KH1", type: "ADJUST", delta: 20, before: 50, after: 70, reason: "Sửa nhầm", by: "manager1", at: now },
+      [`stores/TRAM01/audit_logs/log_${now}_pt`]: { timestamp: now, action: "ADJUST_POINTS", username: "manager1" },
+    };
+    await assertFails(db("cashier_uid").ref().update(updates));
+    await assertSucceeds(db("manager_uid").ref().update(updates));
+  });
+
   it("LS2. Thu ngân đổi điểm (giảm) kèm khóa thao tác và lastRedeem đúng", async () => {
     await seedLoyalty();
     const cashier = db("cashier_uid");
@@ -591,8 +621,8 @@ describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (khô
     for (const child of children) {
       expect(typeof store[child][".read"], `stores/$storeCode/${child} thiếu .read`).toBe("string");
     }
-    // Danh sách test RC1 + customers phải phủ hết nút con (thêm nút mới → cập nhật test)
-    expect([...memberReadable, "customers"].sort()).toEqual(children.sort());
+    // Danh sách test RC1 + customers + point_history (chỉ Thu ngân trở lên đọc) phải phủ hết nút con (thêm nút mới → cập nhật test)
+    expect([...memberReadable, "customers", "point_history"].sort()).toEqual(children.sort());
     expect(children).not.toContain("login_attempts");
   });
 

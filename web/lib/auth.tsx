@@ -229,7 +229,7 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (pathname.startsWith("/dashboard/stores")) {
     return hasPermission(user, "MANAGE_STORE_SETTINGS");
   }
-  if (pathname.startsWith("/dashboard/audit")) {
+  if (pathname.startsWith("/dashboard/audit") || pathname.startsWith("/dashboard/action-codes")) {
     return hasPermission(user, "VIEW_AUDIT_LOGS");
   }
   if (pathname.startsWith("/dashboard/inventory") || pathname.startsWith("/dashboard/reports/inventory")) {
@@ -245,7 +245,8 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     pathname.startsWith("/dashboard/shifts") ||
     pathname.startsWith("/dashboard/customers") ||
     pathname.startsWith("/dashboard/product-sales") ||
-    pathname.startsWith("/dashboard/reports/promotions")
+    pathname.startsWith("/dashboard/reports/promotions") ||
+    pathname.startsWith("/dashboard/reports/loyalty")
   ) {
     return hasPermission(user, "VIEW_REPORTS");
   }

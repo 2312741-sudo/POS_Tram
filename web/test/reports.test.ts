@@ -418,3 +418,20 @@ describe("Modules 4, 5, 6 Specific Edge Cases & Calculations", () => {
     expect(r.difference).toBe(0); // 1,040,000 - 1,040,000 = 0
   });
 });
+
+describe("giảm giá đổi điểm trong chi tiết hóa đơn", () => {
+  it("tách giảm giá đổi điểm khỏi voucher/khác", async () => {
+    const { billOtherOrderDiscount, billPointsDiscount, billPointsUsed } = await import("../lib/reports");
+    const bill = { id: "b", totalDiscount: 15000, itemDiscounts: 3000, pointsUsed: 5, pointsDiscount: 5000 };
+    expect(billPointsUsed(bill)).toBe(5);
+    expect(billPointsDiscount(bill)).toBe(5000);
+    expect(billOtherOrderDiscount(bill)).toBe(7000);
+  });
+
+  it("không vượt giảm giá cấp đơn và chịu được dữ liệu thiếu", async () => {
+    const { billOtherOrderDiscount, billPointsDiscount, billPointsUsed } = await import("../lib/reports");
+    expect(billPointsDiscount({ id: "b", totalDiscount: 2000, pointsDiscount: 9000 })).toBe(2000);
+    expect(billOtherOrderDiscount({ id: "b" })).toBe(0);
+    expect(billPointsUsed({ id: "b" })).toBe(0);
+  });
+});

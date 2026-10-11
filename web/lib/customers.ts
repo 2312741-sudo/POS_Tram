@@ -9,6 +9,8 @@
  * Web chỉ đọc; điểm chỉ đổi qua thao tác hóa đơn trên POS hoặc Quản lý / Chủ quán.
  */
 
+import { DEFAULT_LOYALTY_TIERS, tierForTotalPoints, type LoyaltyTier } from "./loyalty";
+
 export interface StoreCustomer {
   /** Khóa node RTDB */
   id: string;
@@ -28,11 +30,9 @@ export interface StoreCustomer {
 
 export const CUSTOMER_TIERS = ["Thành viên", "Bạc", "Vàng", "Kim Cương"] as const;
 
-export function tierForPoints(points: number): string {
-  if (points >= 500) return "Kim Cương";
-  if (points >= 200) return "Vàng";
-  if (points >= 50) return "Bạc";
-  return "Thành viên";
+/** Hạng theo tổng điểm tích lũy; `tiers` lấy từ storeInfo.loyaltyTiers (mặc định khớp POS) */
+export function tierForPoints(points: number, tiers: LoyaltyTier[] = DEFAULT_LOYALTY_TIERS): string {
+  return tierForTotalPoints(points, tiers);
 }
 
 function firstString(v: Record<string, unknown>, keys: string[]): string {
@@ -65,14 +65,18 @@ function parseTimestamp(raw: unknown): number | undefined {
 }
 
 /** Chuyển 1 node khách RTDB sang dạng hiển thị; trả null nếu không phải object. */
-export function parseStoreCustomer(storeCode: string, id: string, raw: unknown): StoreCustomer | null {
+export function parseStoreCustomer(
+  storeCode: string,
+  id: string,
+  raw: unknown,
+  tiers: LoyaltyTier[] = DEFAULT_LOYALTY_TIERS
+): StoreCustomer | null {
   if (!raw || typeof raw !== "object") return null;
   const v = raw as Record<string, unknown>;
   // Cùng thứ tự ưu tiên trường với KmtCustomerModel.fromMap (Flutter)
   const points = Math.max(0, Math.trunc(firstNumber(v, ["diem_hien_tai", "diemHienTai", "currentPoints"]) ?? 0));
   const total = Math.trunc(firstNumber(v, ["tongDiem", "totalPoints", "diem_hien_tai", "currentPoints"]) ?? points);
   const createdAt = parseTimestamp(v.ngay_tao ?? v.ngayTao ?? v.createdAt);
-  const tierRaw = firstString(v, ["hang_thanh_vien", "tier"]);
   return {
     id,
     storeCode,
@@ -81,7 +85,8 @@ export function parseStoreCustomer(storeCode: string, id: string, raw: unknown):
     soDienThoai: firstString(v, ["so_dien_thoai", "soDienThoai", "phone", "dienThoai"]),
     diemHienTai: points,
     tongDiem: total,
-    hangThanhVien: tierRaw || tierForPoints(points),
+    // Hạng luôn tính lại từ tổng điểm + cấu hình hạng của chi nhánh (giá trị lưu có thể đã cũ)
+    hangThanhVien: tierForPoints(total, tiers),
     createdAt,
     ngayTao: createdAt !== undefined ? new Date(createdAt).toLocaleDateString("vi-VN") : undefined,
     tongChiTieu: firstNumber(v, ["tong_chi_tieu", "totalSpent"]),
@@ -90,11 +95,11 @@ export function parseStoreCustomer(storeCode: string, id: string, raw: unknown):
 }
 
 /** Chuyển cả nút `stores/{storeCode}/customers` sang danh sách. */
-export function parseStoreCustomers(storeCode: string, val: unknown): StoreCustomer[] {
+export function parseStoreCustomers(storeCode: string, val: unknown, tiers: LoyaltyTier[] = DEFAULT_LOYALTY_TIERS): StoreCustomer[] {
   if (!val || typeof val !== "object") return [];
   const out: StoreCustomer[] = [];
   for (const [id, raw] of Object.entries(val as Record<string, unknown>)) {
-    const c = parseStoreCustomer(storeCode, id, raw);
+    const c = parseStoreCustomer(storeCode, id, raw, tiers);
     if (c) out.push(c);
   }
   return out;
@@ -117,4 +122,15 @@ export function canEditPointConfig(roleId: string | undefined, isRootOwner?: boo
   if (isRootOwner) return true;
   const r = (roleId || "").toUpperCase();
   return r === "OWNER" || r === "ROLE_OWNER";
+}
+
+/** Chủ quán / Quản lý chỉnh điểm trực tiếp được theo rules (`customers.$id` cho Thu ngân bị ràng buộc theo hóa đơn). */
+export function canAdjustPoints(roleId: string | undefined, isRootOwner?: boolean): boolean {
+  if (isRootOwner) return true;
+  const r = (roleId || "").toUpperCase();
+  return (
+    r === "OWNER" || r === "ROLE_OWNER" ||
+    r === "MANAGER" || r === "MANAGER_1" || r === "MANAGER_2" ||
+    r === "ROLE_MANAGER" || r === "ROLE_MANAGER_1" || r === "ROLE_MANAGER_2"
+  );
 }
