@@ -681,7 +681,8 @@ export const pullPooledPoints = onCall(
       for (const a of plan.allocations) {
         const r = db.ref(`stores/${a.storeCode}/customers/${a.customerId}`);
         const tx = await r.transaction((cur: unknown) => {
-          if (!cur || typeof cur !== "object") return undefined;
+          if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
+          if (typeof cur !== "object") return undefined;
           const m = { ...(cur as AnyMap) };
           const pts = readCurrentPoints(m);
           if (pts < a.take) return undefined;
@@ -689,22 +690,24 @@ export const pullPooledPoints = onCall(
           m.currentPoints = pts - a.take;
           return m;
         });
-        if (!tx.committed) throw new HttpsError("aborted", `Điểm tại ${a.storeCode} vừa thay đổi. Vui lòng thử lại.`);
+        if (!tx.committed || !tx.snapshot.exists()) throw new HttpsError("aborted", `Điểm tại ${a.storeCode} vừa thay đổi. Vui lòng thử lại.`);
         done.push({ ref: r, take: a.take });
       }
       const homeTx = await homeRef.transaction((cur: unknown) => {
-        if (!cur || typeof cur !== "object") return undefined;
+        if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
+          if (typeof cur !== "object") return undefined;
         const m = { ...(cur as AnyMap) };
         const pts = readCurrentPoints(m);
         m.diem_hien_tai = pts + needed;
         m.currentPoints = pts + needed;
         return m;
       });
-      if (!homeTx.committed) throw new HttpsError("aborted", "Không cập nhật được điểm khách ở chi nhánh bán.");
+      if (!homeTx.committed || !homeTx.snapshot.exists()) throw new HttpsError("aborted", "Không cập nhật được điểm khách ở chi nhánh bán.");
     } catch (err) {
       for (const d of done) {
         await d.ref.transaction((cur: unknown) => {
-          if (!cur || typeof cur !== "object") return undefined;
+          if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
+          if (typeof cur !== "object") return undefined;
           const m = { ...(cur as AnyMap) };
           const pts = readCurrentPoints(m);
           m.diem_hien_tai = pts + d.take;
