@@ -167,7 +167,7 @@ export default function UsersPage() {
       if (!map[sCode]) map[sCode] = [];
       map[sCode].push({
         id: u.id || u.username || "",
-        uid: u.id || u.username || "",
+        uid: (typeof u.uid === "string" && u.uid) || u.id || u.username || "",
         username: u.username || "",
         fullName: u.fullName || u.username || "",
         roleId: u.roleId || u.role || "ROLE_WAITER",

@@ -1,4 +1,5 @@
 "use client";
+import { resolveStaffUid } from "./staff-key";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { db, auth } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
@@ -770,6 +771,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           uList.push({
             ...u,
             id: uName,
+            // Mã tài khoản thật (khóa nút / trường uid) — `id` ở trên chỉ là tên đăng nhập để hiển thị
+            uid: resolveStaffUid(id, u),
+            nodeKey: id,
             username: uName,
             fullName: u.fullName || u.name || uName,
             role: u.roleId || u.role || "ROLE_WAITER",
