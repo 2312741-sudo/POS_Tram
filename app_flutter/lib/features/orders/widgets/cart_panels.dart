@@ -118,8 +118,12 @@ class LoyaltyEarnPreview extends StatelessWidget {
   /// Đ mỗi điểm (để báo hóa đơn tối thiểu có điểm khi +0)
   final int redeemRate;
 
+  /// Chưa tra được số dư điểm (mất mạng…): không hiển thị "điểm → điểm" sai.
+  final bool pointsUnknown;
+
   const LoyaltyEarnPreview({
     super.key,
+    this.pointsUnknown = false,
     required this.customer,
     required this.pointsUsed,
     required this.earnPoints,
@@ -146,7 +150,10 @@ class LoyaltyEarnPreview extends StatelessWidget {
         Text('Tích điểm: +$earnPoints điểm', style: style.copyWith(fontWeight: FontWeight.w800)),
         if (earnPoints == 0)
           Text('Hóa đơn chưa đủ giá trị để có điểm (từ ${(redeemRate * 50 / earnRate).ceil()}đ được 1 điểm)', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
-        Text('Điểm: ${customer.currentPoints} → $after sau thanh toán • Hạng: $tier', style: style),
+        if (pointsUnknown)
+          Text('Điểm hiện có: chưa tải được • sẽ +$earnPoints điểm khi thanh toán', style: style)
+        else
+          Text('Điểm: ${customer.currentPoints} → $after sau thanh toán • Hạng: $tier', style: style),
       ],
     );
   }
@@ -164,9 +171,13 @@ class CartCustomerBar extends StatelessWidget {
   final List<LoyaltyTier> tiers;
   final VoidCallback? onConfigureRate;
   final int redeemRate;
+  final bool pointsUnknown;
+  final VoidCallback? onRetryPoints;
 
   const CartCustomerBar({
     super.key,
+    this.pointsUnknown = false,
+    this.onRetryPoints,
     required this.customer,
     required this.pointsUsed,
     required this.onLookup,
@@ -210,13 +221,35 @@ class CartCustomerBar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
                           ),
-                          Text(
-                            'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
-                          ),
-                          LoyaltyEarnPreview(customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
+                          if (pointsUnknown)
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    'Điểm hiện có: chưa tải được',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                if (onRetryPoints != null)
+                                  InkWell(
+                                    onTap: onRetryPoints,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      child: Text('Thử lại', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w800, color: context.tc.warningInk, decoration: TextDecoration.underline)),
+                                    ),
+                                  ),
+                              ],
+                            )
+                          else
+                            Text(
+                              'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
+                            ),
+                          LoyaltyEarnPreview(pointsUnknown: pointsUnknown, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
                         ],
                       ),
               ),

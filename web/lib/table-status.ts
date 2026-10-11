@@ -42,6 +42,42 @@ export const TABLE_STATUS_ORDER: TableStatus[] = ["EMPTY", "IN_USE", "RESERVED",
 /** Payload xóa đánh dấu in tạm tính (null trong update() RTDB = xóa trường) */
 export const CLEAR_PRE_PRINT = { prePrintedAt: null, prePrintedBy: null } as const;
 
+/**
+ * Khách tích điểm gắn với bàn (hợp đồng chung với Flutter TableModel.customerId/Name/Phone).
+ * null trong update() RTDB = xóa trường.
+ */
+export const CLEAR_TABLE_CUSTOMER = { customerId: null, customerName: null, customerPhone: null } as const;
+
+/** Khách của bàn (rỗng nếu chưa gắn khách), chỉ gồm trường có giá trị — dùng chép vào hóa đơn */
+export function tableCustomerOf(t: { customerId?: unknown; customerName?: unknown; customerPhone?: unknown }): {
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+} {
+  const clean = (v: unknown) => (v == null ? "" : String(v).trim());
+  const id = clean(t.customerId);
+  if (!id) return {};
+  const name = clean(t.customerName);
+  const phone = clean(t.customerPhone);
+  return { customerId: id, ...(name ? { customerName: name } : {}), ...(phone ? { customerPhone: phone } : {}) };
+}
+
+/** Payload khách nhận từ bàn nguồn (chuyển bàn): thay thế hoàn toàn, thiếu thì xóa */
+export function customerPayloadFrom(t: Parameters<typeof tableCustomerOf>[0]): Record<string, string | null> {
+  const c = tableCustomerOf(t);
+  return { customerId: c.customerId ?? null, customerName: c.customerName ?? null, customerPhone: c.customerPhone ?? null };
+}
+
+/** Gộp bàn: giữ khách bàn đích; chỉ khi đích chưa có khách mới lấy của bàn nguồn (không có gì để ghi thì trả {}) */
+export function mergedCustomerPayload(
+  target: Parameters<typeof tableCustomerOf>[0],
+  source: Parameters<typeof tableCustomerOf>[0]
+): Record<string, string | null> {
+  if (tableCustomerOf(target).customerId) return {};
+  if (!tableCustomerOf(source).customerId) return {};
+  return customerPayloadFrom(source);
+}
+
 /** Payload đánh dấu đã in tạm tính */
 export function prePrintPayload(now: number, username?: string | null): { prePrintedAt: number; prePrintedBy: string | null } {
   const by = (username || "").trim();

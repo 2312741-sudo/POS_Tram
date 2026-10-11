@@ -38,6 +38,14 @@ class TableModel {
   int? prePrintedAt;
   String? prePrintedBy;
 
+  // Khách (CRM tích điểm) đã chọn cho bàn: lưu trên node tables/{key} để thoát bàn vào lại
+  // không mất. Hợp đồng chung với web: `customerId` / `customerName` / `customerPhone`.
+  // Đi theo đơn khi chuyển bàn; gộp bàn giữ khách bàn đích (chưa có thì lấy của bàn nguồn);
+  // bị XÓA khi dọn bàn / thanh toán / hủy đơn (xem [clearTable]).
+  String? customerId;
+  String? customerName;
+  String? customerPhone;
+
   TableModel({
     required this.name,
     required this.zone,
@@ -58,6 +66,9 @@ class TableModel {
     this.deletedItemsJson,
     this.prePrintedAt,
     this.prePrintedBy,
+    this.customerId,
+    this.customerName,
+    this.customerPhone,
   }) : _currentOrderJson = currentOrderJson;
 
   /// Giỏ món hiện tại (JSON). Gán giá trị mới mà NỘI DUNG TÍNH TIỀN thay đổi (khác
@@ -95,6 +106,33 @@ class TableModel {
   void markPrePrinted({String? by, int? at}) {
     prePrintedAt = at ?? DateTime.now().millisecondsSinceEpoch;
     prePrintedBy = (by != null && by.isNotEmpty) ? by : null;
+  }
+
+  /// Bàn đang gắn với một khách tích điểm.
+  bool get hasCustomer => customerId != null && customerId!.isNotEmpty;
+
+  void setCustomer({required String id, String? name, String? phone}) {
+    customerId = id;
+    customerName = (name != null && name.isNotEmpty) ? name : null;
+    customerPhone = (phone != null && phone.isNotEmpty) ? phone : null;
+  }
+
+  void clearCustomer() {
+    customerId = null;
+    customerName = null;
+    customerPhone = null;
+  }
+
+  /// Chuyển bàn: bàn này nhận khách của bàn nguồn (thay thế).
+  void takeCustomerFrom(TableModel source) {
+    customerId = source.customerId;
+    customerName = source.customerName;
+    customerPhone = source.customerPhone;
+  }
+
+  /// Gộp bàn: giữ khách của bàn này; chỉ lấy khách bàn nguồn khi bàn này chưa có.
+  void adoptCustomerIfNone(TableModel source) {
+    if (!hasCustomer && source.hasCustomer) takeCustomerFrom(source);
   }
 
   void clearPrePrint() {
@@ -168,6 +206,10 @@ class TableModel {
       prePrintedAt = int.tryParse(rawPre.toString());
     }
     final prePrintedBy = map['prePrintedBy']?.toString();
+    String? nz(Object? v) {
+      final t = v?.toString().trim();
+      return (t == null || t.isEmpty) ? null : t;
+    }
 
     final rawIsReserved = map['isReserved'];
     final isReserved = rawIsReserved == true || rawIsReserved?.toString().toLowerCase() == 'true';
@@ -192,6 +234,9 @@ class TableModel {
       deletedItemsJson: map['deletedItemsJson']?.toString(),
       prePrintedAt: prePrintedAt,
       prePrintedBy: (prePrintedAt != null && prePrintedBy != null && prePrintedBy.isNotEmpty) ? prePrintedBy : null,
+      customerId: nz(map['customerId']),
+      customerName: nz(map['customerName']),
+      customerPhone: nz(map['customerPhone']),
     );
   }
 
@@ -215,6 +260,9 @@ class TableModel {
     if (deletedItemsJson != null && deletedItemsJson!.isNotEmpty) 'deletedItemsJson': deletedItemsJson,
     if (prePrintedAt != null) 'prePrintedAt': prePrintedAt,
     if (prePrintedAt != null && prePrintedBy != null) 'prePrintedBy': prePrintedBy,
+    if (hasCustomer) 'customerId': customerId,
+    if (hasCustomer && customerName != null) 'customerName': customerName,
+    if (hasCustomer && customerPhone != null) 'customerPhone': customerPhone,
   };
 
   List<OrderActionLogModel> get actionLogs {
@@ -290,5 +338,6 @@ class TableModel {
     actionLogsJson = null;
     deletedItemsJson = null;
     clearPrePrint();
+    clearCustomer();
   }
 }

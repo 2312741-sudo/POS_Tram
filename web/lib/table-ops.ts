@@ -19,7 +19,7 @@ import {
   toppingLabel,
   type RawOrderLine,
 } from "./order-math";
-import { CLEAR_PRE_PRINT, prePrintedAtOf } from "./table-status";
+import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, customerPayloadFrom, mergedCustomerPayload, prePrintedAtOf } from "./table-status";
 import { mergeDeletedItemsJson } from "./item-deletion";
 
 function int(v: unknown): number {
@@ -123,6 +123,10 @@ export interface TableNode {
   prePrintedBy?: unknown;
   /** Món đã xóa khỏi đơn đang mở (chuỗi JSON mảng — hợp đồng chung với Flutter) */
   deletedItemsJson?: unknown;
+  /** Khách tích điểm gắn với bàn (hợp đồng chung với Flutter) */
+  customerId?: unknown;
+  customerName?: unknown;
+  customerPhone?: unknown;
   [key: string]: unknown;
 }
 
@@ -231,6 +235,7 @@ export const CLEARED_TABLE_FIELDS = {
   actionLogsJson: null,
   deletedItemsJson: null,
   ...CLEAR_PRE_PRINT,
+  ...CLEAR_TABLE_CUSTOMER,
 } as const;
 
 function itemNames(items: RawOrderLine[]): string {
@@ -291,6 +296,8 @@ export function buildTransferPayloads(args: {
       // "Chờ thanh toán" đi theo đơn sang bàn đích
       prePrintedAt: pre,
       prePrintedBy: pre != null && preBy ? preBy : null,
+      // Khách tích điểm đi theo đơn sang bàn đích
+      ...customerPayloadFrom(source),
     },
     sourceFields: { ...CLEARED_TABLE_FIELDS },
     audit: {
@@ -353,6 +360,8 @@ export function buildMergePayloads(args: {
       deletedItemsJson: mergeDeletedItemsJson(target.deletedItemsJson, source.deletedItemsJson),
       // Đơn gộp khác phiếu tạm tính cũ → bàn đích quay về "Có khách"
       ...CLEAR_PRE_PRINT,
+      // Giữ khách bàn đích; đích chưa có khách thì lấy của bàn nguồn
+      ...mergedCustomerPayload(target, source),
     },
     sourceFields: { ...CLEARED_TABLE_FIELDS, mergedIntoTable: tName },
     audit: {

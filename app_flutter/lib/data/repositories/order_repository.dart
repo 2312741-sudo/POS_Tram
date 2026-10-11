@@ -193,6 +193,9 @@ class OrderRepository {
     // Gán SAU currentOrderJson (setter có thể xóa cờ tạm tính khi món đổi).
     dst.prePrintedAt = src.prePrintedAt;
     dst.prePrintedBy = src.prePrintedBy;
+    dst.customerId = src.customerId;
+    dst.customerName = src.customerName;
+    dst.customerPhone = src.customerPhone;
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
@@ -214,6 +217,8 @@ class OrderRepository {
     }
     final int combinedGuests = (target.guestCount ?? 0) + (sourceTable.guestCount ?? 0);
     target.guestCount = combinedGuests > 0 ? combinedGuests : null;
+    // Giữ khách của bàn đích; bàn đích chưa có khách thì lấy khách của bàn nguồn.
+    target.adoptCustomerIfNone(sourceTable);
     if (target.openedAt == null || (sourceTable.openedAt != null && sourceTable.openedAt! < target.openedAt!)) {
       target.openedAt = sourceTable.openedAt ?? target.openedAt ?? DateTime.now().millisecondsSinceEpoch;
     }
@@ -268,6 +273,8 @@ class OrderRepository {
     // Trạng thái "Chờ thanh toán" đi theo đơn sang bàn đích.
     target.prePrintedAt = sourceTable.prePrintedAt;
     target.prePrintedBy = sourceTable.prePrintedBy;
+    // Khách tích điểm đi theo đơn sang bàn đích.
+    target.takeCustomerFrom(sourceTable);
     target.addActionLog(OrderActionLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       staffUsername: staffUsername ?? 'staff',
@@ -791,6 +798,9 @@ class OrderRepository {
       'itemsJson': jsonEncode(items.map((i) => i.toMap()).toList()),
       'actionLogs': [...table.actionLogs.map((l) => l.toMap()), cancelLog],
       'actionLogsJson': jsonEncode([...table.actionLogs.map((l) => l.toMap()), cancelLog]),
+      if (table.hasCustomer) 'customerId': table.customerId,
+      if (table.hasCustomer && table.customerName != null) 'customerName': table.customerName,
+      if (table.hasCustomer && table.customerPhone != null) 'customerPhone': table.customerPhone,
       'deletedItems': deleted.map((e) => e.toMap()).toList(),
       'deletedItemsCount': deletedSummary.count,
       'deletedItemsAmount': deletedSummary.amount,

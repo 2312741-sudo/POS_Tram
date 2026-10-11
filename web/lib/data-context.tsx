@@ -7,7 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
-import { CLEAR_PRE_PRINT, buildOrderItemsPayload, prePrintPayload } from "./table-status";
+import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
 import { errorMessage } from "./errors";
 import type { AppliedDiscount } from "./pricing-engine";
 import { PromotionLimitError, reserveAllPromotions, rollbackAllPromotions, type PromotionReservation } from "./promotion-commit";
@@ -173,6 +173,10 @@ export interface TableItem {
   prePrintedBy?: string | null;
   /** Món đã xóa khỏi đơn đang mở (chuỗi JSON mảng DeletedItemEntry — hợp đồng chung với Flutter) */
   deletedItemsJson?: string | null;
+  /** Khách tích điểm gắn với bàn (hợp đồng chung với Flutter TableModel) */
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
@@ -1365,6 +1369,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         actionLogsJson: null,
         deletedItemsJson: null,
         ...CLEAR_PRE_PRINT,
+        ...CLEAR_TABLE_CUSTOMER,
       };
       const updates: Record<string, unknown> = { ...prefix };
       for (const key of tableKeysFor(targetStoreCode, table)) {
@@ -1469,6 +1474,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           itemDiscounts: itemDiscounts,
           billDiscounts: billDiscounts,
           ...(promotions.length > 0 ? { discounts: promotions } : {}),
+          ...tableCustomerOf(table),
           ...(options?.customerId ? { customerId: options.customerId } : {}),
           vatRate: 0,
           vatAmount: 0,
@@ -1598,6 +1604,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           discountAmount: 0,
           totalDiscount: 0,
           status: "CANCELLED",
+          ...tableCustomerOf(table),
           cancelReason: reason,
           cancellationReason: reason,
           cancelledAt: now,

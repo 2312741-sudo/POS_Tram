@@ -204,6 +204,15 @@ class TableCard extends StatelessWidget {
       if (code != null) {
         lines.add(Text(code, maxLines: 1, overflow: TextOverflow.ellipsis, style: small.copyWith(fontSize: 11)));
       }
+      if (table.hasCustomer) {
+        final who = (table.customerName ?? '').isNotEmpty ? table.customerName! : (table.customerPhone ?? 'Khách tích điểm');
+        lines.add(Text(
+          '👤 $who',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),
+        ));
+      }
       if (table.isAwaitingPayment) {
         final at = DateTime.fromMillisecondsSinceEpoch(table.prePrintedAt!);
         final hhmm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';

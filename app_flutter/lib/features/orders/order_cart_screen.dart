@@ -29,6 +29,7 @@ import '../cash_shift/cash_shift_dialog.dart';
 import 'widgets/cart_item_card.dart';
 import 'widgets/delete_reason_dialog.dart';
 import 'widgets/cart_panels.dart';
+import '../../core/domain/table_customer.dart';
 import 'widgets/payment_widgets.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/manager_pin_dialogs.dart';
@@ -67,6 +68,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // KiotViet CRM Customer Loyalty
   KmtCustomerModel? _selectedCustomer;
+  bool _customerPointsUnknown = false; // khách phục hồi từ bàn nhưng chưa tra được số dư
   StreamSubscription<String>? _earnFailSub;
   int _pointsUsed = 0;
   late int _guestCount;
@@ -95,6 +97,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     widget.table.ensureCodes();
     _cart = List.from(widget.initialProducts.isNotEmpty ? widget.initialProducts : widget.table.currentItems);
     _guestCount = widget.table.guestCount ?? 2;
+    _selectedCustomer = TableCustomerLogic.restore(widget.table);
+    if (_selectedCustomer != null) {
+      _customerPointsUnknown = true;
+      unawaited(_refreshCustomerPoints());
+    }
     _storeInfo = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _fb.currentStoreCode, storeName: 'POS Trạm');
     _loadStoreAndPromotions();
     _loadAutoPrintSetting();
@@ -1033,6 +1040,37 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
+  /// Tra lại số dư điểm dùng chung của khách đã gắn với bàn. Lỗi → giữ tên/SĐT, điểm "chưa biết".
+  Future<void> _refreshCustomerPoints() async {
+    final c = _selectedCustomer;
+    if (c == null) return;
+    final store = _fb.currentStoreCode;
+    var m = await LoyaltyService().lookupMember(storeCode: store, customerId: c.id);
+    if (!m.found && c.phone.isNotEmpty) m = await LoyaltyService().lookupMember(storeCode: store, phone: c.phone);
+    if (!mounted || !identical(_selectedCustomer, c)) return;
+    final ok = TableCustomerLogic.applyMember(c, found: m.found, points: m.points, totalPoints: m.totalPoints);
+    setState(() => _customerPointsUnknown = !ok);
+  }
+
+  /// Chọn/bỏ khách: cập nhật màn hình và LƯU NGAY vào bàn (thoát vào lại không mất).
+  Future<void> _setCustomer(KmtCustomerModel? c) async {
+    setState(() {
+      _selectedCustomer = c;
+      _customerPointsUnknown = false;
+      _pointsUsed = 0;
+    });
+    TableCustomerLogic.writeToTable(widget.table, c);
+    try {
+      await _fb.saveTable(widget.table);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không lưu được khách vào bàn: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
   // ==================== KIOTVIET CRM CUSTOMER DIALOGS ====================
   Future<void> _showCustomerLookupDialog() async {
     final tiers = _storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults;
@@ -1069,10 +1107,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       // Khách chỉ có ở chi nhánh khác: tạo hồ sơ tại chi nhánh này (điểm lấy từ bản ghi dùng chung)
       final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: picked.fullName, phone: picked.phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
       await _fb.saveCustomer(c);
-            setState(() {
-        _selectedCustomer = KmtCustomerModel(id: c.id, fullName: c.fullName, phone: c.phone, currentPoints: picked.currentPoints, totalPoints: picked.totalPoints, createdAt: c.createdAt);
-        _pointsUsed = 0;
-      });
+      await _setCustomer(KmtCustomerModel(id: c.id, fullName: c.fullName, phone: c.phone, currentPoints: picked.currentPoints, totalPoints: picked.totalPoints, createdAt: c.createdAt));
       return;
     }
     // Điểm DÙNG CHUNG toàn chuỗi (gồm điểm tích ở chi nhánh khác) lấy từ máy chủ
@@ -1083,10 +1118,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (m.totalPoints > picked.totalPoints) picked.totalPoints = m.totalPoints;
     }
     if (!mounted) return;
-    setState(() {
-      _selectedCustomer = picked;
-      _pointsUsed = 0;
-    });
+    await _setCustomer(picked);
   }
 
   // ==================== ITEM DISCOUNT & MANAGER APPROVAL ====================
@@ -2467,6 +2499,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     if (_selectedCustomer != null) ...[
                       const SizedBox(height: 8),
                       LoyaltyEarnPreview(
+                        pointsUnknown: _customerPointsUnknown,
                         customer: _selectedCustomer!,
                         pointsUsed: _pointsUsed,
                         earnPoints: _earnPreview,
@@ -3135,10 +3168,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   onConfigureRate: _auth.can(AppPermissions.manageCustomers) ? _openLoyaltyConfig : null,
                   onLookup: _showCustomerLookupDialog,
                   onUsePoints: _showUsePointsDialog,
-                  onClear: () => setState(() {
-                    _selectedCustomer = null;
-                    _pointsUsed = 0;
-                  }),
+                  pointsUnknown: _customerPointsUnknown,
+                  onRetryPoints: _refreshCustomerPoints,
+                  onClear: () => _setCustomer(null),
                 );
 
                 final cartList = _cart.isEmpty
