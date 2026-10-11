@@ -94,7 +94,9 @@ void main() {
       expect(customer.code, 'KMT-9988');
       expect(customer.fullName, 'Nguyễn Văn A');
       expect(customer.currentPoints, 150);
-      expect(customer.groupName, 'Thân thiết'); // 100-499 pt
+      // Hạng theo mốc do Chủ quán đặt (tổng điểm 150)
+      expect(customer.tierName(const [LoyaltyTier('Thành viên', 0), LoyaltyTier('Thân thiết', 100)]), 'Thân thiết');
+      expect(customer.tierName(LoyaltyTier.defaults), 'Thành viên');
 
       final map = customer.toMap();
       expect(map['so_dien_thoai'], '0912345678');

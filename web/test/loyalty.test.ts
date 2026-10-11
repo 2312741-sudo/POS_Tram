@@ -133,7 +133,7 @@ describe("lịch sử điểm", () => {
 describe("điểm dùng chung toàn hệ thống", () => {
   it("ghi cấu hình + audit cho từng chi nhánh", () => {
     const u = buildSharedLoyaltyUpdates({ storeCodes: ["A", "B"], enabled: true, actor: { username: "chu" }, now: 9 });
-    expect(u["stores/A/storeInfo/sharedLoyalty"]).toEqual({ enabled: true, deductOrder: "HOME_FIRST", confirmedBy: "chu", confirmedAt: 9 });
+    expect(u["stores/A/storeInfo/sharedLoyalty"]).toEqual({ enabled: true, deductOrder: "HOME_FIRST", storeCodes: ["A", "B"], confirmedBy: "chu", confirmedAt: 9 });
     expect(Object.keys(u)).toHaveLength(4);
   });
 

@@ -17,6 +17,7 @@ import '../../data/models/app_models.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../data/services/campaign_service.dart';
+import '../../data/services/pooled_loyalty_service.dart';
 import '../promotions/voucher_check.dart';
 import 'widgets/campaign_pricing.dart';
 import '../../core/domain/deleted_items.dart';
@@ -1074,7 +1075,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           const SizedBox(height: 4),
                           Text('SĐT: ${foundCustomer!.phone}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                           Text('Điểm tích lũy: ${foundCustomer!.currentPoints} điểm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade900))),
-                          Text('Xếp hạng: ${foundCustomer!.groupName}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                          Text('Xếp hạng: ${foundCustomer!.tierName(_storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                         ],
                       ),
                     ),
@@ -1909,13 +1910,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
-  void _showUsePointsDialog() {
-    if (_selectedCustomer == null || _selectedCustomer!.currentPoints <= 0) return;
+  Future<void> _showUsePointsDialog() async {
+    if (_selectedCustomer == null) return;
+    // Điểm dùng chung: cộng thêm điểm của khách (cùng SĐT) ở các chi nhánh khác; tra qua Cloud Function
+    int pooledExtra = 0;
+    if (_storeInfo?.sharedLoyaltyEnabled == true) {
+      try {
+        pooledExtra = await PooledLoyaltyService.othersPoints(
+          storeCode: _storeInfo!.storeCode,
+          customerId: _selectedCustomer!.id,
+        );
+      } catch (_) {
+        pooledExtra = 0; // không tra được → chỉ dùng điểm tại chi nhánh
+      }
+      if (!mounted) return;
+    }
+    final totalAvailable = _selectedCustomer!.currentPoints + pooledExtra;
+    if (totalAvailable <= 0) return;
     final availableAmount = _subTotal - _itemDiscountTotal - _voucherDiscountTotal;
     final maxPointsPossible = availableAmount > 0 ? (availableAmount ~/ _pointRedeemRate) : 0;
-    final maxUsable = _selectedCustomer!.currentPoints < maxPointsPossible
-        ? _selectedCustomer!.currentPoints
-        : maxPointsPossible;
+    final maxUsable = totalAvailable < maxPointsPossible ? totalAvailable : maxPointsPossible;
 
     final pointsCtrl = TextEditingController(text: '$_pointsUsed');
 
@@ -1927,7 +1941,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Khách: ${_selectedCustomer!.fullName} (Có: ${_selectedCustomer!.currentPoints} điểm)', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('Khách: ${_selectedCustomer!.fullName} (Có: ${_selectedCustomer!.currentPoints} điểm${pooledExtra > 0 ? ' + $pooledExtra điểm ở chi nhánh khác' : ''})', style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text('Quy đổi: 1 điểm = ${FormatUtils.vnd(_pointRedeemRate)} trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
             const SizedBox(height: 12),

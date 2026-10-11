@@ -1,3 +1,5 @@
+import 'customer_model.dart';
+
 // ==================== STORE INFO MODEL ====================
 class StoreInfoModel {
   final String storeCode;
@@ -18,6 +20,9 @@ class StoreInfoModel {
   final String ownerId;
   final int pointRedeemRate; // Tỷ lệ quy đổi điểm ra tiền chiết khấu (VD: 1.000đ/điểm)
   final double pointEarnRate; // Tỷ lệ tích điểm % trên doanh thu thực (VD: 1.0%)
+  // Chỉ đọc trên POS: Chủ quán đặt trên Web Admin; KHÔNG đưa vào toMap() để update() không ghi đè
+  final List<LoyaltyTier> loyaltyTiers;
+  final bool sharedLoyaltyEnabled;
   // Chỉ để hiển thị — do máy chủ ghi khi liên kết Chấm Công Trạm; KHÔNG đưa vào toMap()
   final String chamCongStoreId;
   final String chamCongStoreName;
@@ -43,6 +48,8 @@ class StoreInfoModel {
     this.autoPrintBill = true,
     this.pointRedeemRate = 1000,
     this.pointEarnRate = 1.0,
+    this.loyaltyTiers = LoyaltyTier.defaults,
+    this.sharedLoyaltyEnabled = false,
     this.chamCongStoreId = '',
     this.chamCongStoreName = '',
   });
@@ -69,6 +76,8 @@ class StoreInfoModel {
       autoPrintBill: map['autoPrintBill'] ?? true,
       pointRedeemRate: (map['pointRedeemRate'] as num?)?.toInt() ?? 1000,
       pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
+      loyaltyTiers: LoyaltyTier.parseList(map['loyaltyTiers']),
+      sharedLoyaltyEnabled: map['sharedLoyalty'] is Map && (map['sharedLoyalty'] as Map)['enabled'] == true,
       chamCongStoreId: map['chamCongStoreId']?.toString() ?? '',
       chamCongStoreName: map['chamCongStoreName']?.toString() ?? '',
     );
@@ -133,6 +142,8 @@ class StoreInfoModel {
       autoPrintBill: autoPrintBill ?? this.autoPrintBill,
       pointRedeemRate: pointRedeemRate ?? this.pointRedeemRate,
       pointEarnRate: pointEarnRate ?? this.pointEarnRate,
+      loyaltyTiers: loyaltyTiers,
+      sharedLoyaltyEnabled: sharedLoyaltyEnabled,
       chamCongStoreId: chamCongStoreId,
       chamCongStoreName: chamCongStoreName,
     );

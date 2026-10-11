@@ -173,7 +173,7 @@ export interface PointHistoryRow {
   key: string;
   storeCode: string;
   customerId: string;
-  type: "REDEEM" | "AWARD" | "REFUND" | "ADJUST" | "POOL_REDEEM";
+  type: "REDEEM" | "AWARD" | "REFUND" | "ADJUST" | "POOL_REDEEM" | "POOL_TRANSFER";
   /** Biến động có dấu (+ cộng, − trừ) */
   delta: number;
   before: number;
@@ -190,6 +190,7 @@ export const POINT_TYPE_LABEL: Record<PointHistoryRow["type"], string> = {
   REFUND: "Hoàn điểm",
   ADJUST: "Chỉnh điểm thủ công",
   POOL_REDEEM: "Trừ điểm dùng chung toàn hệ thống",
+  POOL_TRANSFER: "Chuyển điểm dùng chung giữa chi nhánh (POS đổi điểm)",
 };
 
 export interface AdjustPointsArgs {
@@ -329,7 +330,7 @@ export function parsePointHistory(storeCode: string, val: unknown): PointHistory
       key: `${storeCode}:${key}`,
       storeCode,
       customerId: String(v.customerId ?? ""),
-      type: v.type === "POOL_REDEEM" ? "POOL_REDEEM" : "ADJUST",
+      type: v.type === "POOL_REDEEM" || v.type === "POOL_TRANSFER" ? v.type : "ADJUST",
       delta: num(v.delta),
       before: num(v.before),
       after: num(v.after),
@@ -352,6 +353,7 @@ export function summarizeHistory(rows: PointHistoryRow[]): { earned: number; red
   for (const r of rows) {
     if (r.type === "AWARD" || r.type === "REFUND") earned += r.delta;
     else if (r.type === "REDEEM" || r.type === "POOL_REDEEM") redeemed += -r.delta;
+    else if (r.type === "POOL_TRANSFER") continue; // chuyển nội bộ: tổng toàn hệ thống không đổi
     else adjusted += r.delta;
   }
   return { earned, redeemed, adjusted };
@@ -396,7 +398,8 @@ export function buildSharedLoyaltyUpdates(args: {
   now: number;
 }): Record<string, unknown> {
   const updates: Record<string, unknown> = {};
-  const cfg = { enabled: args.enabled, deductOrder: args.deductOrder ?? "HOME_FIRST", confirmedBy: args.actor.username, confirmedAt: args.now };
+  // storeCodes: danh sách chi nhánh tham gia — Cloud Function pullPooledPoints chỉ gộp trong danh sách này
+  const cfg = { enabled: args.enabled, deductOrder: args.deductOrder ?? "HOME_FIRST", storeCodes: args.storeCodes, confirmedBy: args.actor.username, confirmedAt: args.now };
   for (const code of args.storeCodes) {
     updates[`stores/${code}/storeInfo/sharedLoyalty`] = cfg;
     updates[`stores/${code}/audit_logs/log_${args.now}_pool_${code}`] = {

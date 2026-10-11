@@ -1,3 +1,46 @@
+// ==================== LOYALTY TIER ====================
+/// Mốc hạng thành viên do Chủ quán tự đặt (storeInfo.loyaltyTiers), xét theo tổng điểm đã tích lũy.
+class LoyaltyTier {
+  final String name;
+  final int minPoints;
+  const LoyaltyTier(this.name, this.minPoints);
+
+  /// Chưa cấu hình: chỉ có hạng gốc 0 điểm, các mốc do Chủ quán tự đặt.
+  static const List<LoyaltyTier> defaults = [LoyaltyTier('Thành viên', 0)];
+
+  /// Đọc mảng/map từ RTDB; sai định dạng → [defaults]. Kết quả sắp tăng dần, hạng thấp nhất luôn từ 0 điểm.
+  static List<LoyaltyTier> parseList(Object? raw) {
+    final Iterable<Object?> items = raw is List
+        ? raw
+        : raw is Map
+            ? raw.values
+            : const <Object?>[];
+    final tiers = <LoyaltyTier>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final name = item['name']?.toString().trim() ?? '';
+      final min = item['minPoints'];
+      final minInt = min is num ? min.toInt() : int.tryParse(min?.toString() ?? '');
+      if (name.isEmpty || minInt == null || minInt < 0) continue;
+      tiers.add(LoyaltyTier(name, minInt));
+    }
+    if (tiers.isEmpty) return defaults;
+    tiers.sort((a, b) => a.minPoints.compareTo(b.minPoints));
+    if (tiers.first.minPoints > 0) tiers[0] = LoyaltyTier(tiers.first.name, 0);
+    return tiers;
+  }
+
+  /// Hạng cao nhất mà [totalPoints] đạt được.
+  static String nameFor(int totalPoints, List<LoyaltyTier> tiers) {
+    final sorted = [...(tiers.isEmpty ? defaults : tiers)]..sort((a, b) => a.minPoints.compareTo(b.minPoints));
+    var name = sorted.first.name;
+    for (final t in sorted) {
+      if (totalPoints >= t.minPoints) name = t.name;
+    }
+    return name;
+  }
+}
+
 // ==================== KIOTVIET CUSTOMER LOYALTY MODEL ====================
 class KmtCustomerModel {
   final String id;
@@ -24,7 +67,8 @@ class KmtCustomerModel {
   }) : name = fullName ?? name ?? '';
 
   String get fullName => name;
-  String get groupName => currentPoints >= 500 ? 'VIP' : (currentPoints >= 100 ? 'Thân thiết' : 'Thành viên');
+  /// Hạng theo mốc của cửa hàng (xét tổng điểm tích lũy) — xem [LoyaltyTier].
+  String tierName(List<LoyaltyTier> tiers) => LoyaltyTier.nameFor(totalPoints, tiers);
 
   factory KmtCustomerModel.fromMap(Map<dynamic, dynamic> map, String id) {
     // Parse createdAt timestamp or int
@@ -98,11 +142,6 @@ class KmtCustomerModel {
     'ngay_cap_nhat': DateTime.now().millisecondsSinceEpoch,
   };
 
-  /// Hạng thành viên KiotViet dựa trên tổng điểm tích lũy
-  String get memberTier {
-    if (totalPoints >= 1000) return 'Kim Cương';
-    if (totalPoints >= 500) return 'Vàng';
-    if (totalPoints >= 200) return 'Bạc';
-    return 'Thành Viên';
-  }
+  /// Hạng thành viên theo mốc mặc định (chưa cấu hình). Nên dùng [tierName] với mốc của cửa hàng.
+  String get memberTier => tierName(LoyaltyTier.defaults);
 }

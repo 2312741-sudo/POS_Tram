@@ -29,6 +29,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   StoreInfoModel? _storeInfo;
   int _pointRedeemRate = 1000;
   double _pointEarnRate = 1.0;
+  List<LoyaltyTier> _tiers = LoyaltyTier.defaults;
 
   bool get _isManagerOrOwner {
     final user = _auth.currentUser;
@@ -53,6 +54,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       _storeInfo = info;
       _pointRedeemRate = info.pointRedeemRate;
       _pointEarnRate = info.pointEarnRate;
+      _tiers = info.loyaltyTiers;
 
       final list = await _fb.getAllCustomers();
       if (mounted) {
@@ -71,9 +73,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   List<KmtCustomerModel> get _filteredCustomers {
     return _customers.where((c) {
       if (_selectedTier != 'ALL') {
-        if (_selectedTier == 'VIP' && c.groupName != 'VIP') return false;
-        if (_selectedTier == 'THAN_THIET' && c.groupName != 'Thân thiết') return false;
-        if (_selectedTier == 'THANH_VIEN' && c.groupName != 'Thành viên') return false;
+        if (c.tierName(_tiers) != _selectedTier) return false;
       }
 
       if (_searchQuery.isNotEmpty) {
@@ -129,7 +129,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
         c.phone,
         pts,
         val,
-        c.groupName,
+        c.tierName(_tiers),
         dateStr,
       ]);
     }
@@ -356,12 +356,11 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                         child: Row(
                           children: [
                             _buildFilterChip('ALL', 'Tất cả (${_customers.length})'),
-                            const SizedBox(width: 6),
-                            _buildFilterChip('VIP', 'VIP ≥500pt'),
-                            const SizedBox(width: 6),
-                            _buildFilterChip('THAN_THIET', 'Thân thiết 100-499pt'),
-                            const SizedBox(width: 6),
-                            _buildFilterChip('THANH_VIEN', 'Thành viên <100pt'),
+                            // Hạng do Chủ quán đặt trên Web Admin (storeInfo.loyaltyTiers)
+                            for (final t in _tiers) ...[
+                              const SizedBox(width: 6),
+                              _buildFilterChip(t.name, '${t.name} ≥${t.minPoints}pt'),
+                            ],
                           ],
                         ),
                       ),
@@ -395,7 +394,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                             final c = _filteredCustomers[index];
                             final pts = c.currentPoints;
                             final val = pts * _pointRedeemRate;
-                            final isVip = c.groupName == 'VIP';
+                            final tierLabel = c.tierName(_tiers);
+                            final isVip = _tiers.length > 1 && tierLabel == _tiers.last.name;
 
                             return Card(
                               elevation: 0.5,
@@ -439,7 +439,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                                   border: Border.all(color: isVip ? Colors.amber.shade400 : context.tc.border),
                                                 ),
                                                 child: Text(
-                                                  c.groupName,
+                                                  tierLabel,
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.bold,

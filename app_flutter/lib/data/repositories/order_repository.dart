@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_functions/cloud_functions.dart' show FirebaseFunctionsException;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_integrity.dart';
@@ -9,6 +10,7 @@ import '../models/app_models.dart';
 import '../services/inventory_service.dart';
 import '../services/campaign_service.dart';
 import '../services/loyalty_service.dart';
+import '../services/pooled_loyalty_service.dart';
 import '../../core/services/auth_service.dart';
 import 'seed_data.dart';
 
@@ -424,6 +426,8 @@ class OrderRepository {
     bool pointsRedeemed = false;
     if (customerId.isNotEmpty && bill.pointsUsed > 0) {
       try {
+        // Điểm dùng chung: thiếu điểm tại chi nhánh → kéo phần thiếu từ chi nhánh khác về trước khi đổi
+        await _topUpFromSharedPool(storeCode: storeCode, customerId: customerId, billId: bill.id, needed: bill.pointsUsed);
         await _loyalty.redeemForBill(
           storeCode: storeCode,
           customerId: customerId,
@@ -495,6 +499,31 @@ class OrderRepository {
   }
 
   late final LoyaltyService _loyalty = LoyaltyService(() => _root);
+
+  /// Khi Chủ quán đã bật điểm dùng chung và khách không đủ điểm tại chi nhánh, nhờ Cloud Function
+  /// chuyển phần thiếu từ chi nhánh khác về. Không bật dùng chung / đủ điểm → không làm gì.
+  /// Lỗi → [LoyaltyException] (hóa đơn không được ghi, điểm tại chi nhánh không đổi).
+  Future<void> _topUpFromSharedPool({
+    required String storeCode,
+    required String customerId,
+    required String billId,
+    required int needed,
+  }) async {
+    try {
+      final enabledSnap = await _root.child('stores/$storeCode/storeInfo/sharedLoyalty/enabled').get().timeout(const Duration(seconds: 3));
+      if (enabledSnap.value != true) return;
+      final customerSnap = await _root.child('stores/$storeCode/customers/$customerId').get().timeout(const Duration(seconds: 3));
+      final v = customerSnap.value;
+      final local = v is Map ? LoyaltyMath.pointsOf(Map<dynamic, dynamic>.from(v)) : 0;
+      final missing = PooledLoyaltyService.shortfall(needed: needed, local: local);
+      if (missing <= 0) return;
+      await PooledLoyaltyService.pull(storeCode: storeCode, customerId: customerId, billId: billId, points: missing);
+    } on FirebaseFunctionsException catch (e) {
+      throw LoyaltyException('Không lấy được điểm dùng chung: ${e.message ?? e.code}');
+    } catch (e) {
+      throw LoyaltyException('Không lấy được điểm dùng chung: $e');
+    }
+  }
 
   /// Lỗi điểm phát sinh muộn (khi đồng bộ) → audit log, không nuốt lỗi.
   void _logLoyaltyProblem(BillModel bill, String msg) {

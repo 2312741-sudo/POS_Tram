@@ -3,6 +3,7 @@ import { onValueWritten } from "firebase-functions/v2/database";
 import { FieldValue } from "firebase-admin/firestore";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { normalizePhone, planPull, pullKey, type Holding } from "./pooledLoyalty";
 import {
   canCallerManageUsers,
   canCallerCreateRole,
@@ -606,3 +607,138 @@ export { verifyManagerPin, setManagerPin } from "./managerPin";
 
 // Đăng nhập bằng Chấm Công Trạm (xem chamCong.ts, docs/CHAMCONG_SSO.md)
 export { chamCongSignIn, linkChamCongStore, unlinkChamCongStore, getChamCongLinkStatus } from "./chamCong";
+
+/**
+ * 6. Kéo điểm dùng chung về chi nhánh đang bán (pullPooledPoints)
+ *
+ * Chỉ chạy khi Chủ quán đã xác nhận storeInfo.sharedLoyalty.enabled. Thu ngân trở lên, đang hoạt động,
+ * thuộc quán. Chuyển phần điểm thiếu từ các chi nhánh khác (cùng SĐT, danh sách storeCodes do Chủ xác nhận)
+ * về node khách của chi nhánh bán; idempotent theo billId; totalPoints không đổi.
+ */
+export const pullPooledPoints = onCall(
+  { region: FUNCTION_REGION },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
+    }
+    const { storeCode, customerId, points, billId, balanceOnly } = (request.data || {}) as Record<string, unknown>;
+    const onlyBalance = balanceOnly === true;
+    if (!isValidStoreCode(storeCode) || !isValidCustomerKey(customerId) || (!onlyBalance && (typeof billId !== "string" || !billId.trim()))) {
+      throw new HttpsError("invalid-argument", "Thiếu hoặc sai mã cửa hàng / khách hàng / hóa đơn.");
+    }
+    const needed = onlyBalance ? 0 : Number(points);
+    if (!onlyBalance && (!Number.isInteger(needed) || needed <= 0 || needed > 10_000_000)) {
+      throw new HttpsError("invalid-argument", "Số điểm cần kéo không hợp lệ.");
+    }
+    const billKey = onlyBalance ? "" : String(billId);
+    const home = storeCode.trim().toUpperCase();
+    const callerUid = request.auth.uid;
+
+    const [callerSnap, indexSnap, cfgSnap] = await Promise.all([
+      db.ref(`stores/${home}/users/${callerUid}`).get(),
+      db.ref(`userIndex/${callerUid}/${home}`).get(),
+      db.ref(`stores/${home}/storeInfo/sharedLoyalty`).get(),
+    ]);
+    const caller = (callerSnap.exists() ? callerSnap.val() : null) as UserProfile | null;
+    if (!canCallerImportCustomer(caller, indexSnap.val() === true)) {
+      throw new HttpsError("permission-denied", "Bạn không có quyền đổi điểm cho chi nhánh này.");
+    }
+    const cfg = (cfgSnap.val() || {}) as { enabled?: unknown; storeCodes?: unknown };
+    if (cfg.enabled !== true) {
+      throw new HttpsError("failed-precondition", "Chi nhánh chưa bật điểm dùng chung (Chủ quán chưa xác nhận).");
+    }
+    const codes = (Array.isArray(cfg.storeCodes) ? cfg.storeCodes : []).map((c) => String(c).trim().toUpperCase()).filter((c) => isValidStoreCode(c) && c !== home);
+
+    const markerRef = db.ref(`stores/${home}/point_history/${pullKey(billKey)}`);
+    if (!onlyBalance && (await markerRef.get()).exists()) {
+      return { success: true, pulled: 0, alreadyApplied: true };
+    }
+
+    const homeRef = db.ref(`stores/${home}/customers/${customerId}`);
+    const homeSnap = await homeRef.get();
+    if (!homeSnap.exists()) throw new HttpsError("not-found", "Không tìm thấy khách hàng ở chi nhánh này.");
+    const homeCustomer = homeSnap.val() as AnyMap;
+    const phone = normalizePhone(homeCustomer.so_dien_thoai ?? homeCustomer.phone);
+    if (!phone) throw new HttpsError("failed-precondition", "Khách chưa có số điện thoại hợp lệ nên không gộp điểm được.");
+
+    const holdings: Holding[] = [];
+    for (const code of codes) {
+      const snap = await db.ref(`stores/${code}/customers`).orderByChild("so_dien_thoai").equalTo(phone).get();
+      snap.forEach((child) => {
+        holdings.push({ storeCode: code, customerId: child.key as string, points: readCurrentPoints(child.val() as AnyMap) });
+      });
+    }
+    if (onlyBalance) {
+      // Chỉ tra số dư: tổng điểm ở các chi nhánh khác (cùng SĐT) để POS tính mức dùng tối đa
+      return { success: true, othersPoints: holdings.reduce((sum, h) => sum + h.points, 0) };
+    }
+    const plan = planPull(holdings, needed);
+    if ("error" in plan) throw new HttpsError("failed-precondition", plan.error);
+
+    // Trừ ở các chi nhánh khác (transaction từng node); lỗi giữa chừng → hoàn lại những node đã trừ
+    const done: { ref: admin.database.Reference; take: number }[] = [];
+    try {
+      for (const a of plan.allocations) {
+        const r = db.ref(`stores/${a.storeCode}/customers/${a.customerId}`);
+        const tx = await r.transaction((cur: unknown) => {
+          if (!cur || typeof cur !== "object") return undefined;
+          const m = { ...(cur as AnyMap) };
+          const pts = readCurrentPoints(m);
+          if (pts < a.take) return undefined;
+          m.diem_hien_tai = pts - a.take;
+          m.currentPoints = pts - a.take;
+          return m;
+        });
+        if (!tx.committed) throw new HttpsError("aborted", `Điểm tại ${a.storeCode} vừa thay đổi. Vui lòng thử lại.`);
+        done.push({ ref: r, take: a.take });
+      }
+      const homeTx = await homeRef.transaction((cur: unknown) => {
+        if (!cur || typeof cur !== "object") return undefined;
+        const m = { ...(cur as AnyMap) };
+        const pts = readCurrentPoints(m);
+        m.diem_hien_tai = pts + needed;
+        m.currentPoints = pts + needed;
+        return m;
+      });
+      if (!homeTx.committed) throw new HttpsError("aborted", "Không cập nhật được điểm khách ở chi nhánh bán.");
+    } catch (err) {
+      for (const d of done) {
+        await d.ref.transaction((cur: unknown) => {
+          if (!cur || typeof cur !== "object") return undefined;
+          const m = { ...(cur as AnyMap) };
+          const pts = readCurrentPoints(m);
+          m.diem_hien_tai = pts + d.take;
+          m.currentPoints = pts + d.take;
+          return m;
+        }).catch(() => undefined);
+      }
+      throw err;
+    }
+
+    const now = Date.now();
+    const by = caller?.username || "unknown";
+    const homeBefore = readCurrentPoints(homeCustomer);
+    const writes: Record<string, unknown> = {
+      [`stores/${home}/point_history/${pullKey(billKey)}`]: {
+        customerId, customerName: String(homeCustomer.ho_ten ?? homeCustomer.name ?? ""), type: "POOL_TRANSFER", mode: "POOL_IN",
+        delta: needed, before: homeBefore, after: homeBefore + needed,
+        reason: `Nhận ${needed} điểm dùng chung từ ${plan.allocations.map((a) => a.storeCode).join(", ")} cho HĐ ${billId}`,
+        by, byName: caller?.fullName || by, at: now,
+      },
+      [`stores/${home}/audit_logs/LOG_${now}_pool_in`]: {
+        timestamp: now, username: by, userFullName: caller?.fullName || "", userRole: caller?.roleId || "",
+        action: "LOYALTY_POOL_REDEEM", targetType: "CUSTOMER", targetId: customerId,
+        details: `Kéo ${needed} điểm dùng chung về ${home} cho HĐ ${billId}`,
+      },
+    };
+    for (const a of plan.allocations) {
+      writes[`stores/${a.storeCode}/point_history/${pullKey(billKey)}`] = {
+        customerId: a.customerId, customerName: String(homeCustomer.ho_ten ?? homeCustomer.name ?? ""), type: "POOL_TRANSFER", mode: "POOL_OUT",
+        delta: -a.take, before: a.points, after: a.after,
+        reason: `Chuyển ${a.take} điểm dùng chung sang ${home} cho HĐ ${billId}`, by, byName: caller?.fullName || by, at: now,
+      };
+    }
+    await db.ref().update(writes).catch(() => undefined); // sổ lịch sử là phụ; số dư đã chuyển xong
+    return { success: true, pulled: needed, alreadyApplied: false, from: plan.allocations.map((a) => ({ storeCode: a.storeCode, take: a.take })) };
+  }
+);
