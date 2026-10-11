@@ -1,9 +1,21 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChefHat, Minus, Plus, Save, Search, StickyNote, Trash2 } from "lucide-react";
 import ModalShell, { btnGhost, errorBox } from "./ModalShell";
 import { lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, type RawOrderLine } from "@/lib/order-math";
-import { addLineToOrder, makeOrderLine, type OrderActor, type OrderableProduct } from "@/lib/web-order";
+import { addLineToOrder, makeOrderLine, type OrderActor } from "@/lib/web-order";
+import {
+  ICE_OPTIONS,
+  SUGAR_OPTIONS,
+  defaultSelection,
+  describeSelection,
+  getProductOptions,
+  makeConfiguredLine,
+  type OptionCategory,
+  type OptionProduct,
+  type OptionSelection,
+  type ProductOptions,
+} from "@/lib/product-options";
 
 const fmt = (n: number) => `${new Intl.NumberFormat("vi-VN").format(n)}đ`;
 
@@ -14,7 +26,9 @@ interface Props {
   opening: boolean;
   /** Món đã có trên bàn (để người gọi biết đang thêm vào đơn nào) */
   existingCount: number;
-  products: OrderableProduct[];
+  /** Toàn bộ món của chi nhánh (kể cả topping — để tính giá topping) */
+  products: OptionProduct[];
+  categories: OptionCategory[];
   actor: OrderActor;
   canSendKitchen: boolean;
   saving?: boolean;
@@ -25,10 +39,10 @@ interface Props {
 
 /**
  * Gọi món trên Web (dự phòng khi app POS sự cố): chọn món → lưu đơn hoặc lưu & gửi phiếu bếp.
- * Topping/size không hỗ trợ ở bản web — món cần tùy chọn phải gọi trên POS.
+ * Món có size / topping / đường / đá sẽ mở bảng chọn tùy chọn (cùng quy tắc với POS).
  */
 export default function WebOrderDialog({
-  tableName, zone, opening, existingCount, products, actor, canSendKitchen, saving, error, onCancel, onSubmit,
+  tableName, zone, opening, existingCount, products, categories: optionCategories, actor, canSendKitchen, saving, error, onCancel, onSubmit,
 }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -52,7 +66,23 @@ export default function WebOrderDialog({
   const { subTotal } = summarizeOrderLines(lines);
   const totalQty = lines.reduce((s, l) => s + lineQuantity(l), 0);
 
-  const add = (p: OrderableProduct) => setLines((prev) => addLineToOrder(prev, makeOrderLine(p, 1, "", actor, Date.now())));
+  const [picking, setPicking] = useState<{ product: OptionProduct; opts: ProductOptions; sel: OptionSelection; qty: number; note: string } | null>(null);
+
+  const add = (p: OptionProduct) => {
+    const opts = getProductOptions(p, optionCategories, products);
+    if (!opts.hasAny) {
+      setLines((prev) => addLineToOrder(prev, makeOrderLine(p, 1, "", actor, Date.now())));
+      return;
+    }
+    setPicking({ product: p, opts, sel: defaultSelection(opts), qty: 1, note: "" });
+  };
+
+  const confirmPicking = () => {
+    if (!picking) return;
+    const line = makeConfiguredLine(picking.product, picking.opts, picking.sel, picking.qty, picking.note, actor, Date.now());
+    setLines((prev) => addLineToOrder(prev, line));
+    setPicking(null);
+  };
   const changeQty = (i: number, delta: number) =>
     setLines((prev) =>
       prev.flatMap((l, idx) => {
@@ -91,6 +121,69 @@ export default function WebOrderDialog({
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)", gap: 16 }} className="grid-stack-sm">
         {/* Thực đơn */}
         <div style={{ minWidth: 0 }}>
+          {picking && (
+            <div style={{ border: "2px solid var(--primary)", borderRadius: 12, padding: 14, marginBottom: 12, background: "var(--surface)" }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                {picking.product.name} <span style={{ color: "var(--primary)", fontWeight: 600 }}>{fmt(picking.product.price)}</span>
+              </div>
+              {picking.opts.sizes.length > 0 && (
+                <OptionGroup label="Size">
+                  {picking.opts.sizes.map((z) => (
+                    <button key={z.name} type="button" style={chip(picking.sel.size === z.name)} onClick={() => setPicking({ ...picking, sel: { ...picking.sel, size: z.name } })}>
+                      {z.name}{z.extra > 0 ? ` +${fmt(z.extra)}` : ""}
+                    </button>
+                  ))}
+                </OptionGroup>
+              )}
+              {picking.opts.iceSugar && (
+                <>
+                  <OptionGroup label="Đường">
+                    {SUGAR_OPTIONS.map((o) => (
+                      <button key={o} type="button" style={chip(picking.sel.sugar === o)} onClick={() => setPicking({ ...picking, sel: { ...picking.sel, sugar: o } })}>{o}</button>
+                    ))}
+                  </OptionGroup>
+                  <OptionGroup label="Đá">
+                    {ICE_OPTIONS.map((o) => (
+                      <button key={o} type="button" style={chip(picking.sel.ice === o)} onClick={() => setPicking({ ...picking, sel: { ...picking.sel, ice: o } })}>{o}</button>
+                    ))}
+                  </OptionGroup>
+                </>
+              )}
+              {picking.opts.toppings.length > 0 && (
+                <OptionGroup label="Topping (chọn nhiều)">
+                  {picking.opts.toppings.map((t) => {
+                    const on = picking.sel.toppings.includes(t.name);
+                    return (
+                      <button
+                        key={t.name}
+                        type="button"
+                        style={chip(on)}
+                        onClick={() =>
+                          setPicking({
+                            ...picking,
+                            sel: { ...picking.sel, toppings: on ? picking.sel.toppings.filter((x) => x !== t.name) : [...picking.sel.toppings, t.name] },
+                          })
+                        }
+                      >
+                        {t.name} +{fmt(t.price)}
+                      </button>
+                    );
+                  })}
+                </OptionGroup>
+              )}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+                <button type="button" aria-label="Giảm" style={{ ...btnGhost, padding: "4px 10px" }} onClick={() => setPicking({ ...picking, qty: Math.max(1, picking.qty - 1) })}><Minus size={13} /></button>
+                <strong>{picking.qty}</strong>
+                <button type="button" aria-label="Tăng" style={{ ...btnGhost, padding: "4px 10px" }} onClick={() => setPicking({ ...picking, qty: picking.qty + 1 })}><Plus size={13} /></button>
+                <input
+                  value={picking.note} onChange={(e) => setPicking({ ...picking, note: e.target.value })} placeholder="Ghi chú" maxLength={80}
+                  style={{ flex: 1, minWidth: 120, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12 }}
+                />
+                <button type="button" style={btnGhost} onClick={() => setPicking(null)}>Hủy</button>
+                <button type="button" className="btn-primary" onClick={confirmPicking}>Thêm vào đơn</button>
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", marginBottom: 8 }}>
             <Search size={14} />
             <input
@@ -130,7 +223,10 @@ export default function WebOrderDialog({
             {lines.map((l, i) => (
               <div key={i} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, fontWeight: 600 }}>
-                  <span>{String(l.name ?? "")}</span>
+                  <span>
+                    {String(l.name ?? "")}
+                    {describeSelection(l) && <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "var(--subtext)" }}>{describeSelection(l)}</span>}
+                  </span>
                   <span>{fmt(lineUnitPrice(l) * lineQuantity(l))}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
@@ -193,5 +289,14 @@ export default function WebOrderDialog({
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+function OptionGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--subtext)", marginBottom: 4 }}>{label}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{children}</div>
+    </div>
   );
 }

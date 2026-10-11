@@ -97,6 +97,8 @@ export const ACTION_CATALOG: ActionCode[] = [
   { code: "LOYALTY_TIERS_UPDATE", label: "Sửa cấu hình điểm theo hạng", group: "Khách hàng", sensitive: true },
   { code: "LOYALTY_POOL_REQUEST", label: "Đề nghị chia sẻ điểm toàn hệ thống", group: "Khách hàng" },
   { code: "LOYALTY_POOL_CONFIRM", label: "Chủ xác nhận điểm dùng chung toàn hệ thống", group: "Khách hàng", sensitive: true },
+  { code: "LOYALTY_POOL_REDEEM", label: "Trừ điểm dùng chung giữa các chi nhánh", group: "Khách hàng", sensitive: true },
+  { code: "SAMPLE_DATA_CREATE", label: "Tạo dữ liệu mẫu (đơn + khuyến mãi)", group: "Hệ thống" },
   { code: "TRANSFER_TABLE", label: "Chuyển bàn", group: "Bàn", permission: "CHANGE_TABLE" },
   { code: "MERGE_TABLE", label: "Gộp bàn", group: "Bàn", permission: "MERGE_SPLIT_TABLE" },
   { code: "SPLIT_BILL", label: "Tách hóa đơn", group: "Bàn", permission: "MERGE_SPLIT_TABLE" },

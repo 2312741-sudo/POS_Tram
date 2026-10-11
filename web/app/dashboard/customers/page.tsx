@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
 import { db } from "@/lib/firebase";
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, update, get } from "firebase/database";
 import { exportCustomersList, CustomerExportItem } from "@/lib/export";
 import { formatVND, formatNumber } from "@/lib/reports";
 import {
@@ -34,8 +34,14 @@ import {
   DEFAULT_LOYALTY_TIERS,
   buildNewCustomerNode,
   buildPointAdjustment,
+  DEDUCT_ORDER_LABEL,
+  buildPooledRedeemUpdates,
   buildSharedLoyaltyUpdates,
+  hasCustomTiers,
+  planPooledRedeem,
   poolCustomersByPhone,
+  type DeductOrder,
+  type PooledCustomer,
   validateTiers,
   type AdjustMode,
   type LoyaltyTier,
@@ -44,7 +50,7 @@ import { errorMessage } from "@/lib/errors";
 import CustomerFormDialog from "@/components/CustomerFormDialog";
 import PointAdjustDialog from "@/components/PointAdjustDialog";
 import LoyaltyTierDialog from "@/components/LoyaltyTierDialog";
-import ModalShell, { btnGhost, btnPrimary } from "@/components/ModalShell";
+import ModalShell, { btnGhost, btnPrimary, errorBox, fieldInput, fieldLabel } from "@/components/ModalShell";
 
 const DEFAULT_REDEEM_RATE = 1000;
 const DEFAULT_EARN_RATE = 1.0;
@@ -65,6 +71,10 @@ export default function CustomersPage() {
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showTierDialog, setShowTierDialog] = useState(false);
   const [showPoolDialog, setShowPoolDialog] = useState(false);
+  const [poolDeductOrder, setPoolDeductOrder] = useState<DeductOrder>("HOME_FIRST");
+  const [redeemTarget, setRedeemTarget] = useState<PooledCustomer | null>(null);
+  const [redeemPoints, setRedeemPoints] = useState("");
+  const [redeemReason, setRedeemReason] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<StoreCustomer | null>(null);
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState("");
@@ -303,15 +313,88 @@ export default function CustomersPage() {
     }
   };
 
-  const handleSaveTiers = async (next: LoyaltyTier[]) => {
+  const handleSaveTiers = async (next: LoyaltyTier[], applyAll: boolean) => {
     const err = validateTiers(next);
     if (err) return alert(err);
     setOpSaving(true);
-    const res = await updateStore(currentStoreCode, { loyaltyTiers: next });
+    let res: { success: boolean; error?: string };
+    if (applyAll) {
+      try {
+        const now = Date.now();
+        const updates: Record<string, unknown> = {};
+        for (const s of stores) {
+          updates[`stores/${s.storeCode}/storeInfo/loyaltyTiers`] = next;
+          updates[`stores/${s.storeCode}/audit_logs/log_${now}_tier_${s.storeCode}`] = {
+            timestamp: now, username: actor.username, userFullName: actor.fullName || actor.username, userRole: actor.role || "",
+            action: "LOYALTY_TIERS_UPDATE", targetType: "STORE", targetId: s.storeCode, storeCode: s.storeCode,
+            details: `Chủ quán đặt mốc hạng: ${next.map((t) => `${t.name} ≥ ${t.minPoints}`).join("; ")}`,
+          };
+        }
+        await update(ref(db), updates);
+        res = { success: true };
+      } catch (e) {
+        res = { success: false, error: errorMessage(e, "Không lưu được cho tất cả chi nhánh") };
+      }
+    } else {
+      res = await updateStore(currentStoreCode, { loyaltyTiers: next });
+    }
     setOpSaving(false);
     if (!res.success) return alert(res.error || "Không lưu được cấu hình hạng");
     setShowTierDialog(false);
     flash("Đã lưu cấu hình điểm theo hạng");
+  };
+
+  const openRedeem = (p: PooledCustomer) => {
+    setOpError("");
+    setRedeemPoints("");
+    setRedeemReason("");
+    setRedeemTarget(p);
+  };
+
+  const poolOrder: DeductOrder = stores.find((s) => s.sharedLoyalty?.enabled)?.sharedLoyalty?.deductOrder || "HOME_FIRST";
+
+  const redeemPreview = useMemo(() => {
+    if (!redeemTarget) return null;
+    const n = Number(redeemPoints);
+    if (!Number.isInteger(n) || n <= 0) return null;
+    return planPooledRedeem({
+      holdings: redeemTarget.perStore.map((x) => ({ storeCode: x.storeCode, customerId: x.customerId, points: x.points })),
+      points: n,
+      homeStore: user?.storeCode,
+      order: poolOrder,
+    });
+  }, [redeemTarget, redeemPoints, user?.storeCode, poolOrder]);
+
+  const handlePoolRedeem = async () => {
+    if (!redeemTarget) return;
+    const n = Number(redeemPoints);
+    setOpSaving(true);
+    setOpError("");
+    try {
+      // Đọc lại số dư thật ở từng chi nhánh ngay trước khi ghi (POS có thể vừa đổi/tích điểm)
+      const fresh = await Promise.all(
+        redeemTarget.perStore.map(async (x) => {
+          const snap = await get(ref(db, `stores/${x.storeCode}/customers/${x.customerId}`));
+          const v = (snap.val() || {}) as Record<string, unknown>;
+          const pts = Number(v.diem_hien_tai ?? v.currentPoints ?? 0);
+          return { storeCode: x.storeCode, customerId: x.customerId, points: Number.isFinite(pts) ? Math.max(0, Math.trunc(pts)) : 0 };
+        })
+      );
+      const plan = planPooledRedeem({ holdings: fresh, points: n, homeStore: user?.storeCode, order: poolOrder });
+      if ("error" in plan) throw new Error(plan.error);
+      const built = buildPooledRedeemUpdates({
+        allocations: plan.allocations, customerName: redeemTarget.hoTen, phone: redeemTarget.phone,
+        reason: redeemReason, actor, now: Date.now(),
+      });
+      if ("error" in built) throw new Error(built.error);
+      await update(ref(db), built.updates);
+      flash(`Đã trừ ${n} điểm dùng chung của ${redeemTarget.hoTen} tại ${plan.allocations.length} chi nhánh`);
+      setRedeemTarget(null);
+    } catch (e) {
+      setOpError(errorMessage(e, "Không trừ được điểm dùng chung"));
+    } finally {
+      setOpSaving(false);
+    }
   };
 
   const handleTogglePool = async (enabled: boolean) => {
@@ -320,7 +403,7 @@ export default function CustomersPage() {
     try {
       await update(
         ref(db),
-        buildSharedLoyaltyUpdates({ storeCodes: stores.map((s) => s.storeCode), enabled, actor, now: Date.now() })
+        buildSharedLoyaltyUpdates({ storeCodes: stores.map((s) => s.storeCode), enabled, deductOrder: poolDeductOrder, actor, now: Date.now() })
       );
       setShowPoolDialog(false);
       flash(enabled ? "Chủ quán đã xác nhận dùng chung điểm toàn hệ thống" : "Đã tắt dùng chung điểm");
@@ -489,6 +572,13 @@ export default function CustomersPage() {
         </div>
       )}
 
+      {isOwner && specificStore && !hasCustomTiers(tiersOf(currentStoreCode)) && (
+        <div style={{ background: "#FEF7E0", color: "#8A5B00", borderRadius: 12, padding: "10px 14px", fontSize: 13, marginBottom: 16, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <span>Chưa đặt mốc hạng thành viên (Bạc, Vàng, ...). Tất cả khách đang ở hạng gốc.</span>
+          <button style={btnPrimary} onClick={() => setShowTierDialog(true)}>Đặt mốc hạng</button>
+        </div>
+      )}
+
       {stores.length > 1 && (isOwner || sharedEnabled) && (
         <div
           style={{
@@ -519,7 +609,7 @@ export default function CustomersPage() {
 
       {sharedEnabled && currentStoreCode === "ALL" && pooled.length > 0 && (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16, overflowX: "auto" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Điểm toàn hệ thống theo số điện thoại (top 10)</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Điểm toàn hệ thống theo số điện thoại (top 10) — thứ tự trừ: {DEDUCT_ORDER_LABEL[poolOrder]}</div>
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ textAlign: "left", color: "var(--subtext)" }}>
@@ -527,6 +617,7 @@ export default function CustomersPage() {
                 <th style={{ padding: "4px 8px" }}>Khách</th>
                 <th style={{ padding: "4px 8px", textAlign: "right" }}>Tổng điểm hiện có</th>
                 <th style={{ padding: "4px 8px" }}>Theo chi nhánh</th>
+                {canAdjust && <th style={{ padding: "4px 8px" }} />}
               </tr>
             </thead>
             <tbody>
@@ -536,6 +627,17 @@ export default function CustomersPage() {
                   <td style={{ padding: "4px 8px" }}>{p.hoTen}</td>
                   <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700 }}>{formatNumber(p.totalCurrent)}</td>
                   <td style={{ padding: "4px 8px", color: "var(--subtext)" }}>{p.perStore.map((x) => `${x.storeCode}: ${x.points}`).join(" • ")}</td>
+                  {canAdjust && (
+                    <td style={{ padding: "4px 8px", textAlign: "right" }}>
+                      <button
+                        onClick={() => openRedeem(p)}
+                        disabled={p.totalCurrent <= 0}
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Trừ điểm
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -836,6 +938,7 @@ export default function CustomersPage() {
           storeCode={currentStoreCode}
           tiers={tiersOf(currentStoreCode)}
           saving={opSaving}
+          storeCount={stores.length}
           onCancel={() => setShowTierDialog(false)}
           onSave={handleSaveTiers}
         />
@@ -859,7 +962,61 @@ export default function CustomersPage() {
               ? "Điểm của từng chi nhánh sẽ không còn được gộp theo số điện thoại."
               : `Điểm của cùng một số điện thoại ở ${stores.length} chi nhánh sẽ được tính là một nguồn điểm chung. Thao tác này được ghi vào Nhật ký kiểm soát với tên của bạn.`}
           </p>
+          {!sharedEnabled && (
+            <div style={{ marginTop: 12 }}>
+              <label style={fieldLabel}>Khi trừ điểm dùng chung</label>
+              <select style={fieldInput} value={poolDeductOrder} onChange={(e) => setPoolDeductOrder(e.target.value as DeductOrder)}>
+                {(Object.keys(DEDUCT_ORDER_LABEL) as DeductOrder[]).map((k) => (
+                  <option key={k} value={k}>{DEDUCT_ORDER_LABEL[k]}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {opError && <p style={{ color: "var(--danger, #B3261E)", fontSize: 13 }}>{opError}</p>}
+        </ModalShell>
+      )}
+
+      {redeemTarget && (
+        <ModalShell
+          title="Trừ điểm dùng chung"
+          subtitle={`${redeemTarget.hoTen} • ${redeemTarget.phone} • còn ${redeemTarget.totalCurrent} điểm toàn hệ thống`}
+          icon={<Coins size={18} color="var(--primary)" />}
+          onClose={() => setRedeemTarget(null)}
+          footer={
+            <>
+              <button style={btnGhost} onClick={() => setRedeemTarget(null)}>Hủy</button>
+              <button
+                style={{ ...btnPrimary, opacity: opSaving || !redeemPreview || "error" in redeemPreview ? 0.6 : 1 }}
+                disabled={opSaving || !redeemPreview || "error" in redeemPreview || !redeemReason.trim()}
+                onClick={handlePoolRedeem}
+              >
+                {opSaving ? "Đang trừ..." : "Xác nhận trừ điểm"}
+              </button>
+            </>
+          }
+        >
+          {opError && <div style={errorBox}>{opError}</div>}
+          <label style={fieldLabel}>Số điểm cần trừ</label>
+          <input style={fieldInput} type="number" min={1} step={1} value={redeemPoints} onChange={(e) => setRedeemPoints(e.target.value)} autoFocus />
+          <label style={{ ...fieldLabel, marginTop: 12 }}>Mã hóa đơn / lý do *</label>
+          <input style={fieldInput} value={redeemReason} onChange={(e) => setRedeemReason(e.target.value)} placeholder="VD: HD-261011-0007" />
+          {redeemPreview && (
+            <div style={{ marginTop: 12, fontSize: 13 }}>
+              {"error" in redeemPreview ? (
+                <span style={{ color: "var(--danger, #B3261E)" }}>{redeemPreview.error}</span>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Sẽ trừ:</div>
+                  {redeemPreview.allocations.map((a) => (
+                    <div key={a.storeCode}>
+                      {a.storeCode}: −{a.take} ({a.before} → {a.after})
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+          <p style={{ fontSize: 12, color: "var(--subtext)", marginTop: 12 }}>Thứ tự trừ: {DEDUCT_ORDER_LABEL[poolOrder]}. Tổng điểm tích lũy (hạng) không bị giảm.</p>
         </ModalShell>
       )}
 

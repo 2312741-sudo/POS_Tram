@@ -10,7 +10,7 @@ describe("parseStoreCustomers", () => {
     });
     expect(list).toHaveLength(2);
     const [a, b] = list;
-    expect(a).toMatchObject({ id: "c1", storeCode: "TRAM01", maKhachHang: "KH1", hoTen: "An", soDienThoai: "0901", diemHienTai: 250, tongDiem: 300, hangThanhVien: "Bạc", createdAt: 1_700_000_000_000 });
+    expect(a).toMatchObject({ id: "c1", storeCode: "TRAM01", maKhachHang: "KH1", hoTen: "An", soDienThoai: "0901", diemHienTai: 250, tongDiem: 300, hangThanhVien: "Thành viên", createdAt: 1_700_000_000_000 });
     expect(b).toMatchObject({ id: "c2", maKhachHang: "c2", hoTen: "Bình", soDienThoai: "0902", diemHienTai: 10, tongDiem: 10, hangThanhVien: "Thành viên" });
   });
 
@@ -26,11 +26,13 @@ describe("parseStoreCustomers", () => {
   });
 
   it("hạng theo điểm", () => {
-    expect(tierForPoints(0)).toBe("Thành viên");
-    expect(tierForPoints(199)).toBe("Thành viên");
-    expect(tierForPoints(200)).toBe("Bạc");
-    expect(tierForPoints(500)).toBe("Vàng");
-    expect(tierForPoints(1000)).toBe("Kim Cương");
+    const t = [{ name: "Thành viên", minPoints: 0 }, { name: "Bạc", minPoints: 200 }, { name: "Vàng", minPoints: 500 }];
+    expect(tierForPoints(0, t)).toBe("Thành viên");
+    expect(tierForPoints(199, t)).toBe("Thành viên");
+    expect(tierForPoints(200, t)).toBe("Bạc");
+    expect(tierForPoints(500, t)).toBe("Vàng");
+    // chưa cấu hình mốc → chỉ có hạng gốc
+    expect(tierForPoints(5000)).toBe("Thành viên");
   });
 });
 

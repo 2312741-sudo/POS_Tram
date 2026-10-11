@@ -433,6 +433,7 @@ describe("POS Trạm - Security Rules: điểm khách hàng & trừ kho thử l�
     await assertFails(db("manager_uid").ref(P).set({ ...entry, after: -1 }));
     await assertFails(db("manager_uid").ref(P).set({ ...entry, type: "AWARD" }));
     await assertSucceeds(db("manager_uid").ref(P).set(entry));
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/point_history/pool_1").set({ ...entry, type: "POOL_REDEEM", mode: "POOL", delta: -10, before: 60, after: 50 }));
     await assertFails(db("manager_uid").ref(P).set({ ...entry, delta: 99 }));
     await assertFails(db("owner_uid").ref(P).remove());
     await assertSucceeds(db("cashier_uid").ref(P).get());

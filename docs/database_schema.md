@@ -159,9 +159,11 @@ Mỗi quán hoặc chi nhánh hoạt động độc lập dưới nút gốc:
 ```
 
 ### 2.8. Điểm khách hàng: cấu hình hạng, lịch sử, dùng chung (Web Admin)
-- `storeInfo.loyaltyTiers` (Chủ quán ghi): mảng `[{ "name": "Bạc", "minPoints": 200 }, ...]`. Hạng của khách = hạng cao nhất mà
-  `totalPoints` (tổng điểm đã tích lũy) đạt được; mặc định Thành viên 0 / Bạc 200 / Vàng 500 / Kim Cương 1000 (khớp `KmtCustomerModel.memberTier`).
-- `storeInfo.sharedLoyalty` = `{ enabled, confirmedBy, confirmedAt }`: Chủ quán xác nhận gộp điểm theo SĐT giữa các chi nhánh.
+- `storeInfo.loyaltyTiers` (Chủ quán ghi): mảng `[{ "name": "Bạc", "minPoints": 200 }, ...]` do Chủ quán tự đặt từng mốc (có thể áp cho mọi chi nhánh).
+  Hạng của khách = hạng cao nhất mà `totalPoints` (tổng điểm đã tích lũy) đạt được. Chưa cấu hình → chỉ có hạng gốc "Thành viên" 0 điểm.
+- `storeInfo.sharedLoyalty` = `{ enabled, deductOrder: "HOME_FIRST"|"LARGEST_FIRST", confirmedBy, confirmedAt }`: Chủ quán xác nhận gộp điểm theo SĐT
+  giữa các chi nhánh và thứ tự trừ. Trừ điểm dùng chung ghi một `update()` đa chi nhánh: giảm `diem_hien_tai/currentPoints` từng nơi
+  (giữ `totalPoints`), `point_history` loại `POOL_REDEEM`, audit `LOYALTY_POOL_REDEEM`. Người trừ phải có quyền ghi tại MỌI chi nhánh liên quan.
 - `customers/{id}`: khách mới do Web tạo có `diem_hien_tai = currentPoints = totalPoints = 0` (rules chỉ cho Thu ngân tạo khách 0 điểm).
 - `point_history/{key}` (chỉ tạo mới, Chủ/Quản lý ghi, Thu ngân trở lên đọc): sổ **chỉnh điểm thủ công**
   `{ customerId, customerName, type:"ADJUST", mode:"SET|ADD|SUB", delta, before, after, reason, by, byName, at }`.
@@ -170,7 +172,7 @@ Mỗi quán hoặc chi nhánh hoạt động độc lập dưới nút gốc:
 - Hóa đơn: `pointsUsed`, `pointsDiscount`, `customerId/Name/Phone`; báo cáo chi tiết hóa đơn tách "Giảm giá đổi điểm" khỏi "Giảm giá voucher/khác".
 
 ### 2.9. Gọi món trên Web (dự phòng POS), khu vực, kho, dữ liệu mẫu
-- Gọi món trên Web ghi `tables/{khóa}` (`inUse`, `openedAt`, `guestCount`, `currentOrderJson`, `currentOrderCode`, `actionLogsJson`) và
+- Gọi món trên Web (kèm size / đường / đá / topping theo quy tắc của POS: `selectedSize`, `sizeExtraPrice`, `selectedSugar`, `selectedIce`, `selectedToppings`, `toppingPrice`) ghi `tables/{khóa}` (`inUse`, `openedAt`, `guestCount`, `currentOrderJson`, `currentOrderCode`, `actionLogsJson`) và
   `kitchen_orders/{key}` theo đúng hợp đồng của Flutter (`KitchenOrderModel`); audit action `WEB_ORDER`.
 - `zones/{tên khu}` = `{ name }`; Web thêm khu (kèm tạo nhanh N bàn `tables/{khu}_{tên bàn}`) và chỉ xóa được khu không còn bàn.
 - Nhập tồn thủ công: ghi `stock_balances/{store}_{itemId}` + `stock_events` (`documentType` = `OPENING` hoặc `STOCK_ADJUSTMENT`) + audit `STOCK_SET_ONHAND`.

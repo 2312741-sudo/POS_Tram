@@ -54,8 +54,14 @@ export function makeOrderLine(product: OrderableProduct, quantity: number, note:
   return line;
 }
 
+/** Khóa tùy chọn của dòng: hai dòng chỉ gộp khi cùng size / đường / đá / topping */
+export function optionKey(l: RawOrderLine): string {
+  const tops = Array.isArray(l.selectedToppings) ? l.selectedToppings.map(String).sort().join("|") : "";
+  return [l.selectedSize ?? "", l.selectedSugar ?? "", l.selectedIce ?? "", tops].join("#");
+}
+
 /**
- * Thêm dòng vào đơn: cộng dồn vào dòng CHƯA GỬI BẾP cùng món + cùng ghi chú + không giảm giá
+ * Thêm dòng vào đơn: cộng dồn vào dòng CHƯA GỬI BẾP cùng món + cùng ghi chú + cùng tùy chọn + không giảm giá
  * (món đã gửi bếp luôn tạo dòng mới để phiếu bếp lần sau chỉ chứa phần mới).
  */
 export function addLineToOrder(lines: RawOrderLine[], line: RawOrderLine): RawOrderLine[] {
@@ -64,6 +70,7 @@ export function addLineToOrder(lines: RawOrderLine[], line: RawOrderLine): RawOr
       l.isSentKitchen !== true &&
       String(l.productId) === String(line.productId) &&
       String(l.note ?? "") === String(line.note ?? "") &&
+      optionKey(l) === optionKey(line) &&
       !(Number(l.lineDiscountTotal ?? l.discountAmount ?? 0) > 0)
   );
   if (idx < 0) return [...lines, line];

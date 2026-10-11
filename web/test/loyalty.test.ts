@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_LOYALTY_TIERS,
+  SUGGESTED_LOYALTY_TIERS,
   buildNewCustomerNode,
+  buildPooledRedeemUpdates,
+  hasCustomTiers,
+  planPooledRedeem,
   buildPointAdjustment,
   buildSharedLoyaltyUpdates,
   normalizePhone,
@@ -33,6 +37,7 @@ describe("cấu hình hạng", () => {
 
   it("validate: trùng tên, trùng mức, không bắt đầu từ 0, số âm", () => {
     expect(validateTiers(DEFAULT_LOYALTY_TIERS)).toBeNull();
+    expect(validateTiers(SUGGESTED_LOYALTY_TIERS)).toBeNull();
     expect(validateTiers([])).toMatch(/ít nhất/);
     expect(validateTiers([{ name: "A", minPoints: 0 }, { name: "a", minPoints: 5 }])).toMatch(/trùng/);
     expect(validateTiers([{ name: "A", minPoints: 0 }, { name: "B", minPoints: 0 }])).toMatch(/cùng mức/);
@@ -41,11 +46,19 @@ describe("cấu hình hạng", () => {
     expect(validateTiers([{ name: "A", minPoints: 0.5 }])).toMatch(/số nguyên/);
   });
 
-  it("xếp hạng và điểm còn thiếu", () => {
-    expect(tierForTotalPoints(499)).toBe("Bạc");
-    expect(tierForTotalPoints(500)).toBe("Vàng");
-    expect(pointsToNextTier(450, DEFAULT_LOYALTY_TIERS)).toEqual({ name: "Vàng", missing: 50 });
-    expect(pointsToNextTier(5000, DEFAULT_LOYALTY_TIERS)).toBeNull();
+  it("chưa cấu hình: chỉ có hạng gốc, mọi mốc do Chủ quán tự đặt", () => {
+    expect(DEFAULT_LOYALTY_TIERS).toEqual([{ name: "Thành viên", minPoints: 0 }]);
+    expect(hasCustomTiers(DEFAULT_LOYALTY_TIERS)).toBe(false);
+    expect(tierForTotalPoints(99999)).toBe("Thành viên");
+    expect(hasCustomTiers([{ name: "A", minPoints: 0 }, { name: "B", minPoints: 10 }])).toBe(true);
+  });
+
+  it("xếp hạng và điểm còn thiếu theo mốc tự đặt", () => {
+    const t = SUGGESTED_LOYALTY_TIERS;
+    expect(tierForTotalPoints(499, t)).toBe("Bạc");
+    expect(tierForTotalPoints(500, t)).toBe("Vàng");
+    expect(pointsToNextTier(450, t)).toEqual({ name: "Vàng", missing: 50 });
+    expect(pointsToNextTier(5000, t)).toBeNull();
   });
 });
 
@@ -73,7 +86,7 @@ describe("khách hàng mới", () => {
 });
 
 describe("chỉnh điểm", () => {
-  const base = { storeCode: "T1", customer: cust, actor, tiers: DEFAULT_LOYALTY_TIERS, now: 5000, nonce: "n" };
+  const base = { storeCode: "T1", customer: cust, actor, tiers: SUGGESTED_LOYALTY_TIERS, now: 5000, nonce: "n" };
 
   it("bắt buộc lý do, số nguyên không âm, không trừ quá số dư", () => {
     expect(buildPointAdjustment({ ...base, mode: "ADD", value: 10, reason: " " })).toMatchObject({ ok: false });
@@ -120,7 +133,7 @@ describe("lịch sử điểm", () => {
 describe("điểm dùng chung toàn hệ thống", () => {
   it("ghi cấu hình + audit cho từng chi nhánh", () => {
     const u = buildSharedLoyaltyUpdates({ storeCodes: ["A", "B"], enabled: true, actor: { username: "chu" }, now: 9 });
-    expect(u["stores/A/storeInfo/sharedLoyalty"]).toEqual({ enabled: true, confirmedBy: "chu", confirmedAt: 9 });
+    expect(u["stores/A/storeInfo/sharedLoyalty"]).toEqual({ enabled: true, deductOrder: "HOME_FIRST", confirmedBy: "chu", confirmedAt: 9 });
     expect(Object.keys(u)).toHaveLength(4);
   });
 
@@ -130,5 +143,45 @@ describe("điểm dùng chung toàn hệ thống", () => {
     const pooled = poolCustomersByPhone([mk("A", "1", "0912345678", 10), mk("B", "2", "+84912345678", 5), mk("A", "3", "xx", 99)]);
     expect(pooled).toHaveLength(1);
     expect(pooled[0]).toMatchObject({ phone: "0912345678", totalCurrent: 15 });
+  });
+});
+
+describe("trừ điểm dùng chung", () => {
+  const holdings = [
+    { storeCode: "A", customerId: "a1", points: 30 },
+    { storeCode: "B", customerId: "b1", points: 80 },
+    { storeCode: "C", customerId: "c1", points: 0 },
+  ];
+
+  it("HOME_FIRST: trừ chi nhánh đang thao tác trước rồi tới chi nhánh nhiều điểm nhất", () => {
+    const r = planPooledRedeem({ holdings, points: 50, homeStore: "A", order: "HOME_FIRST" });
+    if ("error" in r) throw new Error(r.error);
+    expect(r.allocations.map((a) => [a.storeCode, a.take, a.after])).toEqual([["A", 30, 0], ["B", 20, 60]]);
+  });
+
+  it("LARGEST_FIRST: chi nhánh nhiều điểm nhất trước", () => {
+    const r = planPooledRedeem({ holdings, points: 100, homeStore: "A", order: "LARGEST_FIRST" });
+    if ("error" in r) throw new Error(r.error);
+    expect(r.allocations.map((a) => [a.storeCode, a.take])).toEqual([["B", 80], ["A", 20]]);
+  });
+
+  it("từ chối khi không đủ điểm hoặc số điểm sai", () => {
+    expect(planPooledRedeem({ holdings, points: 111, order: "HOME_FIRST" })).toHaveProperty("error");
+    expect(planPooledRedeem({ holdings, points: 0, order: "HOME_FIRST" })).toHaveProperty("error");
+    expect(planPooledRedeem({ holdings, points: 1.5, order: "HOME_FIRST" })).toHaveProperty("error");
+  });
+
+  it("ghi từng chi nhánh: giảm điểm, giữ tổng lịch sử, có lịch sử + nhật ký; bắt buộc lý do", () => {
+    const plan = planPooledRedeem({ holdings, points: 50, homeStore: "A", order: "HOME_FIRST" });
+    if ("error" in plan) throw new Error(plan.error);
+    const base = { allocations: plan.allocations, customerName: "An", phone: "0912345678", actor, now: 7, nonce: "n" };
+    expect(buildPooledRedeemUpdates({ ...base, reason: " " })).toHaveProperty("error");
+    const r = buildPooledRedeemUpdates({ ...base, reason: "HD-1" });
+    if ("error" in r) throw new Error(r.error);
+    expect(r.updates["stores/A/customers/a1/diem_hien_tai"]).toBe(0);
+    expect(r.updates["stores/B/customers/b1/currentPoints"]).toBe(60);
+    expect(Object.keys(r.updates).some((k) => k.endsWith("/totalPoints"))).toBe(false);
+    expect(r.updates["stores/B/point_history/pool_7_n_B"]).toMatchObject({ type: "POOL_REDEEM", delta: -20, before: 80, after: 60 });
+    expect(r.updates["stores/A/audit_logs/log_7_pool_n_A"]).toMatchObject({ action: "LOYALTY_POOL_REDEEM" });
   });
 });

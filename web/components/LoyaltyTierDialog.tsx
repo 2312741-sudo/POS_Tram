@@ -2,29 +2,32 @@
 import { useState } from "react";
 import { Award, Plus, Trash2 } from "lucide-react";
 import ModalShell, { btnGhost, btnPrimary, errorBox, fieldInput } from "./ModalShell";
-import { DEFAULT_LOYALTY_TIERS, validateTiers, type LoyaltyTier } from "@/lib/loyalty";
+import { DEFAULT_LOYALTY_TIERS, SUGGESTED_LOYALTY_TIERS, validateTiers, type LoyaltyTier } from "@/lib/loyalty";
 
 interface Props {
   storeCode: string;
   tiers: LoyaltyTier[];
   saving?: boolean;
   onCancel: () => void;
-  onSave: (tiers: LoyaltyTier[]) => void;
+  /** Số chi nhánh trong hệ thống (>1 → hiện ô "áp dụng cho tất cả") */
+  storeCount?: number;
+  onSave: (tiers: LoyaltyTier[], applyAll: boolean) => void;
 }
 
 /** Cấu hình số điểm tích lũy tối thiểu cho từng hạng (Bạc, Vàng, ...) — Chủ quán */
-export default function LoyaltyTierDialog({ storeCode, tiers, saving, onCancel, onSave }: Props) {
+export default function LoyaltyTierDialog({ storeCode, tiers, saving, storeCount = 1, onCancel, onSave }: Props) {
   const [rows, setRows] = useState<{ name: string; min: string }[]>(
     tiers.map((t) => ({ name: t.name, min: String(t.minPoints) }))
   );
   const [error, setError] = useState("");
+  const [applyAll, setApplyAll] = useState(false);
 
   const submit = () => {
     const next = rows.map((r) => ({ name: r.name.trim(), minPoints: r.min.trim() === "" ? NaN : Number(r.min) }));
     const err = validateTiers(next);
     if (err) return setError(err);
     setError("");
-    onSave([...next].sort((a, b) => a.minPoints - b.minPoints));
+    onSave([...next].sort((a, b) => a.minPoints - b.minPoints), applyAll);
   };
 
   return (
@@ -37,7 +40,7 @@ export default function LoyaltyTierDialog({ storeCode, tiers, saving, onCancel, 
       footer={
         <>
           <button type="button" style={btnGhost} onClick={() => setRows(DEFAULT_LOYALTY_TIERS.map((t) => ({ name: t.name, min: String(t.minPoints) })))}>
-            Về mặc định
+            Xóa hết mốc
           </button>
           <button type="button" style={btnGhost} onClick={onCancel}>Hủy</button>
           <button type="button" style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={submit}>
@@ -84,8 +87,21 @@ export default function LoyaltyTierDialog({ storeCode, tiers, saving, onCancel, 
       >
         <Plus size={14} /> Thêm hạng
       </button>
+      <button
+        type="button"
+        onClick={() => setRows(SUGGESTED_LOYALTY_TIERS.map((t) => ({ name: t.name, min: String(t.minPoints) })))}
+        style={{ ...btnGhost, marginTop: 12, marginLeft: 8, fontSize: 12 }}
+      >
+        Điền mốc gợi ý (sửa tùy ý)
+      </button>
+      {storeCount > 1 && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginTop: 12 }}>
+          <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
+          Áp dụng cùng các mốc này cho tất cả {storeCount} chi nhánh
+        </label>
+      )}
       <p style={{ fontSize: 12, color: "var(--subtext)", marginTop: 12 }}>
-        Hạng thấp nhất phải bắt đầu từ 0 điểm. Khách được xếp vào hạng cao nhất mà tổng điểm tích lũy đạt được; đổi điểm không làm khách bị tụt hạng.
+        Chủ quán tự đặt từng mốc; hạng thấp nhất phải bắt đầu từ 0 điểm. Khách được xếp vào hạng cao nhất mà tổng điểm tích lũy đạt được; đổi điểm không làm khách bị tụt hạng.
       </p>
     </ModalShell>
   );

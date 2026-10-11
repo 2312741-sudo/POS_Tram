@@ -190,6 +190,10 @@ export interface ProductItem {
   category: string;
   imageBase64?: string;
   isTopping?: boolean;
+  /** Size → phụ thu, VD { S: 0, M: 5000 } */
+  sizes?: Record<string, number>;
+  allowedToppings?: string[];
+  hasIceSugarOptions?: boolean | null;
 }
 
 export interface CategoryItem {
