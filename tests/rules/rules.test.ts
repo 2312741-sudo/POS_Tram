@@ -194,7 +194,10 @@ describe("POS Trạm - Security Rules: nền tảng", () => {
 
   it("14. Chỉ có đúng 2 nhánh được mở ở cấp root: userIndex và stores", () => {
     const topLevelKeys = Object.keys(parsedRules.rules).filter((k) => !k.startsWith("."));
-    expect(topLevelKeys.sort()).toEqual(["stores", "userIndex"].sort());
+    // Nhánh gốc mở có chủ đích: stores, userIndex và các nút điểm dùng chung (chỉ đọc cấu hình, còn lại đóng với client)
+    expect(topLevelKeys.sort()).toEqual(
+      ["stores", "userIndex", "loyalty_config", "loyalty_ledger", "loyalty_members", "loyalty_migration"].sort()
+    );
   });
 });
 
@@ -355,6 +358,10 @@ describe("POS Trạm - Security Rules: bộ đếm, kho, khuyến mãi khi thanh
     await assertFails(db("waiter_uid").ref("stores/TRAM01/campaign_counters/CAM1/spentMoney").set(99999));
 
     const v = "stores/TRAM01/vouchers/CAM1/VCH1";
+    // Hóa đơn dùng mã đã tồn tại -> không được trả mã về RELEASED (trường hợp hóa đơn không tồn tại xem VR1)
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("stores/TRAM01/bills/b1").set({ status: "PAID", finalAmount: 10000 });
+    });
     await assertSucceeds(cashier.ref(v).set({ voucherId: "VCH1", campaignId: "CAM1", normalizedCode: "ABC", state: "REDEEMED", redeemedBillId: "b1", version: 2 }));
     await assertFails(cashier.ref(v).set({ voucherId: "VCH1", campaignId: "CAM1", normalizedCode: "ABC", state: "RELEASED", version: 3 }));
     await assertFails(cashier.ref("stores/TRAM01/vouchers/CAM1/VCH_NEW").set({ voucherId: "VCH_NEW", campaignId: "CAM1", normalizedCode: "NEW", state: "RELEASED" }));
