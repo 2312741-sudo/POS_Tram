@@ -196,7 +196,7 @@ describe("POS Trạm - Security Rules: nền tảng", () => {
     const topLevelKeys = Object.keys(parsedRules.rules).filter((k) => !k.startsWith("."));
     // Nhánh gốc mở có chủ đích: stores, userIndex và các nút điểm dùng chung (chỉ đọc cấu hình, còn lại đóng với client)
     expect(topLevelKeys.sort()).toEqual(
-      ["stores", "userIndex", "loyalty_config", "loyalty_ledger", "loyalty_members", "loyalty_migration"].sort()
+      ["stores", "userIndex", "loyalty_config", "loyalty_ledger", "loyalty_ledger_index", "loyalty_members", "loyalty_migration"].sort()
     );
   });
 });
@@ -520,6 +520,20 @@ describe("POS Trạm - Security Rules: điểm khách hàng & trừ kho thử l�
     }
     await assertFails(env().unauthenticatedContext().database().ref("loyalty_config").get());
     await assertFails(db("stranger_uid").ref("loyalty_config").get());
+  });
+
+  it("LS8. Chỉ mục sổ cái loyalty_ledger_index đóng đọc-ghi với mọi client (chỉ Admin SDK)", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("loyalty_ledger_index/202601/0912345678~b1_earn").set({ memberKey: "0912345678", opId: "b1_earn", at: 1, storeCode: "TRAM01", type: "earn" });
+    });
+    for (const uid of ["owner_uid", "manager_uid", "cashier_uid", "waiter_uid", "storeB_uid", "stranger_uid"]) {
+      const c = db(uid);
+      await assertFails(c.ref("loyalty_ledger_index").get());
+      await assertFails(c.ref("loyalty_ledger_index/202601/0912345678~b1_earn").get());
+      await assertFails(c.ref("loyalty_ledger_index/202601/x~y").set({ memberKey: "x", opId: "y", at: 1, storeCode: "TRAM01", type: "earn" }));
+      await assertFails(c.ref("loyalty_ledger_index/_meta").set({ complete: true }));
+    }
+    await assertFails(env().unauthenticatedContext().database().ref("loyalty_ledger_index").get());
   });
 
   it("LS4. bill_stock_lines: marker từng dòng chỉ tạo 1 lần bởi thu ngân trở lên", async () => {
@@ -852,5 +866,15 @@ describe("POS Trạm - Security Rules: gộp vai trò (ROLE_MANAGER / ROLE_STAFF
         await context.database().ref("stores/TRAM01/bills/paid_chk").set({ id: "paid_chk", status: "PAID", finalAmount: 10000, subTotal: 10000 });
       });
     }
+  });
+
+  it("LV1. Thu ngân ghi được lastVisitAt của khách nhưng vẫn không đổi được điểm", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("stores/TRAM01/customers/CLV1").set({ id: "CLV1", fullName: "Khách LV", phone: "0900000001", diem_hien_tai: 0, totalPoints: 0 });
+    });
+    const cashier = db("cashier_uid");
+    await assertSucceeds(cashier.ref("stores/TRAM01/customers/CLV1/lastVisitAt").set(1791741842208));
+    await assertFails(cashier.ref("stores/TRAM01/customers/CLV1/diem_hien_tai").set(9999));
+    await assertFails(cashier.ref("stores/TRAM01/customers/CLV1/totalPoints").set(9999));
   });
 });

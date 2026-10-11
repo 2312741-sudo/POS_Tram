@@ -8,6 +8,7 @@
  *  - adjustLoyaltyPoints   chỉnh tay (Quản lý/Chủ): ADD | SUB | SET + lý do
  *  - lookupMember          tra số dư dùng chung theo SĐT hoặc khách của chi nhánh (Thu ngân trở lên)
  *  - getMemberLedger       lịch sử điểm xuyên chi nhánh
+ *  - listLoyaltyLedger     sổ cái xuyên khách (Quản lý/Chủ): lọc thời gian/loại/tìm kiếm + tổng + phân trang
  *  - setLoyaltyConfig      cấu hình chuỗi: tỷ lệ tích/đổi + mốc hạng (Chủ)
  * Trigger:
  *  - mirrorMemberToBranches  loyalty_members → cache điểm trên mọi node khách chi nhánh cùng SĐT
@@ -38,6 +39,22 @@ import {
   type OpRequest,
   type OpResult,
 } from "./sharedLoyalty";
+import {
+  LEDGER_INDEX_META,
+  LEDGER_INDEX_ROOT,
+  MAX_LEDGER_ENTRIES,
+  clampLimit,
+  computeTotals,
+  filterIndex,
+  filterRows,
+  indexPath,
+  monthsBetween,
+  paginate,
+  sortRows,
+  toRow,
+  type IndexEntry,
+  type LedgerRow,
+} from "./loyaltyLedgerQuery";
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -117,6 +134,14 @@ function withBranch(cur: AnyMap | null, store: string, customerId?: string): Any
   return base;
 }
 
+/** Ghi sổ cái + chỉ mục theo tháng trong MỘT lần cập nhật nguyên tử (chỉ Admin SDK). */
+async function writeLedger(memberKey: string, opId: string, entry: AnyMap, storeCode: string): Promise<void> {
+  const at = Number(entry.at);
+  const updates: AnyMap = { [`loyalty_ledger/${memberKey}/${opId}`]: entry };
+  if (Number.isFinite(at)) updates[indexPath(memberKey, opId, at)] = { memberKey, opId, at, storeCode, type: String(entry.type ?? "") };
+  await db.ref().update(updates);
+}
+
 /** Chạy 1 thao tác điểm bằng transaction trên loyalty_members/{key} và ghi sổ cái (chỉ tạo mới). */
 async function runOp(
   target: Target,
@@ -147,15 +172,14 @@ async function runOp(
 
   const ledgerRef = db.ref(`loyalty_ledger/${target.memberKey}/${req.opId}`);
   if (res.status === "applied") {
-    await ledgerRef
-      .set(clean(buildLedgerEntry(request, res, { ...extra, customerId: target.customerId })))
+    const entry = clean(buildLedgerEntry(request, res, { ...extra, customerId: target.customerId }));
+    await writeLedger(target.memberKey, req.opId, entry as unknown as AnyMap, req.storeCode)
       .catch((e) => console.error("loyalty_ledger write failed", target.memberKey, req.opId, e));
   } else if (res.status === "alreadyApplied") {
     // Lần trước commit số dư nhưng chưa kịp ghi sổ cái → bù bản ghi tối thiểu
     const snap = await ledgerRef.get();
     if (!snap.exists()) {
-      await ledgerRef
-        .set(clean({ type: req.type, points: req.type === "redeem" ? -res.applied : res.applied, balanceAfter: res.after, storeCode: req.storeCode, staff: extra.staff, at: req.now, billId: extra.billId, healed: true }))
+      await writeLedger(target.memberKey, req.opId, clean({ type: req.type, points: req.type === "redeem" ? -res.applied : res.applied, balanceAfter: res.after, storeCode: req.storeCode, staff: extra.staff, at: req.now, billId: extra.billId, healed: true }), req.storeCode)
         .catch(() => undefined);
     }
   }
@@ -329,6 +353,150 @@ export const getMemberLedger = onCall({ region: REGION }, async (request) => {
   });
   entries.sort((a, b) => Number(b.at ?? 0) - Number(a.at ?? 0));
   return { memberKey: target.memberKey, entries: entries.slice(0, limit) };
+});
+
+// ---------------------------------------------------------------------------------------------
+// listLoyaltyLedger: sổ cái xuyên khách cho báo cáo Web
+
+/** Các chi nhánh mà người gọi là Quản lý/Chủ ĐANG HOẠT ĐỘNG (userIndex + vai trò từng quán). */
+async function managedStores(uid: string): Promise<string[]> {
+  const idx = await db.ref(`userIndex/${uid}`).get();
+  const codes = Object.entries((idx.val() || {}) as AnyMap).filter(([, v]) => v === true).map(([k]) => k);
+  const profiles = await Promise.all(codes.map((c) => db.ref(`stores/${c}/users/${uid}`).get()));
+  return codes.filter((_, i) => {
+    const u = profiles[i].exists() ? (profiles[i].val() as UserProfile) : null;
+    return !!u && u.isActive !== false && (isOwnerRole(u.roleId, u.isRootOwner) || isManagerRole(u.roleId));
+  });
+}
+
+const RANGE_TOO_LARGE = `Khoảng dữ liệu quá lớn (hơn ${MAX_LEDGER_ENTRIES.toLocaleString("en-US")} giao dịch). Vui lòng thu hẹp khoảng thời gian hoặc bộ lọc.`;
+
+type RawLedger = Map<string, AnyMap>; // khóa `${memberKey}~${opId}`
+
+/** Chưa có chỉ mục đầy đủ: đọc tuần tự sổ cái theo từng đợt khách, gom bản ghi + (backfill) ghi chỉ mục. */
+async function scanLedger(): Promise<{ raw: RawLedger; index: IndexEntry[] }> {
+  const raw: RawLedger = new Map();
+  const index: IndexEntry[] = [];
+  let last: string | null = null;
+  for (;;) {
+    let q = db.ref("loyalty_ledger").orderByKey().limitToFirst(100);
+    if (last !== null) q = db.ref("loyalty_ledger").orderByKey().startAt(last).limitToFirst(101);
+    const snap = await q.get();
+    let n = 0;
+    snap.forEach((m) => {
+      if (m.key === last) return;
+      n += 1;
+      last = m.key;
+      m.forEach((e) => {
+        const v = e.val() as AnyMap;
+        const at = Number(v?.at);
+        if (!v || !Number.isFinite(at)) return;
+        raw.set(`${m.key}~${e.key}`, v);
+        index.push({ memberKey: m.key as string, opId: e.key as string, at, storeCode: String(v.storeCode ?? ""), type: String(v.type ?? "") });
+      });
+    });
+    if (index.length > MAX_LEDGER_ENTRIES * 2) throw new HttpsError("failed-precondition", RANGE_TOO_LARGE);
+    if (n === 0) break;
+  }
+  return { raw, index };
+}
+
+/** Ghi chỉ mục cho các bản ghi cũ rồi đánh dấu đầy đủ (best effort, idempotent). */
+async function backfillIndex(index: IndexEntry[]): Promise<void> {
+  for (let i = 0; i < index.length; i += 400) {
+    const updates: AnyMap = {};
+    for (const e of index.slice(i, i + 400)) updates[indexPath(e.memberKey, e.opId, e.at)] = e;
+    await db.ref().update(updates);
+  }
+  await db.ref(`${LEDGER_INDEX_ROOT}/${LEDGER_INDEX_META}`).set({ complete: true, at: Date.now(), count: index.length });
+}
+
+async function readIndex(from: number | undefined, to: number | undefined): Promise<IndexEntry[]> {
+  const out: IndexEntry[] = [];
+  const addMonth = (month: admin.database.DataSnapshot) => {
+    month.forEach((e) => {
+      const v = e.val() as IndexEntry;
+      if (v && typeof v.at === "number") out.push(v);
+    });
+  };
+  if (typeof from === "number") {
+    const months = monthsBetween(from, typeof to === "number" ? to : Date.now());
+    const snaps = await Promise.all(months.map((m) => db.ref(`${LEDGER_INDEX_ROOT}/${m}`).get()));
+    snaps.forEach(addMonth);
+  } else {
+    const all = await db.ref(LEDGER_INDEX_ROOT).get();
+    all.forEach((m) => {
+      if (m.key !== LEDGER_INDEX_META) addMonth(m);
+    });
+  }
+  return out;
+}
+
+export const listLoyaltyLedger = onCall({ region: REGION, timeoutSeconds: 120, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
+  const d = (request.data || {}) as AnyMap;
+  const uid = request.auth.uid;
+  const reqStore = typeof d.storeCode === "string" ? d.storeCode.trim().toUpperCase() : "";
+  if (!reqStore) throw new HttpsError("invalid-argument", "Thiếu mã cửa hàng.");
+
+  let stores: Set<string>;
+  if (reqStore === "ALL") {
+    const mine = await managedStores(uid);
+    if (mine.length === 0) throw new HttpsError("permission-denied", "Chỉ Quản lý/Chủ quán được xem lịch sử điểm.");
+    stores = new Set(mine);
+  } else {
+    await authorize(request, "manager");
+    stores = new Set([reqStore]);
+  }
+
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  const from = num(d.from);
+  const to = num(d.to);
+  const types = Array.isArray(d.types) ? d.types.filter((t): t is string => typeof t === "string").slice(0, 10) : [];
+  const search = typeof d.search === "string" ? d.search.slice(0, 100) : "";
+  const cursor = typeof d.cursor === "string" && d.cursor ? d.cursor : undefined;
+  const limit = clampLimit(d.limit);
+  const customerId = typeof d.customerId === "string" && d.customerId.trim() ? d.customerId.trim() : undefined;
+  const filter = { stores, from, to, types, search, customerId };
+
+  // Lấy danh sách ứng viên: dùng chỉ mục khi đã đầy đủ, ngược lại quét sổ cái (và backfill chỉ mục)
+  const meta = await db.ref(`${LEDGER_INDEX_ROOT}/${LEDGER_INDEX_META}/complete`).get();
+  let raw: RawLedger | null = null;
+  let candidates: IndexEntry[];
+  if (meta.val() === true) {
+    candidates = filterIndex(await readIndex(from, to), filter);
+  } else {
+    const scanned = await scanLedger();
+    raw = scanned.raw;
+    candidates = filterIndex(scanned.index, filter);
+    await backfillIndex(scanned.index).catch((e) => console.error("backfill loyalty_ledger_index failed", e));
+  }
+  if (candidates.length > MAX_LEDGER_ENTRIES) throw new HttpsError("failed-precondition", RANGE_TOO_LARGE);
+
+  // Thông tin khách (tên/SĐT) + bản ghi sổ cái đầy đủ
+  const memberKeys = [...new Set(candidates.map((c) => c.memberKey))];
+  const members = new Map<string, AnyMap | null>();
+  for (let i = 0; i < memberKeys.length; i += 50) {
+    const part = memberKeys.slice(i, i + 50);
+    const snaps = await Promise.all(part.map((k) => db.ref(`loyalty_members/${k}`).get()));
+    part.forEach((k, j) => members.set(k, snaps[j].exists() ? (snaps[j].val() as AnyMap) : null));
+  }
+  const rows: LedgerRow[] = [];
+  for (let i = 0; i < candidates.length; i += 100) {
+    const part = candidates.slice(i, i + 100);
+    const vals = raw
+      ? part.map((c) => raw!.get(`${c.memberKey}~${c.opId}`) ?? null)
+      : (await Promise.all(part.map((c) => db.ref(`loyalty_ledger/${c.memberKey}/${c.opId}`).get()))).map((s) => (s.exists() ? (s.val() as AnyMap) : null));
+    part.forEach((c, j) => {
+      const r = toRow(c.memberKey, c.opId, vals[j], members.get(c.memberKey) ?? null);
+      if (r) rows.push(r);
+    });
+  }
+
+  const filtered = sortRows(filterRows(rows, filter));
+  const pg = paginate(filtered, cursor, limit);
+  if (!pg) throw new HttpsError("invalid-argument", "Con trỏ phân trang không hợp lệ.");
+  return { entries: pg.page, nextCursor: pg.nextCursor, totals: computeTotals(filtered) };
 });
 
 export const setLoyaltyConfig = onCall({ region: REGION }, async (request) => {

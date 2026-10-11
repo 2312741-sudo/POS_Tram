@@ -20,6 +20,8 @@ import {
   type DeletedItemEntry,
 } from "./item-deletion";
 import { buildWebOrderUpdates, type OrderActor } from "./web-order";
+import { computeBillAmounts, DEFAULT_REDEEM_VND } from "./loyalty-checkout";
+import { insufficientBalance, redeemLoyaltyPoints, refundLoyaltyPoints } from "./loyalty-client";
 import { normalizeTiers, parseSharedLoyalty, type LoyaltyTier, type SharedLoyaltyConfig } from "./loyalty";
 import { approvalAuditFields, approvalSuffix, type ManagerApproval } from "./manager-approval";
 import {
@@ -331,8 +333,12 @@ interface DashboardContextType {
       promotions?: AppliedDiscount[];
       /** Khách hàng của hóa đơn (tính lượt dùng theo khách của chương trình) */
       customerId?: string | null;
+      /** Số điểm khách dùng để giảm giá (đổi qua callable redeemLoyaltyPoints TRƯỚC khi ghi hóa đơn) */
+      pointsUsed?: number;
+      /** Đồng/điểm khi đổi (cấu hình chuỗi); thiếu → mặc định 1000 như máy chủ */
+      pointRedeemRate?: number;
     }
-  ) => Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }>;
+  ) => Promise<{ success: boolean; billId?: string; billCode?: string; customerId?: string; error?: string }>;
   saveTable: (
     tableData: { id?: string; name: string; zone: string; inUse?: boolean },
     storeCode?: string
@@ -1414,9 +1420,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         discountAmount?: number;
         promotions?: AppliedDiscount[];
         customerId?: string | null;
+        pointsUsed?: number;
+        pointRedeemRate?: number;
       }
-    ): Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }> => {
+    ): Promise<{ success: boolean; billId?: string; billCode?: string; customerId?: string; error?: string }> => {
       let reservations: PromotionReservation[] = [];
+      let redeemed: { storeCode: string; customerId: string; billId: string; points: number } | null = null;
       let reservedStore = "";
       try {
         const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
@@ -1433,9 +1442,22 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const { subTotal, itemDiscounts } = summarizeOrderLines(items);
         const promotions = (options?.promotions || []).filter((d) => Number(d.amount) > 0);
         const promoTotal = promotions.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-        const billDiscounts = Math.max(0, Number(options?.discountAmount || 0)) + promoTotal;
-        const totalDiscount = Math.min(subTotal, itemDiscounts + billDiscounts);
-        const finalAmount = Math.max(0, subTotal - totalDiscount);
+        const customer = tableCustomerOf(table);
+        const customerId = options?.customerId || customer.customerId || "";
+        const redeemRate = options?.pointRedeemRate && options.pointRedeemRate > 0 ? options.pointRedeemRate : DEFAULT_REDEEM_VND;
+        const pointsUsed = customerId ? Math.max(0, Math.trunc(options?.pointsUsed || 0)) : 0;
+        const manualDiscount = Math.max(0, Number(options?.discountAmount || 0));
+        if (pointsUsed * redeemRate > Math.max(0, subTotal - itemDiscounts - manualDiscount - promoTotal)) {
+          return { success: false, error: "Số điểm dùng vượt quá số tiền cần thanh toán, vui lòng giảm số điểm." };
+        }
+        const { billDiscounts, totalDiscount, finalAmount, pointsDiscount } = computeBillAmounts({
+          subTotal,
+          itemDiscounts,
+          manualDiscount,
+          promoTotal,
+          pointsUsed,
+          redeemRate,
+        });
         const paymentMethod = options?.paymentMethod || "CASH";
         const cashierName = options?.staffName || "Quản trị viên Web";
         const now = Date.now();
@@ -1474,8 +1496,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           itemDiscounts: itemDiscounts,
           billDiscounts: billDiscounts,
           ...(promotions.length > 0 ? { discounts: promotions } : {}),
-          ...tableCustomerOf(table),
+          ...customer,
           ...(options?.customerId ? { customerId: options.customerId } : {}),
+          ...(pointsUsed > 0 ? { pointsUsed, pointsDiscount } : {}),
           vatRate: 0,
           vatAmount: 0,
           paymentMethod: paymentMethod,
@@ -1535,16 +1558,40 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             customerId: options?.customerId,
           });
         }
+        // Đổi điểm (điểm dùng chung toàn chuỗi) PHẢI thành công trước khi ghi hóa đơn; lỗi → không ghi gì
+        if (pointsUsed > 0) {
+          try {
+            await redeemLoyaltyPoints(targetStoreCode, customerId, billId, pointsUsed, billCode);
+          } catch (re) {
+            const lack = insufficientBalance(re);
+            throw new Error(
+              lack
+                ? `Khách chỉ còn ${new Intl.NumberFormat("vi-VN").format(lack.balance)} điểm, không đủ để dùng ${pointsUsed} điểm. Chưa ghi hóa đơn.`
+                : `Không đổi được điểm (chưa ghi hóa đơn): ${errorMessage(re, "lỗi kết nối")}`
+            );
+          }
+          redeemed = { storeCode: targetStoreCode, customerId, billId, points: pointsUsed };
+        }
         // Ghi nguyên tử: thành công tất cả hoặc không ghi gì
         await update(ref(db), updates);
         reservations = [];
+        redeemed = null;
 
         applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(historyBill, billId), ...prev]);
 
-        return { success: true, billId, billCode };
+        return { success: true, billId, billCode, customerId: customerId || undefined };
       } catch (e) {
         console.error("checkoutAndFreeTable error:", e);
+        if (redeemed) {
+          const r: { storeCode: string; customerId: string; billId: string; points: number } = redeemed;
+          try {
+            await refundLoyaltyPoints(r.storeCode, r.customerId, r.billId, r.points);
+          } catch (re) {
+            console.error("Hoàn điểm sau khi ghi hóa đơn lỗi thất bại:", re);
+            return { success: false, error: `${errorMessage(e, "Lỗi khi thanh toán trả bàn")} — CHƯA hoàn được ${r.points} điểm đã đổi, hãy báo quản lý (hóa đơn ${r.billId}).` };
+          }
+        }
         if (reservations.length > 0) {
           const rbErrors = await rollbackAllPromotions(db, reservedStore, reservations);
           if (rbErrors.length > 0) console.error("Hoàn tác khuyến mãi lỗi:", rbErrors);

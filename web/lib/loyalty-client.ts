@@ -2,7 +2,7 @@
  * Client TS cho điểm DÙNG CHUNG toàn chuỗi: bọc các Cloud Functions callable (functions/src/sharedLoyaltyHandlers.ts).
  * Web KHÔNG ghi điểm trực tiếp (rules đóng loyalty_members / loyalty_ledger / loyalty_config).
  *
- * Hiện luồng thanh toán Web (lib/data-context.tsx) chưa dùng điểm; khi cần, gọi theo thứ tự POS:
+ * Luồng thanh toán Web (lib/data-context.tsx checkoutAndFreeTable + app/dashboard/tables) gọi theo thứ tự POS:
  * redeemLoyaltyPoints (trước khi ghi hóa đơn) → ghi hóa đơn → applyLoyaltyEarn (sau khi PAID);
  * ghi hóa đơn lỗi → refundLoyaltyPoints.
  */

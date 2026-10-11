@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Eye,
   User,
+  UserCheck,
   CreditCard,
   History,
   X,
@@ -710,6 +711,32 @@ export default function OrdersPage() {
                   {selectedOrder.paymentMethod || "Tiền mặt"}
                 </div>
               </div>
+
+              {(selectedOrder.customerName || selectedOrder.customerPhone || selectedOrder.customerId) ? (
+                <div style={{ background: "var(--surface-muted)", padding: "14px", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <UserCheck size={13} /> Khách hàng
+                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: "800", color: "var(--text)" }}>
+                    {String(selectedOrder.customerName || "Khách hàng")}
+                  </div>
+                  {selectedOrder.customerPhone ? (
+                    <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                      SĐT: {String(selectedOrder.customerPhone)}
+                    </div>
+                  ) : null}
+                  {billPointsUsed(selectedOrder) > 0 ? (
+                    <div style={{ fontSize: "11px", color: "var(--primary)", marginTop: "2px", fontWeight: 600 }}>
+                      Đã đổi: {formatNumber(billPointsUsed(selectedOrder))} điểm
+                    </div>
+                  ) : null}
+                  {Number((selectedOrder as { pointsEarned?: number }).pointsEarned) > 0 ? (
+                    <div style={{ fontSize: "11px", color: "var(--success)", marginTop: "2px", fontWeight: 600 }}>
+                      Đã tích: +{formatNumber(Number((selectedOrder as { pointsEarned?: number }).pointsEarned))} điểm
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div style={{ background: "var(--primary-light)", padding: "14px", borderRadius: "10px", border: "1px solid #F3C9CE" }}>
                 <div style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "700", textTransform: "uppercase", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>

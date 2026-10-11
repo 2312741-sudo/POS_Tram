@@ -370,6 +370,10 @@
       ".read": false,
       ".write": false
     },
+    "loyalty_ledger_index": {
+      ".read": false,
+      ".write": false
+    },
     "loyalty_migration": {
       ".read": false,
       ".write": false

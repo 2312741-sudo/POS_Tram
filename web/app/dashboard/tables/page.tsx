@@ -67,6 +67,10 @@ interface Table {
   actionLogsJson?: string | null;
   prePrintedAt?: number | null;
   prePrintedBy?: string | null;
+  /** Khách tích điểm gắn với bàn (hợp đồng chung với Flutter) */
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
   isReserved?: boolean;
   reservationCustomer?: string;
   reservationPhone?: string;
@@ -90,7 +94,7 @@ import { errorMessage } from "@/lib/errors";
 import { buildTableBillHtml } from "@/lib/print-html";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, parseOrderJson, setLineQuantity, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
 import PromotionPanel, { usePromotions } from "@/components/PromotionPanel";
-import { deriveTableStatus, prePrintedAtOf, TABLE_STATUS_META, TABLE_STATUS_ORDER, type TableStatus } from "@/lib/table-status";
+import { deriveTableStatus, prePrintedAtOf, tableCustomerOf, TABLE_STATUS_META, TABLE_STATUS_ORDER, type TableStatus } from "@/lib/table-status";
 import { hasPermission, useAuth } from "@/lib/auth";
 import LineDiscountDialog from "@/components/LineDiscountDialog";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
@@ -99,7 +103,21 @@ import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinD
 import TableTransferDialog from "@/components/TableTransferDialog";
 import ZoneSetupDialog from "@/components/ZoneSetupDialog";
 import WebOrderDialog from "@/components/WebOrderDialog";
-import { canAdjustPoints as canManageLayout } from "@/lib/customers";
+import { canAdjustPoints as canManageLayout, canEditPointConfig, canReadCustomers } from "@/lib/customers";
+import CustomerPickerDialog from "@/components/CustomerPickerDialog";
+import LoyaltyPanel from "@/components/LoyaltyPanel";
+import { useBranchLoyalty, useLoyaltyEarnRetry, useMemberBalance } from "@/lib/use-branch-loyalty";
+import {
+  buildPointsPreview,
+  maxRedeemablePoints,
+  tableCustomerPayload,
+  toPickerCustomers,
+  type BillCustomer,
+  type PickerCustomer,
+} from "@/lib/loyalty-checkout";
+import { buildNewCustomerNode } from "@/lib/loyalty";
+import { applyLoyaltyEarn } from "@/lib/loyalty-client";
+import { earnQueueKey, earnWithRetry } from "@/lib/loyalty-earn-queue";
 import {
   approverOptions,
   canUserApprove,
@@ -108,6 +126,9 @@ import {
   type ApprovalAction,
   type ManagerApproval,
 } from "@/lib/manager-approval";
+
+/** Thời điểm hiện tại cho các handler sự kiện (tách riêng để không bị coi là gọi hàm không thuần khi render) */
+const nowMs = () => Date.now();
 
 export default function TablesPage() {
   const {
@@ -219,6 +240,43 @@ export default function TablesPage() {
   });
   const canApplyPromotion = hasPermission(user, "APPLY_PROMOTION");
 
+  // Khách hàng + tích điểm (giống giỏ hàng Flutter): chọn khách gắn vào bàn, xem điểm sẽ tích, dùng điểm
+  const canViewCustomers = hasPermission(user, "VIEW_CUSTOMERS");
+  const canManageCustomers = hasPermission(user, "MANAGE_CUSTOMERS");
+  const canRedeemPoints = hasPermission(user, "REDEEM_POINTS");
+  const roleReadsCustomers = canReadCustomers(user?.roleId || user?.role, user?.isRootOwner);
+  const loyaltyAvailable = (canViewCustomers || canManageCustomers) && roleReadsCustomers;
+  const isLoyaltyOwner = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "MANAGE_LOYALTY");
+  const loy = useBranchLoyalty({ storeCode: promoStoreCode, enabled: !!selectedTableForOrder && loyaltyAvailable, store: promoStore });
+  const tableCust = selectedTableForOrder ? tableCustomerOf(selectedTableForOrder) : {};
+  const billCustomer: BillCustomer | null = tableCust.customerId
+    ? { id: tableCust.customerId, name: tableCust.customerName, phone: tableCust.customerPhone }
+    : null;
+  const localCustomer = billCustomer ? loy.customers.find((c) => c.id === billCustomer.id) : undefined;
+  const [balanceTick, setBalanceTick] = useState(0);
+  const balance = useMemberBalance(
+    promoStoreCode,
+    loyaltyAvailable && billCustomer ? billCustomer.id : "",
+    localCustomer?.diemHienTai ?? 0,
+    localCustomer?.tongDiem ?? 0,
+    balanceTick
+  );
+  const [pointsState, setPointsState] = useState<{ key: string; n: number }>({ key: "", n: 0 });
+  const pointsKey = selectedTableForOrder && billCustomer ? `${promoStoreCode}/${selectedTableForOrder.id}/${billCustomer.id}` : "";
+  const amountBeforePoints = Math.max(0, calculateTableTotalFor(selectedTableForOrder) - promo.total);
+  const pointsUsedNow =
+    canRedeemPoints && loyaltyAvailable && billCustomer && pointsState.key === pointsKey
+      ? Math.min(pointsState.n, maxRedeemablePoints(balance.points, amountBeforePoints, loy.rates.redeemRate))
+      : 0;
+  const pointsDiscountNow = pointsUsedNow * loy.rates.redeemRate;
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [loyaltyBusy, setLoyaltyBusy] = useState(false);
+  const [loyaltyWarn, setLoyaltyWarn] = useState<string | null>(null);
+  useLoyaltyEarnRetry(user?.username, (n) => {
+    setCheckoutToast(`Đã cộng bù điểm cho ${n} hóa đơn trước đó.`);
+    setTimeout(() => setCheckoutToast(null), 6000);
+  });
+
   const filtered = useMemo(() => {
     return tables.filter((t) => {
       const matchZone = selectedZone === "ALL" || t.zone === selectedZone;
@@ -246,6 +304,12 @@ export default function TablesPage() {
     [tables]
   );
 
+  function calculateTableTotalFor(t: Table | null): number {
+    if (!t) return 0;
+    const { subTotal, itemDiscounts } = summarizeOrderLines(parseOrderJson(t.currentOrderJson));
+    return Math.max(0, subTotal - itemDiscounts);
+  }
+
   const parseOrderItems = (json?: string): OrderItem[] => {
     if (!json || json.trim() === "" || json === "[]") return [];
     try {
@@ -264,7 +328,7 @@ export default function TablesPage() {
 
   /** Tổng giảm từ khuyến mãi / voucher đã chọn — chỉ áp dụng cho bàn đang mở ở màn thanh toán */
   const promoDiscountOf = (t: Table): number =>
-    selectedTableForOrder && t.id === selectedTableForOrder.id ? promo.total : 0;
+    selectedTableForOrder && t.id === selectedTableForOrder.id ? promo.total + pointsDiscountNow : 0;
 
   const getElapsedMinutes = (openedAt?: string | null): string => {
     if (!openedAt) return "< 1";
@@ -365,7 +429,9 @@ export default function TablesPage() {
     const total = Math.max(0, calculateTableTotal(items) - promoDiscountOf(t));
     const methodText = paymentMethod === "CASH" ? "Tiền mặt" : "Chuyển khoản VietQR";
 
-    if (!confirm(`Xác nhận hoàn tất thanh toán (${methodText}) và trả ${t.name} (Tổng tiền: ${formatVND(total)} VNĐ)?`)) return;
+    const isSel = !!selectedTableForOrder && t.id === selectedTableForOrder.id;
+    const usedPts = isSel ? pointsUsedNow : 0;
+    if (!confirm(`Xác nhận hoàn tất thanh toán (${methodText}) và trả ${t.name} (Tổng tiền: ${formatVND(total)} VNĐ)?${usedPts > 0 ? `\nSẽ trừ ${formatVND(usedPts)} điểm của khách.` : ""}`)) return;
 
     setCompletingPayment(true);
     try {
@@ -373,10 +439,26 @@ export default function TablesPage() {
         paymentMethod,
         promotions: selectedTableForOrder && t.id === selectedTableForOrder.id ? promo.applied : [],
         staffName: user?.fullName,
+        pointsUsed: usedPts,
+        pointRedeemRate: loy.rates.redeemRate,
       });
       if (res.success) {
         setCheckoutToast(`✅ Đã thanh toán hóa đơn ${res.billCode || res.billId} và trả bàn ${t.name} thành công!`);
         setTimeout(() => setCheckoutToast(null), 5000);
+        // Tích điểm SAU khi hóa đơn PAID (máy chủ tính từ finalAmount); lỗi → hàng đợi thử lại, không im lặng
+        if (res.customerId && res.billId) {
+          const storeCode = t.storeCode || resolveWriteStoreCode(currentStoreCode);
+          const billId = res.billId;
+          let storage: Storage | null = null;
+          try {
+            storage = window.localStorage;
+          } catch {}
+          const r = await earnWithRetry(storage, earnQueueKey(user?.username || "", storeCode), { billId, billCode: res.billCode }, (id) => applyLoyaltyEarn(storeCode, id));
+          if (!r.ok) {
+            setLoyaltyWarn("Chưa cộng được điểm, sẽ thử lại");
+            setTimeout(() => setLoyaltyWarn(null), 10000);
+          }
+        }
         setSelectedTableForOrder(null);
       } else {
         alert("Lỗi khi trả bàn: " + (res.error || "Không xác định"));
@@ -385,6 +467,69 @@ export default function TablesPage() {
       alert("Lỗi khi trả bàn: " + errorMessage(e));
     }
     setCompletingPayment(false);
+  };
+
+  // ----- Khách hàng của bàn (lưu ngay trên bàn: POS Flutter và web thấy cùng một khách) -----
+  const attachCustomer = async (table: Table, c: BillCustomer | null) => {
+    await writeTableFields(table, tableCustomerPayload(c));
+    setPointsState({ key: "", n: 0 });
+    setBalanceTick((n) => n + 1);
+    if (c) {
+      // Đánh dấu "ghé gần đây" để lần sau khách này nằm đầu danh sách (không ảnh hưởng điểm; lỗi bỏ qua)
+      const storeCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+      void update(ref(db), { [`stores/${storeCode}/customers/${c.id}/lastVisitAt`]: nowMs() }).catch(() => undefined);
+    }
+  };
+
+  const createBranchCustomer = async (storeCode: string, name: string, phone: string): Promise<BillCustomer> => {
+    const now = nowMs();
+    const id = `CUST_${now}`;
+    await update(ref(db), {
+      [`stores/${storeCode}/customers/${id}`]: buildNewCustomerNode(id, { name, phone }, now),
+      [`stores/${storeCode}/audit_logs/log_${now}_cust`]: {
+        timestamp: now,
+        username: user?.username || "admin_web",
+        userFullName: user?.fullName || user?.username || "",
+        userRole: user?.roleId || user?.role || "",
+        action: "CUSTOMER_CREATE",
+        targetType: "CUSTOMER",
+        targetId: id,
+        storeCode,
+        details: `Tạo khách hàng ${name} (${phone}) từ màn gọi món Web`,
+      },
+    });
+    return { id, name, phone };
+  };
+
+  const handlePickCustomer = async (table: Table, c: PickerCustomer): Promise<string | null> => {
+    const storeCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+    let picked: BillCustomer = { id: c.id, name: c.name, phone: c.phone };
+    if (c.remote || !c.id) {
+      if (!canManageCustomers) return "Khách này ở chi nhánh khác. Cần quyền Quản lý khách hàng (MANAGE_CUSTOMERS) để thêm vào chi nhánh này.";
+      picked = await createBranchCustomer(storeCode, c.name, c.phone);
+    }
+    await attachCustomer(table, picked);
+    setShowCustomerPicker(false);
+    return null;
+  };
+
+  const handleCreateCustomer = async (table: Table, name: string, phone: string): Promise<string | null> => {
+    if (!canManageCustomers) return "Bạn không có quyền tạo khách hàng (MANAGE_CUSTOMERS).";
+    const storeCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
+    const created = await createBranchCustomer(storeCode, name, phone);
+    await attachCustomer(table, created);
+    setShowCustomerPicker(false);
+    return null;
+  };
+
+  const handleRemoveCustomer = async (table: Table) => {
+    setLoyaltyBusy(true);
+    try {
+      await attachCustomer(table, null);
+    } catch (e) {
+      alert("Lỗi bỏ khách khỏi bàn: " + errorMessage(e));
+    }
+    setLoyaltyBusy(false);
   };
 
   const handleCancelActiveTable = async (t: Table) => {
@@ -485,6 +630,15 @@ export default function TablesPage() {
     const subtotal = calculateTableTotal(items);
     const promotions = selectedTableForOrder && table.id === selectedTableForOrder.id ? promo.applied : [];
     const total = Math.max(0, subtotal - promoDiscountOf(table));
+    const isSel = !!selectedTableForOrder && table.id === selectedTableForOrder.id;
+    const printCust = isSel ? billCustomer : null;
+    const printLoyalty = printCust
+      ? {
+          customer: { name: printCust.name, phone: printCust.phone },
+          ...(pointsUsedNow > 0 ? { pointsRedeemed: { points: pointsUsedNow, amount: pointsDiscountNow } } : {}),
+          pointsEarn: buildPointsPreview({ balance: balance.points, totalPoints: balance.total, payable: total, pointsUsed: pointsUsedNow, rates: loy.rates, tiers: loy.tiers }).earn,
+        }
+      : {};
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       alert("Vui lòng cho phép mở cửa sổ popup để in hóa đơn");
@@ -498,6 +652,7 @@ export default function TablesPage() {
         items,
         total,
         promotions: promotions.map((d) => ({ name: d.campaignName, code: d.voucherCode, amount: d.amount })),
+        ...printLoyalty,
         printedAt: new Date().toLocaleString("vi-VN"),
       })
     );
@@ -789,6 +944,17 @@ export default function TablesPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {loyaltyWarn && (
+        <div
+          role="alert"
+          style={{ background: "var(--warning-bg, #FFF4E5)", border: "1.5px solid var(--warning, #F59E0B)", borderRadius: "12px", padding: "12px 18px", color: "var(--text)", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
+        >
+          <span>⚠ {loyaltyWarn}</span>
+          <button onClick={() => setLoyaltyWarn(null)} aria-label="Đóng" style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text)" }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {/* Toast feedback */}
       {checkoutToast && (
         <div
@@ -2146,6 +2312,31 @@ export default function TablesPage() {
                 </div>
               )}
 
+              {/* Khách hàng & tích điểm */}
+              <LoyaltyPanel
+                customer={billCustomer}
+                available={loyaltyAvailable && !loy.denied}
+                unavailableReason={
+                  loyaltyAvailable && loy.denied
+                    ? "Vai trò hiện tại không đọc được danh sách khách của chi nhánh này."
+                    : !roleReadsCustomers
+                      ? "Vai trò hiện tại không được xem khách hàng của chi nhánh."
+                      : undefined
+                }
+                showFullPhone={canViewCustomers || canManageCustomers}
+                canRedeem={canRedeemPoints}
+                isOwner={isLoyaltyOwner}
+                balance={balance}
+                rates={loy.rates}
+                tiers={loy.tiers}
+                amountBeforePoints={amountBeforePoints}
+                pointsUsed={pointsUsedNow}
+                onPointsChange={(n) => setPointsState({ key: pointsKey, n })}
+                onPick={() => setShowCustomerPicker(true)}
+                onRemove={() => handleRemoveCustomer(selectedTableForOrder)}
+                busy={loyaltyBusy || completingPayment}
+              />
+
               {/* Khuyến mãi & Voucher — nhân viên chọn chương trình hoặc nhập mã */}
               <PromotionPanel
                 state={promo}
@@ -2175,11 +2366,12 @@ export default function TablesPage() {
                     {promo.applied.length > 0
                       ? `Đã trừ khuyến mãi: -${formatVND(promo.total)} VNĐ (${promo.applied.map((d) => d.campaignName).join(", ")})`
                       : "Chưa bao gồm khuyến mãi / VAT (nếu có khi thanh toán)"}
+                    {pointsUsedNow > 0 && ` • Đã trừ ${formatVND(pointsUsedNow)} điểm: -${formatVND(pointsDiscountNow)} VNĐ`}
                   </div>
                 </div>
                 <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--primary)" }}>
                   {formatVND(
-                    Math.max(0, calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total)
+                    Math.max(0, calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total - pointsDiscountNow)
                   )}{" "}
                   <span style={{ fontSize: "15px" }}>VNĐ</span>
                 </div>
@@ -2248,7 +2440,7 @@ export default function TablesPage() {
                   const accountName = targetStore?.accountName || "CHU CUA HANG TRAM FNB";
                   const orderTotal = Math.max(
                     0,
-                    calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total
+                    calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total - pointsDiscountNow
                   );
                   const qrUrl = `https://img.vietqr.io/image/${bankId}-${bankAccount}-compact2.png?amount=${orderTotal}&addInfo=${encodeURIComponent(
                     `TT BAN ${selectedTableForOrder.name}`
@@ -2377,6 +2569,20 @@ export default function TablesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCustomerPicker && selectedTableForOrder && (
+        <CustomerPickerDialog
+          storeCode={promoStoreCode}
+          customers={toPickerCustomers(loy.customers)}
+          tiers={loy.tiers}
+          loading={loy.loading}
+          showFullPhone={canViewCustomers || canManageCustomers}
+          canCreate={canManageCustomers}
+          onSelect={(c) => handlePickCustomer(selectedTableForOrder, c)}
+          onCreate={(name, phone) => handleCreateCustomer(selectedTableForOrder, name, phone)}
+          onClose={() => setShowCustomerPicker(false)}
+        />
       )}
 
       {orderTarget && (

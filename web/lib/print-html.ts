@@ -1,6 +1,7 @@
 import { escapeHtml } from "./html";
 import { lineDiscountLabel, lineDiscountTotal, lineGross, lineUnitPrice, toppingLabel, type RawOrderLine } from "./order-math";
 import { formatVND } from "./reports";
+import { maskPhone } from "./customer-search";
 
 /** Pure HTML builders for browser print windows. Every interpolated value is escaped. */
 
@@ -28,7 +29,31 @@ export interface TableBillInput {
   total: number;
   /** Khuyến mãi / voucher đã chọn (đã trừ vào total) */
   promotions?: { name: string; code?: string; amount: number }[];
+  /** Khách tích điểm của bàn */
+  customer?: { name?: string; phone?: string };
+  /** Điểm khách dùng để giảm giá (đã trừ vào total) */
+  pointsRedeemed?: { points: number; amount: number };
+  /** Điểm sẽ tích khi thanh toán (dự kiến) */
+  pointsEarn?: number;
   printedAt: string;
+}
+
+/** Dòng khách + điểm trên phiếu (SĐT che giữa); rỗng nếu không có khách */
+export function loyaltyLinesHtml(
+  v: { customerName?: string; customerPhone?: string; pointsUsed?: number; pointsDiscount?: number; pointsEarn?: number },
+  fmt: (n: number) => string,
+  rowStyle: string
+): { customer: string; used: string; earn: string; points: string } {
+  const e = escapeHtml;
+  const hasCustomer = !!(v.customerName || v.customerPhone);
+  const customer = hasCustomer
+    ? `<div style="${rowStyle}"><span>Khách: ${e(v.customerName || "Khách hàng")}${v.customerPhone ? ` (${e(maskPhone(v.customerPhone))})` : ""}</span></div>`
+    : "";
+  const used = Number(v.pointsUsed) || 0;
+  const earn = Number(v.pointsEarn) || 0;
+  const usedHtml = used > 0 ? `<div style="${rowStyle}"><span>Dùng ${e(used)} điểm</span><span>-${e(fmt(Number(v.pointsDiscount) || 0))}</span></div>` : "";
+  const earnHtml = earn > 0 ? `<div style="${rowStyle}"><span>Điểm tích lũy</span><span>+${e(earn)} điểm</span></div>` : "";
+  return { customer, used: usedHtml, earn: earnHtml, points: usedHtml + earnHtml };
 }
 
 /** Dòng hiển thị khuyến mãi trên phiếu (tên chương trình, mã voucher nếu có, số tiền giảm) */
@@ -48,8 +73,13 @@ const lineNet = (it: RawOrderLine) => lineGross(it) - lineDiscountTotal(it);
 const asLine = (it: TableBillItem | ReceiptItem): RawOrderLine => ({ ...it });
 
 /** Phiếu tạm tính bàn (Sơ đồ bàn). */
-export function buildTableBillHtml({ tableName, zone, items, total, promotions, printedAt }: TableBillInput): string {
+export function buildTableBillHtml({ tableName, zone, items, total, promotions, customer, pointsRedeemed, pointsEarn, printedAt }: TableBillInput): string {
   const e = escapeHtml;
+  const loyalty = loyaltyLinesHtml(
+    { customerName: customer?.name, customerPhone: customer?.phone, pointsUsed: pointsRedeemed?.points, pointsDiscount: pointsRedeemed?.amount, pointsEarn },
+    (n) => `${formatPlainVND(n)}đ`,
+    "display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;"
+  );
   const itemsHtml = items
     .map(
       (it) => `
@@ -97,6 +127,7 @@ export function buildTableBillHtml({ tableName, zone, items, total, promotions, 
           <div style="margin-top: 4px;"><strong>${e(zone)} - ${e(tableName)}</strong></div>
           <div style="font-size: 11px;">Thời gian: ${e(printedAt)}</div>
         </div>
+        ${loyalty.customer}
         <table>
           <thead>
             <tr>
@@ -112,10 +143,12 @@ export function buildTableBillHtml({ tableName, zone, items, total, promotions, 
         </table>
         <div class="total">
           ${promotionRowsHtml(promotions || [], (n) => `${formatPlainVND(n)}đ`, "display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;")}
+          ${loyalty.used}
           <div class="total-row">
             <span>TỔNG CỘNG:</span>
             <span>${e(formatPlainVND(total))} VNĐ</span>
           </div>
+          ${loyalty.earn}
         </div>
         <div class="footer">
           <div>Cảm ơn Quý khách! Hẹn gặp lại.</div>
@@ -156,12 +189,23 @@ export interface ReceiptOrder {
   totalAmount?: number;
   items?: ReceiptItem[];
   /** bill.discounts[] — khuyến mãi / voucher (campaignName, voucherCode, amount) */
+  /** Khách tích điểm + điểm đã dùng / đã tích của hóa đơn */
+  customerName?: string;
+  customerPhone?: string;
+  pointsUsed?: number;
+  pointsDiscount?: number;
+  pointsEarned?: number;
   discounts?: { campaignName?: string; promoName?: string; description?: string; voucherCode?: string; promoCode?: string; amount?: number }[];
 }
 
 /** Hóa đơn thanh toán (Lịch sử giao dịch). `timeStr` is the pre-formatted bill time. */
 export function buildOrderReceiptHtml(order: ReceiptOrder, timeStr: string): string {
   const e = escapeHtml;
+  const loyalty = loyaltyLinesHtml(
+    { customerName: order.customerName, customerPhone: order.customerPhone, pointsUsed: order.pointsUsed, pointsDiscount: order.pointsDiscount, pointsEarn: order.pointsEarned },
+    formatVND,
+    "display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;"
+  );
   const itemsHtml = (order.items || []).map((it, idx) => `
       <tr>
         <td style="padding: 6px 4px; border-bottom: 1px dashed #ccc;">${idx + 1}. ${e(it.name)} ${it.selectedSize ? `(Size ${e(it.selectedSize)})` : ""}</td>
@@ -196,6 +240,7 @@ export function buildOrderReceiptHtml(order: ReceiptOrder, timeStr: string): str
             <div class="meta">Giờ: ${e(timeStr)}</div>
             <div class="meta">Người nhận order: <strong>${e(order.orderStaff || "—")}</strong></div>
             <div class="meta">Thu ngân: <strong>${e(order.cashierName || "—")}</strong></div>
+            ${order.customerName || order.customerPhone ? `<div class="meta">Khách: <strong>${e(order.customerName || "Khách hàng")}</strong>${order.customerPhone ? ` (${e(maskPhone(order.customerPhone))})` : ""}</div>` : ""}
           </div>
           <table>
             <thead>
@@ -219,6 +264,7 @@ export function buildOrderReceiptHtml(order: ReceiptOrder, timeStr: string): str
             formatVND,
             "display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;"
           )}
+          ${loyalty.points}
           <div style="display: flex; justify-content: space-between; margin-top: 8px;" class="total-row">
             <span>TỔNG CỘNG:</span>
             <span style="color: #7E2930;">${e(formatVND(order.totalAmount || 0))}</span>

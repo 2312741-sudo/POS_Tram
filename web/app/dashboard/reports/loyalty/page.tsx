@@ -1,28 +1,30 @@
 "use client";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, History, Search } from "lucide-react";
-import { ref, onValue } from "firebase/database";
-import { db } from "@/lib/firebase";
+import { Download, History, RefreshCw, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
-import { canReadCustomers, parseStoreCustomers } from "@/lib/customers";
+import { canReadCustomers } from "@/lib/customers";
 import {
-  POINT_TYPE_LABEL,
-  parseLoyaltyLedger,
-  parsePointHistory,
-  sortHistoryDesc,
-  summarizeHistory,
-  type PointHistoryRow,
-} from "@/lib/loyalty";
+  LEDGER_KINDS,
+  LEDGER_KIND_LABEL,
+  buildLedgerCsv,
+  dayEndMs,
+  dayStartMs,
+  ledgerErrorMessage,
+  ledgerKindLabel,
+  listLoyaltyLedger,
+  type LoyaltyLedgerEntry,
+  type LoyaltyLedgerTotals,
+} from "@/lib/loyalty-ledger-client";
 import { formatNumber } from "@/lib/reports";
 
 const th = { padding: "10px 12px", textAlign: "left", fontSize: 12, color: "var(--subtext)", whiteSpace: "nowrap" } as const;
 const td = { padding: "9px 12px", fontSize: 13, borderTop: "1px solid var(--border)" } as const;
+const PAGE_SIZE = 200;
+const EMPTY_TOTALS: LoyaltyLedgerTotals = { earned: 0, redeemed: 0, manual: 0, count: 0 };
 
 const fmtTime = (ms: number) => (ms > 0 ? new Date(ms).toLocaleString("vi-VN") : "—");
-const dayStart = (v: string) => (v ? new Date(`${v}T00:00:00`).getTime() : 0);
-const dayEnd = (v: string) => (v ? new Date(`${v}T23:59:59.999`).getTime() : Infinity);
 
 export default function LoyaltyHistoryPage() {
   // useSearchParams cần Suspense để trang vẫn build tĩnh được
@@ -39,101 +41,90 @@ function LoyaltyHistoryContent() {
   const { stores, currentStoreCode } = useDashboardData();
   const canRead = canReadCustomers(user?.roleId || user?.role, user?.isRootOwner);
 
-  const codes = useMemo(
-    () => (currentStoreCode !== "ALL" && currentStoreCode ? [currentStoreCode] : stores.map((s) => s.storeCode).filter(Boolean)),
-    [stores, currentStoreCode]
-  );
-  const codesKey = codes.join(",");
-
-  const [ledger, setLedger] = useState<Record<string, unknown>>({});
-  const [manual, setManual] = useState<Record<string, unknown>>({});
-  const [custRaw, setCustRaw] = useState<Record<string, unknown>>({});
-  const [loaded, setLoaded] = useState(false);
-  const [denied, setDenied] = useState<string[]>([]);
-
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState<"ALL" | PointHistoryRow["type"]>("ALL");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   // Mở từ nút "Lịch sử" ở trang Khách hàng: ?store=...&customer=...
   const [customerId, setCustomerId] = useState(params.get("customer") || "");
-  const [storeFilter, setStoreFilter] = useState(params.get("store") || "");
+  const [storeSel, setStoreSel] = useState(params.get("store") || currentStoreCode || "ALL");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [type, setType] = useState<"ALL" | string>("ALL");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const [entries, setEntries] = useState<LoyaltyLedgerEntry[]>([]);
+  const [totals, setTotals] = useState<LoyaltyLedgerTotals>(EMPTY_TOTALS);
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState("");
+  const reqId = useRef(0);
 
   useEffect(() => {
-    if (!canRead || !codesKey) return;
-    const list = codesKey.split(",");
-    let pending = list.length * 3;
-    const done = () => {
-      pending -= 1;
-      if (pending <= 0) setLoaded(true);
-    };
-    const unsubs: (() => void)[] = [];
-    const listen = (path: string, set: (v: (p: Record<string, unknown>) => Record<string, unknown>) => void, code: string) => {
-      let first = true;
-      unsubs.push(
-        onValue(
-          ref(db, `stores/${code}/${path}`),
-          (snap) => {
-            set((p) => ({ ...p, [code]: snap.val() }));
-            if (first) { first = false; done(); }
-          },
-          () => {
-            setDenied((d) => (d.includes(code) ? d : [...d, code]));
-            if (first) { first = false; done(); }
-          }
-        )
-      );
-    };
-    list.forEach((code) => {
-      listen("loyalty_applied", setLedger, code);
-      listen("point_history", setManual, code);
-      listen("customers", setCustRaw, code);
-    });
-    return () => unsubs.forEach((u) => u());
-  }, [canRead, codesKey]);
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const names = useMemo(() => {
-    const map = new Map<string, string>();
-    codes.forEach((code) => parseStoreCustomers(code, custRaw[code]).forEach((c) => map.set(`${code}:${c.id}`, c.hoTen)));
-    return map;
-  }, [codes, custRaw]);
+  const buildQuery = useCallback(
+    (cursor?: string) => ({
+      storeCode: storeSel || "ALL",
+      from: dayStartMs(from),
+      to: dayEndMs(to),
+      types: type === "ALL" ? undefined : [type],
+      search: debouncedSearch || undefined,
+      customerId: customerId && storeSel !== "ALL" ? customerId : undefined,
+      cursor,
+      limit: PAGE_SIZE,
+    }),
+    [storeSel, from, to, type, debouncedSearch, customerId]
+  );
 
-  const rows = useMemo(() => {
-    const all: PointHistoryRow[] = [];
-    codes.forEach((code) => {
-      all.push(...parseLoyaltyLedger(code, ledger[code]), ...parsePointHistory(code, manual[code]));
-    });
-    return sortHistoryDesc(all);
-  }, [codes, ledger, manual]);
+  const load = useCallback(async () => {
+    if (!canRead) return;
+    const id = ++reqId.current;
+    setLoading(true);
+    setError("");
+    try {
+      const page = await listLoyaltyLedger(buildQuery());
+      if (id !== reqId.current) return;
+      setEntries(page.entries);
+      setTotals(page.totals);
+      setNextCursor(page.nextCursor);
+    } catch (e) {
+      if (id !== reqId.current) return;
+      setEntries([]);
+      setTotals(EMPTY_TOTALS);
+      setNextCursor(undefined);
+      setError(ledgerErrorMessage(e));
+    } finally {
+      if (id === reqId.current) setLoading(false);
+    }
+  }, [canRead, buildQuery]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const f = dayStart(from);
-    const t = dayEnd(to);
-    return rows.filter((r) => {
-      if (storeFilter && r.storeCode !== storeFilter) return false;
-      if (customerId && r.customerId !== customerId) return false;
-      if (type !== "ALL" && r.type !== type) return false;
-      if (r.at < f || r.at > t) return false;
-      if (q) {
-        const name = names.get(`${r.storeCode}:${r.customerId}`) || "";
-        if (!`${name} ${r.customerId} ${r.billId ?? ""} ${r.reason ?? ""} ${r.by}`.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [rows, search, type, from, to, customerId, storeFilter, names]);
+  useEffect(() => {
+    // Tải lại từ máy chủ mỗi khi bộ lọc đổi (setState nằm trong hàm async)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
 
-  const sum = useMemo(() => summarizeHistory(filtered), [filtered]);
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const id = reqId.current;
+    setLoadingMore(true);
+    try {
+      const page = await listLoyaltyLedger(buildQuery(nextCursor));
+      if (id !== reqId.current) return;
+      setEntries((prev) => [...prev, ...page.entries]);
+      setNextCursor(page.nextCursor);
+    } catch (e) {
+      setError(ledgerErrorMessage(e));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const showBranch = storeSel === "ALL" && stores.length > 1;
 
   const exportCsv = () => {
-    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const head = ["Thời gian", "Chi nhánh", "Khách hàng", "Loại", "Biến động", "Trước", "Sau", "Hóa đơn", "Lý do", "Người thực hiện"];
-    const lines = filtered.map((r) =>
-      [fmtTime(r.at), r.storeCode, names.get(`${r.storeCode}:${r.customerId}`) || r.customerId, POINT_TYPE_LABEL[r.type], r.delta, r.before, r.after, r.billId, r.reason, r.by]
-        .map(esc)
-        .join(",")
-    );
-    const blob = new Blob(["﻿" + [head.map(esc).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([buildLedgerCsv(entries, fmtTime)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `lich-su-diem-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -148,6 +139,7 @@ function LoyaltyHistoryContent() {
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
     </div>
   );
+  const cols = showBranch ? 8 : 7;
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: 1280, margin: "0 auto" }}>
@@ -157,50 +149,62 @@ function LoyaltyHistoryContent() {
             <History size={22} /> Lịch sử sử dụng điểm khách hàng
           </h1>
           <p style={{ fontSize: 13, color: "var(--subtext)", margin: "4px 0 0" }}>
-            Đổi điểm, tích điểm, hoàn điểm theo hóa đơn (từ POS) và các lần Chủ/Quản lý chỉnh điểm.
+            Tích điểm, đổi điểm, hoàn điểm theo hóa đơn và các lần Chủ/Quản lý chỉnh điểm (điểm dùng chung toàn chuỗi).
           </p>
         </div>
-        <button
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
-          style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", background: "#137333", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: filtered.length ? 1 : 0.5 }}
-        >
-          <Download size={15} /> Xuất CSV
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => void load()}
+            disabled={loading || !canRead}
+            style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <RefreshCw size={15} /> Làm mới
+          </button>
+          <button
+            onClick={exportCsv}
+            disabled={entries.length === 0}
+            style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 14px", background: "#137333", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: entries.length ? 1 : 0.5 }}
+          >
+            <Download size={15} /> Xuất CSV
+          </button>
+        </div>
       </div>
 
-      {denied.length > 0 && (
-        <div style={{ background: "#FEF7E0", color: "#8A5B00", borderRadius: 12, padding: "10px 14px", fontSize: 13, marginBottom: 14 }}>
-          Không đọc được dữ liệu điểm của chi nhánh: {denied.join(", ")}
+      {error && canRead && (
+        <div role="alert" style={{ background: "#FEF7E0", color: "#8A5B00", borderRadius: 12, padding: "10px 14px", fontSize: 13, marginBottom: 14 }}>
+          {error}
         </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
-        {kpi("Điểm đã tích / hoàn", `+${formatNumber(sum.earned)}`, "#137333")}
-        {kpi("Điểm đã đổi", `−${formatNumber(sum.redeemed)}`, "#B3261E")}
-        {kpi("Điểm chỉnh tay (ròng)", `${sum.adjusted > 0 ? "+" : ""}${formatNumber(sum.adjusted)}`, "#1877F2")}
-        {kpi("Số giao dịch", formatNumber(filtered.length), "var(--text)")}
+        {kpi("Điểm đã tích / hoàn", `+${formatNumber(totals.earned)}`, "#137333")}
+        {kpi("Điểm đã đổi", `−${formatNumber(totals.redeemed)}`, "#B3261E")}
+        {kpi("Điểm chỉnh tay (ròng)", `${totals.manual > 0 ? "+" : ""}${formatNumber(totals.manual)}`, "#1877F2")}
+        {kpi("Số giao dịch", formatNumber(totals.count), "var(--text)")}
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px" }}>
+        <select value={storeSel} onChange={(e) => setStoreSel(e.target.value)} style={input} aria-label="Chi nhánh">
+          <option value="ALL">Tất cả chi nhánh</option>
+          {stores.map((s) => (
+            <option key={s.storeCode} value={s.storeCode}>{s.storeName || s.storeCode}</option>
+          ))}
+        </select>
         <div style={{ display: "flex", alignItems: "center", gap: 6, ...input, minWidth: 220 }}>
           <Search size={14} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Khách, mã HĐ, lý do..." style={{ border: "none", background: "transparent", outline: "none", width: "100%", fontSize: 13 }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Khách, SĐT, mã HĐ, lý do..." style={{ border: "none", background: "transparent", outline: "none", width: "100%", fontSize: 13 }} />
         </div>
-        <select value={type} onChange={(e) => setType(e.target.value as typeof type)} style={input}>
+        <select value={type} onChange={(e) => setType(e.target.value)} style={input} aria-label="Loại">
           <option value="ALL">Tất cả loại</option>
-          {(Object.keys(POINT_TYPE_LABEL) as PointHistoryRow["type"][]).map((t) => (
-            <option key={t} value={t}>{POINT_TYPE_LABEL[t]}</option>
+          {LEDGER_KINDS.map((t) => (
+            <option key={t} value={t}>{LEDGER_KIND_LABEL[t]}</option>
           ))}
         </select>
         <label style={{ fontSize: 12, color: "var(--subtext)" }}>Từ <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={input} /></label>
         <label style={{ fontSize: 12, color: "var(--subtext)" }}>Đến <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={input} /></label>
-        {(customerId || storeFilter) && (
-          <button
-            onClick={() => { setCustomerId(""); setStoreFilter(""); }}
-            style={{ ...input, cursor: "pointer", color: "var(--primary)", fontWeight: 600 }}
-          >
-            Bỏ lọc khách: {names.get(`${storeFilter}:${customerId}`) || customerId} ✕
+        {customerId && (
+          <button onClick={() => setCustomerId("")} style={{ ...input, cursor: "pointer", color: "var(--primary)", fontWeight: 600 }}>
+            Bỏ lọc khách: {entries.find((e) => e.customerId === customerId)?.memberName || customerId} ✕
           </button>
         )}
       </div>
@@ -210,7 +214,7 @@ function LoyaltyHistoryContent() {
           <thead>
             <tr style={{ background: "var(--bg)" }}>
               <th style={th}>Thời gian</th>
-              {codes.length > 1 && <th style={th}>Chi nhánh</th>}
+              {showBranch && <th style={th}>Chi nhánh</th>}
               <th style={th}>Khách hàng</th>
               <th style={th}>Loại</th>
               <th style={{ ...th, textAlign: "right" }}>Biến động</th>
@@ -221,32 +225,45 @@ function LoyaltyHistoryContent() {
           </thead>
           <tbody>
             {!canRead ? (
-              <tr><td colSpan={8} style={{ ...td, textAlign: "center", padding: 32 }}>Vai trò của bạn không có quyền xem dữ liệu khách hàng</td></tr>
-            ) : !loaded ? (
-              <tr><td colSpan={8} style={{ ...td, textAlign: "center", padding: 32 }}>Đang tải...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} style={{ ...td, textAlign: "center", padding: 32 }}>Chưa có lịch sử điểm phù hợp</td></tr>
+              <tr><td colSpan={cols + 1} style={{ ...td, textAlign: "center", padding: 32 }}>Vai trò của bạn không có quyền xem lịch sử điểm. Chỉ Quản lý/Chủ quán xem được.</td></tr>
+            ) : loading ? (
+              <tr><td colSpan={cols + 1} style={{ ...td, textAlign: "center", padding: 32 }}>Đang tải...</td></tr>
+            ) : entries.length === 0 ? (
+              <tr><td colSpan={cols + 1} style={{ ...td, textAlign: "center", padding: 32 }}>{error ? "Không có dữ liệu để hiển thị" : "Chưa có lịch sử điểm phù hợp"}</td></tr>
             ) : (
-              filtered.slice(0, 1000).map((r) => (
-                <tr key={r.key}>
+              entries.map((r) => (
+                <tr key={`${r.memberKey}~${r.opId}`}>
                   <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtTime(r.at)}</td>
-                  {codes.length > 1 && <td style={{ ...td, fontFamily: "monospace" }}>{r.storeCode}</td>}
-                  <td style={{ ...td, fontWeight: 600 }}>{names.get(`${r.storeCode}:${r.customerId}`) || r.customerId || "—"}</td>
-                  <td style={td}>{POINT_TYPE_LABEL[r.type]}</td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 800, color: r.delta < 0 ? "#B3261E" : "#137333" }}>
-                    {r.delta > 0 ? "+" : ""}{formatNumber(r.delta)}
+                  {showBranch && <td style={{ ...td, fontFamily: "monospace" }}>{r.storeCode}</td>}
+                  <td style={{ ...td, fontWeight: 600 }}>
+                    {r.memberName || r.customerId || "—"}
+                    {r.memberPhone && <div style={{ fontSize: 11, fontWeight: 400, color: "var(--subtext)" }}>{r.memberPhone}</div>}
                   </td>
-                  <td style={{ ...td, textAlign: "right", color: "var(--subtext)" }}>{formatNumber(r.before)} → {formatNumber(r.after)}</td>
-                  <td style={td}>{r.billId ? <span style={{ fontFamily: "monospace" }}>{r.billId}</span> : r.reason || "—"}</td>
-                  <td style={{ ...td, color: "var(--subtext)" }}>{r.by || "—"}</td>
+                  <td style={td}>{ledgerKindLabel(r.type)}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 800, color: r.points < 0 ? "#B3261E" : "#137333" }}>
+                    {r.points > 0 ? "+" : ""}{formatNumber(r.points)}
+                  </td>
+                  <td style={{ ...td, textAlign: "right", color: "var(--subtext)" }}>{formatNumber(r.balanceAfter)}</td>
+                  <td style={td}>
+                    {r.billCode || r.billId ? <span style={{ fontFamily: "monospace" }}>{r.billCode || r.billId}</span> : r.note || "—"}
+                    {(r.billCode || r.billId) && r.note ? <div style={{ fontSize: 11, color: "var(--subtext)" }}>{r.note}</div> : null}
+                  </td>
+                  <td style={{ ...td, color: "var(--subtext)" }}>{r.staff || "—"}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
-      {filtered.length > 1000 && (
-        <p style={{ fontSize: 12, color: "var(--subtext)", marginTop: 8 }}>Hiển thị 1.000 dòng mới nhất — dùng bộ lọc hoặc xuất CSV để xem đủ.</p>
+      {canRead && entries.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, fontSize: 12, color: "var(--subtext)" }}>
+          <span>Đang hiển thị {formatNumber(entries.length)} / {formatNumber(totals.count)} giao dịch</span>
+          {nextCursor && (
+            <button onClick={() => void loadMore()} disabled={loadingMore} style={{ ...input, cursor: "pointer", fontWeight: 600 }}>
+              {loadingMore ? "Đang tải..." : "Tải thêm"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

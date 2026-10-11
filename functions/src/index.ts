@@ -681,6 +681,7 @@ export {
   adjustLoyaltyPoints,
   lookupMember,
   getMemberLedger,
+  listLoyaltyLedger,
   setLoyaltyConfig,
   mirrorMemberToBranches,
   linkBranchCustomer,

@@ -27,6 +27,8 @@ export interface StoreCustomer {
   ngayTao?: string;
   tongChiTieu?: number;
   soDonDaMua?: number;
+  /** Lần ghé/gắn bàn gần nhất (ms) — xếp khách gần đây lên đầu khi chọn khách */
+  lastVisitAt?: number;
 }
 
 export const CUSTOMER_TIERS = ["Thành viên", "Bạc", "Vàng", "Kim Cương"] as const;
@@ -92,6 +94,7 @@ export function parseStoreCustomer(
     ngayTao: createdAt !== undefined ? new Date(createdAt).toLocaleDateString("vi-VN") : undefined,
     tongChiTieu: firstNumber(v, ["tong_chi_tieu", "totalSpent"]),
     soDonDaMua: firstNumber(v, ["so_don", "orderCount"]),
+    lastVisitAt: Math.max(parseTimestamp(v.ngay_cap_nhat) ?? 0, parseTimestamp(v.lastVisitAt) ?? 0, createdAt ?? 0) || undefined,
   };
 }
 
