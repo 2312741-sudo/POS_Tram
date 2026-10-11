@@ -34,29 +34,30 @@ describe("Ánh xạ vai trò Chấm Công → POS", () => {
   it("chuẩn hóa mọi biến thể vai trò", () => {
     expect(normalizeChamCongRole("owner")).toBe("owner");
     expect(normalizeChamCongRole("chu")).toBe("owner");
-    for (const r of ["manager1", "manager_1", "manager", "legacyManager", "Manager-1"]) expect(normalizeChamCongRole(r)).toBe("manager1");
-    for (const r of ["manager2", "manager_2"]) expect(normalizeChamCongRole(r)).toBe("manager2");
+    for (const r of ["manager1", "manager_1", "manager", "legacyManager", "Manager-1", "manager2", "manager_2", "ROLE_MANAGER"]) expect(normalizeChamCongRole(r)).toBe("manager");
     for (const r of ["employee", "", undefined, "xyz"]) expect(normalizeChamCongRole(r)).toBe("employee");
   });
 
   it("vai trò POS dùng đúng id hệ thống", () => {
     expect(posRoleForChamCongRole("owner")).toBe("owner");
-    expect(posRoleForChamCongRole("manager1")).toBe("manager_1");
-    expect(posRoleForChamCongRole("manager2")).toBe("manager_2");
-    expect(posRoleForChamCongRole("employee")).toBe("ROLE_WAITER");
+    expect(posRoleForChamCongRole("manager")).toBe("ROLE_MANAGER");
+    expect(posRoleForChamCongRole("employee")).toBe("ROLE_STAFF");
   });
 
   it("chính sách đồng bộ / hạ quyền", () => {
-    expect(decidePosRole("employee", null)).toBe("ROLE_WAITER");
-    expect(decidePosRole("manager1", "ROLE_WAITER")).toBe("manager_1");
+    expect(decidePosRole("employee", null)).toBe("ROLE_STAFF");
+    expect(decidePosRole("manager", "ROLE_STAFF")).toBe("ROLE_MANAGER");
     expect(decidePosRole("owner", "manager_2")).toBe("owner");
     // Nhân viên: giữ vai trò chủ quán chọn trong POS
-    expect(decidePosRole("employee", "ROLE_CASHIER")).toBe("ROLE_CASHIER");
+    expect(decidePosRole("employee", "ROLE_STAFF")).toBe("ROLE_STAFF");
+    // Mã cũ Thu ngân / Phục vụ đã gộp → chuẩn hóa thành ROLE_STAFF
+    expect(decidePosRole("employee", "ROLE_CASHIER")).toBe("ROLE_STAFF");
+    expect(decidePosRole("employee", "waiter")).toBe("ROLE_STAFF");
     expect(decidePosRole("employee", "ROLE_KITCHEN")).toBe("ROLE_KITCHEN");
     // Bị hạ xuống nhân viên bên chấm công → hạ quyền POS
-    expect(decidePosRole("employee", "manager_1")).toBe("ROLE_WAITER");
-    expect(decidePosRole("employee", "owner")).toBe("ROLE_WAITER");
-    expect(decidePosRole("employee", "ROLE_MANAGER")).toBe("ROLE_WAITER");
+    expect(decidePosRole("employee", "manager_1")).toBe("ROLE_STAFF");
+    expect(decidePosRole("employee", "owner")).toBe("ROLE_STAFF");
+    expect(decidePosRole("employee", "ROLE_MANAGER")).toBe("ROLE_STAFF");
   });
 });
 
@@ -152,7 +153,7 @@ describe("Hồ sơ POS", () => {
       uid: "cc_u1",
       username: "nguyenvanan-2",
       fullName: "Nguyễn Văn An",
-      roleId: "ROLE_WAITER",
+      roleId: "ROLE_STAFF",
       isRootOwner: false,
       isActive: true,
       authProvider: "chamcong",
@@ -169,7 +170,7 @@ describe("Hồ sơ POS", () => {
   });
 
   it("POS khóa thủ công → DISABLED; khóa do chấm công → mở lại", () => {
-    const locked = { authProvider: "chamcong", isActive: false, roleId: "ROLE_WAITER", username: "an" };
+    const locked = { authProvider: "chamcong", isActive: false, roleId: "ROLE_STAFF", username: "an" };
     expect(decideProfile({ ...base, existing: locked, membership: mem(), takenUsernames: [] }).kind).toBe("DISABLED");
     const d = decideProfile({
       ...base,
@@ -185,16 +186,16 @@ describe("Hồ sơ POS", () => {
   });
 
   it("đồng bộ tên/sđt và vai trò, giữ username", () => {
-    const existing = { authProvider: "chamcong", isActive: true, roleId: "ROLE_CASHIER", username: "an", fullName: "Cũ", phone: "", chamCongStoreId: "S1" };
+    const existing = { authProvider: "chamcong", isActive: true, roleId: "ROLE_STAFF", username: "an", fullName: "Cũ", phone: "", chamCongStoreId: "S1" };
     const d = decideProfile({ ...base, existing, membership: mem(), takenUsernames: [] });
     if (d.kind !== "WRITE") throw new Error("expected WRITE");
     expect(d.values).toEqual({ fullName: "Nguyễn Văn An", phone: "0900000000" });
-    expect(d.roleId).toBe("ROLE_CASHIER");
+    expect(d.roleId).toBe("ROLE_STAFF");
     expect(d.roleChange).toBeNull();
 
-    const d2 = decideProfile({ ...base, existing, membership: mem({ roleKind: "manager2" }), takenUsernames: [] });
+    const d2 = decideProfile({ ...base, existing, membership: mem({ roleKind: "manager" }), takenUsernames: [] });
     if (d2.kind !== "WRITE") throw new Error("expected WRITE");
-    expect(d2.roleChange).toEqual({ from: "ROLE_CASHIER", to: "manager_2" });
+    expect(d2.roleChange).toEqual({ from: "ROLE_STAFF", to: "ROLE_MANAGER" });
   });
 
   it("không đụng hồ sơ isRootOwner", () => {

@@ -39,11 +39,10 @@ Lỗi là `HttpsError` với thông báo tiếng Việt và `details.code`:
 | Chấm Công (`members.role`) | POS `roleId` |
 |---|---|
 | `owner`, `chu` (hoặc `stores.ownerId === uid`) | `owner` (KHÔNG phải `isRootOwner`) |
-| `manager1`, `manager_1`, `manager`, `legacyManager` | `manager_1` |
-| `manager2`, `manager_2` | `manager_2` |
-| `employee` / khác | `ROLE_WAITER` (vai trò thấp nhất — không dùng `employee` vì rules POS coi `employee` = Thu ngân) |
+| `manager1`, `manager_1`, `manager2`, `manager_2`, `manager`, `legacyManager` | `ROLE_MANAGER` ("Quản lý" — đã gộp Quản lý 1 + Quản lý 2) |
+| `employee` / khác | `ROLE_STAFF` ("Nhân viên" — đã gộp Thu ngân + Phục vụ; vai trò thấp nhất của POS) |
 
-- Lần đăng nhập sau: tên / số điện thoại / avatar được đồng bộ; Chủ/Quản lý bên chấm công → luôn đặt lại vai trò ánh xạ; nhân viên bên chấm công mà POS đang là chủ/quản lý → **hạ về `ROLE_WAITER`**; còn lại giữ vai trò chủ quán đã chọn trong POS (Thu ngân, Bếp…). Muốn ai làm quản lý POS thì nâng vai trò bên Chấm Công.
+- Lần đăng nhập sau: tên / số điện thoại / avatar được đồng bộ; Chủ/Quản lý bên chấm công → luôn đặt lại vai trò ánh xạ; nhân viên bên chấm công mà POS đang là chủ/quản lý → **hạ về `ROLE_STAFF`**; còn lại giữ vai trò chủ quán đã chọn trong POS (Bếp…), riêng mã cũ Thu ngân/Phục vụ (`ROLE_CASHIER`, `ROLE_WAITER`, `employee`…) được **chuẩn hóa thành `ROLE_STAFF`**. Vì Thu ngân = Nhân viên nên Chủ quán không còn "nâng nhân viên lên thu ngân" — chỉ còn nâng lên Quản lý (đổi vai trò bên Chấm Công) hoặc đặt Bếp trong POS. Mã Quản lý cũ (`manager_1`, `manager_2`…) được ghi lại thành `ROLE_MANAGER` ở lần đăng nhập Chấm Công kế tiếp.
 - Username: `employeeCode` viết thường → slug họ tên → `nv` + 6 ký tự uid; trùng thì thêm `-2`, `-3`… Username không đổi sau khi đã cấp.
 - Tài khoản POS do SSO cấp không có mật khẩu (`authProvider: "chamcong"`, `mustChangePassword: false`), chỉ đăng nhập được qua nút Chấm Công.
 

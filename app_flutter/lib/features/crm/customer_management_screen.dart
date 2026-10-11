@@ -31,16 +31,6 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   double _pointEarnRate = 1.0;
   List<LoyaltyTier> _tiers = LoyaltyTier.defaults;
 
-  bool get _isManagerOrOwner {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    return user.isOwner ||
-        user.isManager ||
-        user.can(AppPermissions.viewReports) ||
-        user.can(AppPermissions.manageStoreSettings) ||
-        _auth.canAccessManagerHub;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -272,17 +262,18 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
-          if (_isManagerOrOwner)
+          if (_auth.isOwner || _auth.can(AppPermissions.manageLoyalty))
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Cấu hình tỷ lệ đổi điểm',
               onPressed: _showConfigPointRateDialog,
             ),
-          IconButton(
-            icon: const Icon(Icons.table_view_outlined),
-            tooltip: 'Xuất Excel danh sách',
-            onPressed: _exportExcel,
-          ),
+          if (_auth.can(AppPermissions.exportData))
+            IconButton(
+              icon: const Icon(Icons.table_view_outlined),
+              tooltip: 'Xuất Excel danh sách',
+              onPressed: _exportExcel,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Làm mới',

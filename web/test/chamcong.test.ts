@@ -43,9 +43,9 @@ describe("parseChamCongSignInResponse", () => {
     expect(parseChamCongSignInResponse({ status: "OK", customToken: "t" })).toBeNull();
   });
 
-  it("roleId mặc định ROLE_WAITER, isNewAccount mặc định false", () => {
+  it("roleId mặc định ROLE_STAFF, isNewAccount mặc định false", () => {
     const r = parseChamCongSignInResponse({ status: "OK", customToken: "t", storeCode: "A" });
-    expect(r && r.status === "OK" && r.roleId).toBe("ROLE_WAITER");
+    expect(r && r.status === "OK" && r.roleId).toBe("ROLE_STAFF");
     expect(r && r.status === "OK" && r.isNewAccount).toBe(false);
   });
 
@@ -156,14 +156,16 @@ describe("mapChamCongError", () => {
 
 describe("Vai trò", () => {
   it("roleLabelVi", () => {
-    expect(roleLabelVi("ROLE_WAITER")).toBe("Phục vụ");
-    expect(roleLabelVi("role_cashier")).toBe("Thu ngân");
+    expect(roleLabelVi("ROLE_WAITER")).toBe("Nhân viên");
+    expect(roleLabelVi("role_cashier")).toBe("Nhân viên");
+    expect(roleLabelVi("ROLE_MANAGER_2")).toBe("Quản lý");
+    expect(roleLabelVi("ROLE_KITCHEN")).toBe("Bếp / Bar");
     expect(roleLabelVi("CUSTOM")).toBe("CUSTOM");
   });
 
   it("chamCongNotAdminMessage phân biệt tài khoản mới", () => {
-    expect(chamCongNotAdminMessage("ROLE_WAITER", true)).toContain("Đã tạo tài khoản POS cho bạn với vai trò Phục vụ");
-    expect(chamCongNotAdminMessage("ROLE_CASHIER", false)).toContain("đang ở vai trò Thu ngân");
+    expect(chamCongNotAdminMessage("ROLE_WAITER", true)).toContain("Đã tạo tài khoản POS cho bạn với vai trò Nhân viên");
+    expect(chamCongNotAdminMessage("ROLE_CASHIER", false)).toContain("đang ở vai trò Nhân viên");
     expect(chamCongNotAdminMessage("ROLE_WAITER", false)).toContain("Nhân viên");
   });
 });

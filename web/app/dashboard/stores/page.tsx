@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useDashboardData, StoreItem } from "@/lib/data-context";
-import { useAuth } from "@/lib/auth";
+import { useAuth, hasPermission } from "@/lib/auth";
 import ChamCongLinkCard from "@/components/ChamCongLinkCard";
 
 const BANK_OPTIONS = [
@@ -42,6 +42,7 @@ export default function StoresManagementPage() {
   } = useDashboardData();
   const { user } = useAuth();
   const isOwner = Boolean(user?.isRootOwner);
+  const canLinkChamCong = isOwner || hasPermission(user, "MANAGE_CHAMCONG_LINK");
 
   const [search, setSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -60,7 +61,7 @@ export default function StoresManagementPage() {
   const [newBankAccount, setNewBankAccount] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [newVatRate] = useState("0");
-  const [copyMenuFrom, setCopyMenuFrom] = useState("TRAM01");
+  const [copyMenuFrom, setCopyMenuFrom] = useState("");
 
   // Edit form state
   const [editName, setEditName] = useState("");
@@ -299,7 +300,7 @@ export default function StoresManagementPage() {
       </div>
 
       {/* Liên kết Chấm Công Trạm (chỉ Chủ quán, cần chọn 1 chi nhánh cụ thể) */}
-      {isOwner &&
+      {canLinkChamCong &&
         (currentStoreCode && currentStoreCode !== "ALL" ? (
           <ChamCongLinkCard
             key={currentStoreCode}
@@ -659,12 +660,26 @@ export default function StoresManagementPage() {
                   <input
                     type="checkbox"
                     checked={Boolean(copyMenuFrom)}
-                    onChange={(e) => setCopyMenuFrom(e.target.checked ? "TRAM01" : "")}
+                    onChange={(e) => setCopyMenuFrom(e.target.checked ? (stores[0]?.storeCode || "") : "")}
                   />
-                  <span>Tự động sao chép toàn bộ thực đơn & danh mục món từ Trụ sở TRAM01</span>
+                  <span>Sao chép toàn bộ thực đơn & danh mục món từ chi nhánh khác</span>
                 </label>
+                {copyMenuFrom && (
+                  <select
+                    className="input-field"
+                    value={copyMenuFrom}
+                    onChange={(e) => setCopyMenuFrom(e.target.value)}
+                    style={{ marginTop: "8px", marginLeft: "22px", width: "auto", minWidth: "220px", fontSize: "13px" }}
+                  >
+                    {stores.map((st) => (
+                      <option key={st.storeCode} value={st.storeCode}>
+                        {st.storeCode} - {st.storeName}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "4px", marginLeft: "22px" }}>
-                  Chi nhánh mới sẽ có sẵn 37 món, 10 danh mục và 6 bàn phân bổ theo Tầng 1, Tầng 2, Sân Vườn.
+                  Chi nhánh mới sẽ có sẵn món, danh mục, ghi chú mẫu của chi nhánh nguồn và 6 bàn phân bổ theo Tầng 1, Tầng 2, Sân Vườn.
                 </div>
               </div>
 

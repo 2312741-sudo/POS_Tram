@@ -59,7 +59,7 @@ class BillReportRows {
 
   static List<dynamic> summaryRow(BillModel b) => [
         b.billCode,
-        _time(b.closedAt ?? b.createdAt),
+        _time(b.reportTimeMs),
         b.tableName,
         b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername,
         statusLabel(b.status),

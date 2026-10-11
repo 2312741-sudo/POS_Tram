@@ -1,11 +1,12 @@
 /**
  * Điểm tích lũy khách hàng (CRM) — phần logic thuần của Web Admin.
  *
- * Nguồn dữ liệu (RTDB, theo từng chi nhánh):
- *  - storeInfo.loyaltyTiers          : cấu hình điểm cho từng hạng (Chủ quán ghi)
- *  - customers/{id}                  : số dư điểm (diem_hien_tai / currentPoints / totalPoints)
- *  - loyalty_applied/{billId}/{op}   : sổ cái do POS ghi khi đổi / tích / hoàn điểm theo hóa đơn
- *  - point_history/{key}             : sổ chỉnh điểm thủ công do Web ghi (chỉ tạo mới, Chủ/Quản lý)
+ * ĐIỂM DÙNG CHUNG TOÀN CHUỖI: số dư thật nằm ở RTDB loyalty_members/{SĐT chuẩn hóa} (+ sổ cái loyalty_ledger),
+ * CHỈ Cloud Functions ghi. Web gọi callable qua web/lib/loyalty-client.ts, không ghi điểm trực tiếp.
+ *  - loyalty_config                  : tỷ lệ tích/đổi + mốc hạng toàn chuỗi (Chủ đặt qua setLoyaltyConfig; đọc được)
+ *  - stores/{s}/customers/{id}       : thông tin khách của chi nhánh; điểm chỉ là BẢN SAO đọc (trigger cập nhật)
+ *  - stores/{s}/storeInfo.*          : tỷ lệ / mốc hạng riêng chi nhánh — chỉ dùng khi chuỗi chưa đặt (fallback)
+ *  - loyalty_applied / point_history : sổ cũ trước khi gộp (chỉ đọc, dùng cho báo cáo lịch sử)
  */
 import type { StoreCustomer } from "./customers";
 
@@ -193,89 +194,27 @@ export const POINT_TYPE_LABEL: Record<PointHistoryRow["type"], string> = {
   POOL_TRANSFER: "Chuyển điểm dùng chung giữa chi nhánh (POS đổi điểm)",
 };
 
-export interface AdjustPointsArgs {
-  storeCode: string;
-  customer: Pick<StoreCustomer, "id" | "hoTen" | "diemHienTai" | "tongDiem">;
+export interface AdjustInput {
   mode: AdjustMode;
   value: number;
   reason: string;
-  actor: { username: string; fullName?: string; role?: string };
-  tiers: LoyaltyTier[];
-  now: number;
-  /** Chống trùng khóa khi bấm nhanh */
-  nonce?: string;
+  /** Số dư dùng chung hiện tại (để chặn trừ quá / không đổi) */
+  balance: number;
 }
 
-export type AdjustPointsResult =
-  | { ok: false; error: string }
-  | { ok: true; after: number; delta: number; updates: Record<string, unknown>; entry: PointHistoryRow };
-
 /**
- * Tính bản ghi + đường dẫn ghi (multi-path update) cho một lần chỉnh điểm.
- *  - Bắt buộc có lý do; điểm không âm, số nguyên.
- *  - totalPoints (điểm lịch sử, quyết định hạng) chỉ tăng khi cộng điểm.
+ * Kiểm tra trước khi gọi callable adjustLoyaltyPoints (máy chủ kiểm tra lại, đây chỉ để báo lỗi sớm):
+ * bắt buộc lý do, số nguyên không âm, không trừ quá số dư, không để nguyên số dư.
  */
-export function buildPointAdjustment(a: AdjustPointsArgs): AdjustPointsResult {
-  const reason = a.reason.trim();
-  if (!reason) return { ok: false, error: "Vui lòng nhập lý do chỉnh điểm" };
-  if (!Number.isInteger(a.value) || a.value < 0) return { ok: false, error: "Số điểm phải là số nguyên ≥ 0" };
-  if (a.value > 10_000_000) return { ok: false, error: "Số điểm quá lớn" };
-  const before = Math.max(0, Math.trunc(a.customer.diemHienTai));
-  const total = Math.max(0, Math.trunc(a.customer.tongDiem));
+export function validateAdjustInput(a: AdjustInput): string | null {
+  if (a.reason.trim().length < 3) return "Vui lòng nhập lý do chỉnh điểm (tối thiểu 3 ký tự)";
+  if (!Number.isInteger(a.value) || a.value < 0) return "Số điểm phải là số nguyên ≥ 0";
+  if (a.value > 10_000_000) return "Số điểm quá lớn";
+  const before = Math.max(0, Math.trunc(a.balance));
   const after = a.mode === "SET" ? a.value : a.mode === "ADD" ? before + a.value : before - a.value;
-  if (after < 0) return { ok: false, error: `Khách chỉ còn ${before} điểm, không thể trừ ${a.value}` };
-  const delta = after - before;
-  if (delta === 0) return { ok: false, error: "Số điểm không thay đổi" };
-  const newTotal = delta > 0 ? total + delta : total;
-  const historyKey = `adj_${a.now}_${a.nonce ?? Math.floor(Math.random() * 1e6)}`;
-  const base = `stores/${a.storeCode}`;
-  const entry: PointHistoryRow = {
-    key: historyKey,
-    storeCode: a.storeCode,
-    customerId: a.customer.id,
-    type: "ADJUST",
-    delta,
-    before,
-    after,
-    at: a.now,
-    by: a.actor.username,
-    reason,
-  };
-  const updates: Record<string, unknown> = {
-    [`${base}/customers/${a.customer.id}/diem_hien_tai`]: after,
-    [`${base}/customers/${a.customer.id}/currentPoints`]: after,
-    [`${base}/customers/${a.customer.id}/totalPoints`]: newTotal,
-    [`${base}/customers/${a.customer.id}/hang_thanh_vien`]: tierForTotalPoints(newTotal, a.tiers),
-    [`${base}/customers/${a.customer.id}/ngay_cap_nhat`]: a.now,
-    [`${base}/point_history/${historyKey}`]: {
-      customerId: a.customer.id,
-      customerName: a.customer.hoTen,
-      type: "ADJUST",
-      mode: a.mode,
-      delta,
-      before,
-      after,
-      reason,
-      by: a.actor.username,
-      byName: a.actor.fullName ?? a.actor.username,
-      at: a.now,
-    },
-    [`${base}/audit_logs/log_${a.now}_pt_${a.nonce ?? Math.floor(Math.random() * 1e6)}`]: {
-      timestamp: a.now,
-      username: a.actor.username,
-      userFullName: a.actor.fullName ?? a.actor.username,
-      userRole: a.actor.role ?? "",
-      action: "ADJUST_POINTS",
-      targetType: "CUSTOMER",
-      targetId: a.customer.id,
-      storeCode: a.storeCode,
-      details: `Chỉnh điểm ${a.customer.hoTen}: ${before} → ${after} (${delta > 0 ? "+" : ""}${delta}). Lý do: ${reason}`,
-      isSuspicious: Math.abs(delta) >= 500,
-      beforeState: { diem_hien_tai: before },
-      afterState: { diem_hien_tai: after },
-    },
-  };
-  return { ok: true, after, delta, updates, entry };
+  if (after < 0) return `Khách chỉ còn ${before} điểm, không thể trừ ${a.value}`;
+  if (after === before) return "Số điểm không thay đổi";
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,17 +299,13 @@ export function summarizeHistory(rows: PointHistoryRow[]): { earned: number; red
 }
 
 // ---------------------------------------------------------------------------
-// Điểm dùng chung toàn hệ thống (cần Chủ xác nhận)
+// Điểm dùng chung toàn chuỗi
 // ---------------------------------------------------------------------------
 
-/** Thứ tự trừ điểm khi dùng chung: chi nhánh đang thao tác trước, hoặc chi nhánh nhiều điểm nhất trước */
+/** @deprecated Cờ storeInfo.sharedLoyalty đã được thay thế: điểm LUÔN dùng chung (loyalty_members). Giữ kiểu để đọc dữ liệu cũ. */
 export type DeductOrder = "HOME_FIRST" | "LARGEST_FIRST";
 
-export const DEDUCT_ORDER_LABEL: Record<DeductOrder, string> = {
-  HOME_FIRST: "Trừ chi nhánh đang thao tác trước, thiếu thì trừ tiếp chi nhánh nhiều điểm nhất",
-  LARGEST_FIRST: "Trừ chi nhánh nhiều điểm nhất trước",
-};
-
+/** @deprecated xem DeductOrder */
 export interface SharedLoyaltyConfig {
   enabled: boolean;
   deductOrder: DeductOrder;
@@ -378,6 +313,7 @@ export interface SharedLoyaltyConfig {
   confirmedAt?: number;
 }
 
+/** @deprecated Chỉ để đọc dữ liệu cũ; không còn ảnh hưởng hành vi. */
 export function parseSharedLoyalty(raw: unknown): SharedLoyaltyConfig {
   if (!raw || typeof raw !== "object") return { enabled: false, deductOrder: "HOME_FIRST" };
   const v = raw as Record<string, unknown>;
@@ -389,151 +325,120 @@ export function parseSharedLoyalty(raw: unknown): SharedLoyaltyConfig {
   };
 }
 
-/** Bật/tắt dùng chung: ghi storeInfo.sharedLoyalty của MỌI chi nhánh trong một update() + audit log */
-export function buildSharedLoyaltyUpdates(args: {
-  storeCodes: string[];
-  enabled: boolean;
-  deductOrder?: DeductOrder;
-  actor: { username: string; fullName?: string };
-  now: number;
-}): Record<string, unknown> {
-  const updates: Record<string, unknown> = {};
-  // storeCodes: danh sách chi nhánh tham gia — Cloud Function pullPooledPoints chỉ gộp trong danh sách này
-  const cfg = { enabled: args.enabled, deductOrder: args.deductOrder ?? "HOME_FIRST", storeCodes: args.storeCodes, confirmedBy: args.actor.username, confirmedAt: args.now };
-  for (const code of args.storeCodes) {
-    updates[`stores/${code}/storeInfo/sharedLoyalty`] = cfg;
-    updates[`stores/${code}/audit_logs/log_${args.now}_pool_${code}`] = {
-      timestamp: args.now,
-      username: args.actor.username,
-      userFullName: args.actor.fullName ?? args.actor.username,
-      action: "LOYALTY_POOL_CONFIRM",
-      targetType: "STORE",
-      targetId: code,
-      storeCode: code,
-      details: `Chủ quán ${args.enabled ? "xác nhận BẬT" : "TẮT"} điểm dùng chung toàn hệ thống (${args.storeCodes.length} chi nhánh)`,
-      isSuspicious: false,
-    };
-  }
-  return updates;
+/** Khóa bản ghi điểm dùng chung (khớp functions/src/sharedLoyalty.ts memberKeyFor) */
+export function memberKeyOf(phone: string, storeCode: string, customerId: string): string {
+  const p = normalizePhone(phone ?? "");
+  return p ?? `L_${storeCode.replace(/[.#$[\]/\s]/g, "_")}_${customerId.replace(/[.#$[\]/\s]/g, "_")}`;
 }
 
-export interface PooledCustomer {
-  phone: string;
-  hoTen: string;
-  totalCurrent: number;
-  totalLifetime: number;
-  perStore: { storeCode: string; customerId: string; points: number }[];
-}
-
-/** Gộp khách các chi nhánh theo SĐT → số dư điểm toàn hệ thống */
-export function poolCustomersByPhone(customers: StoreCustomer[]): PooledCustomer[] {
-  const map = new Map<string, PooledCustomer>();
-  for (const c of customers) {
-    const phone = normalizePhone(c.soDienThoai);
-    if (!phone) continue;
-    let p = map.get(phone);
-    if (!p) {
-      p = { phone, hoTen: c.hoTen, totalCurrent: 0, totalLifetime: 0, perStore: [] };
-      map.set(phone, p);
-    }
-    p.totalCurrent += c.diemHienTai;
-    p.totalLifetime += c.tongDiem;
-    p.perStore.push({ storeCode: c.storeCode, customerId: c.id, points: c.diemHienTai });
-  }
-  return [...map.values()].sort((a, b) => b.totalCurrent - a.totalCurrent);
-}
-
-// ---------------------------------------------------------------------------
-// Trừ điểm dùng chung giữa các chi nhánh
-// ---------------------------------------------------------------------------
-
-export interface PoolAllocation {
-  storeCode: string;
-  customerId: string;
-  take: number;
-  before: number;
-  after: number;
+export interface MemberTotals {
+  /** Số khách duy nhất (cùng SĐT ở nhiều chi nhánh chỉ tính 1) */
+  members: number;
+  points: number;
+  totalPoints: number;
+  /** Số node khách trùng SĐT (đã gộp) */
+  duplicateNodes: number;
 }
 
 /**
- * Chia số điểm cần trừ cho các chi nhánh của một khách (cùng SĐT) theo cấu hình.
- * Trả lỗi nếu tổng điểm toàn hệ thống không đủ.
+ * Tổng điểm toàn chuỗi KHÔNG đếm trùng: các node khách cùng SĐT cùng mang bản sao của một số dư,
+ * nên mỗi khách chỉ được cộng một lần (lấy số lớn nhất trong các bản sao phòng khi cache lệch tạm thời).
  */
-export function planPooledRedeem(args: {
-  holdings: { storeCode: string; customerId: string; points: number }[];
-  points: number;
-  homeStore?: string;
-  order: DeductOrder;
-}): { error: string } | { allocations: PoolAllocation[] } {
-  if (!Number.isInteger(args.points) || args.points <= 0) return { error: "Số điểm cần trừ phải là số nguyên > 0" };
-  const held = args.holdings.filter((h) => h.points > 0);
-  const total = held.reduce((s, h) => s + h.points, 0);
-  if (total < args.points) return { error: `Khách chỉ còn ${total} điểm trên toàn hệ thống, không đủ để trừ ${args.points}` };
-  const byLargest = [...held].sort((a, b) => b.points - a.points || a.storeCode.localeCompare(b.storeCode));
-  const ordered =
-    args.order === "HOME_FIRST" && args.homeStore
-      ? [...byLargest.filter((h) => h.storeCode === args.homeStore), ...byLargest.filter((h) => h.storeCode !== args.homeStore)]
-      : byLargest;
-  let left = args.points;
-  const allocations: PoolAllocation[] = [];
-  for (const h of ordered) {
-    if (left <= 0) break;
-    const take = Math.min(h.points, left);
-    allocations.push({ storeCode: h.storeCode, customerId: h.customerId, take, before: h.points, after: h.points - take });
-    left -= take;
+export function totalsByMember(customers: Pick<StoreCustomer, "id" | "storeCode" | "soDienThoai" | "diemHienTai" | "tongDiem">[]): MemberTotals {
+  const map = new Map<string, { points: number; total: number }>();
+  for (const c of customers) {
+    const key = memberKeyOf(c.soDienThoai, c.storeCode, c.id);
+    const cur = map.get(key) ?? { points: 0, total: 0 };
+    map.set(key, { points: Math.max(cur.points, c.diemHienTai), total: Math.max(cur.total, c.tongDiem) });
   }
-  return { allocations };
+  let points = 0;
+  let totalPoints = 0;
+  for (const v of map.values()) {
+    points += v.points;
+    totalPoints += v.total;
+  }
+  return { members: map.size, points, totalPoints, duplicateNodes: customers.length - map.size };
 }
 
-/** Một update() đa chi nhánh: trừ điểm từng nơi + point_history + audit (totalPoints giữ nguyên → không tụt hạng) */
-export function buildPooledRedeemUpdates(args: {
-  allocations: PoolAllocation[];
-  customerName: string;
-  phone: string;
-  reason: string;
-  actor: { username: string; fullName?: string; role?: string };
-  tiers?: Record<string, LoyaltyTier[]>;
-  now: number;
-  nonce?: string;
-}): { error: string } | { updates: Record<string, unknown> } {
-  const reason = args.reason.trim();
-  if (!reason) return { error: "Vui lòng nhập lý do / mã hóa đơn áp dụng" };
-  if (args.allocations.length === 0) return { error: "Không có điểm để trừ" };
-  const updates: Record<string, unknown> = {};
-  const total = args.allocations.reduce((s, a) => s + a.take, 0);
-  const n = args.nonce ?? String(Math.floor(Math.random() * 1e6));
-  for (const a of args.allocations) {
-    const base = `stores/${a.storeCode}`;
-    updates[`${base}/customers/${a.customerId}/diem_hien_tai`] = a.after;
-    updates[`${base}/customers/${a.customerId}/currentPoints`] = a.after;
-    updates[`${base}/customers/${a.customerId}/ngay_cap_nhat`] = args.now;
-    updates[`${base}/point_history/pool_${args.now}_${n}_${a.storeCode}`] = {
-      customerId: a.customerId,
-      customerName: args.customerName,
-      type: "POOL_REDEEM",
-      mode: "POOL",
-      delta: -a.take,
-      before: a.before,
-      after: a.after,
-      reason: `${reason} (dùng chung ${total} điểm / ${args.allocations.length} chi nhánh)`,
-      by: args.actor.username,
-      byName: args.actor.fullName ?? args.actor.username,
-      at: args.now,
-    };
-    updates[`${base}/audit_logs/log_${args.now}_pool_${n}_${a.storeCode}`] = {
-      timestamp: args.now,
-      username: args.actor.username,
-      userFullName: args.actor.fullName ?? args.actor.username,
-      userRole: args.actor.role ?? "",
-      action: "LOYALTY_POOL_REDEEM",
-      targetType: "CUSTOMER",
-      targetId: a.customerId,
-      storeCode: a.storeCode,
-      details: `Trừ ${a.take} điểm dùng chung của ${args.customerName} (${args.phone}) tại ${a.storeCode}: ${a.before} → ${a.after}. ${reason}`,
-      isSuspicious: total >= 500,
-      beforeState: { diem_hien_tai: a.before },
-      afterState: { diem_hien_tai: a.after },
-    };
+export interface ChainLoyaltyConfig {
+  pointEarnRate?: number;
+  pointRedeemRate?: number;
+  loyaltyTiers?: LoyaltyTier[];
+}
+
+/** Đọc loyalty_config (RTDB); thiếu trường nào thì trường đó để undefined (dùng cấu hình chi nhánh) */
+export function parseChainConfig(raw: unknown): ChainLoyaltyConfig {
+  if (!raw || typeof raw !== "object") return {};
+  const v = raw as Record<string, unknown>;
+  const out: ChainLoyaltyConfig = {};
+  if (typeof v.pointEarnRate === "number" && Number.isFinite(v.pointEarnRate) && v.pointEarnRate >= 0) out.pointEarnRate = v.pointEarnRate;
+  if (typeof v.pointRedeemRate === "number" && v.pointRedeemRate > 0) out.pointRedeemRate = v.pointRedeemRate;
+  if (v.loyaltyTiers !== undefined && v.loyaltyTiers !== null) out.loyaltyTiers = normalizeTiers(v.loyaltyTiers);
+  return out;
+}
+
+/** Cấu hình hiệu lực của một chi nhánh: toàn chuỗi ưu tiên, thiếu thì lấy của chi nhánh */
+export function effectiveConfig<T extends { pointEarnRate?: number; pointRedeemRate?: number; loyaltyTiers?: LoyaltyTier[] }>(
+  store: T | undefined,
+  chain: ChainLoyaltyConfig
+): { pointEarnRate?: number; pointRedeemRate?: number; loyaltyTiers: LoyaltyTier[] } {
+  return {
+    pointEarnRate: chain.pointEarnRate ?? store?.pointEarnRate,
+    pointRedeemRate: chain.pointRedeemRate ?? store?.pointRedeemRate,
+    loyaltyTiers: chain.loyaltyTiers ?? store?.loyaltyTiers ?? DEFAULT_LOYALTY_TIERS,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Sổ cái dùng chung (callable getMemberLedger)
+// ---------------------------------------------------------------------------
+
+export type LedgerType = "earn" | "redeem" | "refund" | "adjust" | "opening";
+
+export const LEDGER_TYPE_LABEL: Record<LedgerType, string> = {
+  earn: "Tích điểm từ hóa đơn",
+  redeem: "Đổi điểm (giảm giá hóa đơn)",
+  refund: "Hoàn điểm",
+  adjust: "Chỉnh điểm thủ công",
+  opening: "Số dư đầu kỳ (gộp chi nhánh)",
+};
+
+export interface LedgerRow {
+  id: string;
+  type: LedgerType;
+  /** Biến động có dấu */
+  points: number;
+  balanceAfter: number;
+  /** Chi nhánh phát sinh */
+  storeCode: string;
+  billId?: string;
+  customerId?: string;
+  staff: string;
+  note?: string;
+  at: number;
+}
+
+/** Chuẩn hóa kết quả callable getMemberLedger: bỏ dòng sai định dạng, mới nhất trước */
+export function parseLedgerEntries(raw: unknown): LedgerRow[] {
+  if (!Array.isArray(raw)) return [];
+  const rows: LedgerRow[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const v = item as Record<string, unknown>;
+    const type = String(v.type ?? "") as LedgerType;
+    if (!(type in LEDGER_TYPE_LABEL)) continue;
+    rows.push({
+      id: String(v.id ?? ""),
+      type,
+      points: num(v.points),
+      balanceAfter: num(v.balanceAfter),
+      storeCode: String(v.storeCode ?? ""),
+      billId: typeof v.billId === "string" ? v.billId : undefined,
+      customerId: typeof v.customerId === "string" ? v.customerId : undefined,
+      staff: String(v.staff ?? ""),
+      note: typeof v.note === "string" ? v.note : undefined,
+      at: num(v.at),
+    });
   }
-  return { updates };
+  return rows.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
 }

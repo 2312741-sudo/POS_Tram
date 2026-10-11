@@ -6,6 +6,11 @@ import {
   canCallerSetDisabled,
   normalizeUsername,
   buildSyntheticEmail,
+  normalizeRoleId,
+  isManagerRole,
+  isStaffRole,
+  resolveStaffAuthUid,
+  isChamCongAccount,
 } from "./permissions";
 
 describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
@@ -37,6 +42,7 @@ describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
     expect(canCallerResetPassword(owner, manager, false)).toBe(true);
     expect(canCallerResetPassword(owner, cashier, false)).toBe(true);
     expect(canCallerResetPassword(manager, cashier, false)).toBe(true);
+    expect(canCallerResetPassword(manager, { roleId: "ROLE_MANAGER" }, false)).toBe(false); // không đụng Quản lý khác
     expect(canCallerResetPassword(manager, manager, true)).toBe(true); // Tự đặt lại mật khẩu của mình
   });
 
@@ -52,5 +58,45 @@ describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
     expect(normalizeUsername("Đầu Bếp_01")).toBe("daubep_01");
     expect(buildSyntheticEmail("Lê Thu Ngân", "tram01")).toBe("lethungan.tram01@tram.local");
     expect(buildSyntheticEmail("admin", "TRAM02")).toBe("admin.tram02@tram.local");
+  });
+
+  it("6. normalizeRoleId gộp Quản lý 1/2 → ROLE_MANAGER, Thu ngân/Phục vụ → ROLE_STAFF", () => {
+    for (const r of ["manager", "manager_1", "manager_2", "ROLE_MANAGER_1", "ROLE_MANAGER_2", "Manager-1", "ql"]) {
+      expect(normalizeRoleId(r)).toBe("ROLE_MANAGER");
+      expect(isManagerRole(r)).toBe(true);
+    }
+    for (const r of ["cashier", "ROLE_CASHIER", "employee", "waiter", "ROLE_WAITER", "staff", "ROLE_STAFF", "Waiter"]) {
+      expect(normalizeRoleId(r)).toBe("ROLE_STAFF");
+      expect(isStaffRole(r)).toBe(true);
+    }
+    expect(normalizeRoleId("ROLE_KITCHEN")).toBe("ROLE_KITCHEN");
+    expect(normalizeRoleId("owner")).toBe("owner");
+    expect(isStaffRole("ROLE_KITCHEN")).toBe(false);
+    expect(normalizeRoleId(undefined)).toBe("");
+  });
+
+  it("7. Ma trận đặt lại mật khẩu / khóa: Chủ → mọi người (trừ chủ gốc), Quản lý → Nhân viên/Bếp", () => {
+    const staff = { roleId: "ROLE_STAFF" };
+    const kitchen = { roleId: "ROLE_KITCHEN" };
+    const otherOwner = { roleId: "ROLE_OWNER" };
+    expect(canCallerResetPassword(owner, staff, false)).toBe(true);
+    expect(canCallerResetPassword(owner, otherOwner, false)).toBe(true);
+    expect(canCallerResetPassword(otherOwner, owner, false)).toBe(false); // chủ gốc chỉ tự đặt lại
+    expect(canCallerResetPassword(manager, kitchen, false)).toBe(true);
+    expect(canCallerResetPassword(manager, staff, false)).toBe(true);
+    expect(canCallerResetPassword(manager, otherOwner, false)).toBe(false);
+    expect(canCallerResetPassword(staff, kitchen, false)).toBe(false);
+    expect(canCallerResetPassword(kitchen, kitchen, true)).toBe(true);
+    expect(canCallerResetPassword({ ...manager, isActive: false }, staff, false)).toBe(false);
+    expect(canCallerSetDisabled(manager, { roleId: "manager_2" }, "m2", "m1")).toBe(false);
+  });
+
+  it("8. Hồ sơ cũ khóa theo tên đăng nhập: uid thật lấy từ trường uid, không có thì dùng khóa nút", () => {
+    expect(resolveStaffAuthUid("thungan", { uid: "AbC123" })).toBe("AbC123");
+    expect(resolveStaffAuthUid("thungan", {})).toBe("thungan");
+    expect(resolveStaffAuthUid("thungan", { uid: "  " })).toBe("thungan");
+    expect(isChamCongAccount("cc_x", {})).toBe(true);
+    expect(isChamCongAccount("u1", { authProvider: "chamcong" })).toBe(true);
+    expect(isChamCongAccount("u1", {})).toBe(false);
   });
 });

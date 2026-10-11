@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/permissions/app_permissions.dart';
+import '../../core/permissions/role_catalog.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
@@ -44,13 +45,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
     if (mounted) {
       setState(() {
         _users = users;
-        _roles = roles.isNotEmpty ? roles : [
-          RoleModel(id: 'ROLE_OWNER', name: 'Chủ Quán (Toàn quyền)', permissions: AppPermissions.allPermissions.map((p) => p.key).toList(), isSystemRole: true),
-          RoleModel(id: 'ROLE_MANAGER', name: 'Quản Lý Ca', permissions: [AppPermissions.viewMenu, AppPermissions.editMenu, AppPermissions.openTable, AppPermissions.createBill, AppPermissions.printBill, AppPermissions.viewReports], isSystemRole: true),
-          RoleModel(id: 'ROLE_CASHIER', name: 'Thu Ngân', permissions: [AppPermissions.viewMenu, AppPermissions.openTable, AppPermissions.createBill, AppPermissions.applyPromotion, AppPermissions.printBill], isSystemRole: true),
-          RoleModel(id: 'ROLE_WAITER', name: 'Nhân Viên Phục Vụ', permissions: [AppPermissions.viewMenu, AppPermissions.openTable, AppPermissions.sendKitchen], isSystemRole: true),
-          RoleModel(id: 'ROLE_KITCHEN', name: 'Bếp / Pha Chế', permissions: [], isSystemRole: true),
-        ];
+        _roles = buildRoleCatalog(roles);
         _isLoading = false;
       });
     }
@@ -374,7 +369,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               }),
                             ],
                             rows: _filteredUsers.map((user) {
-                              final role = _roles.where((r) => r.id == user.roleId).firstOrNull;
+                              final role = findRoleById(_roles, user.roleId);
                               return DataRow(
                                 cells: [
                                   // User name & phone

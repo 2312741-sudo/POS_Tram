@@ -5,7 +5,7 @@ const { DEMO_ACCOUNTS, buildSyntheticEmail, buildProfile, validatePassword } = r
 test("đủ 4 bộ phận với vai trò đúng", () => {
   assert.deepStrictEqual(
     DEMO_ACCOUNTS.map((a) => a.roleId),
-    ["ROLE_OWNER", "ROLE_MANAGER_1", "ROLE_CASHIER", "ROLE_KITCHEN"]
+    ["ROLE_OWNER", "ROLE_MANAGER", "ROLE_STAFF", "ROLE_KITCHEN"]
   );
 });
 

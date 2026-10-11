@@ -1,6 +1,7 @@
 // lib/core/router/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/permissions/route_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../data/models/app_models.dart';
 import '../../data/models/campaign_models.dart';
@@ -46,6 +47,12 @@ class AppRouter {
         if (auth.isKitchen) return '/kitchen';
         if (auth.canAccessManagerHub) return '/manager-hub';
         return '/tables';
+      }
+      // Phân quyền theo màn hình: thiếu quyền → về màn hình chính của vai trò (không cho vào bằng đường dẫn trực tiếp)
+      if (auth.isLoggedIn && !isLoggingIn && !auth.isRootOwner && !auth.isOwner) {
+        if (!RoutePermissions.allowed(state.uri.path, auth.can)) {
+          return auth.isKitchen ? '/kitchen' : '/tables';
+        }
       }
       return null;
     },

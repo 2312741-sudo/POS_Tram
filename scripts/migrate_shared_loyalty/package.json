@@ -1,0 +1,13 @@
+{
+  "name": "migrate-shared-loyalty",
+  "version": "1.0.0",
+  "description": "Gộp điểm khách hàng của mọi chi nhánh thành MỘT bản ghi dùng chung loyalty_members/{SĐT}",
+  "main": "migrate.js",
+  "scripts": {
+    "dry-run": "node migrate.js",
+    "apply": "node migrate.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

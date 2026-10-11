@@ -238,25 +238,24 @@ void main() {
         expect(manager1.can(AppPermissions.manageUsers), isFalse);
       });
 
-      test('Quản lý 2 (ROLE_MANAGER_2): giám sát ca, không có quyền hủy món hay sửa menu', () {
-        final manager2 = UserModel(
-          uid: 'm2_uid',
-          username: 'quanly2',
-          fullName: 'Quản Lý Cấp 2',
-          roleId: 'ROLE_MANAGER_2',
-          isRootOwner: false,
-        );
-
-        expect(manager2.can(AppPermissions.openTable), isTrue);
-        expect(manager2.can(AppPermissions.changeTable), isTrue);
-        expect(manager2.can(AppPermissions.createBill), isTrue);
-        expect(manager2.can(AppPermissions.manageCashShift), isTrue);
-        expect(manager2.can(AppPermissions.viewReports), isTrue);
-
-        // Không có quyền nhạy cảm
-        expect(manager2.can(AppPermissions.editMenu), isFalse);
-        expect(manager2.can(AppPermissions.cancelKitchenItem), isFalse);
-        expect(manager2.can(AppPermissions.manualDiscount), isFalse);
+      test('Quản lý 2 (ROLE_MANAGER_2) nay là Quản lý gộp: hợp quyền QL1 + QL2', () {
+        for (final id in ['ROLE_MANAGER_2', 'ROLE_MANAGER', 'manager', 'manager_2', 'manager_1']) {
+          final manager = UserModel(
+            uid: 'm_uid',
+            username: 'quanly',
+            fullName: 'Quản Lý',
+            roleId: id,
+            isRootOwner: false,
+          );
+          expect(manager.can(AppPermissions.openTable), isTrue, reason: id);
+          expect(manager.can(AppPermissions.manageCashShift), isTrue, reason: id);
+          expect(manager.can(AppPermissions.viewReports), isTrue, reason: id);
+          expect(manager.can(AppPermissions.editMenu), isTrue, reason: id); // từng chỉ có ở QL1
+          expect(manager.can(AppPermissions.cancelKitchenItem), isTrue, reason: id);
+          expect(manager.can(AppPermissions.copyMenu), isTrue, reason: id);
+          expect(manager.can(AppPermissions.manageUsers), isFalse, reason: id);
+          expect(manager.can(AppPermissions.manageLoyalty), isFalse, reason: id); // chỉ Chủ quán
+        }
       });
 
       test('Nhân viên thông thường (ROLE_CASHIER / employee): chỉ có quyền bán hàng cơ bản', () {
@@ -277,8 +276,11 @@ void main() {
         // Không có quyền hủy hóa đơn, chiết khấu tay hay quản lý ca
         expect(cashier.can(AppPermissions.cancelBill), isFalse);
         expect(cashier.can(AppPermissions.manualDiscount), isFalse);
-        expect(cashier.can(AppPermissions.manageCashShift), isFalse);
         expect(cashier.can(AppPermissions.viewReports), isFalse);
+        // Thu ngân + Phục vụ đã gộp thành Nhân viên: mở/kết ca của chính mình, nhưng không thu/chi két
+        expect(cashier.can(AppPermissions.manageCashShift), isTrue);
+        expect(cashier.can(AppPermissions.adjustCashShift), isFalse);
+        expect(cashier.can(AppPermissions.deleteItem), isTrue);
       });
 
       test('Quyền riêng biệt (customPermissions) ghi đè và bổ sung quyền cho nhân viên', () {

@@ -26,7 +26,18 @@ export interface TableBillInput {
   zone: string;
   items: TableBillItem[];
   total: number;
+  /** Khuyến mãi / voucher đã chọn (đã trừ vào total) */
+  promotions?: { name: string; code?: string; amount: number }[];
   printedAt: string;
+}
+
+/** Dòng hiển thị khuyến mãi trên phiếu (tên chương trình, mã voucher nếu có, số tiền giảm) */
+function promotionRowsHtml(list: { name: string; code?: string; amount: number }[], fmt: (n: number) => string, rowStyle: string): string {
+  const e = escapeHtml;
+  return list
+    .filter((d) => d.amount > 0)
+    .map((d) => `<div style="${rowStyle}"><span>KM: ${e(d.name)}${d.code ? ` (mã ${e(d.code)})` : ""}</span><span>-${e(fmt(d.amount))}</span></div>`)
+    .join("");
 }
 
 const formatPlainVND = (amount: number) => new Intl.NumberFormat("vi-VN").format(amount);
@@ -37,7 +48,7 @@ const lineNet = (it: RawOrderLine) => lineGross(it) - lineDiscountTotal(it);
 const asLine = (it: TableBillItem | ReceiptItem): RawOrderLine => ({ ...it });
 
 /** Phiếu tạm tính bàn (Sơ đồ bàn). */
-export function buildTableBillHtml({ tableName, zone, items, total, printedAt }: TableBillInput): string {
+export function buildTableBillHtml({ tableName, zone, items, total, promotions, printedAt }: TableBillInput): string {
   const e = escapeHtml;
   const itemsHtml = items
     .map(
@@ -100,6 +111,7 @@ export function buildTableBillHtml({ tableName, zone, items, total, printedAt }:
           </tbody>
         </table>
         <div class="total">
+          ${promotionRowsHtml(promotions || [], (n) => `${formatPlainVND(n)}đ`, "display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;")}
           <div class="total-row">
             <span>TỔNG CỘNG:</span>
             <span>${e(formatPlainVND(total))} VNĐ</span>
@@ -143,6 +155,8 @@ export interface ReceiptOrder {
   paymentMethod?: string;
   totalAmount?: number;
   items?: ReceiptItem[];
+  /** bill.discounts[] — khuyến mãi / voucher (campaignName, voucherCode, amount) */
+  discounts?: { campaignName?: string; promoName?: string; description?: string; voucherCode?: string; promoCode?: string; amount?: number }[];
 }
 
 /** Hóa đơn thanh toán (Lịch sử giao dịch). `timeStr` is the pre-formatted bill time. */
@@ -196,6 +210,15 @@ export function buildOrderReceiptHtml(order: ReceiptOrder, timeStr: string): str
               ${itemsHtml}
             </tbody>
           </table>
+          ${promotionRowsHtml(
+            (Array.isArray(order.discounts) ? order.discounts : []).map((d) => ({
+              name: d.campaignName || d.promoName || d.description || "Khuyến mãi",
+              code: d.voucherCode || d.promoCode,
+              amount: Number(d.amount) || 0,
+            })),
+            formatVND,
+            "display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;"
+          )}
           <div style="display: flex; justify-content: space-between; margin-top: 8px;" class="total-row">
             <span>TỔNG CỘNG:</span>
             <span style="color: #7E2930;">${e(formatVND(order.totalAmount || 0))}</span>

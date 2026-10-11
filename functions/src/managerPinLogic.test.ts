@@ -38,15 +38,14 @@ describe("hashPin / verifyPinHash", () => {
 });
 
 describe("quyền người duyệt", () => {
-  it("chủ quán duyệt mọi thao tác; quản lý 2 chỉ giảm giá; thu ngân không được duyệt", () => {
+  it("chủ quán duyệt mọi thao tác; quản lý (gộp QL1+QL2) duyệt giảm giá + hủy món; nhân viên không được duyệt", () => {
     expect(approverHasPermission({ roleId: "ROLE_OWNER" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
     expect(approverHasPermission({ roleId: "x", isRootOwner: true }, "CANCEL_KITCHEN_ITEM")).toBe(true);
     expect(approverHasPermission({ roleId: "manager_1" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
     expect(approverHasPermission({ roleId: "ROLE_MANAGER_2" }, "DISCOUNT_ITEM")).toBe(true);
-    expect(approverHasPermission({ roleId: "ROLE_MANAGER_2" }, "CANCEL_KITCHEN_ITEM")).toBe(false);
-    expect(
-      approverHasPermission({ roleId: "ROLE_MANAGER_2", customPermissions: ["CANCEL_KITCHEN_ITEM"] }, "CANCEL_KITCHEN_ITEM")
-    ).toBe(true);
+    expect(approverHasPermission({ roleId: "ROLE_MANAGER_2" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
+    expect(approverHasPermission({ roleId: "manager" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
+    expect(approverHasPermission({ roleId: "ROLE_STAFF", customPermissions: ["DISCOUNT_ITEM"] }, "DISCOUNT_ITEM")).toBe(false);
     expect(approverHasPermission({ roleId: "ROLE_CASHIER", customPermissions: ["DISCOUNT_ITEM"] }, "DISCOUNT_ITEM")).toBe(false);
     expect(approverHasPermission({ roleId: "ROLE_OWNER", isActive: false }, "DISCOUNT_ITEM")).toBe(false);
     expect(isApproverEligible({ roleId: "ROLE_WAITER" })).toBe(false);
@@ -72,14 +71,14 @@ describe("matchApprover", () => {
   it("sai PIN / PIN của thu ngân / quản lý thiếu quyền", () => {
     expect(matchApprover([owner, m2], "0000", "DISCOUNT_ITEM")).toEqual({ ok: false, reason: "NO_MATCH" });
     expect(matchApprover([cashier], "9753", "DISCOUNT_ITEM")).toEqual({ ok: false, reason: "NO_MATCH" });
-    expect(matchApprover([m2], "1357", "CANCEL_KITCHEN_ITEM")).toEqual({ ok: false, reason: "NOT_PERMITTED" });
+    expect(matchApprover([m2], "1357", "CANCEL_KITCHEN_ITEM")).toMatchObject({ ok: true, uid: "m2" });
   });
 
   it("trùng PIN: không chọn người duyệt → AMBIGUOUS; chọn người duyệt → khớp", () => {
     expect(matchApprover([m2, m2b], "1357", "DISCOUNT_ITEM")).toEqual({ ok: false, reason: "AMBIGUOUS" });
     expect(matchApprover([m2, m2b], "1357", "DISCOUNT_ITEM", "m2")).toMatchObject({ ok: true, uid: "m2" });
-    // Chỉ một người trùng PIN có quyền → không mơ hồ
-    expect(matchApprover([m2, m2b], "1357", "CANCEL_KITCHEN_ITEM")).toMatchObject({ ok: true, uid: "m3" });
+    // Hai quản lý trùng PIN đều có quyền → vẫn mơ hồ, phải chọn người duyệt
+    expect(matchApprover([m2, m2b], "1357", "CANCEL_KITCHEN_ITEM")).toEqual({ ok: false, reason: "AMBIGUOUS" });
     // Chọn người duyệt nhưng PIN thuộc người khác → sai
     expect(matchApprover([owner, m2], "2580", "DISCOUNT_ITEM", "m2")).toEqual({ ok: false, reason: "NO_MATCH" });
   });

@@ -17,10 +17,10 @@ import {
   Globe2,
 } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth";
+import { useAuth, hasPermission } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
 import { db } from "@/lib/firebase";
-import { ref, onValue, update, get } from "firebase/database";
+import { ref, onValue, update } from "firebase/database";
 import { exportCustomersList, CustomerExportItem } from "@/lib/export";
 import { formatVND, formatNumber } from "@/lib/reports";
 import {
@@ -32,32 +32,34 @@ import {
 } from "@/lib/customers";
 import {
   DEFAULT_LOYALTY_TIERS,
+  LEDGER_TYPE_LABEL,
   buildNewCustomerNode,
-  buildPointAdjustment,
-  DEDUCT_ORDER_LABEL,
-  buildPooledRedeemUpdates,
-  buildSharedLoyaltyUpdates,
+  effectiveConfig,
   hasCustomTiers,
-  planPooledRedeem,
-  poolCustomersByPhone,
-  type DeductOrder,
-  type PooledCustomer,
+  parseChainConfig,
+  parseLedgerEntries,
+  totalsByMember,
+  validateAdjustInput,
   validateTiers,
   type AdjustMode,
+  type ChainLoyaltyConfig,
+  type LedgerRow,
   type LoyaltyTier,
 } from "@/lib/loyalty";
+import { adjustLoyaltyPoints, getMemberLedger, setLoyaltyConfig } from "@/lib/loyalty-client";
+import { searchCustomers } from "@/lib/customer-search";
 import { errorMessage } from "@/lib/errors";
 import CustomerFormDialog from "@/components/CustomerFormDialog";
 import PointAdjustDialog from "@/components/PointAdjustDialog";
 import LoyaltyTierDialog from "@/components/LoyaltyTierDialog";
-import ModalShell, { btnGhost, btnPrimary, errorBox, fieldInput, fieldLabel } from "@/components/ModalShell";
+import ModalShell, { btnGhost, btnPrimary, errorBox } from "@/components/ModalShell";
 
 const DEFAULT_REDEEM_RATE = 1000;
 const DEFAULT_EARN_RATE = 1.0;
 
 export default function CustomersPage() {
   const { user } = useAuth();
-  const { stores, currentStoreCode, updateStore } = useDashboardData();
+  const { stores, currentStoreCode } = useDashboardData();
 
   // Dữ liệu khách theo từng chi nhánh: stores/{code}/customers (lắng nghe realtime)
   const [rawByStore, setRawByStore] = useState<Record<string, unknown>>({});
@@ -70,11 +72,13 @@ export default function CustomersPage() {
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showTierDialog, setShowTierDialog] = useState(false);
-  const [showPoolDialog, setShowPoolDialog] = useState(false);
-  const [poolDeductOrder, setPoolDeductOrder] = useState<DeductOrder>("HOME_FIRST");
-  const [redeemTarget, setRedeemTarget] = useState<PooledCustomer | null>(null);
-  const [redeemPoints, setRedeemPoints] = useState("");
-  const [redeemReason, setRedeemReason] = useState("");
+  // Cấu hình điểm TOÀN CHUỖI (loyalty_config, Chủ đặt qua callable) — ưu tiên hơn cấu hình riêng chi nhánh
+  const [chainConfig, setChainConfig] = useState<ChainLoyaltyConfig>({});
+  // Lịch sử điểm dùng chung (xuyên chi nhánh) của một khách
+  const [historyTarget, setHistoryTarget] = useState<StoreCustomer | null>(null);
+  const [historyRows, setHistoryRows] = useState<LedgerRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<StoreCustomer | null>(null);
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState("");
@@ -84,14 +88,17 @@ export default function CustomersPage() {
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
   const [configSuccess, setConfigSuccess] = useState<string | null>(null);
 
-  const canRead = canReadCustomers(user?.roleId || user?.role, user?.isRootOwner);
+  const canRead =
+    canReadCustomers(user?.roleId || user?.role, user?.isRootOwner) &&
+    (hasPermission(user, "VIEW_CUSTOMERS") || hasPermission(user, "VIEW_REPORTS"));
   // Rules: chỉ Chủ quán ghi storeInfo; cần chọn 1 chi nhánh cụ thể để lưu
-  const canEditConfig = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && currentStoreCode !== "ALL";
-  const isOwner = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner);
+  const canEditConfig =
+    canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "MANAGE_LOYALTY") && currentStoreCode !== "ALL";
+  const isOwner = canEditPointConfig(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "MANAGE_LOYALTY");
   // Rules: chỉ Chủ quán / Quản lý ghi trực tiếp số dư điểm
-  const canAdjust = canAdjustPoints(user?.roleId || user?.role, user?.isRootOwner);
+  const canAdjust = canAdjustPoints(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "ADJUST_POINTS");
+  const canManageCustomers = hasPermission(user, "MANAGE_CUSTOMERS");
   const specificStore = currentStoreCode !== "ALL" && !!currentStoreCode;
-  const sharedEnabled = stores.some((s) => s.sharedLoyalty?.enabled);
 
   // Chi nhánh cần đọc: "ALL" → mọi chi nhánh truy cập được; ngược lại chỉ chi nhánh đang chọn
   const targetCodes = useMemo(() => {
@@ -104,18 +111,19 @@ export default function CustomersPage() {
   const ratesByStore = useMemo(() => {
     const map: Record<string, { redeem: number; earn: number }> = {};
     stores.forEach((s) => {
+      const eff = effectiveConfig(s, chainConfig);
       map[s.storeCode] = {
-        redeem: typeof s.pointRedeemRate === "number" && s.pointRedeemRate > 0 ? s.pointRedeemRate : DEFAULT_REDEEM_RATE,
-        earn: typeof s.pointEarnRate === "number" ? s.pointEarnRate : DEFAULT_EARN_RATE,
+        redeem: typeof eff.pointRedeemRate === "number" && eff.pointRedeemRate > 0 ? eff.pointRedeemRate : DEFAULT_REDEEM_RATE,
+        earn: typeof eff.pointEarnRate === "number" ? eff.pointEarnRate : DEFAULT_EARN_RATE,
       };
     });
     return map;
-  }, [stores]);
+  }, [stores, chainConfig]);
   const tiersByStore = useMemo(() => {
     const map: Record<string, LoyaltyTier[]> = {};
-    stores.forEach((s) => (map[s.storeCode] = s.loyaltyTiers || DEFAULT_LOYALTY_TIERS));
+    stores.forEach((s) => (map[s.storeCode] = effectiveConfig(s, chainConfig).loyaltyTiers));
     return map;
-  }, [stores]);
+  }, [stores, chainConfig]);
   const tiersOf = useCallback((storeCode: string) => tiersByStore[storeCode] || DEFAULT_LOYALTY_TIERS, [tiersByStore]);
   const redeemRateOf = (storeCode: string) => ratesByStore[storeCode]?.redeem ?? DEFAULT_REDEEM_RATE;
   const displayRates = currentStoreCode !== "ALL"
@@ -144,6 +152,15 @@ export default function CustomersPage() {
     return () => unsubs.forEach((u) => u());
   }, [canRead, targetKey, reloadKey]);
 
+  useEffect(() => {
+    if (!canRead) return;
+    return onValue(
+      ref(db, "loyalty_config"),
+      (snap) => setChainConfig(parseChainConfig(snap.val())),
+      () => setChainConfig({})
+    );
+  }, [canRead]);
+
   const loading = canRead && targetCodes.some((c) => !loadedStores[c]);
 
   // Phân tích dữ liệu thô theo cấu hình hạng của từng chi nhánh
@@ -159,39 +176,47 @@ export default function CustomersPage() {
     return names;
   }, [targetCodes, tiersOf]);
 
-  const pooled = useMemo(() => (sharedEnabled ? poolCustomersByPhone(customers) : []), [sharedEnabled, customers]);
+  // Khách cùng SĐT ở nhiều chi nhánh là MỘT khách với một số dư: không cộng trùng
+  const memberTotals = useMemo(() => totalsByMember(customers), [customers]);
 
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return customers.filter((c) => {
-      if (selectedTier !== "ALL" && c.hangThanhVien !== selectedTier) return false;
-      if (q) {
-        const match =
-          c.soDienThoai.toLowerCase().includes(q) ||
-          c.hoTen.toLowerCase().includes(q) ||
-          c.maKhachHang.toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      return true;
-    });
+    const q = searchQuery.trim();
+    const byTier = customers.filter((c) => selectedTier === "ALL" || c.hangThanhVien === selectedTier);
+    if (!q) return byTier;
+    // Khớp theo SĐT đủ/4 số cuối/một phần, tên không dấu thứ tự từ bất kỳ; thêm khớp mã khách
+    const hits = searchCustomers(
+      byTier.map((c) => ({ id: `${c.storeCode}:${c.id}`, name: c.hoTen, phone: c.soDienThoai, points: c.diemHienTai })),
+      q,
+      byTier.length
+    ).map((m) => m.customer.id);
+    const ql = q.toLowerCase();
+    const set = new Set(hits);
+    return [
+      ...hits.map((id) => byTier.find((c) => `${c.storeCode}:${c.id}` === id)!),
+      ...byTier.filter((c) => !set.has(`${c.storeCode}:${c.id}`) && c.maKhachHang.toLowerCase().includes(ql)),
+    ];
   }, [customers, searchQuery, selectedTier]);
 
   // Aggregate KPI stats (giá trị quy đổi theo tỷ lệ của từng chi nhánh)
   const kpiStats = useMemo(() => {
-    const totalCustomers = customers.length;
-    const totalPoints = customers.reduce((sum, c) => sum + c.diemHienTai, 0);
-    const totalPointValue = customers.reduce(
-      (sum, c) => sum + c.diemHienTai * (ratesByStore[c.storeCode]?.redeem ?? DEFAULT_REDEEM_RATE),
-      0
-    );
+    const totalCustomers = memberTotals.members;
+    const totalPoints = memberTotals.points;
+    const seen = new Set<string>();
+    let totalPointValue = 0;
+    for (const c of customers) {
+      const key = c.soDienThoai ? `p:${c.soDienThoai.replace(/\D/g, "")}` : `${c.storeCode}:${c.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      totalPointValue += c.diemHienTai * (ratesByStore[c.storeCode]?.redeem ?? DEFAULT_REDEEM_RATE);
+    }
     // "VIP" = khách ở hạng cao nhất của chi nhánh
     const vipCount = customers.filter((c) => {
       const t = tiersOf(c.storeCode);
       return t.length > 1 && c.hangThanhVien === t[t.length - 1].name;
     }).length;
     return { totalCustomers, totalPoints, totalPointValue, vipCount };
-  }, [customers, ratesByStore, tiersOf]);
+  }, [customers, memberTotals, ratesByStore, tiersOf]);
 
   // Export Excel
   const handleExportExcel = () => {
@@ -225,8 +250,8 @@ export default function CustomersPage() {
     const newEarn = Number.isFinite(parsedEarn) && parsedEarn >= 0 ? parsedEarn : DEFAULT_EARN_RATE;
     setIsSavingConfig(true);
     try {
-      const res = await updateStore(currentStoreCode, { pointRedeemRate: newRedeem, pointEarnRate: newEarn });
-      if (!res.success) throw new Error(res.error || "Không lưu được cấu hình");
+      // Tỷ lệ áp dụng TOÀN CHUỖI (loyalty_config) qua Cloud Function; chi nhánh nào chưa có thì dùng giá trị này
+      await setLoyaltyConfig(currentStoreCode, { pointRedeemRate: newRedeem, pointEarnRate: newEarn });
       setConfigSuccess("Đã lưu tỷ lệ đổi điểm thành công!");
       setTimeout(() => {
         setConfigSuccess(null);
@@ -286,25 +311,24 @@ export default function CustomersPage() {
 
   const handleAdjustPoints = async (mode: AdjustMode, value: number, reason: string) => {
     if (!adjustTarget) return;
-    const res = buildPointAdjustment({
-      storeCode: adjustTarget.storeCode,
-      customer: adjustTarget,
-      mode,
-      value,
-      reason,
-      actor,
-      tiers: tiersOf(adjustTarget.storeCode),
-      now: Date.now(),
-    });
-    if (!res.ok) {
-      setOpError(res.error);
+    const err = validateAdjustInput({ mode, value, reason, balance: adjustTarget.diemHienTai });
+    if (err) {
+      setOpError(err);
       return;
     }
     setOpSaving(true);
     setOpError("");
     try {
-      await update(ref(db), res.updates);
-      flash(`Đã chỉnh điểm ${adjustTarget.hoTen}: ${adjustTarget.diemHienTai} → ${res.after}`);
+      // Điểm là bản ghi dùng chung cả chuỗi: chỉnh qua Cloud Function (transaction + sổ cái + nhật ký)
+      const res = await adjustLoyaltyPoints(
+        adjustTarget.storeCode,
+        { customerId: adjustTarget.id },
+        mode,
+        value,
+        reason,
+        `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+      );
+      flash(`Đã chỉnh điểm ${adjustTarget.hoTen}: ${adjustTarget.diemHienTai} → ${res.after ?? res.points ?? "?"}`);
       setAdjustTarget(null);
     } catch (e) {
       setOpError(errorMessage(e, "Không chỉnh được điểm"));
@@ -313,102 +337,32 @@ export default function CustomersPage() {
     }
   };
 
-  const handleSaveTiers = async (next: LoyaltyTier[], applyAll: boolean) => {
+  const openHistory = async (c: StoreCustomer) => {
+    setHistoryTarget(c);
+    setHistoryRows([]);
+    setHistoryError("");
+    setHistoryLoading(true);
+    try {
+      const res = await getMemberLedger(c.storeCode, { customerId: c.id }, 100);
+      setHistoryRows(parseLedgerEntries(res.entries));
+    } catch (e) {
+      setHistoryError(errorMessage(e, "Không tải được lịch sử điểm"));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleSaveTiers = async (next: LoyaltyTier[]) => {
     const err = validateTiers(next);
     if (err) return alert(err);
     setOpSaving(true);
-    let res: { success: boolean; error?: string };
-    if (applyAll) {
-      try {
-        const now = Date.now();
-        const updates: Record<string, unknown> = {};
-        for (const s of stores) {
-          updates[`stores/${s.storeCode}/storeInfo/loyaltyTiers`] = next;
-          updates[`stores/${s.storeCode}/audit_logs/log_${now}_tier_${s.storeCode}`] = {
-            timestamp: now, username: actor.username, userFullName: actor.fullName || actor.username, userRole: actor.role || "",
-            action: "LOYALTY_TIERS_UPDATE", targetType: "STORE", targetId: s.storeCode, storeCode: s.storeCode,
-            details: `Chủ quán đặt mốc hạng: ${next.map((t) => `${t.name} ≥ ${t.minPoints}`).join("; ")}`,
-          };
-        }
-        await update(ref(db), updates);
-        res = { success: true };
-      } catch (e) {
-        res = { success: false, error: errorMessage(e, "Không lưu được cho tất cả chi nhánh") };
-      }
-    } else {
-      res = await updateStore(currentStoreCode, { loyaltyTiers: next });
-    }
-    setOpSaving(false);
-    if (!res.success) return alert(res.error || "Không lưu được cấu hình hạng");
-    setShowTierDialog(false);
-    flash("Đã lưu cấu hình điểm theo hạng");
-  };
-
-  const openRedeem = (p: PooledCustomer) => {
-    setOpError("");
-    setRedeemPoints("");
-    setRedeemReason("");
-    setRedeemTarget(p);
-  };
-
-  const poolOrder: DeductOrder = stores.find((s) => s.sharedLoyalty?.enabled)?.sharedLoyalty?.deductOrder || "HOME_FIRST";
-
-  const redeemPreview = useMemo(() => {
-    if (!redeemTarget) return null;
-    const n = Number(redeemPoints);
-    if (!Number.isInteger(n) || n <= 0) return null;
-    return planPooledRedeem({
-      holdings: redeemTarget.perStore.map((x) => ({ storeCode: x.storeCode, customerId: x.customerId, points: x.points })),
-      points: n,
-      homeStore: user?.storeCode,
-      order: poolOrder,
-    });
-  }, [redeemTarget, redeemPoints, user?.storeCode, poolOrder]);
-
-  const handlePoolRedeem = async () => {
-    if (!redeemTarget) return;
-    const n = Number(redeemPoints);
-    setOpSaving(true);
-    setOpError("");
     try {
-      // Đọc lại số dư thật ở từng chi nhánh ngay trước khi ghi (POS có thể vừa đổi/tích điểm)
-      const fresh = await Promise.all(
-        redeemTarget.perStore.map(async (x) => {
-          const snap = await get(ref(db, `stores/${x.storeCode}/customers/${x.customerId}`));
-          const v = (snap.val() || {}) as Record<string, unknown>;
-          const pts = Number(v.diem_hien_tai ?? v.currentPoints ?? 0);
-          return { storeCode: x.storeCode, customerId: x.customerId, points: Number.isFinite(pts) ? Math.max(0, Math.trunc(pts)) : 0 };
-        })
-      );
-      const plan = planPooledRedeem({ holdings: fresh, points: n, homeStore: user?.storeCode, order: poolOrder });
-      if ("error" in plan) throw new Error(plan.error);
-      const built = buildPooledRedeemUpdates({
-        allocations: plan.allocations, customerName: redeemTarget.hoTen, phone: redeemTarget.phone,
-        reason: redeemReason, actor, now: Date.now(),
-      });
-      if ("error" in built) throw new Error(built.error);
-      await update(ref(db), built.updates);
-      flash(`Đã trừ ${n} điểm dùng chung của ${redeemTarget.hoTen} tại ${plan.allocations.length} chi nhánh`);
-      setRedeemTarget(null);
+      // Mốc hạng áp dụng cho TOÀN CHUỖI (chỉ Chủ quán, qua Cloud Function)
+      await setLoyaltyConfig(currentStoreCode, { loyaltyTiers: next });
+      setShowTierDialog(false);
+      flash("Đã lưu mốc hạng toàn chuỗi");
     } catch (e) {
-      setOpError(errorMessage(e, "Không trừ được điểm dùng chung"));
-    } finally {
-      setOpSaving(false);
-    }
-  };
-
-  const handleTogglePool = async (enabled: boolean) => {
-    setOpSaving(true);
-    setOpError("");
-    try {
-      await update(
-        ref(db),
-        buildSharedLoyaltyUpdates({ storeCodes: stores.map((s) => s.storeCode), enabled, deductOrder: poolDeductOrder, actor, now: Date.now() })
-      );
-      setShowPoolDialog(false);
-      flash(enabled ? "Chủ quán đã xác nhận dùng chung điểm toàn hệ thống" : "Đã tắt dùng chung điểm");
-    } catch (e) {
-      setOpError(errorMessage(e, "Không lưu được cấu hình dùng chung"));
+      alert(errorMessage(e, "Không lưu được cấu hình hạng"));
     } finally {
       setOpSaving(false);
     }
@@ -478,8 +432,8 @@ export default function CustomersPage() {
                 setOpError("");
                 setShowCustomerForm(true);
               }}
-              disabled={!specificStore || !canRead}
-              title={specificStore ? "Thêm khách hàng mới" : "Chọn 1 chi nhánh cụ thể để thêm khách"}
+              disabled={!specificStore || !canRead || !canManageCustomers}
+              title={!canManageCustomers ? "Bạn không có quyền thêm khách hàng" : specificStore ? "Thêm khách hàng mới" : "Chọn 1 chi nhánh cụ thể để thêm khách"}
               style={{
                 display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--primary)", color: "#FFFFFF",
                 border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "600",
@@ -579,69 +533,21 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {stores.length > 1 && (isOwner || sharedEnabled) && (
+      {stores.length > 1 && (
         <div
           style={{
             background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16,
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
+            display: "flex", alignItems: "center", gap: 10,
           }}
         >
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Globe2 size={18} color="var(--primary)" />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>
-                Điểm dùng chung toàn hệ thống: {sharedEnabled ? "ĐÃ BẬT" : "đang tắt"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--subtext)" }}>
-                {sharedEnabled
-                  ? `Chủ quán ${stores.find((s) => s.sharedLoyalty?.enabled)?.sharedLoyalty?.confirmedBy || ""} đã xác nhận. Khách được gộp theo SĐT ở chế độ "Tất cả chi nhánh" (${pooled.length} khách).`
-                  : "Gộp điểm của khách theo số điện thoại giữa các chi nhánh. Cần Chủ quán bấm xác nhận."}
-              </div>
+          <Globe2 size={18} color="var(--primary)" />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Điểm dùng chung toàn chuỗi (luôn bật)</div>
+            <div style={{ fontSize: 12, color: "var(--subtext)" }}>
+              Khách được nhận diện theo số điện thoại: một số dư và một lịch sử cho mọi chi nhánh
+              {memberTotals.duplicateNodes > 0 ? ` (${memberTotals.duplicateNodes} hồ sơ trùng SĐT đã được gộp điểm)` : ""}. Tỷ lệ tích/đổi và mốc hạng do Chủ quán đặt cho cả chuỗi.
             </div>
           </div>
-          {isOwner && (
-            <button style={btnPrimary} onClick={() => { setOpError(""); setShowPoolDialog(true); }}>
-              {sharedEnabled ? "Tắt dùng chung" : "Xác nhận bật dùng chung"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {sharedEnabled && currentStoreCode === "ALL" && pooled.length > 0 && (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16, overflowX: "auto" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Điểm toàn hệ thống theo số điện thoại (top 10) — thứ tự trừ: {DEDUCT_ORDER_LABEL[poolOrder]}</div>
-          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", color: "var(--subtext)" }}>
-                <th style={{ padding: "4px 8px" }}>SĐT</th>
-                <th style={{ padding: "4px 8px" }}>Khách</th>
-                <th style={{ padding: "4px 8px", textAlign: "right" }}>Tổng điểm hiện có</th>
-                <th style={{ padding: "4px 8px" }}>Theo chi nhánh</th>
-                {canAdjust && <th style={{ padding: "4px 8px" }} />}
-              </tr>
-            </thead>
-            <tbody>
-              {pooled.slice(0, 10).map((p) => (
-                <tr key={p.phone} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{p.phone}</td>
-                  <td style={{ padding: "4px 8px" }}>{p.hoTen}</td>
-                  <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700 }}>{formatNumber(p.totalCurrent)}</td>
-                  <td style={{ padding: "4px 8px", color: "var(--subtext)" }}>{p.perStore.map((x) => `${x.storeCode}: ${x.points}`).join(" • ")}</td>
-                  {canAdjust && (
-                    <td style={{ padding: "4px 8px", textAlign: "right" }}>
-                      <button
-                        onClick={() => openRedeem(p)}
-                        disabled={p.totalCurrent <= 0}
-                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                      >
-                        Trừ điểm
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
@@ -897,11 +803,18 @@ export default function CustomersPage() {
                           >
                             Sửa điểm
                           </button>
-                          <Link
-                            href={`/dashboard/reports/loyalty?store=${encodeURIComponent(c.storeCode)}&customer=${encodeURIComponent(c.id)}`}
-                            style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)" }}
+                          <button
+                            onClick={() => openHistory(c)}
+                            style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6 }}
                           >
                             Lịch sử
+                          </button>
+                          <Link
+                            href={`/dashboard/reports/loyalty?store=${encodeURIComponent(c.storeCode)}&customer=${encodeURIComponent(c.id)}`}
+                            style={{ fontSize: 11, color: "var(--subtext)" }}
+                            title="Sổ cũ trước khi gộp điểm chi nhánh"
+                          >
+                            Sổ cũ
                           </Link>
                         </td>
                       )}
@@ -938,85 +851,53 @@ export default function CustomersPage() {
           storeCode={currentStoreCode}
           tiers={tiersOf(currentStoreCode)}
           saving={opSaving}
-          storeCount={stores.length}
           onCancel={() => setShowTierDialog(false)}
           onSave={handleSaveTiers}
         />
       )}
-      {showPoolDialog && (
+      {historyTarget && (
         <ModalShell
-          title={sharedEnabled ? "Tắt dùng chung điểm?" : "Xác nhận dùng chung điểm toàn hệ thống"}
-          icon={<Globe2 size={18} color="var(--primary)" />}
-          onClose={() => setShowPoolDialog(false)}
-          footer={
-            <>
-              <button style={btnGhost} onClick={() => setShowPoolDialog(false)}>Hủy</button>
-              <button style={btnPrimary} disabled={opSaving} onClick={() => handleTogglePool(!sharedEnabled)}>
-                {opSaving ? "Đang lưu..." : sharedEnabled ? "Tắt" : "Chủ quán xác nhận"}
-              </button>
-            </>
-          }
+          title="Lịch sử điểm dùng chung"
+          subtitle={`${historyTarget.hoTen} • ${historyTarget.soDienThoai || historyTarget.maKhachHang} • mọi chi nhánh`}
+          icon={<History size={18} color="var(--primary)" />}
+          onClose={() => setHistoryTarget(null)}
+          footer={<button style={btnGhost} onClick={() => setHistoryTarget(null)}>Đóng</button>}
         >
-          <p style={{ fontSize: 13, color: "var(--text)", margin: 0 }}>
-            {sharedEnabled
-              ? "Điểm của từng chi nhánh sẽ không còn được gộp theo số điện thoại."
-              : `Điểm của cùng một số điện thoại ở ${stores.length} chi nhánh sẽ được tính là một nguồn điểm chung. Thao tác này được ghi vào Nhật ký kiểm soát với tên của bạn.`}
-          </p>
-          {!sharedEnabled && (
-            <div style={{ marginTop: 12 }}>
-              <label style={fieldLabel}>Khi trừ điểm dùng chung</label>
-              <select style={fieldInput} value={poolDeductOrder} onChange={(e) => setPoolDeductOrder(e.target.value as DeductOrder)}>
-                {(Object.keys(DEDUCT_ORDER_LABEL) as DeductOrder[]).map((k) => (
-                  <option key={k} value={k}>{DEDUCT_ORDER_LABEL[k]}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {opError && <p style={{ color: "var(--danger, #B3261E)", fontSize: 13 }}>{opError}</p>}
-        </ModalShell>
-      )}
-
-      {redeemTarget && (
-        <ModalShell
-          title="Trừ điểm dùng chung"
-          subtitle={`${redeemTarget.hoTen} • ${redeemTarget.phone} • còn ${redeemTarget.totalCurrent} điểm toàn hệ thống`}
-          icon={<Coins size={18} color="var(--primary)" />}
-          onClose={() => setRedeemTarget(null)}
-          footer={
-            <>
-              <button style={btnGhost} onClick={() => setRedeemTarget(null)}>Hủy</button>
-              <button
-                style={{ ...btnPrimary, opacity: opSaving || !redeemPreview || "error" in redeemPreview ? 0.6 : 1 }}
-                disabled={opSaving || !redeemPreview || "error" in redeemPreview || !redeemReason.trim()}
-                onClick={handlePoolRedeem}
-              >
-                {opSaving ? "Đang trừ..." : "Xác nhận trừ điểm"}
-              </button>
-            </>
-          }
-        >
-          {opError && <div style={errorBox}>{opError}</div>}
-          <label style={fieldLabel}>Số điểm cần trừ</label>
-          <input style={fieldInput} type="number" min={1} step={1} value={redeemPoints} onChange={(e) => setRedeemPoints(e.target.value)} autoFocus />
-          <label style={{ ...fieldLabel, marginTop: 12 }}>Mã hóa đơn / lý do *</label>
-          <input style={fieldInput} value={redeemReason} onChange={(e) => setRedeemReason(e.target.value)} placeholder="VD: HD-261011-0007" />
-          {redeemPreview && (
-            <div style={{ marginTop: 12, fontSize: 13 }}>
-              {"error" in redeemPreview ? (
-                <span style={{ color: "var(--danger, #B3261E)" }}>{redeemPreview.error}</span>
-              ) : (
-                <>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Sẽ trừ:</div>
-                  {redeemPreview.allocations.map((a) => (
-                    <div key={a.storeCode}>
-                      {a.storeCode}: −{a.take} ({a.before} → {a.after})
-                    </div>
+          {historyError && <div style={errorBox}>{historyError}</div>}
+          {historyLoading ? (
+            <p style={{ fontSize: 13, color: "var(--subtext)" }}>Đang tải...</p>
+          ) : historyRows.length === 0 && !historyError ? (
+            <p style={{ fontSize: 13, color: "var(--subtext)" }}>Chưa có biến động điểm nào.</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "var(--subtext)" }}>
+                    <th style={{ padding: "4px 8px" }}>Thời gian</th>
+                    <th style={{ padding: "4px 8px" }}>Chi nhánh</th>
+                    <th style={{ padding: "4px 8px" }}>Nghiệp vụ</th>
+                    <th style={{ padding: "4px 8px", textAlign: "right" }}>Điểm</th>
+                    <th style={{ padding: "4px 8px", textAlign: "right" }}>Số dư sau</th>
+                    <th style={{ padding: "4px 8px" }}>Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map((r) => (
+                    <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{r.at ? new Date(r.at).toLocaleString("vi-VN") : "—"}</td>
+                      <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{r.storeCode || "—"}</td>
+                      <td style={{ padding: "4px 8px" }}>{LEDGER_TYPE_LABEL[r.type]}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, color: r.points < 0 ? "var(--danger, #B3261E)" : "#137333" }}>
+                        {r.points > 0 ? "+" : ""}{formatNumber(r.points)}
+                      </td>
+                      <td style={{ padding: "4px 8px", textAlign: "right" }}>{formatNumber(r.balanceAfter)}</td>
+                      <td style={{ padding: "4px 8px", color: "var(--subtext)" }}>{[r.billId && `HĐ ${r.billId}`, r.note, r.staff && `bởi ${r.staff}`].filter(Boolean).join(" • ")}</td>
+                    </tr>
                   ))}
-                </>
-              )}
+                </tbody>
+              </table>
             </div>
           )}
-          <p style={{ fontSize: 12, color: "var(--subtext)", marginTop: 12 }}>Thứ tự trừ: {DEDUCT_ORDER_LABEL[poolOrder]}. Tổng điểm tích lũy (hạng) không bị giảm.</p>
         </ModalShell>
       )}
 

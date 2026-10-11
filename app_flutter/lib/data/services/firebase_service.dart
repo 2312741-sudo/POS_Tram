@@ -1,4 +1,5 @@
 // lib/data/services/firebase_service.dart
+import '../../core/domain/customer_search.dart';
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +14,7 @@ import 'export_service.dart';
 import 'inventory_service.dart';
 import 'campaign_service.dart';
 import '../../core/domain/order_integrity.dart' show StockRetryPlanner;
+import '../../core/domain/menu_copy.dart';
 
 export '../repositories/seed_data.dart';
 export '../repositories/auth_repository.dart';
@@ -375,6 +377,33 @@ class FirebaseService {
     selectedCategories: selectedCategories,
   );
 
+  Future<MenuSnapshot> loadMenuSnapshot(String storeCode) => _orderRepo.loadMenuSnapshot(storeCode);
+
+  Future<CopyPlan> planMenuCopy({
+    required MenuSnapshot source,
+    required String toStoreCode,
+    CopySelection selection = CopySelection.everything,
+    CopyOptions options = const CopyOptions(),
+  }) => _orderRepo.planMenuCopy(source: source, toStoreCode: toStoreCode, selection: selection, options: options);
+
+  Future<void> applyMenuCopyPlan({
+    required String fromStoreCode,
+    required String toStoreCode,
+    required CopyPlan plan,
+    String username = '',
+    String fullName = '',
+    String role = '',
+    void Function(int done, int total)? onProgress,
+  }) => _orderRepo.applyMenuCopyPlan(
+    fromStoreCode: fromStoreCode,
+    toStoreCode: toStoreCode,
+    plan: plan,
+    username: username,
+    fullName: fullName,
+    role: role,
+    onProgress: onProgress,
+  );
+
   Future<void> clearStoreMenu(String storeCode) => _orderRepo.clearStoreMenu(storeCode);
 
   Stream<List<ZoneModel>> zonesStream() => _orderRepo.zonesStream();
@@ -469,6 +498,8 @@ class FirebaseService {
 
   // awardPoints / redeemCustomerPoints (ghi điểm trực tiếp vào Firestore) đã gỡ bỏ:
   // điểm chỉ đổi qua closeAndPayBill (LoyaltyService, RTDB), Firestore do Cloud Function đồng bộ.
+  Future<List<CustomerCandidate>> getBranchCandidates() => _reportRepo.getBranchCandidates();
+
   Future<List<KmtCustomerModel>> getAllCustomers() => _reportRepo.getAllCustomers();
 
   // ==================== KIOTVIET TABLE RESERVATIONS ====================

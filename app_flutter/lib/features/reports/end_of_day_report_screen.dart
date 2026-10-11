@@ -144,7 +144,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   // Filtered bills
   List<BillModel> get _rangeBills {
     return _bills.where((b) {
-      final ts = b.closedAt ?? b.createdAt;
+      final ts = b.reportTimeMs;
       return _isWithinRange(ts);
     }).toList();
   }

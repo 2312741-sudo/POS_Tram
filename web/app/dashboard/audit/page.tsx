@@ -31,6 +31,7 @@ import { exportAuditLogs, exportCancellationReport, exportDeletionReport } from 
 import { deletionReportFromAuditLogs } from "@/lib/item-deletion";
 import { useDashboardData, AuditLogItem } from "@/lib/data-context";
 import { calculateCancellationReport, formatVND } from "@/lib/reports";
+import { normalizeRoleId, ROLE_OWNER, ROLE_MANAGER, ROLE_KITCHEN, STAFF_ROLE_LABEL } from "@/lib/roles";
 
 // Cấu hình định danh các hành động
 interface ActionConfig {
@@ -218,12 +219,13 @@ function extractTarget(log: AuditLogItem): { label: string; isTable: boolean } {
 }
 
 function getRoleName(role?: string): string {
-  if (!role) return "Nhân viên";
+  if (!role) return `👤 ${STAFF_ROLE_LABEL}`;
   const r = role.toUpperCase();
-  if (r.includes("MANAGER") || r.includes("OWNER") || r.includes("ADMIN")) return "👑 Quản lý";
-  if (r.includes("KITCHEN") || r.includes("BẾP")) return "🍳 Bếp";
-  if (r.includes("CASHIER") || r.includes("THU NGÂN")) return "💳 Thu ngân";
-  return "👤 Nhân viên";
+  if (r.includes("BẾP")) return "🍳 Bếp";
+  const n = normalizeRoleId(role);
+  if (n === ROLE_OWNER || n === ROLE_MANAGER) return "👑 Quản lý";
+  if (n === ROLE_KITCHEN) return "🍳 Bếp";
+  return `👤 ${STAFF_ROLE_LABEL}`;
 }
 
 const PAGE_SIZE = 25;

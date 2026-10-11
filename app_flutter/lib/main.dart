@@ -9,12 +9,15 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
 import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
+import 'core/reports/report_export_service.dart';
 import 'data/services/firebase_service.dart';
 import 'widgets/keyboard_dismiss_wrapper.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Quyền xuất file (EXPORT_REPORTS / EXPORT_DATA) theo người đang đăng nhập
+  ReportExportService.permissionGate = (permission) => AuthService().can(permission);
   try {
     await initializeDateFormatting('vi_VN', null);
   } catch (_) {}

@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../../data/models/bill_model.dart';
+import '../permissions/app_permissions.dart';
 import '../../data/models/inventory_models.dart';
 import '../../data/models/order_item_model.dart';
 import 'stock_engine.dart';
@@ -570,14 +571,11 @@ class StockRetryPlanner {
     return out;
   }
 
-  /// Vai trò được phép trừ kho / chạy hàng đợi thử lại (khớp rules: Thu ngân trở lên).
+  /// Vai trò được phép trừ kho / chạy hàng đợi thử lại (khớp rules: Nhân viên trở lên).
   static bool canRunRetry(String? roleId, {bool isRootOwner = false}) {
     if (isRootOwner) return true;
-    const allowed = {
-      'owner', 'ROLE_OWNER',
-      'manager', 'manager_1', 'manager_2', 'ROLE_MANAGER', 'ROLE_MANAGER_1', 'ROLE_MANAGER_2',
-      'cashier', 'ROLE_CASHIER', 'employee',
-    };
-    return allowed.contains(roleId);
+    // Quản lý + Nhân viên (Thu ngân/Phục vụ đã gộp) + Chủ quán; Bếp bị chặn. Mã cũ vẫn được chấp nhận.
+    final r = normalizeRoleId(roleId);
+    return r == kRoleOwner || r == kRoleManager || r == kRoleStaff;
   }
 }

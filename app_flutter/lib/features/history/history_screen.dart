@@ -102,7 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             }
 
             // Date match
-            final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+            final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
             if (dt.year != _selectedDate.year || dt.month != _selectedDate.month || dt.day != _selectedDate.day) {
               return false;
             }
@@ -310,7 +310,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         ),
         subtitle: Text(
-          '${showOrderCode ? "Đơn: ${bill.orderCode} • " : ""}Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)} • $methodStr',
+          '${showOrderCode ? "Đơn: ${bill.orderCode} • " : ""}Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)} • $methodStr',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
@@ -529,7 +529,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         Text('Mã đặt món: ${bill.orderCode}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blueGrey)),
                       const SizedBox(height: 4),
                       Text('Bàn: ${bill.tableName} (${bill.zone}) • Tổng tiền: ${FormatUtils.vnd(bill.finalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                     ],
                   ),
                 ),

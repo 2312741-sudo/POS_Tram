@@ -18,12 +18,15 @@ import {
   UtensilsCrossed,
   FileText,
   Sparkles,
+  Copy,
 } from "lucide-react";
 import { ref, onValue, set, remove } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
-import { useAuth } from "@/lib/auth";
+import { useAuth, hasPermission } from "@/lib/auth";
+import { canCopyMenu } from "@/lib/menu-copy";
+import CopyMenuDialog from "./copy-menu-dialog";
 import { errorMessage } from "@/lib/errors";
 
 function formatVND(amount: number) {
@@ -93,6 +96,8 @@ export default function ProductsPage() {
   const [activeTab, setActiveTab] = useState<"products" | "categories" | "notes">("products");
 
   const { user } = useAuth();
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
+  const allowCopyMenu = canCopyMenu(user, (perm) => hasPermission(user, perm)) && stores.length >= 2;
   const targetStoreCode = currentStoreCode !== "ALL"
     ? currentStoreCode
     : (user?.storeCode || stores[0]?.storeCode || "");
@@ -463,6 +468,12 @@ export default function ProductsPage() {
                 <Download size={16} />
                 Xuất Excel
               </button>
+              {allowCopyMenu && (
+                <button className="btn-secondary" onClick={() => setShowCopyMenu(true)}>
+                  <Copy size={16} />
+                  Sao chép thực đơn
+                </button>
+              )}
               <button className="btn-primary" onClick={openAddProduct}>
                 <Plus size={16} />
                 Thêm sản phẩm
@@ -1914,6 +1925,14 @@ export default function ProductsPage() {
       )}
 
       {/* ==================== MODAL: THÊM GHI CHÚ MẪU ==================== */}
+      {showCopyMenu && (
+        <CopyMenuDialog
+          stores={stores}
+          defaultSource={currentStoreCode !== "ALL" ? currentStoreCode : ""}
+          onClose={() => setShowCopyMenu(false)}
+        />
+      )}
+
       {showNoteModal && (
         <div className="modal-overlay" onClick={() => setShowNoteModal(false)}>
           <div className="modal-content" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>

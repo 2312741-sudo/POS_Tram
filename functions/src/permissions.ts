@@ -4,6 +4,8 @@
  */
 
 export interface UserProfile {
+  uid?: string;
+  authProvider?: string;
   username?: string;
   fullName?: string;
   roleId?: string;
@@ -17,21 +19,56 @@ export function isOwnerRole(roleId?: string, isRootOwner?: boolean): boolean {
   if (isRootOwner === true) return true;
   if (!roleId) return false;
   const clean = roleId.toLowerCase();
-  return clean === "owner" || clean === "role_owner" || clean === "chu";
+  return clean === "owner" || clean === "role_owner" || clean === "chu" || clean === "admin";
+}
+
+/** Mã vai trò chuẩn của "Quản lý" (đã gộp Quản lý 1 + Quản lý 2). */
+export const ROLE_MANAGER_ID = "ROLE_MANAGER";
+/** Mã vai trò chuẩn của "Nhân viên" (đã gộp Thu ngân + Phục vụ). */
+export const ROLE_STAFF_ID = "ROLE_STAFF";
+export const ROLE_KITCHEN_ID = "ROLE_KITCHEN";
+/** Tên hiển thị của vai trò gộp Thu ngân/Phục vụ — đổi một chỗ này khi cần đổi tên. */
+export const STAFF_ROLE_LABEL = "Nhân viên";
+export const MANAGER_ROLE_LABEL = "Quản lý";
+
+const norm = (raw: string) => raw.trim().toLowerCase().replace(/[-\s]+/g, "_");
+
+/** Mọi mã cũ/biến thể của vai trò Quản lý. */
+const MANAGER_ROLE_ALIASES = new Set([
+  "manager", "role_manager", "manager_1", "manager_2", "role_manager_1", "role_manager_2",
+  "manager1", "manager2", "legacymanager", "legacy_manager",
+  "ql", "ql1", "ql2", "ql_1", "ql_2", "quan_ly", "quan_ly_1", "quan_ly_2",
+]);
+
+/** Mọi mã cũ/biến thể của vai trò Nhân viên (Thu ngân + Phục vụ + employee). */
+const STAFF_ROLE_ALIASES = new Set([
+  "role_staff", "staff", "employee", "role_employee", "cashier", "role_cashier",
+  "waiter", "role_waiter", "nhan_vien", "nv", "thu_ngan", "phuc_vu",
+]);
+
+/**
+ * Chuẩn hóa mã vai trò: mọi biến thể Quản lý → "ROLE_MANAGER"; mọi biến thể Thu ngân/Phục vụ/employee
+ * → "ROLE_STAFF". Vai trò khác (owner, ROLE_KITCHEN...) giữ nguyên (đã trim).
+ * Mọi bản ghi MỚI phải ghi mã đã chuẩn hóa.
+ */
+export function normalizeRoleId(raw?: string | null): string {
+  if (raw == null) return "";
+  const trimmed = String(raw).trim();
+  const clean = norm(trimmed);
+  if (MANAGER_ROLE_ALIASES.has(clean)) return ROLE_MANAGER_ID;
+  if (STAFF_ROLE_ALIASES.has(clean)) return ROLE_STAFF_ID;
+  return trimmed;
 }
 
 export function isManagerRole(roleId?: string): boolean {
   if (!roleId) return false;
-  const clean = roleId.toLowerCase();
-  return (
-    clean === "manager" ||
-    clean === "role_manager" ||
-    clean === "manager_1" ||
-    clean === "manager_2" ||
-    clean === "role_manager_1" ||
-    clean === "role_manager_2" ||
-    clean === "ql"
-  );
+  return normalizeRoleId(roleId) === ROLE_MANAGER_ID;
+}
+
+/** Vai trò Nhân viên (đã gộp Thu ngân + Phục vụ). */
+export function isStaffRole(roleId?: string): boolean {
+  if (!roleId) return false;
+  return normalizeRoleId(roleId) === ROLE_STAFF_ID;
 }
 
 export function canCallerManageUsers(caller: UserProfile | null): boolean {
@@ -69,8 +106,8 @@ export function canCallerResetPassword(caller: UserProfile, target: UserProfile,
 
   const callerIsManager = isManagerRole(caller.roleId);
   if (callerIsManager) {
-    // Quản lý không được đổi mật khẩu của chủ quán
-    return !isOwnerRole(target.roleId);
+    // Quản lý chỉ đặt lại mật khẩu cho Nhân viên / Bếp; không đụng tới Chủ quán hay Quản lý khác
+    return !isOwnerRole(target.roleId, target.isRootOwner) && !isManagerRole(target.roleId);
   }
 
   return false;
@@ -86,8 +123,8 @@ export function canCallerSetDisabled(caller: UserProfile, target: UserProfile, t
 
   const callerIsManager = isManagerRole(caller.roleId);
   if (callerIsManager) {
-    // Quản lý không được khóa chủ quán
-    return !isOwnerRole(target.roleId);
+    // Quản lý không được khóa Chủ quán hoặc Quản lý khác
+    return !isOwnerRole(target.roleId, target.isRootOwner) && !isManagerRole(target.roleId);
   }
 
   return false;
@@ -109,11 +146,9 @@ export function buildSyntheticEmail(username: string, storeCode: string): string
   return `${cleanUser}.${cleanStore}@tram.local`;
 }
 
-/** Vai trò Thu ngân (khớp database.rules.json: cashier / ROLE_CASHIER / employee). */
+/** @deprecated Thu ngân đã gộp vào Nhân viên — giữ tên cũ cho mã gọi cũ. */
 export function isCashierRole(roleId?: string): boolean {
-  if (!roleId) return false;
-  const clean = roleId.toLowerCase();
-  return clean === "cashier" || clean === "role_cashier" || clean === "employee";
+  return isStaffRole(roleId);
 }
 
 /**
@@ -124,4 +159,15 @@ export function isCashierRole(roleId?: string): boolean {
 export function canCallerImportCustomer(caller: UserProfile | null, inStoreIndex: boolean): boolean {
   if (!caller || !inStoreIndex || caller.isActive === false) return false;
   return isOwnerRole(caller.roleId, caller.isRootOwner) || isManagerRole(caller.roleId) || isCashierRole(caller.roleId);
+}
+
+/** UID Firebase Auth thật của nhân viên: trường `uid` trong hồ sơ, nếu không có thì khóa nút. */
+export function resolveStaffAuthUid(nodeKey: string, record?: { uid?: unknown } | null): string {
+  const fromRecord = record && typeof record.uid === "string" ? record.uid.trim() : "";
+  return fromRecord || nodeKey;
+}
+
+/** Tài khoản tự tạo khi đăng nhập bằng Chấm Công Trạm (không có mật khẩu POS). */
+export function isChamCongAccount(nodeKey: string, record?: { authProvider?: unknown } | null): boolean {
+  return (record && record.authProvider === "chamcong") || nodeKey.startsWith("cc_");
 }

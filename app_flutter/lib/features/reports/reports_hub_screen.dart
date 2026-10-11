@@ -196,7 +196,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
     return bills.where((b) {
       // 1. Lọc ngày
-      final dt = ReportDateUtils.getBillDateTime(b.closedAt, b.createdAt, b.status);
+      final dt = ReportDateUtils.billDateTime(b);
       if (!ReportDateUtils.isInRange(dt, start, end)) return false;
 
       // 2. Lọc ca

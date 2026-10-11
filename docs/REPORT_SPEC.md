@@ -119,13 +119,17 @@ Hệ thống phân tách chiết khấu thành 4 tầng rõ rệt:
   hoặc neo theo trường `b.shiftId == shift.id`.
 
 ### 3.4. Quy tắc lựa chọn trường thời gian xếp ngày (Date Sorting Field Priority)
-Khi lọc dữ liệu hóa đơn vào các khoảng ngày/kỳ báo cáo, thứ tự ưu tiên áp dụng bắt buộc:
-1. **Ưu tiên 1 (Số 1): `closedAt`**  
-   Áp dụng cho mọi hóa đơn đã thanh toán (`status == 'PAID'`) hoặc hoàn tiền (`status == 'REFUNDED'`). Doanh thu tài chính ghi nhận tại thời điểm giao dịch hoàn tất và thu tiền.
-2. **Ưu tiên 2: `createdAt`**  
-   Áp dụng cho các đơn đang mở / đang phục vụ (`status == 'OPEN'`) hoặc đơn hủy (`CANCELLED`) chưa kịp đóng.
-3. **Ưu tiên 3: `timestamp`**  
-   Chỉ dùng làm giá trị dự phòng (Fallback) khi dữ liệu lịch sử kế thừa cũ (`legacy`) không có trường `closedAt` hay `createdAt`.
+Khi lọc dữ liệu hóa đơn vào các khoảng ngày/kỳ báo cáo, thứ tự ưu tiên áp dụng bắt buộc theo trạng thái:
+1. **`PAID` / `REFUNDED`: `closedAt` → `createdAt` → `timestamp`.**  
+   Doanh thu tài chính ghi nhận tại thời điểm giao dịch hoàn tất và thu tiền.
+2. **`CANCELLED`: `cancelledAt` → `closedAt` → `timestamp` → `createdAt` (giá trị hợp lệ đầu tiên).**  
+   Đơn hủy thuộc về **NGÀY HỦY**, không phải ngày tạo (một đơn có thể mở trên bàn nhiều ngày rồi mới bị hủy). Đơn hủy không bao giờ tính vào doanh thu; mọi báo cáo kiểm toán/danh sách đều xếp theo ngày hủy. Hai ứng dụng (Flutter + Web) phải luôn ghi `cancelledAt` và `closedAt` (epoch ms) khi hủy.
+3. **`OPEN` / trạng thái khác: `createdAt` → `closedAt` → `timestamp`.**  
+   `timestamp` chỉ là giá trị dự phòng (legacy) khi thiếu các trường trên.
+
+**Món bị xóa (`deletedItems`)** theo ngày của hóa đơn chứa chúng: hóa đơn PAID theo `closedAt`, hóa đơn CANCELLED theo ngày hủy.
+
+**Giá trị đơn hủy** = `max(subTotal | totalAmount, tổng deletedItems.amount)`. Đơn hủy bằng "Xóa hết món" có `subTotal = 0` vì mọi món đã bị xóa trước khi hủy, nên giá trị thất thoát lấy theo tiền món đã xóa. "Giá trị đơn hủy" và "Tổng tiền xóa món" là hai dòng kiểm toán riêng biệt — **không được cộng chung** ở bất kỳ đâu.
 
 ---
 

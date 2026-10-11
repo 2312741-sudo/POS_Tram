@@ -1,16 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Search, KeyRound, ListChecks } from "lucide-react";
+import { Search, KeyRound, ListChecks, Download } from "lucide-react";
 import { ACTION_CATALOG, PERMISSION_CATALOG } from "@/lib/permission-catalog";
-import { ROLE_PERMISSIONS } from "@/lib/auth";
-
-const ROLE_COLUMNS: { id: string; label: string }[] = [
-  { id: "ROLE_OWNER", label: "Chủ" },
-  { id: "ROLE_MANAGER_1", label: "QL 1" },
-  { id: "ROLE_MANAGER_2", label: "QL 2" },
-  { id: "ROLE_CASHIER", label: "Bán hàng" },
-  { id: "ROLE_KITCHEN", label: "Bếp" },
-];
+import { ROLE_PERMISSIONS, hasPermission, useAuth } from "@/lib/auth";
+import { ROLE_COLUMNS, roleGrants, filterActions, filterPermissions, exportActionCodesExcel } from "@/lib/action-codes-export";
 
 const th = { padding: "10px 12px", textAlign: "left", fontSize: "12px", color: "var(--subtext)" } as const;
 const td = { padding: "9px 12px", fontSize: "13px", borderTop: "1px solid var(--border)" } as const;
@@ -20,17 +13,20 @@ export default function ActionCodesPage() {
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
 
-  const permissions = useMemo(
-    () =>
-      PERMISSION_CATALOG.filter(
-        (p) => !needle || `${p.key} ${p.label} ${p.category} ${p.description}`.toLowerCase().includes(needle)
-      ),
-    [needle]
-  );
-  const actions = useMemo(
-    () => ACTION_CATALOG.filter((a) => !needle || `${a.code} ${a.label} ${a.group}`.toLowerCase().includes(needle)),
-    [needle]
-  );
+  const { user, storeCode } = useAuth();
+  const canExport = hasPermission(user, "EXPORT_REPORTS");
+  const permissions = useMemo(() => filterPermissions(PERMISSION_CATALOG, q), [q]);
+  const actions = useMemo(() => filterActions(ACTION_CATALOG, q), [q]);
+  const handleExport = () =>
+    exportActionCodesExcel({
+      actions,
+      permissions,
+      allPermissions: PERMISSION_CATALOG,
+      presets: ROLE_PERMISSIONS,
+      filterText: needle,
+      storeName: user?.storeName || storeCode,
+      userName: user?.fullName || user?.username,
+    });
 
   const tabBtn = (id: "PERMISSION" | "ACTION", label: string, icon: React.ReactNode) => (
     <button
@@ -64,6 +60,14 @@ export default function ActionCodesPage() {
             style={{ border: "none", background: "transparent", outline: "none", fontSize: 13, width: "100%" }}
           />
         </div>
+        {canExport && (
+          <button
+            onClick={handleExport}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}
+          >
+            <Download size={15} /> Xuất Excel
+          </button>
+        )}
       </div>
 
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflowX: "auto" }}>
@@ -75,7 +79,7 @@ export default function ActionCodesPage() {
                 <th style={th}>Tên</th>
                 <th style={th}>Nhóm</th>
                 {ROLE_COLUMNS.map((r) => (
-                  <th key={r.id} style={{ ...th, textAlign: "center" }}>{r.label}</th>
+                  <th key={r.label} style={{ ...th, textAlign: "center" }}>{r.label}</th>
                 ))}
               </tr>
             </thead>
@@ -89,8 +93,8 @@ export default function ActionCodesPage() {
                   </td>
                   <td style={{ ...td, color: "var(--subtext)" }}>{p.category}</td>
                   {ROLE_COLUMNS.map((r) => (
-                    <td key={r.id} style={{ ...td, textAlign: "center" }}>
-                      {r.id === "ROLE_OWNER" || (ROLE_PERMISSIONS[r.id] || []).includes(p.key) ? "✓" : ""}
+                    <td key={r.label} style={{ ...td, textAlign: "center" }}>
+                      {roleGrants(ROLE_PERMISSIONS, r.ids, p.key) ? "✓" : ""}
                     </td>
                   ))}
                 </tr>

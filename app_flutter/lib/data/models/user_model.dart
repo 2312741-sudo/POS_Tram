@@ -201,8 +201,12 @@ class UserModel {
     bool checkSingle(String key) {
       if (customPermissions.contains(key)) return true;
       if (roles != null && roles.isNotEmpty) {
-        final matchedRole = roles.where((r) => r.id == roleId).firstOrNull;
-        if (matchedRole != null && matchedRole.hasPermission(key)) return true;
+        // Vai trò lưu trong RTDB có thể mang mã cũ (ROLE_MANAGER_1, ROLE_CASHIER...): so khớp theo mã đã
+        // chuẩn hóa và lấy HỢP quyền của mọi bản ghi cùng vai trò gộp để không ai mất quyền.
+        final myRole = normalizeRoleId(roleId);
+        for (final r in roles) {
+          if ((r.id == roleId || normalizeRoleId(r.id) == myRole) && r.hasPermission(key)) return true;
+        }
       }
       return role.hasDefaultPermission(key);
     }

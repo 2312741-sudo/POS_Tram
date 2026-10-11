@@ -1,3 +1,4 @@
+import '../../core/domain/customer_search.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
@@ -78,12 +79,22 @@ class ReportRepository {
         Map<dynamic, dynamic>.from(event.snapshot.value as Map),
         _currentStoreCode,
       );
-    }).handleError((_) => StoreInfoModel(
+    }).asyncMap(_withChainLoyalty).handleError((_) => StoreInfoModel(
       storeCode: _currentStoreCode,
       storeName: _currentStoreCode == 'TRAM02'
           ? 'POS Trạm - Chi nhánh 02 (Sài Gòn)'
           : (_currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - $_currentStoreCode'),
     ));
+  }
+
+  /// Cấu hình điểm toàn chuỗi (loyalty_config) ưu tiên hơn cấu hình riêng của chi nhánh; không đọc được → giữ nguyên.
+  Future<StoreInfoModel> _withChainLoyalty(StoreInfoModel info) async {
+    try {
+      final snap = await storeInfoRef.root.child('loyalty_config').get().timeout(const Duration(seconds: 2));
+      return info.withChainLoyalty(snap.value);
+    } catch (_) {
+      return info;
+    }
   }
 
   Future<StoreInfoModel> getStoreInfo() async {
@@ -102,7 +113,7 @@ class ReportRepository {
         map['defaultVatRate'] = 0.0;
         storeInfoRef.update({'defaultVatRate': 0.0}).catchError((_) {});
       }
-      return StoreInfoModel.fromMap(map, _currentStoreCode);
+      return await _withChainLoyalty(StoreInfoModel.fromMap(map, _currentStoreCode));
     } catch (_) {
       return StoreInfoModel(
         storeCode: _currentStoreCode,
@@ -635,6 +646,26 @@ class ReportRepository {
     } catch (_) {}
   }
 
+  /// Khách của chi nhánh (RTDB, điểm là bản sao số dư dùng chung) cho ô "Tìm khách" - nhẹ hơn [getAllCustomers].
+  Future<List<CustomerCandidate>> getBranchCandidates() async {
+    try {
+      final snap = await customersRef.get().timeout(const Duration(seconds: 4));
+      if (snap.value is! Map) return [];
+      final out = <CustomerCandidate>[];
+      for (final e in Map<dynamic, dynamic>.from(snap.value as Map).entries) {
+        if (e.value is! Map) continue;
+        final m = Map<dynamic, dynamic>.from(e.value as Map);
+        final c = KmtCustomerModel.fromMap(m, e.key.toString());
+        int t(Object? v) => v is num ? v.toInt() : 0;
+        final last = [t(m['ngay_cap_nhat']), t(m['lastVisitAt']), c.createdAt ?? 0].reduce((a, b) => a > b ? a : b);
+        out.add(CustomerCandidate(id: c.id, name: c.fullName, phone: c.phone, points: c.currentPoints, totalPoints: c.totalPoints, lastVisitAt: last));
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Lấy toàn bộ danh sách khách hàng để xem báo cáo CRM và xuất file Excel
   Future<List<KmtCustomerModel>> getAllCustomers() async {
     final Map<String, KmtCustomerModel> map = {};
@@ -702,7 +733,7 @@ class ReportRepository {
       final deduped = ReportCalculator.deduplicateBills(list);
       if (startDate != null && endDate != null) {
         return deduped.where((b) {
-          final dt = ReportDateUtils.getBillDateTime(b.closedAt, b.createdAt, b.status);
+          final dt = ReportDateUtils.billDateTime(b);
           return ReportDateUtils.isInRange(dt, startDate, endDate);
         }).toList();
       }

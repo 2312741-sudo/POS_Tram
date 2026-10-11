@@ -2,8 +2,8 @@
 
 const DEMO_ACCOUNTS = [
   { username: "chu_demo", fullName: "Chủ quán (mẫu)", roleId: "ROLE_OWNER", department: "Chủ" },
-  { username: "quanly_demo", fullName: "Quản lý (mẫu)", roleId: "ROLE_MANAGER_1", department: "Quản lý" },
-  { username: "banhang_demo", fullName: "Nhân viên bán hàng (mẫu)", roleId: "ROLE_CASHIER", department: "Nhân viên bán hàng" },
+  { username: "quanly_demo", fullName: "Quản lý (mẫu)", roleId: "ROLE_MANAGER", department: "Quản lý" },
+  { username: "banhang_demo", fullName: "Nhân viên bán hàng (mẫu)", roleId: "ROLE_STAFF", department: "Nhân viên bán hàng" },
   { username: "bep_demo", fullName: "Nhân viên bếp (mẫu)", roleId: "ROLE_KITCHEN", department: "Nhân viên bếp" },
 ];
 

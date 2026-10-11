@@ -105,6 +105,53 @@ class CartHeaderBar extends StatelessWidget {
   }
 }
 
+// ==================== TÍCH ĐIỂM THEO GIÁ TRỊ HÓA ĐƠN ====================
+/// Dòng xem trước: "Tích điểm: +N điểm", "Điểm: X → Y sau thanh toán", hạng. Tỷ lệ 0/chưa đặt → gợi ý cấu hình.
+class LoyaltyEarnPreview extends StatelessWidget {
+  final KmtCustomerModel customer;
+  final int pointsUsed;
+  final int earnPoints;
+  final double earnRate;
+  final List<LoyaltyTier> tiers;
+  final VoidCallback? onConfigure;
+
+  /// Đ mỗi điểm (để báo hóa đơn tối thiểu có điểm khi +0)
+  final int redeemRate;
+
+  const LoyaltyEarnPreview({
+    super.key,
+    required this.customer,
+    required this.pointsUsed,
+    required this.earnPoints,
+    required this.earnRate,
+    required this.tiers,
+    this.onConfigure,
+    this.redeemRate = 1000,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final after = customer.currentPoints - pointsUsed + earnPoints;
+    final tier = LoyaltyTier.nameFor(customer.totalPoints + earnPoints, tiers);
+    final style = GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600);
+    if (earnRate <= 0) {
+      return Row(children: [
+        Expanded(child: Text('Chưa cấu hình tỷ lệ tích điểm', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk, fontWeight: FontWeight.w600))),
+        if (onConfigure != null) TextButton(onPressed: onConfigure, child: const Text('Cài đặt')),
+      ]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Tích điểm: +$earnPoints điểm', style: style.copyWith(fontWeight: FontWeight.w800)),
+        if (earnPoints == 0)
+          Text('Hóa đơn chưa đủ giá trị để có điểm (từ ${(redeemRate * 50 / earnRate).ceil()}đ được 1 điểm)', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+        Text('Điểm: ${customer.currentPoints} → $after sau thanh toán • Hạng: $tier', style: style),
+      ],
+    );
+  }
+}
+
 // ==================== CUSTOMER (CRM) ====================
 class CartCustomerBar extends StatelessWidget {
   final KmtCustomerModel? customer;
@@ -112,6 +159,11 @@ class CartCustomerBar extends StatelessWidget {
   final VoidCallback onLookup;
   final VoidCallback onUsePoints;
   final VoidCallback onClear;
+  final int earnPoints;
+  final double earnRate;
+  final List<LoyaltyTier> tiers;
+  final VoidCallback? onConfigureRate;
+  final int redeemRate;
 
   const CartCustomerBar({
     super.key,
@@ -120,6 +172,11 @@ class CartCustomerBar extends StatelessWidget {
     required this.onLookup,
     required this.onUsePoints,
     required this.onClear,
+    this.earnPoints = 0,
+    this.earnRate = 1,
+    this.tiers = const [],
+    this.onConfigureRate,
+    this.redeemRate = 1000,
   });
 
   @override
@@ -159,6 +216,7 @@ class CartCustomerBar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
                           ),
+                          LoyaltyEarnPreview(customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
                         ],
                       ),
               ),

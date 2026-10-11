@@ -122,6 +122,7 @@ class StoreInfoModel {
     bool? autoPrintBill,
     int? pointRedeemRate,
     double? pointEarnRate,
+    List<LoyaltyTier>? loyaltyTiers,
   }) {
     return StoreInfoModel(
       storeCode: storeCode ?? this.storeCode,
@@ -142,10 +143,24 @@ class StoreInfoModel {
       autoPrintBill: autoPrintBill ?? this.autoPrintBill,
       pointRedeemRate: pointRedeemRate ?? this.pointRedeemRate,
       pointEarnRate: pointEarnRate ?? this.pointEarnRate,
-      loyaltyTiers: loyaltyTiers,
+      loyaltyTiers: loyaltyTiers ?? this.loyaltyTiers,
       sharedLoyaltyEnabled: sharedLoyaltyEnabled,
       chamCongStoreId: chamCongStoreId,
       chamCongStoreName: chamCongStoreName,
+    );
+  }
+
+  /// Cấu hình điểm TOÀN CHUỖI (RTDB loyalty_config, do Chủ đặt) ghi đè cấu hình riêng của chi nhánh;
+  /// trường nào chuỗi chưa đặt thì giữ giá trị của chi nhánh (fallback). Mốc hạng không có giá trị mặc định.
+  StoreInfoModel withChainLoyalty(Object? chain) {
+    if (chain is! Map) return this;
+    final earn = chain['pointEarnRate'];
+    final redeem = chain['pointRedeemRate'];
+    final tiersRaw = chain['loyaltyTiers'];
+    return copyWith(
+      pointEarnRate: earn is num ? earn.toDouble() : null,
+      pointRedeemRate: redeem is num && redeem > 0 ? redeem.toInt() : null,
+      loyaltyTiers: tiersRaw != null ? LoyaltyTier.parseList(tiersRaw) : null,
     );
   }
 }

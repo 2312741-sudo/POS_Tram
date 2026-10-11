@@ -165,17 +165,17 @@ void main() {
       expect(UserRole.fromString('Chủ_Cửa_Hàng'), equals(UserRole.owner));
       expect(UserRole.fromString('admin'), equals(UserRole.owner));
 
-      expect(UserRole.fromString('manager_1'), equals(UserRole.manager1));
-      expect(UserRole.fromString('QL1'), equals(UserRole.manager1));
-      expect(UserRole.fromString('quan_ly_1'), equals(UserRole.manager1));
+      expect(UserRole.fromString('manager_1'), equals(UserRole.manager));
+      expect(UserRole.fromString('QL1'), equals(UserRole.manager));
+      expect(UserRole.fromString('quan_ly_1'), equals(UserRole.manager));
 
-      expect(UserRole.fromString('manager_2'), equals(UserRole.manager2));
-      expect(UserRole.fromString('ql2'), equals(UserRole.manager2));
+      expect(UserRole.fromString('manager_2'), equals(UserRole.manager));
+      expect(UserRole.fromString('ql2'), equals(UserRole.manager));
 
-      expect(UserRole.fromString('staff'), equals(UserRole.employee));
-      expect(UserRole.fromString('nhan_vien'), equals(UserRole.employee));
-      expect(UserRole.fromString(''), equals(UserRole.employee));
-      expect(UserRole.fromString(null), equals(UserRole.employee));
+      expect(UserRole.fromString('staff'), equals(UserRole.staff));
+      expect(UserRole.fromString('nhan_vien'), equals(UserRole.staff));
+      expect(UserRole.fromString(''), equals(UserRole.staff));
+      expect(UserRole.fromString(null), equals(UserRole.staff));
     });
 
     test('Owner Sovereign Rule', () {

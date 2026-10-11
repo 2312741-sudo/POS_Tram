@@ -187,8 +187,18 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     }
   }
 
+  /// Chặn thao tác ca/két khi thiếu quyền (MANAGE_CASH_SHIFT: mở/kết ca; ADJUST_CASH_SHIFT: thu/chi phát sinh).
+  bool _requirePermission(String permission, String action) {
+    if (_auth.can(permission)) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Bạn không có quyền $action ($permission).'), backgroundColor: AppColors.danger),
+    );
+    return false;
+  }
+
   Future<void> _openShift() async {
     if (_isSubmitting) return;
+    if (!_requirePermission(AppPermissions.manageCashShift, 'mở ca')) return;
     final initial = int.tryParse(_initialCashCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     final now = DateTime.now();
     final shiftCode = 'CA-${DateFormat('yyMMdd-HHmm').format(now)}';
@@ -236,6 +246,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
 
   Future<void> _addAdjustment(bool isCashIn) async {
     if (_currentShift == null || _isSubmitting) return;
+    if (!_requirePermission(AppPermissions.adjustCashShift, 'thu/chi két tiền')) return;
     final amount = int.tryParse(_adjustAmountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     final reason = _adjustReasonCtrl.text.trim();
     if (amount <= 0 || reason.isEmpty) {
@@ -275,6 +286,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
 
   Future<void> _closeShift() async {
     if (_currentShift == null || _isSubmitting) return;
+    if (!_requirePermission(AppPermissions.manageCashShift, 'kết ca / chốt két')) return;
     final shiftToClose = _currentShift!;
     final actual = int.tryParse(_actualCashCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? shiftToClose.expectedCash;
     final notes = _notesCtrl.text.trim();

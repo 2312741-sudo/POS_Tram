@@ -172,7 +172,7 @@ class ExportService {
             logSheet.appendRow([
               TextCellValue(b.billCode),
               TextCellValue(b.tableName),
-              TextCellValue(DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt))),
+              TextCellValue(DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs))),
               TextCellValue(b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername),
               TextCellValue('PAY_BILL'),
               TextCellValue('Thanh toán ${b.finalAmount}đ (${b.paymentMethod})'),

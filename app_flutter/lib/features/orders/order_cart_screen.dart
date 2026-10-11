@@ -1,4 +1,8 @@
 // lib/features/orders/order_cart_screen.dart
+import '../../core/domain/order_integrity.dart';
+import '../crm/customer_management_screen.dart';
+import '../../core/domain/customer_search.dart';
+import 'widgets/customer_picker_sheet.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
@@ -17,7 +21,7 @@ import '../../data/models/app_models.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../data/services/campaign_service.dart';
-import '../../data/services/pooled_loyalty_service.dart';
+import '../../data/services/loyalty_service.dart';
 import '../promotions/voucher_check.dart';
 import 'widgets/campaign_pricing.dart';
 import '../../core/domain/deleted_items.dart';
@@ -63,6 +67,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // KiotViet CRM Customer Loyalty
   KmtCustomerModel? _selectedCustomer;
+  StreamSubscription<String>? _earnFailSub;
   int _pointsUsed = 0;
   late int _guestCount;
 
@@ -71,6 +76,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   @override
   void dispose() {
+    _earnFailSub?.cancel();
     for (final sub in _subscriptions) {
       sub.cancel();
     }
@@ -80,6 +86,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   @override
   void initState() {
     super.initState();
+    _earnFailSub = LoyaltyEarnQueue.failures.stream.listen((msg) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.orange.shade800));
+    });
+    // Tích điểm còn tồn từ các hóa đơn trước (mất mạng / hóa đơn chưa đồng bộ)
+    unawaited(LoyaltyEarnQueue.retryAll(LoyaltyService(), onlyStoreCode: _fb.currentStoreCode));
     _isShiftOpen = _fb.activeShiftCache != null && _fb.activeShiftCache!.isOpen;
     widget.table.ensureCodes();
     _cart = List.from(widget.initialProducts.isNotEmpty ? widget.initialProducts : widget.table.currentItems);
@@ -198,6 +209,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   int get _finalTotal => _afterDiscount + _vatAmount;
 
+  /// Điểm sẽ được tích khi thanh toán: tính từ số tiền khách thực trả, theo cấu hình chuỗi/chi nhánh
+  /// (máy chủ tính lại từ hóa đơn PAID - cùng công thức)
+  double get _earnRate => _storeInfo?.pointEarnRate ?? 1.0;
+  int get _earnPreview => LoyaltyMath.pointsToAward(billAmount: _finalTotal, earnRatePercent: _earnRate, redeemRate: _pointRedeemRate);
+
+  void _openLoyaltyConfig() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CustomerManagementScreen()));
+  }
+
   int get _cartCount => _cart.fold(0, (s, p) => s + p.quantity);
 
   // ==================== CART ACTIONS ====================
@@ -231,6 +251,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       );
     }
     return approval != null;
+  }
+
+  /// Xóa/giảm phần món ĐÃ LƯU trên bàn cần quyền DELETE_ITEM (món mới thêm trong giỏ, chưa lưu, thì không cần).
+  bool _ensureCanDeleteSaved(int savedPortion) {
+    if (savedPortion <= 0 || _auth.can(AppPermissions.deleteItem)) return true;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền xóa món khỏi đơn (DELETE_ITEM).'), backgroundColor: AppColors.danger),
+      );
+    }
+    return false;
   }
 
   /// Ghi nhận 1 lần xóa món đã lưu: entry vào bàn (deletedItemsJson), lịch sử thao tác
@@ -283,6 +314,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (!await _ensureCanCancelKitchenItem(item) || !mounted) return;
 
     final saved = _savedPortion(item, 1);
+    if (!_ensureCanDeleteSaved(saved)) return;
     String? reason;
     if (saved > 0) {
       reason = await showDeleteItemReasonDialog(
@@ -404,6 +436,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     // Phần đã lưu trên bàn → bắt buộc chọn lý do.
     final saved = _savedPortion(item, item.quantity);
+    if (!_ensureCanDeleteSaved(saved)) return;
     String? reason;
     if (saved > 0) {
       reason = await showDeleteItemReasonDialog(
@@ -1001,186 +1034,59 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   // ==================== KIOTVIET CRM CUSTOMER DIALOGS ====================
-  void _showCustomerLookupDialog() {
-    final phoneCtrl = TextEditingController();
-    bool isSearching = false;
-    KmtCustomerModel? foundCustomer;
-    bool searched = false;
-
-    showDialog(
+  Future<void> _showCustomerLookupDialog() async {
+    final tiers = _storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults;
+    final store = _fb.currentStoreCode;
+    final picked = await showModalBottomSheet<KmtCustomerModel>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDlgState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text('Khách Hàng Tích Điểm (KiotViet)', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
-            content: SizedBox(
-              width: 360,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: 'Số điện thoại',
-                            prefixIcon: Icon(Icons.phone),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
-                        onPressed: isSearching
-                            ? null
-                            : () async {
-                                final phone = phoneCtrl.text.trim();
-                                if (phone.isEmpty) return;
-                                setDlgState(() => isSearching = true);
-                                final c = await _fb.lookupCustomer(phone);
-                                setDlgState(() {
-                                  foundCustomer = c;
-                                  isSearching = false;
-                                  searched = true;
-                                });
-                              },
-                        child: isSearching
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Tìm'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (searched && foundCustomer != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: context.bg(Colors.green.shade50),
-                        border: Border.all(color: context.line(Colors.green.shade200)),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.verified, color: Colors.green, size: 20),
-                              const SizedBox(width: 6),
-                              Text(foundCustomer!.fullName, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text('SĐT: ${foundCustomer!.phone}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                          Text('Điểm tích lũy: ${foundCustomer!.currentPoints} điểm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade900))),
-                          Text('Xếp hạng: ${foundCustomer!.tierName(_storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                        ],
-                      ),
-                    ),
-                  ] else if (searched && foundCustomer == null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: context.bg(Colors.amber.shade50),
-                        border: Border.all(color: context.line(Colors.amber.shade200)),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          const Text('Chưa có thông tin khách này trong hệ thống Trạm.'),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.person_add, size: 16),
-                            label: const Text('Đăng Ký Khách Mới'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800),
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              _showRegisterCustomerDialog(phoneCtrl.text.trim());
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
-              if (foundCustomer != null)
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedCustomer = foundCustomer;
-                      _pointsUsed = 0;
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Chọn Khách Này'),
-                ),
-            ],
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CustomerPickerSheet(
+        tiers: tiers,
+        showFullPhone: _auth.can(AppPermissions.viewCustomers) || _auth.can(AppPermissions.manageCustomers),
+        loadCandidates: _fb.getBranchCandidates,
+        lookupByPhone: (phone) async {
+          final c = await _fb.lookupCustomer(phone);
+          final m = await LoyaltyService().lookupMember(storeCode: store, phone: phone);
+          if (c == null && !m.found) return null;
+          return CustomerCandidate(
+            id: c?.id ?? '',
+            name: c?.fullName ?? m.name,
+            phone: c?.phone ?? m.phone,
+            points: m.found ? m.points : (c?.currentPoints ?? 0),
+            totalPoints: m.found ? m.totalPoints : (c?.totalPoints ?? 0),
           );
+        },
+        createCustomer: (name, phone) async {
+          final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: name, phone: phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+          await _fb.saveCustomer(c); // 0 điểm; nếu SĐT đã có điểm chung, máy chủ gắn vào bản ghi đó
+          return c;
         },
       ),
     );
-  }
-
-  void _showRegisterCustomerDialog(String phone) {
-    final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: phone);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Đăng Ký Thành Viên Trạm', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Họ và tên khách *', prefixIcon: Icon(Icons.person)),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Số điện thoại *', prefixIcon: Icon(Icons.phone)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final p = phoneCtrl.text.trim();
-              if (name.isEmpty || p.isEmpty) return;
-              final newCust = KmtCustomerModel(
-                id: 'CUST_${DateTime.now().millisecondsSinceEpoch}',
-                fullName: name,
-                phone: p,
-                currentPoints: 0,
-                createdAt: DateTime.now().millisecondsSinceEpoch,
-              );
-              await _fb.saveCustomer(newCust);
-              setState(() {
-                _selectedCustomer = newCust;
-                _pointsUsed = 0;
-              });
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Đã tạo thành viên: $name!')),
-                );
-              }
-            },
-            child: const Text('Lưu & Chọn'),
-          ),
-        ],
-      ),
-    );
+    if (picked == null || !mounted) return;
+    if (picked.id.isEmpty) {
+      // Khách chỉ có ở chi nhánh khác: tạo hồ sơ tại chi nhánh này (điểm lấy từ bản ghi dùng chung)
+      final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: picked.fullName, phone: picked.phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+      await _fb.saveCustomer(c);
+            setState(() {
+        _selectedCustomer = KmtCustomerModel(id: c.id, fullName: c.fullName, phone: c.phone, currentPoints: picked.currentPoints, totalPoints: picked.totalPoints, createdAt: c.createdAt);
+        _pointsUsed = 0;
+      });
+      return;
+    }
+    // Điểm DÙNG CHUNG toàn chuỗi (gồm điểm tích ở chi nhánh khác) lấy từ máy chủ
+    var m = await LoyaltyService().lookupMember(storeCode: store, customerId: picked.id);
+    if (!m.found && picked.phone.isNotEmpty) m = await LoyaltyService().lookupMember(storeCode: store, phone: picked.phone);
+    if (m.found) {
+      picked.currentPoints = m.points;
+      if (m.totalPoints > picked.totalPoints) picked.totalPoints = m.totalPoints;
+    }
+    if (!mounted) return;
+    setState(() {
+      _selectedCustomer = picked;
+      _pointsUsed = 0;
+    });
   }
 
   // ==================== ITEM DISCOUNT & MANAGER APPROVAL ====================
@@ -1912,20 +1818,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   Future<void> _showUsePointsDialog() async {
     if (_selectedCustomer == null) return;
-    // Điểm dùng chung: cộng thêm điểm của khách (cùng SĐT) ở các chi nhánh khác; tra qua Cloud Function
-    int pooledExtra = 0;
-    if (_storeInfo?.sharedLoyaltyEnabled == true) {
-      try {
-        pooledExtra = await PooledLoyaltyService.othersPoints(
-          storeCode: _storeInfo!.storeCode,
-          customerId: _selectedCustomer!.id,
-        );
-      } catch (_) {
-        pooledExtra = 0; // không tra được → chỉ dùng điểm tại chi nhánh
-      }
-      if (!mounted) return;
+    if (!_auth.can(AppPermissions.redeemPoints)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền đổi điểm tích lũy (REDEEM_POINTS).'), backgroundColor: AppColors.danger),
+      );
+      return;
     }
-    final totalAvailable = _selectedCustomer!.currentPoints + pooledExtra;
+    // Điểm DÙNG CHUNG toàn chuỗi: số dư thật nằm ở máy chủ (gộp mọi chi nhánh); không tra được → dùng bản sao tại chi nhánh
+    final member = await LoyaltyService().lookupMember(storeCode: _fb.currentStoreCode, customerId: _selectedCustomer!.id);
+    if (!mounted) return;
+    final totalAvailable = member.found ? member.points : _selectedCustomer!.currentPoints;
     if (totalAvailable <= 0) return;
     final availableAmount = _subTotal - _itemDiscountTotal - _voucherDiscountTotal;
     final maxPointsPossible = availableAmount > 0 ? (availableAmount ~/ _pointRedeemRate) : 0;
@@ -1941,7 +1843,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Khách: ${_selectedCustomer!.fullName} (Có: ${_selectedCustomer!.currentPoints} điểm${pooledExtra > 0 ? ' + $pooledExtra điểm ở chi nhánh khác' : ''})', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('Khách: ${_selectedCustomer!.fullName} (Có: $totalAvailable điểm dùng chung toàn chuỗi)', style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text('Quy đổi: 1 điểm = ${FormatUtils.vnd(_pointRedeemRate)} trừ vào hóa đơn', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
             const SizedBox(height: 12),
@@ -2562,6 +2464,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ? 'Khách hàng: ${_selectedCustomer!.fullName} (${_selectedCustomer!.phone})'
                           : null,
                     ),
+                    if (_selectedCustomer != null) ...[
+                      const SizedBox(height: 8),
+                      LoyaltyEarnPreview(
+                        customer: _selectedCustomer!,
+                        pointsUsed: _pointsUsed,
+                        earnPoints: _earnPreview,
+                        earnRate: _earnRate,
+                        redeemRate: _pointRedeemRate,
+                        tiers: _storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults,
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Payment Method Tabs (CASH, VIETQR, SPLIT)
@@ -3215,6 +3128,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 final customerBar = CartCustomerBar(
                   customer: _selectedCustomer,
                   pointsUsed: _pointsUsed,
+                  earnPoints: _earnPreview,
+                  earnRate: _earnRate,
+                  redeemRate: _pointRedeemRate,
+                  tiers: _storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults,
+                  onConfigureRate: _auth.can(AppPermissions.manageCustomers) ? _openLoyaltyConfig : null,
                   onLookup: _showCustomerLookupDialog,
                   onUsePoints: _showUsePointsDialog,
                   onClear: () => setState(() {

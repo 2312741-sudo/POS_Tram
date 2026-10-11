@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth, canAccessRoute } from "@/lib/auth";
+import { isOwnerRoleId, normalizeRoleId, ROLE_MANAGER, ROLE_KITCHEN, MANAGER_ROLE_LABEL, STAFF_ROLE_LABEL, KITCHEN_ROLE_LABEL } from "@/lib/roles";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -81,13 +82,12 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const getRoleLabel = () => {
     if (!user) return "Nhân viên";
-    if (user.isRootOwner || (user.roleId || user.role || "").toUpperCase().includes("OWNER")) {
+    if (user.isRootOwner || isOwnerRoleId(user.roleId || user.role)) {
       return "👑 CHỦ QUÁN";
     }
-    const r = (user.roleId || user.role || "").toUpperCase();
-    if (r.includes("MANAGER_1")) return "⭐ QUẢN LÝ 1";
-    if (r.includes("MANAGER_2") || r.includes("MANAGER")) return "⭐ QUẢN LÝ 2";
-    return "👤 NHÂN VIÊN";
+    const r = normalizeRoleId(user.roleId || user.role);
+    if (r === ROLE_MANAGER) return `⭐ ${MANAGER_ROLE_LABEL.toUpperCase()}`;
+    return `👤 ${(r === ROLE_KITCHEN ? KITCHEN_ROLE_LABEL : STAFF_ROLE_LABEL).toUpperCase()}`;
   };
 
   // Lọc danh mục hiển thị theo quyền người dùng (RBAC)

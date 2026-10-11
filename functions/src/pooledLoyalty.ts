@@ -1,5 +1,8 @@
 /**
- * Logic thuần cho điểm DÙNG CHUNG toàn hệ thống (Chủ quán đã xác nhận storeInfo.sharedLoyalty.enabled).
+ * @deprecated Thay bằng bản ghi điểm dùng chung duy nhất loyalty_members (xem sharedLoyalty.ts). Chỉ còn normalizePhone/planPull
+ * cho test cũ; pullPooledPoints đã thành stub không ghi dữ liệu.
+ *
+ * (Mô tả cũ) Logic thuần cho điểm DÙNG CHUNG toàn hệ thống (Chủ quán đã xác nhận storeInfo.sharedLoyalty.enabled).
  *
  * POS chỉ đổi điểm trên node khách của CHÍNH chi nhánh (rules). Khi điểm tại chi nhánh không đủ,
  * callable `pullPooledPoints` CHUYỂN phần thiếu từ các chi nhánh khác (cùng số điện thoại) về node khách

@@ -9,6 +9,9 @@ import { generateBillCode } from "./bill-code";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT, buildOrderItemsPayload, prePrintPayload } from "./table-status";
 import { errorMessage } from "./errors";
+import type { AppliedDiscount } from "./pricing-engine";
+import { PromotionLimitError, reserveAllPromotions, rollbackAllPromotions, type PromotionReservation } from "./promotion-commit";
+import { copyWholeMenu } from "./menu-copy-run";
 import {
   appendDeletedItemsJson,
   billDeletionFields,
@@ -320,6 +323,10 @@ interface DashboardContextType {
       paymentMethod?: "CASH" | "TRANSFER";
       staffName?: string;
       discountAmount?: number;
+      /** Khuyến mãi / voucher nhân viên đã chọn (ghi vào bill.discounts, đổi mã + cập nhật bộ đếm khi thanh toán) */
+      promotions?: AppliedDiscount[];
+      /** Khách hàng của hóa đơn (tính lượt dùng theo khách của chương trình) */
+      customerId?: string | null;
     }
   ) => Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }>;
   saveTable: (
@@ -776,8 +783,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             nodeKey: id,
             username: uName,
             fullName: u.fullName || u.name || uName,
-            role: u.roleId || u.role || "ROLE_WAITER",
-            roleId: u.roleId || u.role || "ROLE_WAITER",
+            role: u.roleId || u.role || "ROLE_STAFF",
+            roleId: u.roleId || u.role || "ROLE_STAFF",
             phone: u.phone || "",
             password: u.password || "",
             isActive: u.isActive !== false,
@@ -1221,18 +1228,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       await set(ref(db, `stores/${cleanCode}/zones`), defaultZones);
       await set(ref(db, `stores/${cleanCode}/tables`), defaultTablesMap);
 
-      // Copy menu and categories if requested
+      // Sao chép thực đơn từ chi nhánh khác (cùng thư viện với màn Thực đơn → Sao chép thực đơn)
       if (copyMenuFrom) {
-        const sourceCatRef = ref(db, `stores/${copyMenuFrom}/categories`);
-        const sourceProdRef = ref(db, `stores/${copyMenuFrom}/products`);
-        const [catSnap, prodSnap] = await Promise.all([get(sourceCatRef), get(sourceProdRef)]);
-
-        if (catSnap.exists()) {
-          await set(ref(db, `stores/${cleanCode}/categories`), catSnap.val());
-        }
-
-        if (prodSnap.exists()) {
-          await set(ref(db, `stores/${cleanCode}/products`), prodSnap.val());
+        const copied = await copyWholeMenu(db, copyMenuFrom.trim().toUpperCase(), cleanCode, { username: "admin", role: "MANAGER" });
+        if (!copied.ok) {
+          return { success: false, error: `Đã tạo chi nhánh nhưng sao chép thực đơn lỗi: ${copied.error}` };
         }
       }
 
@@ -1407,8 +1407,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         paymentMethod?: "CASH" | "TRANSFER";
         staffName?: string;
         discountAmount?: number;
+        promotions?: AppliedDiscount[];
+        customerId?: string | null;
       }
     ): Promise<{ success: boolean; billId?: string; billCode?: string; error?: string }> => {
+      let reservations: PromotionReservation[] = [];
+      let reservedStore = "";
       try {
         const targetStoreCode = table.storeCode || resolveWriteStoreCode(currentStoreCode);
         const targetStore = stores.find((s) => s.storeCode === targetStoreCode) || currentStore;
@@ -1422,7 +1426,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         }
 
         const { subTotal, itemDiscounts } = summarizeOrderLines(items);
-        const billDiscounts = Math.max(0, Number(options?.discountAmount || 0));
+        const promotions = (options?.promotions || []).filter((d) => Number(d.amount) > 0);
+        const promoTotal = promotions.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+        const billDiscounts = Math.max(0, Number(options?.discountAmount || 0)) + promoTotal;
         const totalDiscount = Math.min(subTotal, itemDiscounts + billDiscounts);
         const finalAmount = Math.max(0, subTotal - totalDiscount);
         const paymentMethod = options?.paymentMethod || "CASH";
@@ -1462,6 +1468,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           totalDiscount: totalDiscount,
           itemDiscounts: itemDiscounts,
           billDiscounts: billDiscounts,
+          ...(promotions.length > 0 ? { discounts: promotions } : {}),
+          ...(options?.customerId ? { customerId: options.customerId } : {}),
           vatRate: 0,
           vatAmount: 0,
           paymentMethod: paymentMethod,
@@ -1509,8 +1517,21 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           [`stores/${targetStoreCode}/history/${billId}`]: rawHistoryMap,
           [`stores/${targetStoreCode}/audit_logs/${logId}`]: auditPayload,
         });
+        // Đổi voucher + cập nhật bộ đếm khuyến mãi bằng transaction TRƯỚC khi ghi hóa đơn
+        // (chống 2 máy dùng 1 mã); ghi hóa đơn lỗi thì hoàn tác ở khối catch.
+        if (promotions.length > 0) {
+          reservedStore = targetStoreCode;
+          reservations = await reserveAllPromotions(db, targetStoreCode, promotions, billId, {
+            username: "admin_web",
+            staffName: cashierName,
+            billCode,
+            tableName: table.name,
+            customerId: options?.customerId,
+          });
+        }
         // Ghi nguyên tử: thành công tất cả hoặc không ghi gì
         await update(ref(db), updates);
+        reservations = [];
 
         applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(historyBill, billId), ...prev]);
@@ -1518,6 +1539,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: true, billId, billCode };
       } catch (e) {
         console.error("checkoutAndFreeTable error:", e);
+        if (reservations.length > 0) {
+          const rbErrors = await rollbackAllPromotions(db, reservedStore, reservations);
+          if (rbErrors.length > 0) console.error("Hoàn tác khuyến mãi lỗi:", rbErrors);
+        }
+        if (e instanceof PromotionLimitError) return { success: false, error: e.message };
         return { success: false, error: errorMessage(e, "Lỗi khi thanh toán trả bàn") };
       }
     },
@@ -1989,7 +2015,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (!userData.fullName?.trim()) return { success: false, error: "Họ tên không được để trống" };
 
         const finalStoreCode = targetStoreCode || userData.storeCode || resolveWriteStoreCode(currentStoreCode);
-        const role = userData.role || "ROLE_WAITER";
+        const role = userData.role || "ROLE_STAFF";
         const isRootOwner = role === "ROLE_OWNER" || role === "OWNER";
         const now = Date.now();
 
@@ -2126,6 +2152,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           status: "CANCELLED",
           cancelReason: reason,
           cancelledAt: now,
+          closedAt: now,
           cancelledBy: "Quản trị viên Web",
           actionLogs: updatedLogs,
           actionLogsJson: JSON.stringify(updatedLogs),

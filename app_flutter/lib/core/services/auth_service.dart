@@ -67,8 +67,8 @@ class AuthService extends ChangeNotifier {
 
   bool get isLoggedIn => _currentUser != null;
   bool get isRootOwner => _currentUser?.isRootOwner ?? false;
-  bool get isKitchen => _currentUser?.roleId == 'ROLE_KITCHEN' || _currentUser?.roleId == 'daubep';
-  UserRole get currentRole => _currentUser?.role ?? UserRole.employee;
+  bool get isKitchen => normalizeRoleId(_currentUser?.roleId) == kRoleKitchen;
+  UserRole get currentRole => _currentUser?.role ?? UserRole.staff;
   bool get isOwner => isRootOwner || currentRole.isOwner;
   bool get isManager => currentRole.isManager;
   bool get canAccessManagerHub => isOwner || isManager || can(AppPermissions.viewReports);

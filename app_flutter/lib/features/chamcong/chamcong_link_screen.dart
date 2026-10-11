@@ -1,6 +1,7 @@
 // lib/features/chamcong/chamcong_link_screen.dart
 // Màn "Liên kết Chấm Công Trạm" (chỉ Chủ quán): liên kết cửa hàng POS hiện tại với
 // cửa hàng trên ứng dụng Chấm Công Trạm để nhân viên đăng nhập POS bằng tài khoản chấm công.
+import '../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
@@ -152,7 +153,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
           IconButton(icon: const Icon(Icons.refresh), tooltip: 'Làm mới', onPressed: _loading ? null : _load),
         ],
       ),
-      body: !_auth.isOwner
+      body: !(_auth.isOwner || _auth.can(AppPermissions.manageChamcongLink))
           ? Center(
               child: Text('Chỉ Chủ quán mới được quản lý liên kết Chấm Công Trạm.',
                   style: TextStyle(color: context.tc.textSecondary)))

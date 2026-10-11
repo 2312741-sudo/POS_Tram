@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:cloud_functions/cloud_functions.dart' show FirebaseFunctionsException;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
+import '../../core/domain/menu_copy.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
 import '../services/campaign_service.dart';
 import '../services/loyalty_service.dart';
-import '../services/pooled_loyalty_service.dart';
 import '../../core/services/auth_service.dart';
 import 'seed_data.dart';
 
@@ -383,7 +382,7 @@ class OrderRepository {
   ///    (ném [PromotionLimitExceededException] nếu vượt).
   /// 3. Ghi NGUYÊN TỬ 1 lệnh multi-path: bills/{id}, history/{id}, tables/{key}.
   ///    Lỗi được ném ra ([DataWriteException]) và lượt khuyến mãi được hoàn tác.
-  /// 2b. Đổi điểm khách (nếu có) bằng transaction trên customers/{id}, idempotent theo hóa đơn.
+  /// 2b. Đổi điểm khách (nếu có) qua callable redeemLoyaltyPoints (điểm dùng chung toàn chuỗi), idempotent theo hóa đơn.
   ///    Không đủ điểm → ném [InsufficientPointsException] TRƯỚC khi ghi hóa đơn
   ///    (lượt khuyến mãi đã giữ được hoàn tác).
   /// 4. Tác vụ phụ chạy nền (trừ kho, tích điểm, audit log) - lỗi được ghi audit log, không bị nuốt.
@@ -426,8 +425,6 @@ class OrderRepository {
     bool pointsRedeemed = false;
     if (customerId.isNotEmpty && bill.pointsUsed > 0) {
       try {
-        // Điểm dùng chung: thiếu điểm tại chi nhánh → kéo phần thiếu từ chi nhánh khác về trước khi đổi
-        await _topUpFromSharedPool(storeCode: storeCode, customerId: customerId, billId: bill.id, needed: bill.pointsUsed);
         await _loyalty.redeemForBill(
           storeCode: storeCode,
           customerId: customerId,
@@ -500,31 +497,6 @@ class OrderRepository {
 
   late final LoyaltyService _loyalty = LoyaltyService(() => _root);
 
-  /// Khi Chủ quán đã bật điểm dùng chung và khách không đủ điểm tại chi nhánh, nhờ Cloud Function
-  /// chuyển phần thiếu từ chi nhánh khác về. Không bật dùng chung / đủ điểm → không làm gì.
-  /// Lỗi → [LoyaltyException] (hóa đơn không được ghi, điểm tại chi nhánh không đổi).
-  Future<void> _topUpFromSharedPool({
-    required String storeCode,
-    required String customerId,
-    required String billId,
-    required int needed,
-  }) async {
-    try {
-      final enabledSnap = await _root.child('stores/$storeCode/storeInfo/sharedLoyalty/enabled').get().timeout(const Duration(seconds: 3));
-      if (enabledSnap.value != true) return;
-      final customerSnap = await _root.child('stores/$storeCode/customers/$customerId').get().timeout(const Duration(seconds: 3));
-      final v = customerSnap.value;
-      final local = v is Map ? LoyaltyMath.pointsOf(Map<dynamic, dynamic>.from(v)) : 0;
-      final missing = PooledLoyaltyService.shortfall(needed: needed, local: local);
-      if (missing <= 0) return;
-      await PooledLoyaltyService.pull(storeCode: storeCode, customerId: customerId, billId: billId, points: missing);
-    } on FirebaseFunctionsException catch (e) {
-      throw LoyaltyException('Không lấy được điểm dùng chung: ${e.message ?? e.code}');
-    } catch (e) {
-      throw LoyaltyException('Không lấy được điểm dùng chung: $e');
-    }
-  }
-
   /// Lỗi điểm phát sinh muộn (khi đồng bộ) → audit log, không nuốt lỗi.
   void _logLoyaltyProblem(BillModel bill, String msg) {
     _safeLog(AuditLogModel(
@@ -538,21 +510,6 @@ class OrderRepository {
       details: 'Điểm khách của HĐ ${bill.billCode}: $msg',
       isSuspicious: true,
     ));
-  }
-
-  Future<({double earnRate, int redeemRate})> _loyaltyConfig(String storeCode, double? earnRate, int? redeemRate) async {
-    if (earnRate != null && redeemRate != null) return (earnRate: earnRate, redeemRate: redeemRate);
-    double e = earnRate ?? 1.0;
-    int r = redeemRate ?? 1000;
-    try {
-      final snap = await _root.child('stores/$storeCode/storeInfo').get().timeout(_readTimeout);
-      if (snap.value is Map) {
-        final m = snap.value as Map;
-        if (earnRate == null && m['pointEarnRate'] is num) e = (m['pointEarnRate'] as num).toDouble();
-        if (redeemRate == null && m['pointRedeemRate'] is num) r = (m['pointRedeemRate'] as num).toInt();
-      }
-    } catch (_) {}
-    return (earnRate: e, redeemRate: r);
   }
 
   /// Trừ kho cho hóa đơn (idempotent - gọi lại chỉ trừ các dòng còn thiếu).
@@ -617,22 +574,21 @@ class OrderRepository {
     final customerId = bill.customerId?.trim() ?? '';
     if (customerId.isNotEmpty && bill.finalAmount > 0) {
       try {
-        final cfg = await _loyaltyConfig(storeCode, pointEarnRate, pointRedeemRate);
+        // Số điểm tích do máy chủ tính từ hóa đơn PAID + cấu hình chuỗi (loyalty_config); pointEarnRate/pointRedeemRate chỉ còn để tương thích
         final r = await _loyalty.awardForBill(
           storeCode: storeCode,
           customerId: customerId,
           billId: bill.id,
           billCode: bill.billCode,
-          billAmount: bill.finalAmount,
-          earnRatePercent: cfg.earnRate,
-          redeemRate: cfg.redeemRate,
           by: bill.staffUsername,
-          timeout: const Duration(seconds: 10),
+          timeout: const Duration(seconds: 12),
           onLate: (msg) => _logLoyaltyProblem(bill, msg),
         );
         problems.addAll(r.notes);
       } catch (e) {
         problems.add('Tích điểm cho khách $customerId thất bại: $e');
+        // Không im lặng: đưa vào hàng đợi thử lại + báo thu ngân (SnackBar ở màn hình giỏ hàng)
+        await LoyaltyEarnQueue.add(storeCode: storeCode, billId: bill.id, customerId: customerId, billCode: bill.billCode, error: e);
       }
     }
 
@@ -827,6 +783,7 @@ class OrderRepository {
       'timestamp': now,
       'createdAt': table.openedAt ?? now,
       'closedAt': now,
+      'cancelledAt': now,
       'staffUsername': staffUsername,
       'staffFullName': staffFullName,
       'orderStaff': staffFullName,
@@ -1123,28 +1080,95 @@ class OrderRepository {
     await ref.child(noteId).remove();
   }
 
+  /// Đọc thô thực đơn một chi nhánh (món, nhóm, ghi chú mẫu) để dựng kế hoạch sao chép.
+  Future<MenuSnapshot> loadMenuSnapshot(String storeCode) async {
+    final sc = storeCode.trim().toUpperCase();
+    final snaps = await Future.wait([
+      _root.child('stores/$sc/products').get(),
+      _root.child('stores/$sc/categories').get(),
+      _root.child('stores/$sc/product_notes').get(),
+    ]);
+    return MenuSnapshot(
+      products: MenuCopy.toRecord(snaps[0].value),
+      categories: MenuCopy.toRecord(snaps[1].value),
+      notes: MenuCopy.toRecord(snaps[2].value),
+    );
+  }
+
+  /// Dựng kế hoạch (xem trước) sao chép từ [source] sang chi nhánh đích — chưa ghi gì.
+  Future<CopyPlan> planMenuCopy({
+    required MenuSnapshot source,
+    required String toStoreCode,
+    CopySelection selection = CopySelection.everything,
+    CopyOptions options = const CopyOptions(),
+  }) async {
+    final target = await loadMenuSnapshot(toStoreCode);
+    return MenuCopy.buildPlan(source: source, target: target, selection: selection, options: options);
+  }
+
+  /// Ghi kế hoạch bằng update() đa đường dẫn theo lô <= 400 đường dẫn, rồi ghi nhật ký COPY_MENU
+  /// cho chi nhánh đích. KHÔNG xóa gì ở đích. Ném lỗi nếu một lô thất bại (nhật ký ghi nhận "chưa hoàn tất").
+  Future<void> applyMenuCopyPlan({
+    required String fromStoreCode,
+    required String toStoreCode,
+    required CopyPlan plan,
+    String username = '',
+    String fullName = '',
+    String role = '',
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final to = toStoreCode.trim().toUpperCase();
+    final from = fromStoreCode.trim().toUpperCase();
+    final chunks = MenuCopy.chunkUpdates(plan.updates);
+    var done = 0;
+    Future<void> audit(bool failed) async {
+      try {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await _root.child('stores/$to/audit_logs/LOG_${now}_${now % 9973}').set(MenuCopy.auditEntry(
+              sourceStore: from,
+              targetStore: to,
+              created: failed ? 0 : plan.created + plan.duplicated,
+              overwritten: failed ? 0 : plan.overwritten,
+              skipped: plan.skipped,
+              username: username,
+              fullName: fullName,
+              role: role,
+              now: now,
+              failed: failed,
+            ));
+      } catch (_) {}
+    }
+
+    try {
+      for (final part in chunks) {
+        await _root.child('stores/$to').update(part);
+        done++;
+        onProgress?.call(done, chunks.length);
+      }
+    } catch (e) {
+      await audit(true);
+      throw Exception('Sao chép sang $to lỗi ở lô $done/${chunks.length}: $e');
+    }
+    await audit(false);
+  }
+
+  /// Giữ chữ ký cũ: sao chép món (và nhóm) từ [fromStoreCode] sang [toStoreCode], ghi đè món trùng tên.
+  /// Trả về số món đã tạo/ghi đè. Mã món ở đích được cấp không trùng (xem [MenuCopy]).
   Future<int> copyMenuBetweenStores({
     required String fromStoreCode,
     required String toStoreCode,
     List<String>? selectedCategories,
   }) async {
-    final sourceProducts = await getProducts(storeCode: fromStoreCode);
-    final sourceCategories = await getCategories(storeCode: fromStoreCode);
-    int copiedCount = 0;
-
-    for (final cat in sourceCategories) {
-      if (selectedCategories == null || selectedCategories.contains(cat.name)) {
-        await saveCategory(cat, storeCode: toStoreCode);
-      }
-    }
-
-    for (final prod in sourceProducts) {
-      if (selectedCategories == null || selectedCategories.contains(prod.category)) {
-        await saveProduct(prod, storeCode: toStoreCode);
-        copiedCount++;
-      }
-    }
-    return copiedCount;
+    final source = await loadMenuSnapshot(fromStoreCode);
+    final plan = await planMenuCopy(
+      source: source,
+      toStoreCode: toStoreCode,
+      selection: selectedCategories == null ? CopySelection.everything : CopySelection(categories: selectedCategories),
+      options: const CopyOptions(conflict: ConflictPolicy.overwrite, copyNotes: false),
+    );
+    if (selectedCategories != null && selectedCategories.isEmpty) return 0;
+    await applyMenuCopyPlan(fromStoreCode: fromStoreCode, toStoreCode: toStoreCode, plan: plan);
+    return plan.copiedCount;
   }
 
   Future<void> clearStoreMenu(String storeCode) async {

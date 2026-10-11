@@ -161,11 +161,12 @@ void main() {
       expect(StockRetryPlanner.decodePlan(null), isNull);
     });
 
-    test('canRunRetry khớp nhóm Thu ngân trở lên của rules', () {
+    test('canRunRetry khớp nhóm Nhân viên trở lên của rules', () {
       expect(StockRetryPlanner.canRunRetry('cashier'), isTrue);
       expect(StockRetryPlanner.canRunRetry('employee'), isTrue);
       expect(StockRetryPlanner.canRunRetry('ROLE_MANAGER_1'), isTrue);
-      expect(StockRetryPlanner.canRunRetry('waiter'), isFalse);
+      expect(StockRetryPlanner.canRunRetry('waiter'), isTrue); // Phục vụ đã gộp vào Nhân viên
+      expect(StockRetryPlanner.canRunRetry('ROLE_STAFF'), isTrue);
       expect(StockRetryPlanner.canRunRetry('ROLE_KITCHEN'), isFalse);
       expect(StockRetryPlanner.canRunRetry('anything', isRootOwner: true), isTrue);
     });

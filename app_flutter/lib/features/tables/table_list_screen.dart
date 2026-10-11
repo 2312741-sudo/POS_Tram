@@ -577,7 +577,7 @@ class _TableListScreenState extends State<TableListScreen> {
           );
         },
       ),
-      floatingActionButton: _auth.can(AppPermissions.openTable)
+      floatingActionButton: _auth.can(AppPermissions.manageTables)
           ? FloatingActionButton.extended(
               onPressed: () => _showAddTableDialog(),
               icon: const Icon(Icons.add, color: Colors.white),
@@ -1399,6 +1399,7 @@ class _TableListScreenState extends State<TableListScreen> {
             },
           ),
           // Quản lý ca & két tiền (KiotViet cash shift)
+          if (_auth.can(AppPermissions.manageCashShift) || _auth.can(AppPermissions.viewCashShifts))
           ListTile(
             leading: Icon(Icons.point_of_sale, color: context.tc.success),
             title: const Text('Quản Lý Ca & Két Tiền'),
@@ -1408,23 +1409,27 @@ class _TableListScreenState extends State<TableListScreen> {
               CashShiftDialog.show(context);
             },
           ),
+          if (_auth.can(AppPermissions.viewCashShifts) || _auth.can(AppPermissions.viewReports))
           ListTile(
             leading: Icon(Icons.receipt_long, color: context.tc.primary),
             title: const Text('Phiếu Bàn Giao Ca'),
             subtitle: const Text('Xem phiên giao két & chênh lệch'),
             onTap: () => _navigateTo('/cash-shifts'),
           ),
+          if (_auth.can(AppPermissions.viewReports))
           ListTile(
             leading: Icon(Icons.summarize_outlined, color: context.tc.info),
             title: const Text('Báo Cáo Cuối Ngày'),
             subtitle: const Text('Tổng hợp, Thu chi, Hàng hóa, Phòng bàn'),
             onTap: () => _navigateTo('/end-of-day-report'),
           ),
+          if (_auth.can(AppPermissions.viewKitchen) || _auth.can(AppPermissions.sendKitchen))
           ListTile(
             leading: const Icon(Icons.soup_kitchen),
             title: const Text('Màn hình Bếp / KDS'),
             onTap: () => _navigateTo('/kitchen'),
           ),
+          if (_auth.can(AppPermissions.viewOnlineOrders))
           ListTile(
             leading: Icon(Icons.delivery_dining, color: context.tc.warning),
             title: const Text('Đơn Hàng Online (App/Web)'),

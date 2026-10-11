@@ -40,6 +40,8 @@ class BillModel {
   final String zone;
   final int createdAt;
   int? closedAt;
+  /// Thời điểm hủy đơn (epoch ms) — chỉ có với đơn CANCELLED.
+  int? cancelledAt;
   String status; // 'OPEN', 'PAID', 'CANCELLED', 'REFUNDED'
   final String staffUsername;
   final String staffFullName;
@@ -73,6 +75,7 @@ class BillModel {
     required this.zone,
     required this.createdAt,
     this.closedAt,
+    this.cancelledAt,
     this.status = 'OPEN',
     required this.staffUsername,
     required this.staffFullName,
@@ -168,6 +171,7 @@ class BillModel {
       zone: map['zone']?.toString() ?? '',
       createdAt: (map['createdAt'] as num?)?.toInt() ?? 0,
       closedAt: (map['closedAt'] as num?)?.toInt(),
+      cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
       status: map['status']?.toString() ?? 'OPEN',
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
@@ -192,6 +196,24 @@ class BillModel {
       actionLogs: actionLogs,
       deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
     );
+  }
+
+  /// Mốc thời gian xếp ngày báo cáo (docs/REPORT_SPEC.md §3.4):
+  /// - CANCELLED: cancelledAt → closedAt → createdAt (đơn hủy thuộc NGÀY HỦY)
+  /// - PAID / REFUNDED: closedAt → createdAt
+  /// - OPEN / khác: createdAt → closedAt
+  int get reportTimeMs {
+    bool ok(int? v) => v != null && v > 0;
+    if (status == 'CANCELLED') {
+      if (ok(cancelledAt)) return cancelledAt!;
+      if (ok(closedAt)) return closedAt!;
+      return createdAt;
+    }
+    if (status == 'PAID' || status == 'REFUNDED') {
+      return ok(closedAt) ? closedAt! : createdAt;
+    }
+    if (createdAt > 0) return createdAt;
+    return ok(closedAt) ? closedAt! : 0;
   }
 
   int get deletedItemsCount => DeletedItemsLogic.summarize(deletedItems).count;
@@ -228,6 +250,7 @@ class BillModel {
     'zone': zone,
     'createdAt': createdAt,
     if (closedAt != null) 'closedAt': closedAt,
+    if (cancelledAt != null) 'cancelledAt': cancelledAt,
     'status': status,
     'staffUsername': staffUsername,
     'staffFullName': staffFullName,

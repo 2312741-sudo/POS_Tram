@@ -1,4 +1,5 @@
 // lib/features/manager/manager_hub_screen.dart
+import '../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -295,6 +296,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       ],
                     ),
                   ),
+                  if (_auth.can(AppPermissions.viewCustomers) || _auth.can(AppPermissions.viewReports))
                   PopupMenuItem(
                     value: 'CUSTOMERS',
                     child: Row(
@@ -317,7 +319,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       ),
                     ),
                   // Chỉ Chủ quán / Quản lý được đặt PIN duyệt (máy chủ kiểm tra lại)
-                  if (_auth.isOwner || _auth.isManager)
+                  if (_auth.isOwner || (_auth.isManager && _auth.can(AppPermissions.manageManagerPin)))
                     PopupMenuItem(
                       value: 'APPROVAL_PIN',
                       child: Row(
@@ -329,7 +331,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       ),
                     ),
                   // Chỉ Chủ quán được liên kết cửa hàng với ứng dụng Chấm Công Trạm
-                  if (_auth.isOwner)
+                  if (_auth.isOwner || _auth.can(AppPermissions.manageChamcongLink))
                     PopupMenuItem(
                       value: 'CHAMCONG_LINK',
                       child: Row(

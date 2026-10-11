@@ -24,10 +24,23 @@ import {
   KeyRound,
 } from "lucide-react";
 import { exportUsers } from "@/lib/export";
+import { PERMISSION_CATALOG } from "@/lib/permission-catalog";
+import {
+  ROLE_OWNER,
+  ROLE_MANAGER,
+  ROLE_STAFF,
+  ROLE_KITCHEN,
+  MANAGER_ROLE_LABEL,
+  STAFF_ROLE_LABEL,
+  STAFF_ROLE_DESCRIPTION,
+  KITCHEN_ROLE_LABEL,
+  normalizeRoleId,
+} from "@/lib/roles";
+import { callableErrorMessage, canResetStaffPassword, validateStaffPassword, MIN_STAFF_PASSWORD_LENGTH } from "@/lib/staff-password";
 import { useAuth, hasPermission, validateUsername, normalizeUsername } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
 import { db, functions } from "@/lib/firebase";
-import { ref, set, update, remove } from "firebase/database";
+import { ref, set, update, remove, get } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 
 function formatDateTime(timestamp?: number | null) {
@@ -41,59 +54,45 @@ function formatDateTime(timestamp?: number | null) {
 
 const UNIFIED_ROLES = [
   {
-    id: "ROLE_OWNER",
+    id: ROLE_OWNER,
     name: "Chủ Quán (Toàn quyền)",
     icon: "👑",
     desc: "Toàn quyền quản trị tất cả chi nhánh và phân quyền",
   },
   {
-    id: "ROLE_MANAGER_1",
-    name: "Quản Lý 1 (Điều hành & Báo cáo)",
+    id: ROLE_MANAGER,
+    name: MANAGER_ROLE_LABEL,
     icon: "⭐",
-    desc: "Điều hành bán hàng, kho, doanh thu, ca két, chiết khấu",
+    desc: "Điều hành ca, bán hàng, kho, khuyến mãi, két tiền, chiết khấu, báo cáo",
   },
   {
-    id: "ROLE_MANAGER_2",
-    name: "Quản Lý 2 (Giám sát ca)",
-    icon: "📋",
-    desc: "Giám sát ca trực, điều phối bàn, in bill, xem báo cáo ca",
-  },
-  {
-    id: "ROLE_CASHIER",
-    name: "Thu Ngân",
-    icon: "💰",
-    desc: "Mở bàn, tính tiền, in hóa đơn, áp dụng khuyến mãi",
-  },
-  {
-    id: "ROLE_WAITER",
-    name: "Nhân Viên Phục Vụ",
+    id: ROLE_STAFF,
+    name: `${STAFF_ROLE_LABEL} (${STAFF_ROLE_DESCRIPTION})`,
     icon: "🍽️",
-    desc: "Xem menu, mở bàn, gọi món gửi bếp KDS",
+    desc: "Mở bàn, gọi món gửi bếp, tính tiền, in hóa đơn, áp dụng khuyến mãi",
   },
   {
-    id: "ROLE_KITCHEN",
-    name: "Bếp / Pha Chế",
+    id: ROLE_KITCHEN,
+    name: KITCHEN_ROLE_LABEL,
     icon: "🍳",
     desc: "Xem màn hình bếp KDS, cập nhật trạng thái chế biến",
   },
 ];
 
-const AVAILABLE_CUSTOM_PERMISSIONS = [
-  { id: "INVENTORY_STOCK_IN", label: "Nhập kho (Stock In)", desc: "Tạo và hoàn thành phiếu nhập hàng, tăng tồn kho" },
-  { id: "INVENTORY_STOCK_OUT", label: "Xuất kho (Stock Out)", desc: "Tạo và hoàn thành phiếu xuất kho nội bộ, pha chế" },
-  { id: "INVENTORY_WASTE", label: "Huỷ kho (Stock Waste)", desc: "Tạo và hoàn thành phiếu xuất hủy hàng hỏng, hết hạn" },
-  { id: "DISCOUNT_ITEM", label: "Giảm giá món", desc: "Giảm giá trực tiếp từng món ăn trên đơn" },
-  { id: "MENU_MANAGEMENT", label: "Quản lý thực đơn & Topping", desc: "Quản lý toàn diện món, mã SKU, nhóm món và topping" },
-  { id: "MANUAL_DISCOUNT", label: "Chiết khấu thủ công", desc: "Giảm giá trực tiếp trên đơn" },
-  { id: "CANCEL_BILL", label: "Hủy hóa đơn", desc: "Hủy đơn hàng sau khi tạo" },
-  { id: "REPRINT_BILL", label: "In lại hóa đơn", desc: "In lại hóa đơn đã thanh toán" },
-  { id: "CANCEL_KITCHEN_ITEM", label: "Hủy món gửi bếp", desc: "Hủy món đã chuyển sang KDS" },
-  { id: "VIEW_AUDIT_LOGS", label: "Xem nhật ký kiểm soát", desc: "Truy cập nhật ký thao tác nhạy cảm" },
-  { id: "VIEW_COST_PRICE", label: "Xem giá vốn NVL", desc: "Xem chi phí nguyên vật liệu" },
-  { id: "APPROVE_STOCKTAKE", label: "Duyệt kiểm kê kho", desc: "Xác nhận chênh lệch kiểm kê" },
-  { id: "ADJUST_CASH_SHIFT", label: "Điều chỉnh két ca", desc: "Sửa đổi số dư ca làm việc" },
-  { id: "MANAGE_PROMOTIONS", label: "Quản lý khuyến mãi", desc: "Tạo và sửa chương trình khuyến mãi" },
-];
+// Quyền riêng có thể cấp thêm cho từng nhân viên: toàn bộ danh mục quyền, trừ các quyền quản trị cấp Chủ quán
+// (quản lý tài khoản, phân quyền, cấu hình quán, liên kết Chấm Công, xóa món vĩnh viễn, nhập hàng loạt...)
+const OWNER_ONLY_PERMISSIONS = new Set([
+  "MANAGE_USERS",
+  "MANAGE_ROLES_PERMISSIONS",
+  "MANAGE_STORE_SETTINGS",
+  "MANAGE_CHAMCONG_LINK",
+  "OVERRIDE_MANUAL_DISCOUNT",
+]);
+const AVAILABLE_CUSTOM_PERMISSIONS = PERMISSION_CATALOG.filter((p) => !OWNER_ONLY_PERMISSIONS.has(p.key)).map((p) => ({
+  id: p.key,
+  label: p.label,
+  desc: p.description,
+}));
 
 export interface DashboardUser {
   id: string;
@@ -132,7 +131,7 @@ const emptyForm: UserForm = {
   fullName: "",
   username: "",
   password: "",
-  role: "ROLE_WAITER",
+  role: ROLE_STAFF,
   phone: "",
   storeCode: "",
   isActive: true,
@@ -170,8 +169,8 @@ export default function UsersPage() {
         uid: (typeof u.uid === "string" && u.uid) || u.id || u.username || "",
         username: u.username || "",
         fullName: u.fullName || u.username || "",
-        roleId: u.roleId || u.role || "ROLE_WAITER",
-        role: u.roleId || u.role || "ROLE_WAITER",
+        roleId: u.roleId || u.role || ROLE_STAFF,
+        role: u.roleId || u.role || ROLE_STAFF,
         isRootOwner: u.isRootOwner,
         customPermissions: u.customPermissions || [],
         isActive: u.isActive !== false,
@@ -235,12 +234,7 @@ export default function UsersPage() {
         u.username.toLowerCase().includes(q) ||
         (u.phone && u.phone.includes(q));
 
-      const roleIdUpper = (u.roleId || u.role || "").toUpperCase();
-      const matchRole =
-        filterRole === "ALL" ||
-        roleIdUpper === filterRole ||
-        (filterRole === "ROLE_MANAGER_1" && roleIdUpper.includes("MANAGER_1")) ||
-        (filterRole === "ROLE_MANAGER_2" && (roleIdUpper.includes("MANAGER_2") || roleIdUpper === "ROLE_MANAGER"));
+      const matchRole = filterRole === "ALL" || normalizeRoleId(u.roleId || u.role) === filterRole;
 
       return matchSearch && matchRole;
     });
@@ -251,8 +245,8 @@ export default function UsersPage() {
     const totalStaff = currentUsers.length;
     const activeStaff = currentUsers.filter((u) => u.isActive !== false).length;
     const managers = currentUsers.filter((u) => {
-      const r = (u.roleId || u.role || "").toUpperCase();
-      return r.includes("OWNER") || r.includes("MANAGER");
+      const r = normalizeRoleId(u.roleId || u.role);
+      return r === ROLE_OWNER || r === ROLE_MANAGER;
     }).length;
     return { totalStaff, activeStaff, managers };
   }, [currentUsers]);
@@ -277,7 +271,7 @@ export default function UsersPage() {
       fullName: u.fullName,
       username: u.username,
       password: "",
-      role: u.roleId || u.role || "ROLE_WAITER",
+      role: normalizeRoleId(u.roleId || u.role || ROLE_STAFF),
       phone: u.phone || "",
       storeCode: u.storeCode || storesList[0]?.storeCode || activeStoreCode || "",
       isActive: u.isActive !== false,
@@ -328,8 +322,8 @@ export default function UsersPage() {
         setError("Vui lòng nhập mật khẩu khởi tạo cho nhân viên");
         return;
       }
-      if (form.password.trim().length < 6) {
-        setError("Mật khẩu khởi tạo phải có tối thiểu 6 ký tự");
+      if (form.password.trim().length < MIN_STAFF_PASSWORD_LENGTH) {
+        setError(`Mật khẩu khởi tạo phải có tối thiểu ${MIN_STAFF_PASSWORD_LENGTH} ký tự`);
         return;
       }
     }
@@ -347,8 +341,8 @@ export default function UsersPage() {
         const updateData: Record<string, unknown> = {
           fullName: form.fullName.trim(),
           phone: form.phone.trim(),
-          roleId: isRoot ? editUser.roleId : form.role,
-          role: isRoot ? editUser.role : form.role,
+          roleId: isRoot ? editUser.roleId : normalizeRoleId(form.role),
+          role: isRoot ? editUser.role : normalizeRoleId(form.role),
           customPermissions: form.customPermissions,
           isActive: isRoot ? true : form.isActive,
         };
@@ -356,7 +350,12 @@ export default function UsersPage() {
         // Ghi vào stores/{storeCode}/users/{uid}
         await update(ref(db, `stores/${cleanStore}/users/${targetUid}`), updateData);
         // Đồng bộ bản ghi username nếu có
-        await update(ref(db, `stores/${cleanStore}/users/${cleanUser}`), updateData).catch(() => {});
+        // Đồng bộ nút khóa theo tên đăng nhập CHỈ khi nó đã tồn tại (nút cũ); không tạo nút mồ côi mới
+        if (cleanUser !== targetUid) {
+          const legacyRef = ref(db, `stores/${cleanStore}/users/${cleanUser}`);
+          const legacySnap = await get(legacyRef).catch(() => null);
+          if (legacySnap && legacySnap.exists()) await update(legacyRef, updateData).catch(() => {});
+        }
 
         // Ghi Audit log
         const logId = `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -391,7 +390,7 @@ export default function UsersPage() {
           storeCode: cleanStore,
           username: cleanUser,
           fullName: form.fullName.trim(),
-          roleId: form.role,
+          roleId: normalizeRoleId(form.role),
           tempPassword: form.password.trim(),
           phone: form.phone.trim(),
           customPermissions: form.customPermissions,
@@ -440,7 +439,7 @@ export default function UsersPage() {
           disabled: !newActive,
         });
       } catch (err: unknown) {
-        alert((err as Error)?.message || "Lỗi cập nhật trạng thái tài khoản");
+        alert(callableErrorMessage(err, "Lỗi cập nhật trạng thái tài khoản"));
       }
     },
     [activeStoreCode]
@@ -462,8 +461,9 @@ export default function UsersPage() {
 
   const handleConfirmResetPassword = async () => {
     if (!resetPasswordTarget) return;
-    if (!newPasswordInput || newPasswordInput.length < 6) {
-      setResetPasswordError("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+    const pwError = validateStaffPassword(newPasswordInput);
+    if (pwError) {
+      setResetPasswordError(pwError);
       return;
     }
 
@@ -489,7 +489,7 @@ export default function UsersPage() {
       alert(`Đã đặt lại mật khẩu cho tài khoản @${resetPasswordTarget.username}. Nhân viên sẽ bắt buộc đổi mật khẩu khi đăng nhập.`);
       closeResetPassword();
     } catch (err: unknown) {
-      setResetPasswordError((err as Error)?.message || "Lỗi khi đặt lại mật khẩu nhân viên.");
+      setResetPasswordError(callableErrorMessage(err, "Không đặt lại được mật khẩu. Vui lòng thử lại."));
     } finally {
       setResettingPassword(false);
     }
@@ -550,15 +550,15 @@ export default function UsersPage() {
   };
 
   const getRoleBadge = (roleStr: string) => {
-    const r = (roleStr || "").toUpperCase();
-    if (r.includes("OWNER")) {
+    const role = normalizeRoleId(roleStr);
+    if (role === ROLE_OWNER) {
       return (
         <span className="badge badge-danger" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
           👑 Chủ Quán
         </span>
       );
     }
-    if (r.includes("MANAGER_1")) {
+    if (role === ROLE_MANAGER) {
       return (
         <span
           className="badge"
@@ -571,54 +571,20 @@ export default function UsersPage() {
             gap: "4px",
           }}
         >
-          ⭐ Quản Lý 1
+          ⭐ {MANAGER_ROLE_LABEL}
         </span>
       );
     }
-    if (r.includes("MANAGER_2") || r === "ROLE_MANAGER") {
-      return (
-        <span
-          className="badge"
-          style={{
-            background: "rgba(59,130,246,0.15)",
-            color: "#2563EB",
-            borderColor: "rgba(59,130,246,0.3)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-          }}
-        >
-          📋 Quản Lý 2
-        </span>
-      );
-    }
-    if (r.includes("CASHIER") || r.includes("THUNGAN")) {
-      return (
-        <span
-          className="badge"
-          style={{
-            background: "rgba(16,185,129,0.15)",
-            color: "#059669",
-            borderColor: "rgba(16,185,129,0.3)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-          }}
-        >
-          💰 Thu Ngân
-        </span>
-      );
-    }
-    if (r.includes("KITCHEN") || r.includes("BEP")) {
+    if (role === ROLE_KITCHEN) {
       return (
         <span className="badge badge-warning" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-          🍳 Bếp / Bar
+          🍳 {KITCHEN_ROLE_LABEL}
         </span>
       );
     }
     return (
       <span className="badge badge-info" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-        🍽️ Phục Vụ
+        🍽️ {STAFF_ROLE_LABEL}
       </span>
     );
   };
@@ -769,7 +735,7 @@ export default function UsersPage() {
             {stats.totalStaff - stats.managers}
           </div>
           <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
-            Thu ngân, phục vụ, bếp/bar
+            Nhân viên (thu ngân / phục vụ), bếp/bar
           </div>
         </div>
       </div>
@@ -1012,7 +978,12 @@ export default function UsersPage() {
                       </button>
 
                       {/* Nút Đặt lại mật khẩu */}
-                      {(!u.isRootOwner || currentUser?.isRootOwner) && u.authProvider !== "chamcong" && (
+                      {(!u.isRootOwner || currentUser?.isRootOwner) &&
+                        canResetStaffPassword(
+                          currentUser,
+                          { ...u, isRootOwner: false },
+                          Boolean(currentUser?.uid && currentUser.uid === (u.uid || u.id))
+                        ) && (
                         <button
                           title="Đặt lại mật khẩu nhân viên"
                           onClick={() => openResetPassword(u)}
@@ -1474,7 +1445,7 @@ export default function UsersPage() {
                     type={showNewPassword ? "text" : "password"}
                     value={newPasswordInput}
                     onChange={(e) => setNewPasswordInput(e.target.value)}
-                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                    placeholder={`Nhập mật khẩu mới (tối thiểu ${MIN_STAFF_PASSWORD_LENGTH} ký tự)`}
                     style={{
                       width: "100%",
                       padding: "10px 40px 10px 12px",

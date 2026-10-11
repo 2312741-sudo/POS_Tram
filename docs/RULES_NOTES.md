@@ -26,9 +26,9 @@
 | Nhóm | `roleId` |
 | :--- | :--- |
 | Chủ quán | `isRootOwner === true`, `owner`, `ROLE_OWNER` |
-| Quản lý | `manager`, `manager_1`, `manager_2`, `ROLE_MANAGER`, `ROLE_MANAGER_1`, `ROLE_MANAGER_2` |
-| Thu ngân (người thanh toán) | `cashier`, `ROLE_CASHIER`, `employee` (alias thu ngân trên Web) |
-| Nhân viên khác | `waiter`, `ROLE_WAITER`, `ROLE_KITCHEN`, … (chỉ là thành viên quán) |
+| Quản lý | `ROLE_MANAGER` (chuẩn) + alias cũ `manager`, `manager_1`, `manager_2`, `ROLE_MANAGER_1`, `ROLE_MANAGER_2` |
+| Nhân viên (người thanh toán; đã gộp Thu ngân + Phục vụ) | `ROLE_STAFF` (chuẩn), `staff` + alias cũ `cashier`, `ROLE_CASHIER`, `employee`, `waiter`, `ROLE_WAITER` |
+| Bếp / khác | `ROLE_KITCHEN`, … (chỉ là thành viên quán) |
 
 ### Nút mới cho luồng thanh toán
 | Nhánh | Quyền ghi |
@@ -94,7 +94,9 @@ Giới hạn còn lại: kẻ tấn công vẫn có thể gọi trực tiếp RE
 
 ## 3b. Điểm khách hàng: RTDB là nguồn chuẩn, Firestore là bản sao chỉ đọc
 
-- **Nguồn chuẩn:** `stores/{s}/customers/{id}` (RTDB). Điểm chỉ đổi qua `LoyaltyService` (transaction theo hóa đơn) hoặc Quản lý / Chủ quán.
+> **Đã được thay thế một phần bởi §3c** (điểm gộp một bản ghi toàn chuỗi `loyalty_members`). Phần dưới còn đúng cho nhập khách từ Firestore và bản sao Firestore; các câu về "điểm đổi trực tiếp trên node chi nhánh" và `kmt_point_history` theo node chi nhánh là bản cũ.
+
+- **Nguồn chuẩn (bản cũ):** `stores/{s}/customers/{id}` (RTDB). Điểm chỉ đổi qua `LoyaltyService` (transaction theo hóa đơn) hoặc Quản lý / Chủ quán.
 - **Nhập khách từ Firestore** `kmt_customers/{id}` → callable `importCustomerToStore({storeCode, customerId})` (region `asia-southeast1`): người gọi là Thu ngân trở lên, đang hoạt động, có `userIndex`; Admin SDK đọc Firestore và tạo node RTDB với số dư thật bằng transaction (đã có thì giữ nguyên → idempotent), ghi audit `IMPORT_CUSTOMER`. Client không tự sao chép nữa.
 - **Đồng bộ ngược** → trigger `mirrorCustomerToFirestore` (`onValueWritten /stores/{storeCode}/customers/{customerId}`): merge thông tin + `diem_hien_tai` / `currentPoints` / `totalPoints` vào `kmt_customers/{customerId}` (doc id = khóa RTDB) và ghi `kmt_point_history` với doc id cố định (`POS_{store}_{customer}_{billId:type}`; chỉnh tay: `POS_EVT_{eventId}`). Xóa khách RTDB không xóa Firestore.
 - App Flutter đã bỏ mọi ghi `kmt_customers` / `kmt_point_history` (gỡ `awardPoints` / `redeemCustomerPoints` cũ). Web chỉ đọc.
@@ -110,6 +112,26 @@ match /kmt_customers/{id} {
 match /kmt_point_history/{id} { allow read: if request.auth != null; allow write: if false; }
 ```
   (Cloud Functions dùng Admin SDK nên không bị rules chặn.) Nếu hệ thống Khuyến Mãi Trạm vẫn cộng/trừ điểm trực tiếp trên Firestore thì số đó sẽ bị RTDB ghi đè ở lần đồng bộ kế tiếp - cần chuyển hệ thống đó sang gọi qua RTDB/Function.
+
+---
+
+## 3c. Điểm DÙNG CHUNG toàn chuỗi: một bản ghi duy nhất `loyalty_members`
+
+**Mô hình**
+- `loyalty_members/{memberKey}`: `{name, phone, points, totalPoints, joinedAt, updatedAt, lastStoreCode, branches:{store:{customerId:true}}, ops:{opId:{p,t,at}}}`. `memberKey` = SĐT chuẩn hóa `0xxxxxxxxx`; khách không có SĐT hợp lệ → `L_{store}_{customerId}` (bản ghi riêng, không gộp). `ops` là vòng khóa idempotent (200 thao tác mới nhất, dùng cho hoàn điểm).
+- `loyalty_ledger/{memberKey}/{opId}`: sổ cái chỉ tạo mới `{type: earn|redeem|refund|adjust|opening, points (có dấu), balanceAfter, billId, billCode, storeCode, customerId, staff, note, at}`. `opId` = `{billId}_{earn|redeem|refund}`, `adj_*`, `opening_{store}_{customerId}`, `merge_*`.
+- `loyalty_config` (đọc: mọi nhân viên thuộc ≥ 1 chi nhánh; ghi: chỉ callable `setLoyaltyConfig`, Chủ quán): `{pointEarnRate, pointRedeemRate, loyaltyTiers:[{name,minPoints}]}`. Ưu tiên hơn `storeInfo.*` của chi nhánh (fallback khi chuỗi chưa đặt). **Mốc hạng không có mặc định**: Chủ tự đặt.
+- `stores/{s}/customers/{id}`: thông tin/viếng thăm của chi nhánh; `diem_hien_tai`/`currentPoints`/`totalPoints` chỉ còn là **bản sao đọc** (trigger `mirrorMemberToBranches` + `linkBranchCustomer`). Rules: mọi client (kể cả Quản lý/Chủ) không đổi được các trường điểm; tạo khách mới chỉ với 0 điểm; xóa khách chỉ Quản lý/Chủ (điểm chung vẫn giữ).
+- `storeInfo.sharedLoyalty` **không còn tác dụng** (luôn dùng chung). Callable `pullPooledPoints` là stub không ghi dữ liệu (để app cũ không lỗi 404) - xóa sau khi mọi POS đã cập nhật.
+
+**Rules:** `loyalty_members`, `loyalty_ledger`, `loyalty_migration` đóng đọc/ghi với mọi client (rules RTDB không liệt kê được chi nhánh của người dùng nên không thể cấp "đọc cho Thu ngân của bất kỳ chi nhánh"; mọi truy vấn đi qua callable có kiểm tra vai trò). `stores/{s}/loyalty_applied` đóng ghi (sổ cũ chỉ đọc).
+
+**Callable** (region `asia-southeast1`, Thu ngân trở lên đang hoạt động của `storeCode`, trừ ghi chú): `applyLoyaltyEarn{storeCode,billId}` (điểm tính phía máy chủ từ `bills/{id}.finalAmount` PAID), `redeemLoyaltyPoints{storeCode,customerId,billId,points}` (không đủ → `failed-precondition` `details.code="insufficient"`), `refundLoyaltyPoints{storeCode,customerId,billId}` (chỉ khi hóa đơn chưa PAID), `lookupMember{storeCode,customerId|phone}`, `getMemberLedger{storeCode,customerId|phone,limit}`, `adjustLoyaltyPoints{storeCode,customerId|phone,mode:ADD|SUB|SET,points,reason,opId?}` (Quản lý/Chủ), `setLoyaltyConfig{storeCode,pointEarnRate?,pointRedeemRate?,loyaltyTiers?}` (Chủ). Mọi thao tác theo hóa đơn idempotent theo `(billId, op)`.
+
+**Di trú (làm TRƯỚC khi deploy rules/functions/app mới, khi đóng cửa):**
+1. `cd scripts/migrate_shared_loyalty && npm i && node migrate.js --service-account=KEY.json` (dry-run: nhóm theo SĐT, trùng, khách không SĐT, kiểm tra tổng).
+2. Đọc kỹ báo cáo rồi `--apply` (sao lưu `migration_output/`, marker `loyalty_migration/shared_v1`, tạo `loyalty_members` + sổ `opening_*`, cập nhật cache điểm các node chi nhánh). Không xóa/ghi đè gì khác; chạy lại an toàn.
+3. Deploy: `firebase deploy --only functions` → phát hành app POS/Web mới → `firebase deploy --only database`. POS cũ không đổi/tích điểm được sau khi rules mới có hiệu lực.
 
 ---
 
@@ -132,3 +154,13 @@ match /kmt_point_history/{id} { allow read: if request.auth != null; allow write
 - Nút gốc `chamcong_links/` (`stores/{storeCode}`, `byChamCongStore/{chamCongStoreId}`, `users/{storeCode}/{chamCongUid}`) **không có rule riêng** → bị chặn bởi `.read/.write: false` ở gốc; chỉ Cloud Functions (`chamCongSignIn`, `linkChamCongStore`, `unlinkChamCongStore`, `getChamCongLinkStatus`) truy cập bằng Admin SDK. Test: `CC1` trong `tests/rules/rules.test.ts`.
 - Không đặt dữ liệu liên kết dưới `stores/{storeCode}` (quyền đọc của thành viên quán sẽ lan xuống). `storeInfo/chamCongStoreId`, `storeInfo/chamCongStoreName` chỉ để hiển thị — máy chủ không tin các trường này.
 - Hồ sơ nhân viên do SSO cấp nằm ở `stores/{storeCode}/users/cc_{chamCongUid}` (`authProvider: "chamcong"`), dùng chung rules `users` hiện có. Chi tiết: `docs/CHAMCONG_SSO.md`.
+
+## 6. Gộp vai trò: Quản lý (ROLE_MANAGER) và Nhân viên (ROLE_STAFF)
+
+- **Quản lý 1 + Quản lý 2 → `ROLE_MANAGER`** ("Quản lý"); **Thu ngân + Phục vụ → `ROLE_STAFF`** ("Nhân viên"). Bếp (`ROLE_KITCHEN`) giữ riêng. Mã chuẩn do `normalizeRoleId` (functions `permissions.ts`, web `lib/roles.ts`, Flutter `app_permissions.dart`) trả về; ghi mới luôn dùng mã chuẩn.
+- **Rules**: danh sách vai trò vốn đã chứa mọi mã Quản lý cũ. Mọi chỗ cho phép Thu ngân (`cashier`/`ROLE_CASHIER`/`employee`, 17 điểm) nay thêm `ROLE_STAFF`, `staff`, `ROLE_WAITER`, `waiter` ⇒ **mã cũ vẫn hoạt động nguyên trạng**, không cần migrate khẩn.
+- **Quyền Phục vụ TĂNG khi gộp** (vì `waiter`/`ROLE_WAITER` nay = Nhân viên): thanh toán (ghi `bills`/`history` sang `PAID`/`REFUNDED`, sửa hóa đơn đã thanh toán), ghi `cash_shifts`, `online_orders`, `customers` (đọc + tạo/sửa không đụng điểm), `point_history` (đọc), `loyalty_applied`, `bill_stock_applied`/`bill_stock_lines`/`stock_events`/`stock_balances`/`stock_retry_queue`, `promotions/*/usageCount`, `vouchers/*/*`, `campaign_counters`, `customer_campaign_counters`. Các ràng buộc **không còn áp cho Phục vụ**: chặn sửa/xóa hóa đơn PAID, chặn đọc `customers`, chặn ghi tồn kho/điểm. Muốn siết lại: dùng vai trò **Bếp** cho người chỉ gọi món, hoặc (đề xuất) thêm cờ từ chối quyền theo từng người — hiện `customPermissions` chỉ **cộng thêm**, không trừ bớt.
+- **Quản lý** không còn phân biệt QL1/QL2 ở rules (trước đây cũng không phân biệt) — thay đổi chỉ ở quyền chức năng (ứng dụng/Web).
+- **Migrate dữ liệu** (tùy chọn, không bắt buộc): `scripts/migrate_merge_roles/` (`node migrate.js` = dry-run; `--apply` để ghi). Chạy sau khi đã deploy bản app/Web/Functions mới.
+- Callable `resetStaffPassword`/`setStaffDisabled`: Quản lý chỉ thao tác được với Nhân viên/Bếp (không Chủ quán, không Quản lý khác); tìm người gọi/đối tượng theo khóa nút, trường `uid` hoặc tên đăng nhập (hồ sơ cũ khóa theo username).
+- Test: `MR1`–`MR4` trong `tests/rules/rules.test.ts` (cần emulator) kiểm tra mọi mã cũ/mới. Fixture `waiter_uid` của các test cũ nay mang vai trò **Bếp** (nhóm "chỉ là thành viên quán") để các kiểm tra giới hạn quyền (hóa đơn PAID, khách hàng, tồn kho, điểm...) vẫn đúng ngữ nghĩa; chưa chạy được emulator cục bộ nên cần chạy `npm run test:emulator` trước khi deploy.

@@ -222,8 +222,8 @@ export default function ChamCongLinkCard({ storeCode, storeName }: Props) {
 
         {configured && (
           <p style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
-            Nhân viên đăng nhập lần đầu sẽ tự xuất hiện với vai trò <strong>Phục vụ</strong>. Bạn có thể nâng quyền
-            (Thu ngân, Quản lý...) trong mục <strong>Nhân viên</strong>.
+            Nhân viên đăng nhập lần đầu sẽ tự xuất hiện với vai trò <strong>Nhân viên</strong>. Bạn có thể đổi sang
+            Quản lý hoặc Bếp / Bar trong mục <strong>Nhân viên</strong> (hoặc nâng vai trò bên Chấm Công).
           </p>
         )}
       </div>

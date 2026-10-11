@@ -695,7 +695,7 @@ class BillDetailSheet extends StatelessWidget {
                         Text('Mã đặt món: ${bill.orderCode}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blueGrey)),
                       const SizedBox(height: 4),
                       Text('Bàn: ${bill.tableName} (${bill.zone}) • Tổng tiền: ${FormatUtils.vnd(bill.finalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.closedAt ?? bill.createdAt)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
                     ],
                   ),
                 ),

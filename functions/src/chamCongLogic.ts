@@ -3,34 +3,28 @@
  * Không phụ thuộc Firebase runtime → unit test 100% (xem chamCongLogic.test.ts).
  * Phần I/O (verify token, đọc Firestore chấm công, ghi RTDB) nằm ở chamCong.ts.
  */
-import { UserProfile, isManagerRole, isOwnerRole } from "./permissions";
+import { UserProfile, ROLE_MANAGER_ID, ROLE_STAFF_ID, isManagerRole, isOwnerRole, normalizeRoleId } from "./permissions";
 
-/** Nhóm vai trò bên Chấm Công sau khi chuẩn hóa. */
-export type ChamCongRoleKind = "owner" | "manager1" | "manager2" | "employee";
+/** Nhóm vai trò bên Chấm Công sau khi chuẩn hóa (Quản lý 1 / Quản lý 2 đã gộp thành "manager"). */
+export type ChamCongRoleKind = "owner" | "manager" | "employee";
 
 /** Vai trò POS tương ứng (khớp app_permissions.dart / web/lib/auth.tsx / database.rules.json). */
 export const POS_ROLE_OWNER = "owner";
-export const POS_ROLE_MANAGER_1 = "manager_1";
-export const POS_ROLE_MANAGER_2 = "manager_2";
-/** Vai trò thấp nhất của POS (Nhân viên phục vụ). KHÔNG dùng "employee" vì rules coi "employee" = Thu ngân. */
-export const POS_ROLE_LOWEST = "ROLE_WAITER";
+/** Mã Quản lý chuẩn (đã gộp Quản lý 1 + 2). */
+export const POS_ROLE_MANAGER = ROLE_MANAGER_ID;
+/** Vai trò thấp nhất của POS: Nhân viên (đã gộp Thu ngân + Phục vụ). */
+export const POS_ROLE_LOWEST = ROLE_STAFF_ID;
 
 export const AUTH_PROVIDER_CHAMCONG = "chamcong";
 export const DEACTIVATED_BY_CHAMCONG = "chamcong";
 
 const OWNER_ALIASES = new Set(["owner", "chu", "role_owner", "chu_cua_hang"]);
-const MANAGER1_ALIASES = new Set([
-  "manager_1", "manager1", "manager", "legacymanager", "legacy_manager",
-  "role_manager", "role_manager_1", "ql", "ql1", "ql_1", "quan_ly", "quan_ly_1",
-]);
-const MANAGER2_ALIASES = new Set(["manager_2", "manager2", "role_manager_2", "ql2", "ql_2", "quan_ly_2"]);
 
-/** Chuẩn hóa vai trò Chấm Công (owner|manager1|manager_1|manager2|manager_2|employee + legacy 'manager','legacyManager','chu'). */
+/** Chuẩn hóa vai trò Chấm Công (owner | manager | manager1/2 | manager_1/2 | legacyManager | chu → owner/manager/employee). */
 export function normalizeChamCongRole(raw: unknown): ChamCongRoleKind {
   const clean = typeof raw === "string" ? raw.trim().toLowerCase().replace(/[-\s]+/g, "_") : "";
   if (OWNER_ALIASES.has(clean)) return "owner";
-  if (MANAGER1_ALIASES.has(clean)) return "manager1";
-  if (MANAGER2_ALIASES.has(clean)) return "manager2";
+  if (isManagerRole(clean)) return "manager";
   return "employee";
 }
 
@@ -38,10 +32,8 @@ export function posRoleForChamCongRole(kind: ChamCongRoleKind): string {
   switch (kind) {
     case "owner":
       return POS_ROLE_OWNER;
-    case "manager1":
-      return POS_ROLE_MANAGER_1;
-    case "manager2":
-      return POS_ROLE_MANAGER_2;
+    case "manager":
+      return POS_ROLE_MANAGER;
     default:
       return POS_ROLE_LOWEST;
   }
@@ -49,16 +41,18 @@ export function posRoleForChamCongRole(kind: ChamCongRoleKind): string {
 
 /**
  * Chính sách vai trò POS:
- * - Lần đầu: theo bảng ánh xạ (nhân viên → ROLE_WAITER).
+ * - Lần đầu: theo bảng ánh xạ (nhân viên → ROLE_STAFF).
  * - Các lần sau: Chủ/Quản lý bên chấm công → luôn đặt vai trò ánh xạ;
- *   Nhân viên bên chấm công mà POS đang là chủ/quản lý → hạ về ROLE_WAITER;
- *   còn lại giữ vai trò chủ quán đã chọn trong POS (thu ngân, bếp...).
+ *   Nhân viên bên chấm công mà POS đang là chủ/quản lý → hạ về ROLE_STAFF;
+ *   còn lại giữ vai trò chủ quán đã chọn trong POS (Bếp...); mã cũ Thu ngân/Phục vụ
+ *   được chuẩn hóa thành ROLE_STAFF (đã gộp một vai trò). Chủ quán không còn "nâng
+ *   nhân viên lên thu ngân" vì Thu ngân = Nhân viên; chỉ còn Bếp hoặc Quản lý.
  */
 export function decidePosRole(kind: ChamCongRoleKind, existingRoleId: string | null | undefined): string {
   if (existingRoleId == null || existingRoleId === "") return posRoleForChamCongRole(kind);
   if (kind !== "employee") return posRoleForChamCongRole(kind);
   if (isOwnerRole(existingRoleId) || isManagerRole(existingRoleId)) return POS_ROLE_LOWEST;
-  return existingRoleId;
+  return normalizeRoleId(existingRoleId);
 }
 
 // ---------------------------------------------------------------------------

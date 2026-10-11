@@ -3,17 +3,19 @@ import {
   DEFAULT_LOYALTY_TIERS,
   SUGGESTED_LOYALTY_TIERS,
   buildNewCustomerNode,
-  buildPooledRedeemUpdates,
+  LEDGER_TYPE_LABEL,
+  effectiveConfig,
+  memberKeyOf,
+  parseChainConfig,
+  parseLedgerEntries,
+  totalsByMember,
+  validateAdjustInput,
   hasCustomTiers,
-  planPooledRedeem,
-  buildPointAdjustment,
-  buildSharedLoyaltyUpdates,
   normalizePhone,
   normalizeTiers,
   parseLoyaltyLedger,
   parsePointHistory,
   pointsToNextTier,
-  poolCustomersByPhone,
   sortHistoryDesc,
   summarizeHistory,
   tierForTotalPoints,
@@ -21,8 +23,6 @@ import {
   validateTiers,
 } from "../lib/loyalty";
 
-const actor = { username: "ql1", fullName: "Quản lý 1", role: "ROLE_MANAGER_1" };
-const cust = { id: "C1", hoTen: "An", diemHienTai: 100, tongDiem: 300 };
 
 describe("cấu hình hạng", () => {
   it("mặc định khi chưa cấu hình / sai định dạng", () => {
@@ -85,34 +85,16 @@ describe("khách hàng mới", () => {
   });
 });
 
-describe("chỉnh điểm", () => {
-  const base = { storeCode: "T1", customer: cust, actor, tiers: SUGGESTED_LOYALTY_TIERS, now: 5000, nonce: "n" };
-
-  it("bắt buộc lý do, số nguyên không âm, không trừ quá số dư", () => {
-    expect(buildPointAdjustment({ ...base, mode: "ADD", value: 10, reason: " " })).toMatchObject({ ok: false });
-    expect(buildPointAdjustment({ ...base, mode: "ADD", value: -1, reason: "x" })).toMatchObject({ ok: false });
-    expect(buildPointAdjustment({ ...base, mode: "ADD", value: 1.5, reason: "x" })).toMatchObject({ ok: false });
-    expect(buildPointAdjustment({ ...base, mode: "SUB", value: 101, reason: "x" })).toMatchObject({ ok: false });
-    expect(buildPointAdjustment({ ...base, mode: "SET", value: 100, reason: "x" })).toMatchObject({ ok: false });
-  });
-
-  it("cộng điểm tăng cả tổng lịch sử và lên hạng", () => {
-    const r = buildPointAdjustment({ ...base, mode: "ADD", value: 200, reason: "Tặng sinh nhật" });
-    if (!r.ok) throw new Error(r.error);
-    expect(r.after).toBe(300);
-    expect(r.updates["stores/T1/customers/C1/diem_hien_tai"]).toBe(300);
-    expect(r.updates["stores/T1/customers/C1/currentPoints"]).toBe(300);
-    expect(r.updates["stores/T1/customers/C1/totalPoints"]).toBe(500);
-    expect(r.updates["stores/T1/customers/C1/hang_thanh_vien"]).toBe("Vàng");
-    expect(r.updates["stores/T1/point_history/adj_5000_n"]).toMatchObject({ delta: 200, before: 100, after: 300, reason: "Tặng sinh nhật" });
-    expect(r.updates["stores/T1/audit_logs/log_5000_pt_n"]).toMatchObject({ action: "ADJUST_POINTS", username: "ql1" });
-  });
-
-  it("trừ / đặt lại điểm không làm giảm tổng lịch sử", () => {
-    const r = buildPointAdjustment({ ...base, mode: "SET", value: 20, reason: "Sửa nhầm" });
-    if (!r.ok) throw new Error(r.error);
-    expect(r.delta).toBe(-80);
-    expect(r.updates["stores/T1/customers/C1/totalPoints"]).toBe(300);
+describe("chỉnh điểm (kiểm tra trước khi gọi callable)", () => {
+  const base = { balance: 100 };
+  it("bắt buộc lý do, số nguyên không âm, không trừ quá số dư, không để nguyên số dư", () => {
+    expect(validateAdjustInput({ ...base, mode: "ADD", value: 10, reason: " " })).not.toBeNull();
+    expect(validateAdjustInput({ ...base, mode: "ADD", value: -1, reason: "sinh nhật" })).not.toBeNull();
+    expect(validateAdjustInput({ ...base, mode: "ADD", value: 1.5, reason: "sinh nhật" })).not.toBeNull();
+    expect(validateAdjustInput({ ...base, mode: "SUB", value: 101, reason: "sửa nhầm" })).toMatch(/không thể trừ/);
+    expect(validateAdjustInput({ ...base, mode: "SET", value: 100, reason: "sửa nhầm" })).toMatch(/không thay đổi/);
+    expect(validateAdjustInput({ ...base, mode: "ADD", value: 200, reason: "Tặng sinh nhật" })).toBeNull();
+    expect(validateAdjustInput({ ...base, mode: "SET", value: 20, reason: "Sửa nhầm" })).toBeNull();
   });
 });
 
@@ -130,58 +112,40 @@ describe("lịch sử điểm", () => {
   });
 });
 
-describe("điểm dùng chung toàn hệ thống", () => {
-  it("ghi cấu hình + audit cho từng chi nhánh", () => {
-    const u = buildSharedLoyaltyUpdates({ storeCodes: ["A", "B"], enabled: true, actor: { username: "chu" }, now: 9 });
-    expect(u["stores/A/storeInfo/sharedLoyalty"]).toEqual({ enabled: true, deductOrder: "HOME_FIRST", storeCodes: ["A", "B"], confirmedBy: "chu", confirmedAt: 9 });
-    expect(Object.keys(u)).toHaveLength(4);
+describe("điểm dùng chung toàn chuỗi", () => {
+  const mk = (storeCode: string, id: string, phone: string, pts: number, total = pts) =>
+    ({ id, storeCode, soDienThoai: phone, diemHienTai: pts, tongDiem: total });
+
+  it("khóa bản ghi: SĐT chuẩn hóa, không SĐT thì riêng theo chi nhánh/khách", () => {
+    expect(memberKeyOf("+84 912 345 678", "A", "1")).toBe("0912345678");
+    expect(memberKeyOf("", "A", "x.y")).toBe("L_A_x_y");
   });
 
-  it("gộp khách theo SĐT chuẩn hóa", () => {
-    const mk = (storeCode: string, id: string, phone: string, pts: number) =>
-      ({ id, storeCode, soDienThoai: phone, hoTen: "An", maKhachHang: id, diemHienTai: pts, tongDiem: pts, hangThanhVien: "" });
-    const pooled = poolCustomersByPhone([mk("A", "1", "0912345678", 10), mk("B", "2", "+84912345678", 5), mk("A", "3", "xx", 99)]);
-    expect(pooled).toHaveLength(1);
-    expect(pooled[0]).toMatchObject({ phone: "0912345678", totalCurrent: 15 });
-  });
-});
-
-describe("trừ điểm dùng chung", () => {
-  const holdings = [
-    { storeCode: "A", customerId: "a1", points: 30 },
-    { storeCode: "B", customerId: "b1", points: 80 },
-    { storeCode: "C", customerId: "c1", points: 0 },
-  ];
-
-  it("HOME_FIRST: trừ chi nhánh đang thao tác trước rồi tới chi nhánh nhiều điểm nhất", () => {
-    const r = planPooledRedeem({ holdings, points: 50, homeStore: "A", order: "HOME_FIRST" });
-    if ("error" in r) throw new Error(r.error);
-    expect(r.allocations.map((a) => [a.storeCode, a.take, a.after])).toEqual([["A", 30, 0], ["B", 20, 60]]);
+  it("tổng toàn chuỗi không đếm trùng khách cùng SĐT ở nhiều chi nhánh (các node mang cùng bản sao số dư)", () => {
+    const t = totalsByMember([mk("A", "1", "0912345678", 110, 600), mk("B", "2", "+84912345678", 110, 600), mk("A", "3", "", 5), mk("B", "4", "", 7)]);
+    expect(t).toEqual({ members: 3, points: 122, totalPoints: 612, duplicateNodes: 1 });
   });
 
-  it("LARGEST_FIRST: chi nhánh nhiều điểm nhất trước", () => {
-    const r = planPooledRedeem({ holdings, points: 100, homeStore: "A", order: "LARGEST_FIRST" });
-    if ("error" in r) throw new Error(r.error);
-    expect(r.allocations.map((a) => [a.storeCode, a.take])).toEqual([["B", 80], ["A", 20]]);
+  it("cấu hình chuỗi ưu tiên hơn chi nhánh; thiếu thì dùng của chi nhánh; mốc hạng không có mặc định ngầm", () => {
+    const chain = parseChainConfig({ pointEarnRate: 2, loyaltyTiers: [{ name: "Vàng", minPoints: 500 }] });
+    expect(chain.pointRedeemRate).toBeUndefined();
+    const eff = effectiveConfig({ pointEarnRate: 1, pointRedeemRate: 500, loyaltyTiers: [{ name: "Bạc", minPoints: 0 }] }, chain);
+    expect(eff.pointEarnRate).toBe(2);
+    expect(eff.pointRedeemRate).toBe(500);
+    expect(eff.loyaltyTiers[0].name).toBe("Vàng"); // hạng thấp nhất luôn về 0 điểm
+    expect(effectiveConfig(undefined, {}).loyaltyTiers).toEqual(DEFAULT_LOYALTY_TIERS);
+    expect(parseChainConfig(null)).toEqual({});
   });
 
-  it("từ chối khi không đủ điểm hoặc số điểm sai", () => {
-    expect(planPooledRedeem({ holdings, points: 111, order: "HOME_FIRST" })).toHaveProperty("error");
-    expect(planPooledRedeem({ holdings, points: 0, order: "HOME_FIRST" })).toHaveProperty("error");
-    expect(planPooledRedeem({ holdings, points: 1.5, order: "HOME_FIRST" })).toHaveProperty("error");
-  });
-
-  it("ghi từng chi nhánh: giảm điểm, giữ tổng lịch sử, có lịch sử + nhật ký; bắt buộc lý do", () => {
-    const plan = planPooledRedeem({ holdings, points: 50, homeStore: "A", order: "HOME_FIRST" });
-    if ("error" in plan) throw new Error(plan.error);
-    const base = { allocations: plan.allocations, customerName: "An", phone: "0912345678", actor, now: 7, nonce: "n" };
-    expect(buildPooledRedeemUpdates({ ...base, reason: " " })).toHaveProperty("error");
-    const r = buildPooledRedeemUpdates({ ...base, reason: "HD-1" });
-    if ("error" in r) throw new Error(r.error);
-    expect(r.updates["stores/A/customers/a1/diem_hien_tai"]).toBe(0);
-    expect(r.updates["stores/B/customers/b1/currentPoints"]).toBe(60);
-    expect(Object.keys(r.updates).some((k) => k.endsWith("/totalPoints"))).toBe(false);
-    expect(r.updates["stores/B/point_history/pool_7_n_B"]).toMatchObject({ type: "POOL_REDEEM", delta: -20, before: 80, after: 60 });
-    expect(r.updates["stores/A/audit_logs/log_7_pool_n_A"]).toMatchObject({ action: "LOYALTY_POOL_REDEEM" });
+  it("đọc sổ cái dùng chung: bỏ dòng sai, mới nhất trước, có cột chi nhánh", () => {
+    const rows = parseLedgerEntries([
+      { id: "b1_earn", type: "earn", points: 20, balanceAfter: 120, storeCode: "A", billId: "b1", staff: "nv", at: 100 },
+      { id: "b2_redeem", type: "redeem", points: -50, balanceAfter: 70, storeCode: "B", billId: "b2", staff: "nv", at: 200 },
+      { id: "x", type: "bogus", points: 1, at: 300 },
+      "rác",
+    ]);
+    expect(rows.map((r) => [r.id, r.storeCode, r.points])).toEqual([["b2_redeem", "B", -50], ["b1_earn", "A", 20]]);
+    expect(LEDGER_TYPE_LABEL[rows[0].type]).toContain("Đổi điểm");
+    expect(parseLedgerEntries(undefined)).toEqual([]);
   });
 });

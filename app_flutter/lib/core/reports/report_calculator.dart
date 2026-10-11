@@ -26,12 +26,8 @@ class ReportCalculator {
         map[b.id] = b;
       } else {
         final existing = map[b.id]!;
-        final exTime = (existing.closedAt != null && existing.closedAt! > 0)
-            ? existing.closedAt!
-            : existing.createdAt;
-        final newTime = (b.closedAt != null && b.closedAt! > 0)
-            ? b.closedAt!
-            : b.createdAt;
+        final exTime = existing.reportTimeMs;
+        final newTime = b.reportTimeMs;
         if (newTime >= exTime) {
           map[b.id] = b;
         }
@@ -87,9 +83,15 @@ class ReportCalculator {
     return b.notes.isNotEmpty ? b.notes : null;
   }
 
+  /// Giá trị đơn hủy = max(subTotal, tổng tiền món đã xóa). Đơn hủy bằng "Xóa hết món"
+  /// có subTotal = 0. Đây là dòng kiểm toán RIÊNG, không cộng chung với "Tổng tiền xóa món".
+  static int cancelledBillValue(BillModel b) {
+    final deleted = b.deletedItemsAmount;
+    return b.subTotal > deleted ? b.subTotal : deleted;
+  }
+
   static int? getCancelledAt(BillModel b) {
-    if (b is ReportBillModel && b.cancelledAt != null) return b.cancelledAt;
-    return (b.closedAt != null && b.closedAt! > 0) ? b.closedAt : b.createdAt;
+    return b.reportTimeMs;
   }
 
   /// BÁO CÁO 1: BÁO CÁO TỔNG QUAN QUẢN TRỊ (EXECUTIVE OVERVIEW)
@@ -146,7 +148,7 @@ class ReportCalculator {
 
     final cancelledTotalValue = cancelledBills.fold<int>(
       0,
-      (sum, b) => sum + b.subTotal,
+      (sum, b) => sum + cancelledBillValue(b),
     );
 
     final totalCostPrice = paidBills.fold<int>(
@@ -241,7 +243,7 @@ class ReportCalculator {
     }
 
     for (final b in paidBills) {
-      final dt = ReportDateUtils.getBillDateTime(b.closedAt, b.createdAt, b.status);
+      final dt = ReportDateUtils.billDateTime(b);
       hourlyMap[dt.hour]?.add(b);
     }
 
@@ -271,7 +273,7 @@ class ReportCalculator {
     final Map<String, List<BillModel>> grouped = {};
 
     for (final b in paidBills) {
-      final dt = ReportDateUtils.getBillDateTime(b.closedAt, b.createdAt, b.status);
+      final dt = ReportDateUtils.billDateTime(b);
       String key;
       switch (period) {
         case PeriodType.day:
@@ -617,10 +619,11 @@ class ReportCalculator {
         cancelledAt: cancelledTime,
         reason: reason,
         items: formattedItems,
-        subTotal: b.subTotal,
+        subTotal: cancelledBillValue(b),
       ));
     }
 
+    // Giá trị thất thoát từng đơn đã là max(subTotal, tiền món xóa) — xem cancelledBillValue.
     final totalLoss = items.fold<int>(0, (sum, b) => sum + b.subTotal);
 
     return CancellationReportResult(
@@ -921,7 +924,7 @@ class ReportCalculator {
 
     final displayDate = dateStr ??
         (bills.isNotEmpty
-            ? ReportDateUtils.formatYmd(ReportDateUtils.getBillDateTime(bills.first.closedAt, bills.first.createdAt))
+            ? ReportDateUtils.formatYmd(ReportDateUtils.billDateTime(bills.first))
             : ReportDateUtils.formatYmd(ReportDateUtils.toUtc7(DateTime.now().millisecondsSinceEpoch)));
 
     return EndOfDayReportData(

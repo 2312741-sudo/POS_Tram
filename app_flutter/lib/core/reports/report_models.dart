@@ -7,7 +7,6 @@ class ReportBillModel extends BillModel {
   final int guestCount;
   final int refundAmount;
   final String? cancelReason;
-  final int? cancelledAt;
 
   ReportBillModel({
     required super.id,
@@ -42,7 +41,7 @@ class ReportBillModel extends BillModel {
     this.guestCount = 1,
     this.refundAmount = 0,
     this.cancelReason,
-    this.cancelledAt,
+    super.cancelledAt,
   });
 
   factory ReportBillModel.fromMap(Map<dynamic, dynamic> map, String id) {
@@ -80,7 +79,7 @@ class ReportBillModel extends BillModel {
       guestCount: (map['guestCount'] as num?)?.toInt() ?? 1,
       refundAmount: (map['refundAmount'] as num?)?.toInt() ?? 0,
       cancelReason: map['cancelReason']?.toString(),
-      cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
+      cancelledAt: base.cancelledAt,
     );
   }
 
@@ -124,7 +123,7 @@ class ReportBillModel extends BillModel {
       guestCount: guestCount,
       refundAmount: refundAmount,
       cancelReason: cancelReason,
-      cancelledAt: cancelledAt,
+      cancelledAt: cancelledAt ?? base.cancelledAt,
     );
   }
 }

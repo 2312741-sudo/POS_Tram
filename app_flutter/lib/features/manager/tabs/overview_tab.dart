@@ -65,7 +65,7 @@ class _OverviewTabState extends State<OverviewTab> {
     final now = DateTime.now();
     return _bills.where((b) {
       if (b.status != 'PAID') return false;
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
       return dt.year == now.year && dt.month == now.month && dt.day == now.day;
     }).toList();
   }
@@ -92,7 +92,7 @@ class _OverviewTabState extends State<OverviewTab> {
       final targetDate = now.subtract(Duration(days: 6 - i));
       final dayBills = _bills.where((b) {
         if (b.status != 'PAID') return false;
-        final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+        final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
         return dt.year == targetDate.year && dt.month == targetDate.month && dt.day == targetDate.day;
       });
       final revenue = dayBills.fold(0, (s, b) => s + b.finalAmount);

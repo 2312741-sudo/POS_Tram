@@ -7,6 +7,7 @@
  * dòng món + audit log của thao tác.
  */
 import type { RawOrderLine } from "./order-math";
+import { normalizeRoleId, ROLE_MANAGER, ROLE_OWNER } from "./roles";
 
 export type ApprovalAction = "DISCOUNT_ITEM" | "CANCEL_KITCHEN_ITEM";
 
@@ -124,22 +125,19 @@ interface ApproverSource {
   customPermissions?: unknown;
 }
 
-const OWNER_ROLES = ["owner", "role_owner", "chu"];
-const MANAGER_ROLES = ["manager", "role_manager", "manager_1", "manager_2", "role_manager_1", "role_manager_2", "ql"];
+// Quản lý đã gộp QL1 + QL2: duyệt cả giảm giá món lẫn hủy món đã gửi bếp
 const ROLE_APPROVAL: Record<string, ApprovalAction[]> = {
-  role_manager_1: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
-  manager_1: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
+  [ROLE_MANAGER]: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
 };
 
 /** Khớp managerPinLogic.approverHasPermission phía máy chủ */
 export function canUserApprove(u: ApproverSource, action: ApprovalAction): boolean {
   if (u.isActive === false) return false;
-  const role = String(u.roleId || u.role || "").toLowerCase();
-  if (u.isRootOwner === true || OWNER_ROLES.includes(role)) return true;
-  if (!MANAGER_ROLES.includes(role)) return false;
+  const role = normalizeRoleId(String(u.roleId || u.role || ""));
+  if (u.isRootOwner === true || role === ROLE_OWNER) return true;
+  if (role !== ROLE_MANAGER) return false;
   const custom = Array.isArray(u.customPermissions) ? (u.customPermissions as unknown[]) : [];
   if (custom.includes(action) || (action === "DISCOUNT_ITEM" && custom.includes("MANUAL_DISCOUNT"))) return true;
-  if (action === "DISCOUNT_ITEM") return true; // mọi vai trò quản lý đều có DISCOUNT_ITEM
   return (ROLE_APPROVAL[role] || []).includes(action);
 }
 

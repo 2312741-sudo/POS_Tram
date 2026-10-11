@@ -11,6 +11,11 @@ import {
 import { authenticateChamCong, getCurrentChamCongIdToken, signOutChamCong } from "./chamcong-firebase";
 import { ref, get, set, update } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
+import { PERMISSION_CATALOG } from "./permission-catalog";
+import { setExportGrants } from "./export-guard";
+import { ROLE_OWNER, ROLE_MANAGER, ROLE_STAFF, ROLE_KITCHEN, normalizeRoleId } from "./roles";
+
+export { normalizeRoleId, roleLabel, ROLE_OWNER, ROLE_MANAGER, ROLE_STAFF, ROLE_KITCHEN } from "./roles";
 import {
   signInWithCustomToken,
   signOut,
@@ -110,77 +115,58 @@ export function generateEmail(username: string, storeCode: string): string {
 // 2. Hệ thống phân quyền RBAC Matrix (theo AUTH_CONTRACT.md)
 // ---------------------------------------------------------------------------
 
+/**
+ * Quyền mặc định theo vai trò — CHỈ có 4 mã vai trò chuẩn (xem lib/roles.ts):
+ * ROLE_OWNER, ROLE_MANAGER (đã gộp QL1+QL2 = HỢP hai bộ quyền cũ), ROLE_STAFF (đã gộp Thu ngân+Phục vụ), ROLE_KITCHEN.
+ * Mã cũ được chuẩn hóa bởi normalizeRoleId trước khi tra bảng. Nguồn song song: app_permissions.dart.
+ */
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Chủ quán có toàn quyền
-  ROLE_OWNER: [
-    "VIEW_MENU", "EDIT_MENU", "DELETE_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT",
-    "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM",
-    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
-    "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT",
-    "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
-    "MANAGE_USERS", "MANAGE_ROLES_PERMISSIONS", "MANAGE_PROMOTIONS", "MANAGE_STORE_SETTINGS",
-    "VIEW_INVENTORY", "VIEW_COST_PRICE",
-    "CREATE_RECEIPT", "INVENTORY_STOCK_IN", "COMPLETE_RECEIPT",
-    "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT",
-    "CREATE_WASTE", "INVENTORY_WASTE",
-    "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
-    "CREATE_CAMPAIGN", "EDIT_CAMPAIGN", "MANAGE_CODES", "OVERRIDE_MANUAL_DISCOUNT",
+  [ROLE_OWNER]: PERMISSION_CATALOG.map((p) => p.key),
+  // Quản lý = hợp Quản lý 1 + Quản lý 2
+  [ROLE_MANAGER]: [
+    "VIEW_MENU", "EDIT_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT", "OPEN_TABLE", "CHANGE_TABLE",
+    "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM", "CREATE_BILL", "EDIT_BILL",
+    "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL",
+    "REPRINT_BILL", "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT", "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
+    "MANAGE_PROMOTIONS", "VIEW_INVENTORY", "EDIT_CATALOG_ITEM", "VIEW_COST_PRICE",
+    "MANAGE_RECIPES", "VIEW_SUPPLIERS", "EDIT_SUPPLIERS", "CREATE_RECEIPT", "INVENTORY_STOCK_IN",
+    "COMPLETE_RECEIPT", "CREATE_PURCHASE_RETURN", "RECORD_SUPPLIER_PAYMENT", "CREATE_STOCKTAKE",
+    "APPROVE_STOCKTAKE", "CREATE_TRANSFER", "RECEIVE_TRANSFER", "CREATE_WASTE", "INVENTORY_WASTE",
+    "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT", "CREATE_PRODUCTION", "CREATE_CAMPAIGN",
+    "EDIT_CAMPAIGN", "ACTIVATE_CAMPAIGN", "MANAGE_CODES", "COPY_MENU", "DELETE_ITEM",
+    "MANAGE_TABLES", "REDEEM_POINTS", "VIEW_CUSTOMERS", "MANAGE_CUSTOMERS", "ADJUST_POINTS",
+    "EXPORT_REPORTS", "EXPORT_AUDIT_LOGS", "EXPORT_DATA", "VIEW_CASH_SHIFTS", "VIEW_ONLINE_ORDERS",
+    "MANAGE_ONLINE_ORDERS", "VIEW_KITCHEN", "MANAGE_MANAGER_PIN",
+    "CREATE_SAMPLE_DATA",
   ],
-  // Quản lý 1
-  ROLE_MANAGER_1: [
-    "VIEW_MENU", "EDIT_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT",
-    "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM",
-    "CREATE_BILL", "EDIT_BILL", "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL", "REPRINT_BILL",
-    "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT",
-    "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
-    "MANAGE_PROMOTIONS",
-    "VIEW_INVENTORY", "VIEW_COST_PRICE",
-    "CREATE_RECEIPT", "INVENTORY_STOCK_IN", "COMPLETE_RECEIPT",
-    "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT",
-    "CREATE_WASTE", "INVENTORY_WASTE",
-    "APPROVE_STOCKTAKE", "RECORD_SUPPLIER_PAYMENT",
-    "CREATE_CAMPAIGN", "EDIT_CAMPAIGN", "MANAGE_CODES",
+  // Nhân viên = hợp Thu ngân + Phục vụ
+  [ROLE_STAFF]: [
+    "VIEW_MENU", "OPEN_TABLE", "CHANGE_TABLE", "SEND_KITCHEN", "CREATE_BILL", "APPLY_PROMOTION",
+    "PRINT_BILL", "DELETE_ITEM", "REDEEM_POINTS", "VIEW_CUSTOMERS", "MANAGE_CUSTOMERS",
+    "VIEW_ONLINE_ORDERS", "MANAGE_ONLINE_ORDERS", "VIEW_KITCHEN", "MANAGE_CASH_SHIFT",
+    "VIEW_CASH_SHIFTS",
   ],
-  // Quản lý 2 / Quản lý ca
-  ROLE_MANAGER_2: [
-    "VIEW_MENU",
-    "OPEN_TABLE", "CHANGE_TABLE", "MERGE_SPLIT_TABLE", "SEND_KITCHEN",
-    "CREATE_BILL", "APPLY_PROMOTION", "DISCOUNT_ITEM", "PRINT_BILL",
-    "MANAGE_CASH_SHIFT",
-    "VIEW_REPORTS",
-  ],
-  // Thu ngân / Nhân viên
-  ROLE_CASHIER: [
-    "VIEW_MENU", "OPEN_TABLE", "CHANGE_TABLE", "SEND_KITCHEN", "CREATE_BILL", "APPLY_PROMOTION", "PRINT_BILL",
-  ],
-  ROLE_WAITER: [
-    "VIEW_MENU", "OPEN_TABLE", "CHANGE_TABLE", "SEND_KITCHEN",
-  ],
-  ROLE_KITCHEN: [
-    "VIEW_MENU", "SEND_KITCHEN",
-  ],
+  [ROLE_KITCHEN]: ["VIEW_MENU", "SEND_KITCHEN", "VIEW_KITCHEN"],
 };
 
-// Đồng bộ alias cho roleId viết thường
-ROLE_PERMISSIONS.owner = ROLE_PERMISSIONS.ROLE_OWNER;
-ROLE_PERMISSIONS.manager_1 = ROLE_PERMISSIONS.ROLE_MANAGER_1;
-ROLE_PERMISSIONS.manager_2 = ROLE_PERMISSIONS.ROLE_MANAGER_2;
-ROLE_PERMISSIONS.ROLE_MANAGER = ROLE_PERMISSIONS.ROLE_MANAGER_2;
-ROLE_PERMISSIONS.employee = ROLE_PERMISSIONS.ROLE_CASHIER;
+/** Mã vai trò (đã chuẩn hóa) của người dùng. */
+export function userRoleId(user: { roleId?: string; role?: string } | null | undefined): string {
+  return normalizeRoleId(user?.roleId || user?.role || "");
+}
 
 export function hasPermission(user: User | null, permission: string): boolean {
   if (!user) return false;
 
   // Sovereign Owner Rule: Chủ quán tối cao luôn có mọi quyền
   if (user.isRootOwner) return true;
-  const roleIdUpper = (user.roleId || user.role || "").toUpperCase();
-  if (roleIdUpper === "ROLE_OWNER" || roleIdUpper === "OWNER") return true;
+  const roleKey = userRoleId(user);
+  if (roleKey === ROLE_OWNER) return true;
 
   const userPerms = Array.isArray(user.customPermissions) ? user.customPermissions : [];
   const checkSingle = (p: string) => {
     if (userPerms.includes(p)) return true;
-    const roleKey = user.roleId || user.role || "";
-    const perms = ROLE_PERMISSIONS[roleKey] || ROLE_PERMISSIONS[roleIdUpper] || [];
+    const perms = ROLE_PERMISSIONS[roleKey] || [];
     return perms.includes(p);
   };
 
@@ -209,19 +195,14 @@ export function hasPermission(user: User | null, permission: string): boolean {
 
 export function isWebAdminRole(roleId: string, isRootOwner?: boolean): boolean {
   if (isRootOwner) return true;
-  const r = (roleId || "").toUpperCase();
-  return (
-    r.includes("OWNER") ||
-    r.includes("ADMIN") ||
-    r.includes("MANAGER")
-  );
+  const r = normalizeRoleId(roleId);
+  return r === ROLE_OWNER || r === ROLE_MANAGER;
 }
 
 export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (!user) return false;
   if (user.isRootOwner) return true;
-  const roleUpper = (user.roleId || user.role || "").toUpperCase();
-  if (roleUpper === "ROLE_OWNER" || roleUpper === "OWNER") return true;
+  if (userRoleId(user) === ROLE_OWNER) return true;
 
   if (pathname.startsWith("/dashboard/users")) {
     return hasPermission(user, "MANAGE_USERS");
@@ -242,13 +223,17 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     pathname.startsWith("/dashboard/revenue") ||
     pathname.startsWith("/dashboard/analytics") ||
     pathname.startsWith("/dashboard/end-of-day") ||
-    pathname.startsWith("/dashboard/shifts") ||
-    pathname.startsWith("/dashboard/customers") ||
     pathname.startsWith("/dashboard/product-sales") ||
     pathname.startsWith("/dashboard/reports/promotions") ||
     pathname.startsWith("/dashboard/reports/loyalty")
   ) {
     return hasPermission(user, "VIEW_REPORTS");
+  }
+  if (pathname.startsWith("/dashboard/shifts")) {
+    return hasPermission(user, "VIEW_CASH_SHIFTS") || hasPermission(user, "VIEW_REPORTS");
+  }
+  if (pathname.startsWith("/dashboard/customers")) {
+    return hasPermission(user, "VIEW_CUSTOMERS") || hasPermission(user, "VIEW_REPORTS");
   }
   if (pathname.startsWith("/dashboard/products")) {
     return hasPermission(user, "VIEW_MENU");
@@ -311,6 +296,19 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Cập nhật chốt chặn quyền xuất file theo người đang đăng nhập (xem lib/export-guard.ts)
+  useEffect(() => {
+    setExportGrants(
+      user
+        ? {
+            EXPORT_REPORTS: hasPermission(user, "EXPORT_REPORTS"),
+            EXPORT_AUDIT_LOGS: hasPermission(user, "EXPORT_AUDIT_LOGS"),
+            EXPORT_DATA: hasPermission(user, "EXPORT_DATA"),
+          }
+        : null
+    );
+  }, [user]);
   const [storeCode, setStoreCodeState] = useState<string>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -359,7 +357,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
 
-      const rawRoleId = String(profileData.roleId || profileData.role || "ROLE_WAITER");
+      const rawRoleId = String(profileData.roleId || profileData.role || "ROLE_STAFF");
       const isOwnerRole = rawRoleId.toUpperCase().includes("OWNER");
       const isRoot = profileData.isRootOwner === true || isOwnerRole;
 

@@ -47,7 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = DateTime.now();
     return _bills.where((b) {
       if (b.status != 'PAID') return false;
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
       return dt.year == now.year && dt.month == now.month && dt.day == now.day;
     }).toList();
   }

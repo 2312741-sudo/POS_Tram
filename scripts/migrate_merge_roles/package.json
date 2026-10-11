@@ -1,0 +1,14 @@
+{
+  "name": "migrate-merge-roles",
+  "version": "1.0.0",
+  "description": "Gộp vai trò: Quản lý 1+2 -> ROLE_MANAGER, Thu ngân+Phục vụ -> ROLE_STAFF (dry-run mặc định)",
+  "main": "migrate.js",
+  "scripts": {
+    "test": "node --test roles.test.js",
+    "dry-run": "node migrate.js",
+    "apply": "node migrate.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

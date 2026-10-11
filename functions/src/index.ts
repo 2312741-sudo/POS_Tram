@@ -1,9 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onValueWritten } from "firebase-functions/v2/database";
-import { FieldValue } from "firebase-admin/firestore";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import { normalizePhone, planPull, pullKey, type Holding } from "./pooledLoyalty";
 import {
   canCallerManageUsers,
   canCallerCreateRole,
@@ -12,6 +10,9 @@ import {
   normalizeUsername,
   buildSyntheticEmail,
   canCallerImportCustomer,
+  normalizeRoleId,
+  resolveStaffAuthUid,
+  isChamCongAccount,
   UserProfile,
 } from "./permissions";
 import {
@@ -22,7 +23,6 @@ import {
   decideImport,
   buildFirestoreMirror,
   shouldMirror,
-  buildPointHistoryEntry,
   readCurrentPoints,
 } from "./customerSync";
 import {
@@ -91,12 +91,12 @@ export const createStaffAccount = onCall(
     }
 
     // Lấy hồ sơ người gọi
-    const callerSnap = await db.ref(`stores/${cleanStoreCode}/users/${callerUid}`).get();
-    if (!callerSnap.exists()) {
+    const callerNode = await findCallerNode(cleanStoreCode, callerUid);
+    if (!callerNode) {
       throw new HttpsError("permission-denied", "Bạn không thuộc chi nhánh này.");
     }
 
-    const caller = callerSnap.val() as UserProfile;
+    const caller = callerNode.record;
     if (!canCallerManageUsers(caller)) {
       throw new HttpsError("permission-denied", "Bạn không có quyền quản lý nhân viên.");
     }
@@ -134,7 +134,7 @@ export const createStaffAccount = onCall(
         uid: newUid,
         username: cleanUser,
         fullName: String(fullName).trim(),
-        roleId: String(roleId),
+        roleId: normalizeRoleId(String(roleId)),
         isRootOwner: false,
         isActive: true,
         phone: phone ? String(phone).trim() : "",
@@ -198,32 +198,66 @@ export const resetStaffPassword = onCall(
     const cleanStoreCode = String(storeCode).trim().toUpperCase();
 
     // Lấy hồ sơ người gọi
-    const callerSnap = await db.ref(`stores/${cleanStoreCode}/users/${callerUid}`).get();
-    if (!callerSnap.exists()) {
+    const callerNode = await findCallerNode(cleanStoreCode, callerUid);
+    if (!callerNode) {
       throw new HttpsError("permission-denied", "Bạn không thuộc chi nhánh này.");
     }
 
-    // Lấy hồ sơ người bị tác động
-    const targetSnap = await db.ref(`stores/${cleanStoreCode}/users/${targetUid}`).get();
-    if (!targetSnap.exists()) {
+    // Lấy hồ sơ người bị tác động (chấp nhận khóa nút, trường uid hoặc tên đăng nhập)
+    const found = await findStaffNode(cleanStoreCode, String(targetUid));
+    if (!found) {
       throw new HttpsError("not-found", "Không tìm thấy hồ sơ nhân viên trong quán.");
     }
-
-    const caller = callerSnap.val() as UserProfile;
-    const target = targetSnap.val() as UserProfile;
-    const isSelf = callerUid === targetUid;
+    const { nodeKey, record: target } = found;
+    const caller = callerNode.record;
+    const authUidGuess = resolveStaffAuthUid(nodeKey, target);
+    const isSelf = callerUid === authUidGuess || callerUid === nodeKey;
 
     if (!canCallerResetPassword(caller, target, isSelf)) {
-      throw new HttpsError("permission-denied", "Bạn không có quyền đặt lại mật khẩu cho tài khoản này.");
+      throw new HttpsError(
+        "permission-denied",
+        "Bạn không có quyền đặt lại mật khẩu cho tài khoản này (Quản lý không đặt lại được mật khẩu của Chủ quán hoặc Quản lý khác)."
+      );
     }
 
-    // Cập nhật Auth
-    await auth.updateUser(targetUid, {
-      password: String(newPassword),
-    });
+    if (isChamCongAccount(nodeKey, target)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Tài khoản này đăng nhập bằng Chấm Công Trạm nên không có mật khẩu POS để đặt lại."
+      );
+    }
 
-    // Bật mustChangePassword trong RTDB
-    await db.ref(`stores/${cleanStoreCode}/users/${targetUid}/mustChangePassword`).set(true);
+    // Cập nhật Auth (khóa nút cũ theo tên đăng nhập → thử tra uid thật qua email tổng hợp)
+    let authUid = authUidGuess;
+    try {
+      await auth.updateUser(authUid, { password: String(newPassword) });
+    } catch (err: any) {
+      const code = String(err?.code || "");
+      if (code === "auth/user-not-found" || code === "auth/invalid-uid") {
+        const email = target.username ? buildSyntheticEmail(String(target.username), cleanStoreCode) : "";
+        let resolved: string | null = null;
+        if (email) {
+          resolved = await auth.getUserByEmail(email).then((u) => u.uid).catch(() => null);
+        }
+        if (!resolved) {
+          throw new HttpsError(
+            "not-found",
+            "Tài khoản này chưa có đăng nhập Firebase (hồ sơ cũ). Hãy xóa và tạo lại tài khoản nhân viên."
+          );
+        }
+        authUid = resolved;
+        await auth.updateUser(authUid, { password: String(newPassword) }).catch((e2: any) => {
+          throw new HttpsError("internal", e2?.message || "Không cập nhật được mật khẩu.");
+        });
+      } else if (code === "auth/invalid-password" || code === "auth/weak-password") {
+        throw new HttpsError("invalid-argument", "Mật khẩu mới không hợp lệ (tối thiểu 6 ký tự).");
+      } else {
+        throw new HttpsError("internal", err?.message || "Không cập nhật được mật khẩu.");
+      }
+    }
+
+    // Bật mustChangePassword trong RTDB (trên đúng nút hồ sơ)
+    await db.ref(`stores/${cleanStoreCode}/users/${nodeKey}/mustChangePassword`).set(true);
 
     // Ghi audit log
     const logId = `LOG_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -232,7 +266,7 @@ export const resetStaffPassword = onCall(
       action: "RESET_STAFF_PASSWORD",
       staffUsername: caller.username || "unknown",
       staffFullName: caller.fullName || "Quản lý",
-      details: `Đặt lại mật khẩu cho tài khoản @${target.username || targetUid} (Bắt buộc đổi mật khẩu lần tới)`,
+      details: `Đặt lại mật khẩu cho tài khoản @${target.username || nodeKey} (Bắt buộc đổi mật khẩu lần tới)`,
     });
 
     return {
@@ -241,6 +275,37 @@ export const resetStaffPassword = onCall(
     };
   }
 );
+
+/**
+ * Hồ sơ NGƯỜI GỌI: khóa nút = uid, hoặc (nút cũ khóa theo tên đăng nhập) nút có trường `uid` đúng bằng uid đăng nhập.
+ * Không khớp theo username để tránh mạo danh.
+ */
+async function findCallerNode(storeCode: string, callerUid: string): Promise<{ nodeKey: string; record: UserProfile } | null> {
+  const direct = await db.ref(`stores/${storeCode}/users/${callerUid}`).get();
+  if (direct.exists()) return { nodeKey: callerUid, record: direct.val() as UserProfile };
+  const all = await db.ref(`stores/${storeCode}/users`).get();
+  if (!all.exists()) return null;
+  for (const [nodeKey, rec] of Object.entries(all.val() as Record<string, UserProfile>)) {
+    if (rec && typeof rec === "object" && rec.uid === callerUid) return { nodeKey, record: rec };
+  }
+  return null;
+}
+
+/** Tìm nút hồ sơ nhân viên: theo khóa nút, rồi theo trường uid / username. */
+async function findStaffNode(storeCode: string, key: string): Promise<{ nodeKey: string; record: UserProfile } | null> {
+  const direct = await db.ref(`stores/${storeCode}/users/${key}`).get();
+  if (direct.exists()) return { nodeKey: key, record: direct.val() as UserProfile };
+  const all = await db.ref(`stores/${storeCode}/users`).get();
+  if (!all.exists()) return null;
+  const lower = key.toLowerCase();
+  for (const [nodeKey, rec] of Object.entries(all.val() as Record<string, UserProfile>)) {
+    if (!rec || typeof rec !== "object") continue;
+    if (rec.uid === key || String(rec.username || "").toLowerCase() === lower) {
+      return { nodeKey, record: rec };
+    }
+  }
+  return null;
+}
 
 /**
  * 3. Hàm khóa / mở khóa tài khoản nhân viên (setStaffDisabled)
@@ -261,33 +326,37 @@ export const setStaffDisabled = onCall(
     const cleanStoreCode = String(storeCode).trim().toUpperCase();
 
     // Lấy hồ sơ người gọi
-    const callerSnap = await db.ref(`stores/${cleanStoreCode}/users/${callerUid}`).get();
-    if (!callerSnap.exists()) {
+    const callerNode = await findCallerNode(cleanStoreCode, callerUid);
+    if (!callerNode) {
       throw new HttpsError("permission-denied", "Bạn không thuộc chi nhánh này.");
     }
 
     // Lấy hồ sơ người bị tác động
-    const targetSnap = await db.ref(`stores/${cleanStoreCode}/users/${targetUid}`).get();
-    if (!targetSnap.exists()) {
+    const found = await findStaffNode(cleanStoreCode, String(targetUid));
+    if (!found) {
       throw new HttpsError("not-found", "Không tìm thấy hồ sơ nhân viên trong quán.");
     }
+    const { nodeKey, record: target } = found;
+    const authUid = resolveStaffAuthUid(nodeKey, target);
 
-    const caller = callerSnap.val() as UserProfile;
-    const target = targetSnap.val() as UserProfile;
+    const caller = callerNode.record;
 
-    if (!canCallerSetDisabled(caller, target, targetUid, callerUid)) {
+    if (!canCallerSetDisabled(caller, target, authUid, callerUid)) {
       throw new HttpsError("permission-denied", "Không thể thực hiện khóa/mở khóa tài khoản này.");
     }
 
     // 1. Cập nhật Auth
-    await auth.updateUser(targetUid, { disabled });
+    await auth.updateUser(authUid, { disabled }).catch((e: any) => {
+      if (String(e?.code) === "auth/user-not-found") return; // hồ sơ cũ không có Auth: vẫn cập nhật isActive
+      throw e;
+    });
     if (disabled) {
       // Hủy bỏ refresh token ngay lập tức
-      await auth.revokeRefreshTokens(targetUid).catch(() => {});
+      await auth.revokeRefreshTokens(authUid).catch(() => {});
     }
 
     // 2. Cập nhật isActive trong RTDB
-    await db.ref(`stores/${cleanStoreCode}/users/${targetUid}/isActive`).set(!disabled);
+    await db.ref(`stores/${cleanStoreCode}/users/${nodeKey}/isActive`).set(!disabled);
 
     // 3. Ghi audit log
     const logId = `LOG_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -296,7 +365,7 @@ export const setStaffDisabled = onCall(
       action: disabled ? "LOCK_STAFF_ACCOUNT" : "UNLOCK_STAFF_ACCOUNT",
       staffUsername: caller.username || "unknown",
       staffFullName: caller.fullName || "Quản lý",
-      details: `${disabled ? "Khóa" : "Mở khóa"} tài khoản @${target.username || targetUid}`,
+      details: `${disabled ? "Khóa" : "Mở khóa"} tài khoản @${target.username || nodeKey}`,
     });
 
     return {
@@ -573,7 +642,8 @@ export const importCustomerToStore = onCall(
 /**
  * 6. Đồng bộ một chiều RTDB → Firestore kmt_customers (mirrorCustomerToFirestore)
  *
- * RTDB stores/{s}/customers/{id} là nguồn chuẩn của điểm; Firestore chỉ là bản sao để
+ * Điểm chuẩn nằm ở RTDB loyalty_members/{memberKey}; stores/{s}/customers/{id} là cache do trigger mirrorMemberToBranches
+ * cập nhật; Firestore chỉ là bản sao để
  * hệ sinh thái Khuyến Mãi Trạm / web đọc. Client KHÔNG ghi điểm vào Firestore nữa.
  * - Doc id Firestore = customerId (khóa RTDB).
  * - Ghi lịch sử kmt_point_history với doc id cố định (chạy lại không trùng).
@@ -592,13 +662,8 @@ export const mirrorCustomerToFirestore = onValueWritten(
     const now = Date.now();
     await fs.collection("kmt_customers").doc(customerId).set(buildFirestoreMirror(after, storeCode, now), { merge: true });
 
-    const hist = buildPointHistoryEntry(before, after, storeCode, customerId, event.id);
-    if (hist) {
-      await fs
-        .collection("kmt_point_history")
-        .doc(hist.docId)
-        .set({ ...hist.data, ngay_tich: FieldValue.serverTimestamp() }, { merge: true });
-    }
+    // Lịch sử điểm (kmt_point_history) KHÔNG ghi ở đây nữa: điểm đổi ở bản ghi dùng chung nên mỗi dòng
+    // sổ cái loyalty_ledger/{memberKey}/{opId} sinh đúng 1 bản ghi lịch sử (mirrorLedgerToHistory).
   }
 );
 
@@ -608,140 +673,28 @@ export { verifyManagerPin, setManagerPin } from "./managerPin";
 // Đăng nhập bằng Chấm Công Trạm (xem chamCong.ts, docs/CHAMCONG_SSO.md)
 export { chamCongSignIn, linkChamCongStore, unlinkChamCongStore, getChamCongLinkStatus } from "./chamCong";
 
+// Điểm DÙNG CHUNG toàn chuỗi: bản ghi loyalty_members + callable/trigger (xem sharedLoyaltyHandlers.ts)
+export {
+  applyLoyaltyEarn,
+  redeemLoyaltyPoints,
+  refundLoyaltyPoints,
+  adjustLoyaltyPoints,
+  lookupMember,
+  getMemberLedger,
+  setLoyaltyConfig,
+  mirrorMemberToBranches,
+  linkBranchCustomer,
+  mirrorLedgerToHistory,
+} from "./sharedLoyaltyHandlers";
+
 /**
- * 6. Kéo điểm dùng chung về chi nhánh đang bán (pullPooledPoints)
- *
- * Chỉ chạy khi Chủ quán đã xác nhận storeInfo.sharedLoyalty.enabled. Thu ngân trở lên, đang hoạt động,
- * thuộc quán. Chuyển phần điểm thiếu từ các chi nhánh khác (cùng SĐT, danh sách storeCodes do Chủ xác nhận)
- * về node khách của chi nhánh bán; idempotent theo billId; totalPoints không đổi.
+ * @deprecated Đã bị thay bằng bản ghi điểm dùng chung duy nhất (loyalty_members). KHÔNG còn chuyển điểm giữa
+ * các chi nhánh nữa: hàm giữ lại để app cũ chưa cập nhật không bị lỗi 404, luôn trả pulled = 0 / othersPoints = 0
+ * và KHÔNG ghi dữ liệu. Có thể xóa sau khi mọi POS đã cập nhật.
  */
-export const pullPooledPoints = onCall(
-  { region: FUNCTION_REGION },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
-    }
-    const { storeCode, customerId, points, billId, balanceOnly } = (request.data || {}) as Record<string, unknown>;
-    const onlyBalance = balanceOnly === true;
-    if (!isValidStoreCode(storeCode) || !isValidCustomerKey(customerId) || (!onlyBalance && (typeof billId !== "string" || !billId.trim()))) {
-      throw new HttpsError("invalid-argument", "Thiếu hoặc sai mã cửa hàng / khách hàng / hóa đơn.");
-    }
-    const needed = onlyBalance ? 0 : Number(points);
-    if (!onlyBalance && (!Number.isInteger(needed) || needed <= 0 || needed > 10_000_000)) {
-      throw new HttpsError("invalid-argument", "Số điểm cần kéo không hợp lệ.");
-    }
-    const billKey = onlyBalance ? "" : String(billId);
-    const home = storeCode.trim().toUpperCase();
-    const callerUid = request.auth.uid;
-
-    const [callerSnap, indexSnap, cfgSnap] = await Promise.all([
-      db.ref(`stores/${home}/users/${callerUid}`).get(),
-      db.ref(`userIndex/${callerUid}/${home}`).get(),
-      db.ref(`stores/${home}/storeInfo/sharedLoyalty`).get(),
-    ]);
-    const caller = (callerSnap.exists() ? callerSnap.val() : null) as UserProfile | null;
-    if (!canCallerImportCustomer(caller, indexSnap.val() === true)) {
-      throw new HttpsError("permission-denied", "Bạn không có quyền đổi điểm cho chi nhánh này.");
-    }
-    const cfg = (cfgSnap.val() || {}) as { enabled?: unknown; storeCodes?: unknown };
-    if (cfg.enabled !== true) {
-      throw new HttpsError("failed-precondition", "Chi nhánh chưa bật điểm dùng chung (Chủ quán chưa xác nhận).");
-    }
-    const codes = (Array.isArray(cfg.storeCodes) ? cfg.storeCodes : []).map((c) => String(c).trim().toUpperCase()).filter((c) => isValidStoreCode(c) && c !== home);
-
-    const markerRef = db.ref(`stores/${home}/point_history/${pullKey(billKey)}`);
-    if (!onlyBalance && (await markerRef.get()).exists()) {
-      return { success: true, pulled: 0, alreadyApplied: true };
-    }
-
-    const homeRef = db.ref(`stores/${home}/customers/${customerId}`);
-    const homeSnap = await homeRef.get();
-    if (!homeSnap.exists()) throw new HttpsError("not-found", "Không tìm thấy khách hàng ở chi nhánh này.");
-    const homeCustomer = homeSnap.val() as AnyMap;
-    const phone = normalizePhone(homeCustomer.so_dien_thoai ?? homeCustomer.phone);
-    if (!phone) throw new HttpsError("failed-precondition", "Khách chưa có số điện thoại hợp lệ nên không gộp điểm được.");
-
-    const holdings: Holding[] = [];
-    for (const code of codes) {
-      const snap = await db.ref(`stores/${code}/customers`).orderByChild("so_dien_thoai").equalTo(phone).get();
-      snap.forEach((child) => {
-        holdings.push({ storeCode: code, customerId: child.key as string, points: readCurrentPoints(child.val() as AnyMap) });
-      });
-    }
-    if (onlyBalance) {
-      // Chỉ tra số dư: tổng điểm ở các chi nhánh khác (cùng SĐT) để POS tính mức dùng tối đa
-      return { success: true, othersPoints: holdings.reduce((sum, h) => sum + h.points, 0) };
-    }
-    const plan = planPull(holdings, needed);
-    if ("error" in plan) throw new HttpsError("failed-precondition", plan.error);
-
-    // Trừ ở các chi nhánh khác (transaction từng node); lỗi giữa chừng → hoàn lại những node đã trừ
-    const done: { ref: admin.database.Reference; take: number }[] = [];
-    try {
-      for (const a of plan.allocations) {
-        const r = db.ref(`stores/${a.storeCode}/customers/${a.customerId}`);
-        const tx = await r.transaction((cur: unknown) => {
-          if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
-          if (typeof cur !== "object") return undefined;
-          const m = { ...(cur as AnyMap) };
-          const pts = readCurrentPoints(m);
-          if (pts < a.take) return undefined;
-          m.diem_hien_tai = pts - a.take;
-          m.currentPoints = pts - a.take;
-          return m;
-        });
-        if (!tx.committed || !tx.snapshot.exists()) throw new HttpsError("aborted", `Điểm tại ${a.storeCode} vừa thay đổi. Vui lòng thử lại.`);
-        done.push({ ref: r, take: a.take });
-      }
-      const homeTx = await homeRef.transaction((cur: unknown) => {
-        if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
-          if (typeof cur !== "object") return undefined;
-        const m = { ...(cur as AnyMap) };
-        const pts = readCurrentPoints(m);
-        m.diem_hien_tai = pts + needed;
-        m.currentPoints = pts + needed;
-        return m;
-      });
-      if (!homeTx.committed || !homeTx.snapshot.exists()) throw new HttpsError("aborted", "Không cập nhật được điểm khách ở chi nhánh bán.");
-    } catch (err) {
-      for (const d of done) {
-        await d.ref.transaction((cur: unknown) => {
-          if (cur === null) return null; // lần chạy đầu với cache rỗng: SDK sẽ chạy lại với dữ liệu thật
-          if (typeof cur !== "object") return undefined;
-          const m = { ...(cur as AnyMap) };
-          const pts = readCurrentPoints(m);
-          m.diem_hien_tai = pts + d.take;
-          m.currentPoints = pts + d.take;
-          return m;
-        }).catch(() => undefined);
-      }
-      throw err;
-    }
-
-    const now = Date.now();
-    const by = caller?.username || "unknown";
-    const homeBefore = readCurrentPoints(homeCustomer);
-    const writes: Record<string, unknown> = {
-      [`stores/${home}/point_history/${pullKey(billKey)}`]: {
-        customerId, customerName: String(homeCustomer.ho_ten ?? homeCustomer.name ?? ""), type: "POOL_TRANSFER", mode: "POOL_IN",
-        delta: needed, before: homeBefore, after: homeBefore + needed,
-        reason: `Nhận ${needed} điểm dùng chung từ ${plan.allocations.map((a) => a.storeCode).join(", ")} cho HĐ ${billId}`,
-        by, byName: caller?.fullName || by, at: now,
-      },
-      [`stores/${home}/audit_logs/LOG_${now}_pool_in`]: {
-        timestamp: now, username: by, userFullName: caller?.fullName || "", userRole: caller?.roleId || "",
-        action: "LOYALTY_POOL_REDEEM", targetType: "CUSTOMER", targetId: customerId,
-        details: `Kéo ${needed} điểm dùng chung về ${home} cho HĐ ${billId}`,
-      },
-    };
-    for (const a of plan.allocations) {
-      writes[`stores/${a.storeCode}/point_history/${pullKey(billKey)}`] = {
-        customerId: a.customerId, customerName: String(homeCustomer.ho_ten ?? homeCustomer.name ?? ""), type: "POOL_TRANSFER", mode: "POOL_OUT",
-        delta: -a.take, before: a.points, after: a.after,
-        reason: `Chuyển ${a.take} điểm dùng chung sang ${home} cho HĐ ${billId}`, by, byName: caller?.fullName || by, at: now,
-      };
-    }
-    await db.ref().update(writes).catch(() => undefined); // sổ lịch sử là phụ; số dư đã chuyển xong
-    return { success: true, pulled: needed, alreadyApplied: false, from: plan.allocations.map((a) => ({ storeCode: a.storeCode, take: a.take })) };
+export const pullPooledPoints = onCall({ region: FUNCTION_REGION }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
   }
-);
+  return { success: true, pulled: 0, othersPoints: 0, alreadyApplied: true, deprecated: true };
+});

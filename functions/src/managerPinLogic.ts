@@ -8,7 +8,7 @@
  *   (bảng quyền khớp web/lib/auth.tsx ROLE_PERMISSIONS + customPermissions).
  */
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
-import { UserProfile, isManagerRole, isOwnerRole } from "./permissions";
+import { UserProfile, isManagerRole, isOwnerRole, normalizeRoleId } from "./permissions";
 
 /** Hành động được phép duyệt bằng PIN */
 export const APPROVABLE_ACTIONS = ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"] as const;
@@ -56,13 +56,8 @@ export function verifyPinHash(pin: string, stored: StoredPin | null | undefined)
 
 /** Quyền theo vai trò — chỉ các quyền liên quan tới duyệt PIN (khớp web/lib/auth.tsx) */
 const ROLE_APPROVAL_PERMS: Record<string, ApprovableAction[]> = {
-  role_manager_1: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
-  manager_1: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
-  role_manager_2: ["DISCOUNT_ITEM"],
-  manager_2: ["DISCOUNT_ITEM"],
-  role_manager: ["DISCOUNT_ITEM"],
-  manager: ["DISCOUNT_ITEM"],
-  ql: ["DISCOUNT_ITEM"],
+  // Quản lý (đã gộp QL1 + QL2): hợp của hai bộ quyền cũ
+  ROLE_MANAGER: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
 };
 
 /** Hồ sơ có thể làm người duyệt (chủ quán / quản lý đang hoạt động) */
@@ -80,7 +75,7 @@ export function approverHasPermission(p: UserProfile | null | undefined, action:
   if (custom.includes(action)) return true;
   // DISCOUNT_ITEM có alias MANUAL_DISCOUNT (giống web hasPermission)
   if (action === "DISCOUNT_ITEM" && custom.includes("MANUAL_DISCOUNT")) return true;
-  const perms = ROLE_APPROVAL_PERMS[(profile.roleId || "").toLowerCase()] || [];
+  const perms = ROLE_APPROVAL_PERMS[normalizeRoleId(profile.roleId)] || [];
   return perms.includes(action);
 }
 

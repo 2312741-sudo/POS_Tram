@@ -5,6 +5,7 @@ import {
   calculateCashShiftReport,
   formatVND,
   formatNumber,
+  getBillTimestamp,
   extractBillItems,
   itemLineDiscount,
   itemDiscountedQuantity,
@@ -124,7 +125,7 @@ export default function ShiftsPage() {
     const sId = selectedShift.shiftId || (selectedShift as { id?: string }).id || "";
     return historyData.filter((b) => {
       if (b.shiftId && sId) return b.shiftId === sId;
-      const bTime = Number(b.closedAt || b.createdAt || b.timestamp || 0);
+      const bTime = getBillTimestamp(b);
       const closeT = selectedShift.closedAt ? Number(selectedShift.closedAt) : Infinity;
       return selectedShift.openedAt <= bTime && bTime <= closeT;
     });

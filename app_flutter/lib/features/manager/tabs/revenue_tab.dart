@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/revenue_tab.dart
+import '../../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -119,7 +120,7 @@ class _RevenueTabState extends State<RevenueTab> {
 
     return _bills.where((b) {
       if (b.status != 'PAID') return false;
-      final ts = b.closedAt ?? b.createdAt;
+      final ts = b.reportTimeMs;
       return ts >= startMs && ts <= endMs;
     }).toList();
   }
@@ -142,7 +143,7 @@ class _RevenueTabState extends State<RevenueTab> {
       // 24 hours
       return List.generate(24, (h) {
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
           return dt.hour == h;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': '${h}h', 'revenue': rev};
@@ -153,7 +154,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(7, (i) {
         final weekday = i + 1; // 1 = Mon, 7 = Sun
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
           return dt.weekday == weekday;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': days[i], 'revenue': rev};
@@ -165,7 +166,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(daysInMonth, (i) {
         final day = i + 1;
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
           return dt.day == day;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': '$day', 'revenue': rev};
@@ -176,7 +177,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(12, (i) {
         final month = i + 1;
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
           return dt.month == month;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': months[i], 'revenue': rev};
@@ -204,6 +205,12 @@ class _RevenueTabState extends State<RevenueTab> {
     if (_filteredBills.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Không có dữ liệu hóa đơn nào trong khoảng thời gian này!')),
+      );
+      return;
+    }
+    if (!_auth.can(AppPermissions.exportReports)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền xuất báo cáo (EXPORT_REPORTS).')),
       );
       return;
     }
@@ -682,7 +689,7 @@ class _RevenueTabState extends State<RevenueTab> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final bill = filtered[index];
-                final time = FormatUtils.dateTime(bill.closedAt ?? bill.createdAt);
+                final time = FormatUtils.dateTime(bill.reportTimeMs);
                 final isCash = bill.paymentMethod.toLowerCase().contains('cash') || bill.paymentMethod.toLowerCase().contains('tiền mặt');
 
                 return InkWell(

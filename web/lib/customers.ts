@@ -5,10 +5,11 @@
  * app_flutter/lib/data/models/customer_model.dart và loyalty_service.dart). Firestore `kmt_customers`
  * chỉ là bản sao do Cloud Function `mirrorCustomerToFirestore` đồng bộ, nên Web không đọc điểm từ đó.
  *
- * Quyền đọc nút customers: Chủ quán / Quản lý / Thu ngân (Phục vụ, Bếp bị chặn).
+ * Quyền đọc nút customers: Chủ quán / Quản lý / Nhân viên (Bếp bị chặn).
  * Web chỉ đọc; điểm chỉ đổi qua thao tác hóa đơn trên POS hoặc Quản lý / Chủ quán.
  */
 
+import { normalizeRoleId, ROLE_OWNER, ROLE_MANAGER, ROLE_STAFF } from "./roles";
 import { DEFAULT_LOYALTY_TIERS, tierForTotalPoints, type LoyaltyTier } from "./loyalty";
 
 export interface StoreCustomer {
@@ -108,29 +109,19 @@ export function parseStoreCustomers(storeCode: string, val: unknown, tiers: Loya
 /** Vai trò được rules cho đọc stores/{s}/customers (khớp database.rules.json). */
 export function canReadCustomers(roleId: string | undefined, isRootOwner?: boolean): boolean {
   if (isRootOwner) return true;
-  const r = (roleId || "").toUpperCase();
-  return (
-    r === "OWNER" || r === "ROLE_OWNER" ||
-    r === "MANAGER" || r === "MANAGER_1" || r === "MANAGER_2" ||
-    r === "ROLE_MANAGER" || r === "ROLE_MANAGER_1" || r === "ROLE_MANAGER_2" ||
-    r === "CASHIER" || r === "ROLE_CASHIER" || r === "EMPLOYEE"
-  );
+  const r = normalizeRoleId(roleId);
+  return r === ROLE_OWNER || r === ROLE_MANAGER || r === ROLE_STAFF;
 }
 
 /** Chỉ Chủ quán ghi được storeInfo (pointEarnRate / pointRedeemRate) theo rules. */
 export function canEditPointConfig(roleId: string | undefined, isRootOwner?: boolean): boolean {
   if (isRootOwner) return true;
-  const r = (roleId || "").toUpperCase();
-  return r === "OWNER" || r === "ROLE_OWNER";
+  return normalizeRoleId(roleId) === ROLE_OWNER;
 }
 
 /** Chủ quán / Quản lý chỉnh điểm trực tiếp được theo rules (`customers.$id` cho Thu ngân bị ràng buộc theo hóa đơn). */
 export function canAdjustPoints(roleId: string | undefined, isRootOwner?: boolean): boolean {
   if (isRootOwner) return true;
-  const r = (roleId || "").toUpperCase();
-  return (
-    r === "OWNER" || r === "ROLE_OWNER" ||
-    r === "MANAGER" || r === "MANAGER_1" || r === "MANAGER_2" ||
-    r === "ROLE_MANAGER" || r === "ROLE_MANAGER_1" || r === "ROLE_MANAGER_2"
-  );
+  const r = normalizeRoleId(roleId);
+  return r === ROLE_OWNER || r === ROLE_MANAGER;
 }

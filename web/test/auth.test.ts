@@ -91,7 +91,7 @@ describe("Ma trận phân quyền RBAC & Quyền riêng (AUTH_CONTRACT Section 4
     expect(hasPermission(rootOwner, "ANY_CUSTOM_PERMISSION")).toBe(true);
   });
 
-  it("Quản lý 1 (ROLE_MANAGER_1) có quyền điều hành và kiểm soát, nhưng không có MANAGE_USERS", () => {
+  it("Quản lý (mã cũ ROLE_MANAGER_1) có quyền điều hành và kiểm soát, nhưng không có MANAGE_USERS", () => {
     const manager1 = createMockUser({ roleId: "ROLE_MANAGER_1" });
     expect(hasPermission(manager1, "VIEW_MENU")).toBe(true);
     expect(hasPermission(manager1, "EDIT_MENU")).toBe(true);
@@ -106,18 +106,32 @@ describe("Ma trận phân quyền RBAC & Quyền riêng (AUTH_CONTRACT Section 4
     expect(hasPermission(manager1, "MANAGE_STORE_SETTINGS")).toBe(false);
   });
 
-  it("Quản lý 2 (ROLE_MANAGER_2) chỉ có quyền giám sát ca và xem báo cáo cơ bản", () => {
-    const manager2 = createMockUser({ roleId: "ROLE_MANAGER_2" });
-    expect(hasPermission(manager2, "VIEW_MENU")).toBe(true);
-    expect(hasPermission(manager2, "OPEN_TABLE")).toBe(true);
-    expect(hasPermission(manager2, "VIEW_REPORTS")).toBe(true);
-    expect(hasPermission(manager2, "MANAGE_CASH_SHIFT")).toBe(true);
+  it("Mọi mã Quản lý cũ (QL1/QL2/manager...) đều là Quản lý gộp: hợp quyền của hai vai trò cũ", () => {
+    for (const id of ["ROLE_MANAGER", "ROLE_MANAGER_1", "ROLE_MANAGER_2", "manager", "manager_1", "manager_2"]) {
+      const m = createMockUser({ roleId: id });
+      expect(hasPermission(m, "OPEN_TABLE")).toBe(true);
+      expect(hasPermission(m, "VIEW_REPORTS")).toBe(true);
+      expect(hasPermission(m, "MANAGE_CASH_SHIFT")).toBe(true);
+      expect(hasPermission(m, "VIEW_AUDIT_LOGS")).toBe(true); // từng chỉ có ở QL1
+      expect(hasPermission(m, "VIEW_INVENTORY")).toBe(true);
+      expect(hasPermission(m, "COPY_MENU")).toBe(true);
+      expect(hasPermission(m, "MANAGE_USERS")).toBe(false);
+      expect(hasPermission(m, "MANAGE_LOYALTY")).toBe(false); // chỉ Chủ quán
+    }
+  });
 
-    // Không có quyền nhạy cảm
-    expect(hasPermission(manager2, "MANAGE_USERS")).toBe(false);
-    expect(hasPermission(manager2, "VIEW_AUDIT_LOGS")).toBe(false);
-    expect(hasPermission(manager2, "MANUAL_DISCOUNT")).toBe(false);
-    expect(hasPermission(manager2, "VIEW_INVENTORY")).toBe(false);
+  it("Thu ngân + Phục vụ đã gộp thành Nhân viên (mọi mã cũ cùng bộ quyền)", () => {
+    for (const id of ["ROLE_STAFF", "ROLE_CASHIER", "ROLE_WAITER", "cashier", "waiter", "employee"]) {
+      const u = createMockUser({ roleId: id });
+      expect(hasPermission(u, "CREATE_BILL")).toBe(true);
+      expect(hasPermission(u, "OPEN_TABLE")).toBe(true);
+      expect(hasPermission(u, "DELETE_ITEM")).toBe(true);
+      expect(hasPermission(u, "MANAGE_CASH_SHIFT")).toBe(true); // mở/kết ca của chính mình
+      expect(hasPermission(u, "ADJUST_CASH_SHIFT")).toBe(false); // thu/chi két cần được cấp riêng
+      expect(hasPermission(u, "VIEW_REPORTS")).toBe(false);
+    }
+    expect(hasPermission(createMockUser({ roleId: "ROLE_KITCHEN" }), "CREATE_BILL")).toBe(false);
+    expect(hasPermission(createMockUser({ roleId: "ROLE_KITCHEN" }), "VIEW_KITCHEN")).toBe(true);
   });
 
   it("Nhân viên thường có thể được cấp quyền riêng qua customPermissions", () => {
@@ -171,15 +185,18 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
     expect(canAccessRoute(manager1WithPerm, "/dashboard/users")).toBe(true);
   });
 
-  it("Quản lý 2 không thể vào trang nhật ký kiểm toán và kho hàng", () => {
+  it("Quản lý (mã cũ QL2) vào được nhật ký & kho (đã gộp); nhân viên thì không", () => {
     const manager2 = createMockUser("ROLE_MANAGER_2");
     expect(canAccessRoute(manager2, "/dashboard")).toBe(true);
     expect(canAccessRoute(manager2, "/dashboard/revenue")).toBe(true);
     expect(canAccessRoute(manager2, "/dashboard/tables")).toBe(true);
 
-    // Bị chặn
+    expect(canAccessRoute(manager2, "/dashboard/audit")).toBe(true);
+    expect(canAccessRoute(manager2, "/dashboard/inventory")).toBe(true);
     expect(canAccessRoute(manager2, "/dashboard/users")).toBe(false);
-    expect(canAccessRoute(manager2, "/dashboard/audit")).toBe(false);
-    expect(canAccessRoute(manager2, "/dashboard/inventory")).toBe(false);
+    const staff = createMockUser("ROLE_CASHIER");
+    expect(canAccessRoute(staff, "/dashboard/audit")).toBe(false);
+    expect(canAccessRoute(staff, "/dashboard/inventory")).toBe(false);
+    expect(canAccessRoute(staff, "/dashboard/revenue")).toBe(false);
   });
 });

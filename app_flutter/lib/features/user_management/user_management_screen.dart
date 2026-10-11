@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/permissions/app_permissions.dart';
+import '../../core/permissions/role_catalog.dart';
+import '../../core/permissions/staff_password_policy.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -40,73 +42,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (mounted) {
         setState(() {
           _users = users;
-          _roles = roles.isNotEmpty
-              ? roles
-              : [
-                  RoleModel(
-                    id: 'ROLE_OWNER',
-                    name: 'Chủ Quán (Toàn quyền)',
-                    permissions: AppPermissions.allPermissions.map((p) => p.key).toList(),
-                    isSystemRole: true,
-                  ),
-                  RoleModel(
-                    id: 'ROLE_MANAGER_1',
-                    name: 'Quản Lý 1 (Điều hành & Kho)',
-                    permissions: [
-                      AppPermissions.viewMenu,
-                      AppPermissions.editMenu,
-                      AppPermissions.changePrice,
-                      AppPermissions.openTable,
-                      AppPermissions.changeTable,
-                      AppPermissions.mergeSplitTable,
-                      AppPermissions.sendKitchen,
-                      AppPermissions.cancelKitchenItem,
-                      AppPermissions.createBill,
-                      AppPermissions.editBill,
-                      AppPermissions.applyPromotion,
-                      AppPermissions.manualDiscount,
-                      AppPermissions.cancelBill,
-                      AppPermissions.printBill,
-                      AppPermissions.reprintBill,
-                      AppPermissions.manageCashShift,
-                      AppPermissions.viewReports,
-                      AppPermissions.viewAuditLogs,
-                      AppPermissions.viewInventory,
-                    ],
-                    isSystemRole: true,
-                  ),
-                  RoleModel(
-                    id: 'ROLE_MANAGER_2',
-                    name: 'Quản Lý 2 (Giám sát ca)',
-                    permissions: [
-                      AppPermissions.viewMenu,
-                      AppPermissions.openTable,
-                      AppPermissions.changeTable,
-                      AppPermissions.mergeSplitTable,
-                      AppPermissions.sendKitchen,
-                      AppPermissions.createBill,
-                      AppPermissions.applyPromotion,
-                      AppPermissions.printBill,
-                      AppPermissions.manageCashShift,
-                      AppPermissions.viewReports,
-                    ],
-                    isSystemRole: true,
-                  ),
-                  RoleModel(
-                    id: 'ROLE_CASHIER',
-                    name: 'Thu Ngân / Phục Vụ',
-                    permissions: [
-                      AppPermissions.viewMenu,
-                      AppPermissions.openTable,
-                      AppPermissions.changeTable,
-                      AppPermissions.sendKitchen,
-                      AppPermissions.createBill,
-                      AppPermissions.applyPromotion,
-                      AppPermissions.printBill,
-                    ],
-                    isSystemRole: true,
-                  ),
-                ];
+          _roles = buildRoleCatalog(roles);
           _isLoading = false;
         });
       }
@@ -212,7 +148,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final passCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: userToEdit?.phone ?? '');
 
-    String selectedRole = userToEdit?.roleId ?? (_roles.isNotEmpty ? _roles.last.id : 'ROLE_CASHIER');
+    String selectedRole = userToEdit != null ? normalizeRoleId(userToEdit.roleId) : kRoleStaff;
     List<String> customPerms = List<String>.from(userToEdit?.customPermissions ?? []);
     bool obscure = true;
     String? dlgError;
@@ -609,7 +545,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                     );
                                   }
                                 } on FirebaseFunctionsException catch (e) {
-                                  String msg = e.message ?? 'Lỗi tạo tài khoản nhân viên.';
+                                  String msg = callableErrorMessage(e.code, e.message, fallback: 'Lỗi tạo tài khoản nhân viên.');
                                   if (e.code == 'already-exists') {
                                     msg = 'Tên đăng nhập này đã được sử dụng trong chi nhánh.';
                                   }
@@ -737,7 +673,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(e.message ?? 'Lỗi khi cập nhật trạng thái tài khoản.'),
+              content: Text(callableErrorMessage(e.code, e.message, fallback: 'Lỗi khi cập nhật trạng thái tài khoản.')),
               backgroundColor: AppColors.danger,
             ),
           );
@@ -876,8 +812,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ? null
                           : () async {
                               final newPass = passwordCtrl.text.trim();
-                              if (newPass.length < 6) {
-                                setDlgState(() => dlgError = 'Mật khẩu mới phải có tối thiểu 6 ký tự.');
+                              final pwError = validateStaffPassword(newPass);
+                              if (pwError != null) {
+                                setDlgState(() => dlgError = pwError);
                                 return;
                               }
 
@@ -907,7 +844,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 }
                               } on FirebaseFunctionsException catch (e) {
                                 setDlgState(() {
-                                  dlgError = e.message ?? 'Lỗi khi đặt lại mật khẩu.';
+                                  dlgError = callableErrorMessage(e.code, e.message, fallback: 'Không đặt lại được mật khẩu. Vui lòng thử lại.');
                                   isSaving = false;
                                 });
                               } catch (e) {
@@ -1029,7 +966,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final user = _users[index];
-                    final role = _roles.where((r) => r.id == user.roleId).firstOrNull;
+                    final role = findRoleById(_roles, user.roleId);
 
                     return Card(
                       elevation: 1.5,
@@ -1205,8 +1142,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                                 // Reset Password Action (Qua Cloud Function)
                                 // Ẩn với tài khoản Chấm Công: họ đăng nhập bằng tài khoản chấm công, không dùng mật khẩu POS
-                                if (!user.isChamCongAccount &&
-                                    (!user.isRootOwner || (_auth.currentUser?.isRootOwner ?? false)))
+                                if ((!user.isRootOwner || (_auth.currentUser?.isRootOwner ?? false)) &&
+                                    canResetStaffPassword(
+                                      callerRoleId: _auth.currentUser?.roleId ?? '',
+                                      callerIsRootOwner: _auth.currentUser?.isRootOwner ?? false,
+                                      targetRoleId: user.roleId,
+                                      targetIsRootOwner: false,
+                                      targetIsChamCong: user.isChamCongAccount,
+                                      isSelf: user.uid.isNotEmpty && user.uid == _auth.currentUser?.uid,
+                                    ))
                                   IconButton(
                                     icon: const Icon(Icons.key_outlined, size: 20, color: Colors.purple),
                                     tooltip: 'Đặt lại mật khẩu',

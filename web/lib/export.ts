@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { guardExport } from "./export-guard";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { escapeHtml } from "./html";
@@ -21,6 +22,7 @@ import {
   itemLineDiscount,
   formatVND,
   formatNumber,
+  getBillTimestamp,
   billStatusLabel,
   billSubTotal,
   billItemDiscount,
@@ -85,6 +87,7 @@ export interface ExportReportOptions {
  * Xuất dữ liệu báo cáo dạng Excel chuyên nghiệp chuẩn dàn trang (Mục 7.2)
  */
 export function exportStandardReportExcel(opts: ExportReportOptions) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
 
   const storeTitle = (opts.storeName || "POS TRẠM").toUpperCase();
@@ -317,6 +320,7 @@ export function buildStandardReportHtml(opts: ExportReportOptions): string {
  * In / Xuất PDF từ trình duyệt với bố cục chuẩn, font Be Vietnam Pro, màu Trạm #7E2930
  */
 export function printStandardReportPDF(opts: ExportReportOptions) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   if (typeof window === "undefined") return;
 
   const printWindow = window.open("", "_blank");
@@ -887,6 +891,7 @@ export function exportDeletionReport(data: DeletionReport, storeInfo?: ReportSto
 
 // 8b. BÁO CÁO KHUYẾN MÃI THEO CHIẾN DỊCH (2 sheet: tổng hợp + chi tiết hóa đơn)
 export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: ReportStoreInfo, dateText?: string, range?: { start?: Date | string | null; end?: Date | string | null }) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
   const head = (title: string): (string | number)[][] => [
     [(storeInfo?.storeName || "POS TRẠM").toUpperCase()],
@@ -1035,7 +1040,7 @@ export function exportShiftPromotionsExcel(
     totalDisc += billTotDisc;
     totalFinal += finalA;
 
-    const bTime = Number(b.closedAt || b.createdAt || b.timestamp || Date.now());
+    const bTime = getBillTimestamp(b) || Date.now();
     const timeStr = format(new Date(bTime), "dd/MM/yyyy HH:mm");
 
     return [
@@ -1222,6 +1227,7 @@ export function exportRevenue(
   }>,
   title = "Doanh thu"
 ) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   const rows = data.map((item) => ({
     "Ngày": item.date || "",
     "Số hóa đơn": item.totalOrders || 0,
@@ -1238,13 +1244,16 @@ export function exportRevenue(
 }
 
 export function exportHistory(data: HistoryOrder[]) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
 
   // 1. Sheet Tổng hợp Hóa đơn
   const summaryRows = data.map((item) => {
     const ts = typeof item.timestamp === "number" ? item.timestamp : new Date(item.timestamp || 0).getTime();
     const createdTs = typeof item.createdAt === "number" ? item.createdAt : new Date(item.createdAt || ts).getTime();
-    const closedTs = typeof item.closedAt === "number" ? item.closedAt : new Date(item.closedAt || ts).getTime();
+    const closedTs = String(item.status || "").toUpperCase() === "CANCELLED" && Number(item.cancelledAt) > 0
+      ? Number(item.cancelledAt)
+      : typeof item.closedAt === "number" ? item.closedAt : new Date(item.closedAt || ts).getTime();
     const itemCount = Array.isArray(item.items) ? item.items.reduce((s: number, i: OrderItem) => s + (i.quantity || 1), 0) : 0;
 
     return {
@@ -1390,6 +1399,7 @@ export function exportHistory(data: HistoryOrder[]) {
 }
 
 export function exportSingleBillExcel(order: HistoryOrder) {
+  if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
   const billCode = order.billCode || order.orderCode || order.id?.slice(0, 8) || "HD";
   const orderCode = order.orderCode || billCode;
@@ -1455,6 +1465,7 @@ export function exportSingleBillExcel(order: HistoryOrder) {
 }
 
 export function exportUsers(data: Array<Record<string, unknown>>) {
+  if (!guardExport("EXPORT_DATA")) return;
   const rows = data.map((item) => ({
     "Họ tên": item.fullName || "",
     "Tài khoản": item.username || "",
@@ -1475,6 +1486,7 @@ export function exportUsers(data: Array<Record<string, unknown>>) {
 export function exportProducts(
   data: Array<{ name?: string; category?: string; price?: number; costPrice?: number; unit?: string }>
 ) {
+  if (!guardExport("EXPORT_DATA")) return;
   const rows = data.map((item) => ({
     "Tên sản phẩm": item.name || "",
     "Danh mục": item.category || "",
@@ -1490,6 +1502,7 @@ export function exportProducts(
 }
 
 export function exportAuditLogs(data: Array<Record<string, unknown>>) {
+  if (!guardExport("EXPORT_AUDIT_LOGS")) return;
   const rows = data.map((item) => ({
     "Hành động": item.actionDisplay || item.action || "",
     "Mã hành động": item.action || "",
@@ -1531,6 +1544,7 @@ export interface CustomerExportItem {
 }
 
 export function exportCustomersList(data: CustomerExportItem[], storeInfo?: ReportStoreInfo) {
+  if (!guardExport("EXPORT_DATA")) return;
   const rows = data.map((item, idx) => ({
     "STT": idx + 1,
     "Mã khách hàng": item.maKhachHang || "",

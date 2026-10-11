@@ -148,9 +148,11 @@ Hệ sinh thái Trạm chuẩn hóa 4 vai trò gốc theo quy định tại `app
 | Role ID (`roleId`) | Nhãn hiển thị | Cấp bậc | Ý nghĩa nghiệp vụ |
 | :--- | :--- | :---: | :--- |
 | `owner` / `ROLE_OWNER` | **Chủ cửa hàng** | Cấp 0 | Nắm toàn quyền tối cao của cửa hàng. Không ai có thể khóa, xóa hay hạ quyền của Chủ quán. |
-| `manager_1` / `ROLE_MANAGER_1` | **Quản lý 1** | Cấp 1 | Điều hành toàn diện bán hàng, kho hàng, nhập hàng, khuyến mãi nâng cao, quản lý ca két, chiết khấu và báo cáo doanh thu. |
-| `manager_2` / `ROLE_MANAGER_2` | **Quản lý 2** | Cấp 2 | Giám sát ca làm việc, điều phối bàn, in bill, duyệt chuyển bàn, xem báo cáo ca két và bán hàng cơ bản. |
-| `employee` / `ROLE_CASHIER` / `ROLE_STAFF` / `ROLE_KITCHEN` | **Nhân viên** | Cấp 3 | Nhân viên thu ngân, phục vụ, tiếp thực, bếp/bar: nhận order, gửi bếp, thanh toán, in bill. |
+| `ROLE_MANAGER` (alias cũ: `manager`, `manager_1`, `manager_2`, `ROLE_MANAGER_1`, `ROLE_MANAGER_2`) | **Quản lý** | Cấp 1 | Đã gộp Quản lý 1 + Quản lý 2 (hợp quyền): điều hành bán hàng, kho, nhập hàng, khuyến mãi, ca két, chiết khấu, báo cáo. |
+| `ROLE_STAFF` (alias cũ: `staff`, `employee`, `cashier`, `ROLE_CASHIER`, `waiter`, `ROLE_WAITER`) | **Nhân viên** | Cấp 2 | Đã gộp Thu ngân + Phục vụ (hợp quyền): nhận order, gửi bếp, thanh toán, in bill, mở/kết ca. |
+| `ROLE_KITCHEN` | **Bếp / Bar** | Cấp 2 | Màn hình bếp KDS, cập nhật trạng thái chế biến. |
+
+> Cập nhật: bảng ma trận chi tiết ở mục 4.2 đang được thay thế bởi `docs/PERMISSIONS_AUDIT.md` (đầy đủ mã quyền, vai trò mặc định và nơi áp dụng).
 
 ### 4.2. Ma trận phân quyền chi tiết (Permission Matrix)
 Dựa trên 20+ quyền định nghĩa tại `app_flutter/lib/core/permissions/app_permissions.dart`:

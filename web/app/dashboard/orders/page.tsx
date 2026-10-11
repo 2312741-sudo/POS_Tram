@@ -23,11 +23,11 @@ import {
 } from "lucide-react";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
+import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
 import { billDeletedItems } from "@/lib/item-deletion";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
 import { buildOrderReceiptHtml } from "@/lib/print-html";
-import { useAuth } from "@/lib/auth";
+import { useAuth, hasPermission } from "@/lib/auth";
 import { canAdjustPoints as isOwnerOrManager } from "@/lib/customers";
 import SampleDataDialog from "@/components/SampleDataDialog";
 
@@ -37,7 +37,8 @@ export default function OrdersPage() {
   const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder } = useDashboardData();
   const { user } = useAuth();
   const [showSamples, setShowSamples] = useState(false);
-  const canManageSamples = isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && currentStoreCode !== "ALL";
+  const canManageSamples =
+    isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "CREATE_SAMPLE_DATA") && currentStoreCode !== "ALL";
   const loading = !historyLoaded && historyData.length === 0;
   const [search, setSearch] = useState("");
   const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("ALL");
@@ -92,7 +93,7 @@ export default function OrdersPage() {
         (h.orderStaff || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.cashierName || "").toLowerCase().includes(search.toLowerCase());
 
-      const dt = new Date(typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime());
+      const dt = new Date(getBillTimestamp(h as never) || (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()));
       let matchDate = true;
       if (datePreset === "TODAY") {
         matchDate = dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth() && dt.getDate() === now.getDate();
@@ -726,6 +727,17 @@ export default function OrdersPage() {
                     Giá gốc: {formatVND(selectedOrder.subTotal || selectedOrder.totalAmount || 0)}
                   </div>
                 )}
+                {(Array.isArray(selectedOrder.discounts) ? selectedOrder.discounts : [])
+                  .filter((d) => Number(d?.amount) > 0)
+                  .map((d, i) => {
+                    const name = String(d.campaignName || d.promoName || d.description || "Khuyến mãi");
+                    const code = String(d.voucherCode || d.promoCode || "");
+                    return (
+                      <div key={`${name}-${i}`} style={{ fontSize: "11px", color: "var(--success)", marginTop: "2px", fontWeight: 600 }}>
+                        KM: {name}{code ? ` (mã ${code})` : ""} = −{formatVND(Number(d.amount))}
+                      </div>
+                    );
+                  })}
                 {billPointsUsed(selectedOrder) > 0 ? (
                   <div style={{ fontSize: "11px", color: "var(--primary)", marginTop: "2px", fontWeight: 600 }}>
                     Đổi điểm: {formatNumber(billPointsUsed(selectedOrder))} điểm = −{formatVND(billPointsDiscount(selectedOrder))}

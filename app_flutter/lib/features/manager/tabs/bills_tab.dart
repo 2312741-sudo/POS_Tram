@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/bills_tab.dart
+import '../../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -111,7 +112,7 @@ class _BillsTabState extends State<BillsTab> {
       if (_statusFilter == 'ALL' && b.status != 'PAID' && b.status != 'CANCELLED') return false;
 
       // 2. Date Filter
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
       final billDay = DateTime(dt.year, dt.month, dt.day);
 
       if (_dateFilter == 'TODAY') {
@@ -190,6 +191,12 @@ class _BillsTabState extends State<BillsTab> {
     if (bills.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Không có hóa đơn nào để xuất!')),
+      );
+      return;
+    }
+    if (!_auth.can(AppPermissions.exportReports)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền xuất báo cáo (EXPORT_REPORTS).')),
       );
       return;
     }
@@ -621,7 +628,7 @@ class _BillsTabState extends State<BillsTab> {
   Widget _buildBillCard(BillModel bill) {
     final isCash = bill.paymentMethod.toLowerCase().contains('cash') || bill.paymentMethod.toLowerCase().contains('tiền mặt');
     final isCancelled = bill.status == 'CANCELLED';
-    final timeStr = FormatUtils.dateTime(bill.closedAt ?? bill.createdAt);
+    final timeStr = FormatUtils.dateTime(bill.reportTimeMs);
 
     final tableName = bill.tableName.trim();
     final zone = bill.zone.trim();

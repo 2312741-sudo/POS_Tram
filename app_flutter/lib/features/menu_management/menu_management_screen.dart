@@ -7,12 +7,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/domain/menu_copy.dart';
+import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'copy_menu_dialog.dart';
 
 class MenuManagementScreen extends StatefulWidget {
   const MenuManagementScreen({super.key});
@@ -320,67 +323,32 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     }
   }
 
+  /// Chủ / Quản lý (khớp rules) VÀ có mã quyền COPY_MENU (Chủ + Quản lý mặc định có).
+  bool get _canCopyMenu => MenuCopy.canCopyMenu(
+        isOwnerOrManager: _auth.isOwner || _auth.isManager,
+        canEditMenu: _auth.can(AppPermissions.copyMenu),
+      );
+
   Future<void> _showCopyMenuDialog() async {
-    final otherStores = _availableStores.where((s) => s.storeCode != _selectedStoreCode).toList();
-    if (otherStores.isEmpty) {
+    if (!_canCopyMenu) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bạn không có quyền sao chép thực đơn.')),
+      );
+      return;
+    }
+    List<StoreInfoModel> stores = _availableStores;
+    try {
+      final all = await _fb.getAllStores();
+      if (all.isNotEmpty) stores = all;
+    } catch (_) {}
+    if (!mounted) return;
+    if (stores.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Không có chi nhánh khác để sao chép!')),
       );
       return;
     }
-
-    String sourceStore = otherStores.first.storeCode;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          title: Text('Sao Chép Thực Đơn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Sao chép toàn bộ món và nhóm danh mục sang chi nhánh hiện tại ($_selectedStoreCode):',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                key: ValueKey<Object?>(sourceStore),
-                initialValue: sourceStore,
-                decoration: const InputDecoration(labelText: 'Chọn chi nhánh nguồn'),
-                items: otherStores.map((s) => DropdownMenuItem(
-                  value: s.storeCode,
-                  child: Text('${s.storeCode} - ${s.storeName}'),
-                )).toList(),
-                onChanged: (val) {
-                  if (val != null) setSt(() => sourceStore = val);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final count = await _fb.copyMenuBetweenStores(
-                  fromStoreCode: sourceStore,
-                  toStoreCode: _selectedStoreCode,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Đã sao chép $count món từ $sourceStore sang $_selectedStoreCode thành công!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Sao chép ngay'),
-            ),
-          ],
-        ),
-      ),
-    );
+    await showCopyMenuDialog(context, stores: stores, defaultSource: _selectedStoreCode);
   }
 
   Future<void> _showClearMenuDialog() async {
@@ -434,6 +402,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               if (val == 'CLEAR') _showClearMenuDialog();
             },
             itemBuilder: (_) => [
+              if (_canCopyMenu)
               PopupMenuItem(
                 value: 'COPY',
                 child: Row(
@@ -587,7 +556,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        OutlinedButton.icon(
+                        if (_canCopyMenu) OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                           onPressed: _showCopyMenuDialog,
                           icon: const Icon(Icons.copy_all),

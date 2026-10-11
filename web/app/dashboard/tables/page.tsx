@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useState, useMemo, type CSSProperties } from "react";
+import { useState, useMemo, useCallback, type CSSProperties } from "react";
 import { db } from "@/lib/firebase";
 import { ref, update } from "firebase/database";
 import {
@@ -88,7 +88,8 @@ const emptyForm: TableFormData = {
 import { useDashboardData, resolveWriteStoreCode } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
 import { buildTableBillHtml } from "@/lib/print-html";
-import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
+import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, parseOrderJson, setLineQuantity, summarizeOrderLines, toppingLabel, type RawOrderLine } from "@/lib/order-math";
+import PromotionPanel, { usePromotions } from "@/components/PromotionPanel";
 import { deriveTableStatus, prePrintedAtOf, TABLE_STATUS_META, TABLE_STATUS_ORDER, type TableStatus } from "@/lib/table-status";
 import { hasPermission, useAuth } from "@/lib/auth";
 import LineDiscountDialog from "@/components/LineDiscountDialog";
@@ -140,7 +141,8 @@ export default function TablesPage() {
   const canOrderOnWeb = hasPermission(user, "OPEN_TABLE");
   const canSendKitchenFromWeb = hasPermission(user, "SEND_KITCHEN");
   // Quản lý / chủ quán có thể tự đặt PIN duyệt
-  const canSetApprovalPin = !!user && canUserApprove({ ...user }, "DISCOUNT_ITEM");
+  const canSetApprovalPin = !!user && canUserApprove({ ...user }, "DISCOUNT_ITEM") && hasPermission(user, "MANAGE_MANAGER_PIN");
+  const canDeleteItem = hasPermission(user, "DELETE_ITEM");
   const loading = ctxLoading && tables.length === 0;
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TableStatus>("ALL");
@@ -198,6 +200,25 @@ export default function TablesPage() {
     return updated.inUse ? updated : null;
   }, [pickedTableForOrder, tables]);
 
+  // Khuyến mãi / voucher cho bàn đang thanh toán (nhân viên tự chọn hoặc nhập mã — không tự áp dụng)
+  const promoStoreCode = selectedTableForOrder ? selectedTableForOrder.storeCode || resolveWriteStoreCode(currentStoreCode) : "";
+  const promoItems = useMemo(() => parseOrderJson(selectedTableForOrder?.currentOrderJson), [selectedTableForOrder?.currentOrderJson]);
+  const categoryById = useMemo(() => new Map(products.map((p) => [String(p.id), p.category])), [products]);
+  const promoGroupOf = useCallback(
+    (it: RawOrderLine) => categoryById.get(String(it.productId ?? it.id ?? "")) ?? (typeof it.category === "string" ? it.category : null),
+    [categoryById]
+  );
+  const promoStore = stores.find((s) => s.storeCode === promoStoreCode) || currentStore;
+  const promo = usePromotions({
+    storeCode: promoStoreCode,
+    tableKey: selectedTableForOrder ? `${promoStoreCode}/${selectedTableForOrder.id}` : "",
+    items: promoItems,
+    groupOf: promoGroupOf,
+    guestCount: selectedTableForOrder?.guestCount,
+    allowStack: promoStore?.allowStackPromotions ?? true,
+  });
+  const canApplyPromotion = hasPermission(user, "APPLY_PROMOTION");
+
   const filtered = useMemo(() => {
     return tables.filter((t) => {
       const matchZone = selectedZone === "ALL" || t.zone === selectedZone;
@@ -240,6 +261,10 @@ export default function TablesPage() {
     const { subTotal, itemDiscounts } = summarizeOrderLines(items as unknown as RawOrderLine[]);
     return Math.max(0, subTotal - itemDiscounts);
   };
+
+  /** Tổng giảm từ khuyến mãi / voucher đã chọn — chỉ áp dụng cho bàn đang mở ở màn thanh toán */
+  const promoDiscountOf = (t: Table): number =>
+    selectedTableForOrder && t.id === selectedTableForOrder.id ? promo.total : 0;
 
   const getElapsedMinutes = (openedAt?: string | null): string => {
     if (!openedAt) return "< 1";
@@ -337,14 +362,18 @@ export default function TablesPage() {
 
   const handleCheckoutAndFreeTable = async (t: Table) => {
     const items = parseOrderItems(t.currentOrderJson);
-    const total = calculateTableTotal(items);
+    const total = Math.max(0, calculateTableTotal(items) - promoDiscountOf(t));
     const methodText = paymentMethod === "CASH" ? "Tiền mặt" : "Chuyển khoản VietQR";
 
     if (!confirm(`Xác nhận hoàn tất thanh toán (${methodText}) và trả ${t.name} (Tổng tiền: ${formatVND(total)} VNĐ)?`)) return;
 
     setCompletingPayment(true);
     try {
-      const res = await checkoutAndFreeTable(t, { paymentMethod });
+      const res = await checkoutAndFreeTable(t, {
+        paymentMethod,
+        promotions: selectedTableForOrder && t.id === selectedTableForOrder.id ? promo.applied : [],
+        staffName: user?.fullName,
+      });
       if (res.success) {
         setCheckoutToast(`✅ Đã thanh toán hóa đơn ${res.billCode || res.billId} và trả bàn ${t.name} thành công!`);
         setTimeout(() => setCheckoutToast(null), 5000);
@@ -453,7 +482,9 @@ export default function TablesPage() {
       alert("Bàn chưa có món để in tạm tính");
       return;
     }
-    const total = calculateTableTotal(items);
+    const subtotal = calculateTableTotal(items);
+    const promotions = selectedTableForOrder && table.id === selectedTableForOrder.id ? promo.applied : [];
+    const total = Math.max(0, subtotal - promoDiscountOf(table));
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       alert("Vui lòng cho phép mở cửa sổ popup để in hóa đơn");
@@ -466,6 +497,7 @@ export default function TablesPage() {
         zone: table.zone,
         items,
         total,
+        promotions: promotions.map((d) => ({ name: d.campaignName, code: d.voucherCode, amount: d.amount })),
         printedAt: new Date().toLocaleString("vi-VN"),
       })
     );
@@ -578,6 +610,10 @@ export default function TablesPage() {
   };
 
   const openRemoval = (table: Table, index: number, initialQty: number) => {
+    if (!canDeleteItem) {
+      alert("Bạn không có quyền xóa món khỏi đơn (DELETE_ITEM).");
+      return;
+    }
     setLineError("");
     setRemovalTarget({ table, orderJson: table.currentOrderJson || "", index, initialQty });
   };
@@ -849,7 +885,7 @@ export default function TablesPage() {
               PIN duyệt
             </button>
           )}
-          {canManageLayout(user?.roleId || user?.role, user?.isRootOwner) && (
+          {canManageLayout(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "MANAGE_TABLES") && (
             <button
               className="btn-secondary"
               onClick={() => setShowZoneSetup(true)}
@@ -2110,6 +2146,14 @@ export default function TablesPage() {
                 </div>
               )}
 
+              {/* Khuyến mãi & Voucher — nhân viên chọn chương trình hoặc nhập mã */}
+              <PromotionPanel
+                state={promo}
+                storeCode={promoStoreCode}
+                canApply={canApplyPromotion}
+                billId={selectedTableForOrder.currentBillId || undefined}
+              />
+
               {/* Total Calculation */}
               <div
                 style={{
@@ -2128,12 +2172,14 @@ export default function TablesPage() {
                     Tổng tiền tạm tính của bàn
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--primary)", marginTop: "2px" }}>
-                    Chưa bao gồm khuyến mãi / VAT (nếu có khi thanh toán)
+                    {promo.applied.length > 0
+                      ? `Đã trừ khuyến mãi: -${formatVND(promo.total)} VNĐ (${promo.applied.map((d) => d.campaignName).join(", ")})`
+                      : "Chưa bao gồm khuyến mãi / VAT (nếu có khi thanh toán)"}
                   </div>
                 </div>
                 <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--primary)" }}>
                   {formatVND(
-                    calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson))
+                    Math.max(0, calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total)
                   )}{" "}
                   <span style={{ fontSize: "15px" }}>VNĐ</span>
                 </div>
@@ -2200,8 +2246,9 @@ export default function TablesPage() {
                   const bankId = targetStore?.bankId || "MB";
                   const bankAccount = targetStore?.bankAccount || "0987654321";
                   const accountName = targetStore?.accountName || "CHU CUA HANG TRAM FNB";
-                  const orderTotal = calculateTableTotal(
-                    parseOrderItems(selectedTableForOrder.currentOrderJson)
+                  const orderTotal = Math.max(
+                    0,
+                    calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total
                   );
                   const qrUrl = `https://img.vietqr.io/image/${bankId}-${bankAccount}-compact2.png?amount=${orderTotal}&addInfo=${encodeURIComponent(
                     `TT BAN ${selectedTableForOrder.name}`

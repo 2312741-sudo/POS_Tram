@@ -23,6 +23,7 @@ import {
   CampaignReportItem,
   CancelledBillItem,
   HistoryOrder,
+  getBillTimestamp,
 } from "../lib/reports";
 
 // Load golden verification dataset
@@ -433,5 +434,72 @@ describe("giảm giá đổi điểm trong chi tiết hóa đơn", () => {
     expect(billPointsDiscount({ id: "b", totalDiscount: 2000, pointsDiscount: 9000 })).toBe(2000);
     expect(billOtherOrderDiscount({ id: "b" })).toBe(0);
     expect(billPointsUsed({ id: "b" })).toBe(0);
+  });
+});
+
+describe("Đơn hủy thuộc NGÀY HỦY (đặc tả 3.4) - 3 hóa đơn thật 12/10/2026", () => {
+  // Giờ địa phương UTC+7 -> epoch ms
+  const L = (m: number, d: number, h: number, mi: number) => Date.UTC(2026, m - 1, d, h - 7, mi);
+  const dayOf = (ts: number) => new Date(ts + 7 * 3600_000).toISOString().slice(0, 10);
+
+  const bills: HistoryOrder[] = [
+    {
+      id: "HD-261011-180352-UBZF", status: "CANCELLED",
+      createdAt: L(10, 11, 18, 3), closedAt: L(10, 12, 1, 4), timestamp: L(10, 12, 1, 4),
+      subTotal: 0, finalAmount: 0, deletedItemsCount: 1, deletedItemsAmount: 15000,
+    },
+    {
+      id: "HD-261009-015221", status: "CANCELLED",
+      createdAt: L(10, 9, 1, 52), closedAt: L(10, 12, 1, 5),
+      subTotal: 0, finalAmount: 0, deletedItemsCount: 1, deletedItemsAmount: 50000,
+    },
+    {
+      id: "HD-261012-0003", status: "CANCELLED",
+      createdAt: L(10, 9, 14, 24), closedAt: L(10, 12, 1, 4), cancelledAt: L(10, 12, 1, 5),
+      subTotal: 90000, finalAmount: 90000,
+    },
+  ] as unknown as HistoryOrder[];
+
+  it("getBillTimestamp: cả 3 đơn rơi vào ngày hủy 2026-10-12", () => {
+    for (const b of bills) expect(dayOf(getBillTimestamp(b))).toBe("2026-10-12");
+  });
+
+  it("thứ tự cancelledAt → closedAt → timestamp → createdAt", () => {
+    expect(getBillTimestamp(bills[2])).toBe(L(10, 12, 1, 5));
+    expect(getBillTimestamp({ id: "x", status: "CANCELLED", createdAt: 5, timestamp: 9 } as unknown as HistoryOrder)).toBe(9);
+    expect(getBillTimestamp({ id: "x", status: "CANCELLED", createdAt: 5 } as unknown as HistoryOrder)).toBe(5);
+    // PAID vẫn theo closedAt, OPEN vẫn theo createdAt
+    expect(getBillTimestamp({ id: "p", status: "PAID", createdAt: 1, closedAt: 2 } as unknown as HistoryOrder)).toBe(2);
+    expect(getBillTimestamp({ id: "o", status: "OPEN", createdAt: 1, closedAt: 2 } as unknown as HistoryOrder)).toBe(1);
+  });
+
+  it("lọc 'Hôm nay' (12/10) giữ đủ 3 đơn hủy, 0đ doanh thu, giá trị hủy = max(subTotal, tiền món xóa)", () => {
+    const today = bills.filter((b) => dayOf(getBillTimestamp(b)) === "2026-10-12");
+    expect(today.length).toBe(3);
+    const cancel = calculateCancellationReport(today);
+    expect(cancel.cancelledBillsCount).toBe(3);
+    expect(cancel.totalLossValue).toBe(15000 + 50000 + 90000);
+    const ov = calculateOverviewReport(today);
+    expect(ov.cancelledBillsCount).toBe(3);
+    expect(ov.netRevenue).toBe(0);
+    expect(ov.paidBillsCount).toBe(0);
+    const z = generateEndOfDayZReport(today, [], []);
+    expect(z.tab1_tongHop.deletedItemsAmount).toBe(0); // không có mảng deletedItems chi tiết -> không đếm đôi
+  });
+
+  it("deletedItems chi tiết: giá trị hủy lấy tiền món xóa, tổng tiền xóa món là dòng riêng", () => {
+    const b = {
+      id: "A", status: "CANCELLED", createdAt: L(10, 9, 1, 0), closedAt: L(10, 12, 1, 4), subTotal: 0,
+      deletedItems: [{ name: "Trà", productId: 1, quantity: 1, unitPrice: 15000, amount: 15000, reason: "Nhập nhầm", timestamp: L(10, 12, 1, 3) }],
+    } as unknown as HistoryOrder;
+    expect(calculateCancellationReport([b]).totalLossValue).toBe(15000);
+    expect(generateEndOfDayZReport([b], [], []).tab1_tongHop.deletedItemsAmount).toBe(15000);
+  });
+
+  it("khử trùng lặp: bản ghi hủy (có cancelledAt) thắng bản chưa hủy cùng id", () => {
+    const open = { id: "D", status: "OPEN", createdAt: L(10, 9, 1, 0) } as unknown as HistoryOrder;
+    const canc = { id: "D", status: "CANCELLED", createdAt: L(10, 9, 1, 0), cancelledAt: L(10, 12, 1, 5) } as unknown as HistoryOrder;
+    expect(deduplicateBills([canc, open])[0].status).toBe("CANCELLED");
+    expect(deduplicateBills([open, canc])[0].status).toBe("CANCELLED");
   });
 });

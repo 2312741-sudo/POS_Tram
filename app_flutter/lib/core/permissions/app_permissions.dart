@@ -1,195 +1,147 @@
 // lib/core/permissions/app_permissions.dart
 
-/// 4 VAI TRÒ GỐC TỪ HỆ SINH THÁI TRẠM (CHẤM CÔNG TRẠM)
-/// Theo mục 3.1 & 3.2 của BO_QUY_TAC_CHUNG_HE_SINH_THAI_TRAM.md
+/// Mã vai trò CHUẨN (ghi vào RTDB). Mọi mã cũ vẫn được chấp nhận khi đọc (xem [normalizeRoleId]).
+///  - Quản lý 1 + Quản lý 2  => ROLE_MANAGER ("Quản lý")
+///  - Thu ngân + Phục vụ     => ROLE_STAFF   ("Nhân viên")
+/// Nguồn song song: functions/src/permissions.ts, web/lib/roles.ts — giữ đồng bộ.
+const String kRoleOwner = 'ROLE_OWNER';
+const String kRoleManager = 'ROLE_MANAGER';
+const String kRoleStaff = 'ROLE_STAFF';
+const String kRoleKitchen = 'ROLE_KITCHEN';
+
+/// Tên hiển thị vai trò gộp Thu ngân/Phục vụ — đổi tên chỉ cần sửa các hằng số này.
+const String kStaffRoleLabel = 'Nhân viên';
+const String kStaffRoleDescription = 'Thu ngân / Phục vụ';
+const String kManagerRoleLabel = 'Quản lý';
+const String kOwnerRoleLabel = 'Chủ cửa hàng';
+const String kKitchenRoleLabel = 'Bếp / Bar';
+
+const Set<String> _ownerAliases = {
+  'owner', 'role_owner', 'chu', 'chu_cua_hang', 'chủ', 'chủ_cửa_hàng', 'admin',
+};
+const Set<String> _managerAliases = {
+  'manager', 'role_manager', 'manager_1', 'manager_2', 'role_manager_1', 'role_manager_2',
+  'manager1', 'manager2', 'legacymanager', 'legacy_manager',
+  'ql', 'ql1', 'ql2', 'ql_1', 'ql_2', 'quan_ly', 'quan_ly_1', 'quan_ly_2',
+  'quan_ly_cap_1', 'quan_ly_cap_2',
+};
+const Set<String> _staffAliases = {
+  'role_staff', 'staff', 'employee', 'role_employee', 'cashier', 'role_cashier',
+  'waiter', 'role_waiter', 'nhan_vien', 'nv', 'thu_ngan', 'phuc_vu',
+};
+const Set<String> _kitchenAliases = {'role_kitchen', 'kitchen', 'daubep', 'bep'};
+
+/// Chuẩn hóa mã vai trò về mã chuẩn: ROLE_OWNER / ROLE_MANAGER / ROLE_STAFF / ROLE_KITCHEN.
+/// Mã lạ giữ nguyên (đã trim); null/rỗng => ''.
+String normalizeRoleId(String? raw) {
+  if (raw == null) return '';
+  final trimmed = raw.trim();
+  final clean = trimmed.toLowerCase().replaceAll('-', '_').replaceAll(RegExp(r'\s+'), '_');
+  if (_ownerAliases.contains(clean)) return kRoleOwner;
+  if (_managerAliases.contains(clean)) return kRoleManager;
+  if (_staffAliases.contains(clean)) return kRoleStaff;
+  if (_kitchenAliases.contains(clean)) return kRoleKitchen;
+  return trimmed;
+}
+
+/// Tên hiển thị tiếng Việt của một mã vai trò (kể cả mã cũ).
+String roleDisplayLabel(String? raw) {
+  switch (normalizeRoleId(raw)) {
+    case kRoleOwner:
+      return kOwnerRoleLabel;
+    case kRoleManager:
+      return kManagerRoleLabel;
+    case kRoleStaff:
+      return kStaffRoleLabel;
+    case kRoleKitchen:
+      return kKitchenRoleLabel;
+    default:
+      return (raw == null || raw.trim().isEmpty) ? kStaffRoleLabel : raw;
+  }
+}
+
+/// Vai trò POS sau khi gộp: Chủ quán, Quản lý, Nhân viên (Thu ngân + Phục vụ), Bếp/Bar.
 enum UserRole {
   owner,
-  manager1,
-  manager2,
-  legacyManager,
-  employee;
+  manager,
+  staff,
+  kitchen;
+
+  // Tên cũ giữ lại để mã gọi cũ biên dịch được — tất cả trỏ về vai trò đã gộp.
+  static const UserRole manager1 = UserRole.manager;
+  static const UserRole manager2 = UserRole.manager;
+  static const UserRole legacyManager = UserRole.manager;
+  static const UserRole employee = UserRole.staff;
 
   bool get isOwner => this == UserRole.owner;
-  bool get isManager1 => this == UserRole.manager1;
-  bool get isManager2 => this == UserRole.manager2;
-  bool get isLegacyManager => this == UserRole.legacyManager;
-  bool get isManager =>
-      this == UserRole.manager1 ||
-      this == UserRole.manager2 ||
-      this == UserRole.legacyManager;
-  bool get isEmployee => this == UserRole.employee;
+  bool get isManager => this == UserRole.manager;
+  bool get isStaff => this == UserRole.staff;
+  bool get isKitchen => this == UserRole.kitchen;
+  bool get isEmployee => this == UserRole.staff;
 
   String get label {
     switch (this) {
       case UserRole.owner:
-        return 'Chủ cửa hàng';
-      case UserRole.manager1:
-        return 'Quản lý 1';
-      case UserRole.manager2:
-        return 'Quản lý 2';
-      case UserRole.legacyManager:
-        return 'Quản lý';
-      case UserRole.employee:
-        return 'Nhân viên';
+        return kOwnerRoleLabel;
+      case UserRole.manager:
+        return kManagerRoleLabel;
+      case UserRole.staff:
+        return kStaffRoleLabel;
+      case UserRole.kitchen:
+        return kKitchenRoleLabel;
     }
   }
 
+  /// Mã vai trò chuẩn để ghi vào cơ sở dữ liệu.
   String get value {
     switch (this) {
       case UserRole.owner:
         return 'owner';
-      case UserRole.manager1:
-        return 'manager_1';
-      case UserRole.manager2:
-        return 'manager_2';
-      case UserRole.legacyManager:
-        return 'manager';
-      case UserRole.employee:
-        return 'employee';
+      case UserRole.manager:
+        return kRoleManager;
+      case UserRole.staff:
+        return kRoleStaff;
+      case UserRole.kitchen:
+        return kRoleKitchen;
     }
   }
 
-  /// Parser siêu bền bỉ: Chống mọi lỗi định dạng chuỗi từ database theo chuẩn Hệ sinh thái Trạm
+  /// Mã vai trò chuẩn dùng tra bảng quyền ([AppPermissions.rolePresets]).
+  String get presetId {
+    switch (this) {
+      case UserRole.owner:
+        return kRoleOwner;
+      case UserRole.manager:
+        return kRoleManager;
+      case UserRole.staff:
+        return kRoleStaff;
+      case UserRole.kitchen:
+        return kRoleKitchen;
+    }
+  }
+
+  /// Parser chịu lỗi: mọi biến thể mã (kể cả mã cũ Quản lý 1/2, Thu ngân, Phục vụ) về vai trò đã gộp.
   static UserRole fromString(String? value) {
-    if (value == null || value.trim().isEmpty) return UserRole.employee;
-    final clean = value.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
-
-    switch (clean) {
-      case 'owner':
-      case 'role_owner':
-      case 'chu':
-      case 'chu_cua_hang':
-      case 'chủ':
-      case 'chủ_cửa_hàng':
-      case 'admin':
+    switch (normalizeRoleId(value)) {
+      case kRoleOwner:
         return UserRole.owner;
-
-      case 'manager_1':
-      case 'manager1':
-      case 'role_manager_1':
-      case 'ql1':
-      case 'ql_1':
-      case 'quan_ly_1':
-      case 'quan_ly_cap_1':
-        return UserRole.manager1;
-
-      case 'manager_2':
-      case 'manager2':
-      case 'role_manager_2':
-      case 'ql2':
-      case 'ql_2':
-      case 'quan_ly_2':
-      case 'quan_ly_cap_2':
-        return UserRole.manager2;
-
-      case 'manager':
-      case 'role_manager':
-      case 'ql':
-      case 'quan_ly':
-      case 'legacy_manager':
-        return UserRole.legacyManager;
-
-      case 'employee':
-      case 'role_employee':
-      case 'staff':
-      case 'nhan_vien':
-      case 'nv':
+      case kRoleManager:
+        return UserRole.manager;
+      case kRoleKitchen:
+        return UserRole.kitchen;
       default:
-        return UserRole.employee;
+        return UserRole.staff;
     }
   }
 
-  /// Kiểm tra quyền mặc định của vai trò trong môi trường F&B POS KiotViet
+  /// Quyền mặc định của vai trò (Chủ quán: toàn quyền; còn lại theo [AppPermissions.rolePresets]).
   bool hasDefaultPermission(String permKey) {
-    if (isOwner) return true; // Chủ quán toàn quyền tối cao
-
-    if (isManager1) {
-      // Quản lý 1: Điều hành bán hàng, két tiền, duyệt hủy món, xem báo cáo, chiết khấu
-      // + Kho hàng, NCC, khuyến mãi nâng cao
-      return [
-        AppPermissions.viewMenu,
-        AppPermissions.editMenu,
-        AppPermissions.changePrice,
-        AppPermissions.openTable,
-        AppPermissions.changeTable,
-        AppPermissions.mergeSplitTable,
-        AppPermissions.sendKitchen,
-        AppPermissions.cancelKitchenItem,
-        AppPermissions.createBill,
-        AppPermissions.editBill,
-        AppPermissions.applyPromotion,
-        AppPermissions.manualDiscount,
-        AppPermissions.cancelBill,
-        AppPermissions.printBill,
-        AppPermissions.reprintBill,
-        AppPermissions.manageCashShift,
-        AppPermissions.viewReports,
-        AppPermissions.viewAuditLogs,
-        // Kho hàng
-        AppPermissions.viewInventory,
-        AppPermissions.editCatalogItem,
-        AppPermissions.viewCostPrice,
-        AppPermissions.manageRecipes,
-        // NCC & Nhập hàng
-        AppPermissions.viewSuppliers,
-        AppPermissions.editSuppliers,
-        AppPermissions.createReceipt,
-        AppPermissions.inventoryStockIn,
-        AppPermissions.completeReceipt,
-        AppPermissions.createPurchaseReturn,
-        // Kiểm kho & Vận hành
-        AppPermissions.createStocktake,
-        AppPermissions.approveStocktake,
-        AppPermissions.createTransfer,
-        AppPermissions.receiveTransfer,
-        AppPermissions.createWaste,
-        AppPermissions.inventoryWaste,
-        AppPermissions.createInternalUse,
-        AppPermissions.inventoryStockOut,
-        AppPermissions.createProduction,
-        // Thực đơn & Topping
-        AppPermissions.manageMenu,
-        // Chiết khấu & Giảm giá món
-        AppPermissions.discountItem,
-        // Khuyến mãi nâng cao
-        AppPermissions.createCampaign,
-        AppPermissions.editCampaign,
-        AppPermissions.activateCampaign,
-        AppPermissions.manageCodes,
-      ].contains(permKey);
-    }
-
-    if (isManager2) {
-      // Quản lý 2: Giám sát ca, mở bàn, đổi bàn, in bill, xem ca két
-      return [
-        AppPermissions.viewMenu,
-        AppPermissions.openTable,
-        AppPermissions.changeTable,
-        AppPermissions.mergeSplitTable,
-        AppPermissions.sendKitchen,
-        AppPermissions.createBill,
-        AppPermissions.applyPromotion,
-        AppPermissions.discountItem,
-        AppPermissions.printBill,
-        AppPermissions.manageCashShift,
-        AppPermissions.viewReports,
-      ].contains(permKey);
-    }
-
-    // Nhân viên phục vụ / Thu ngân thông thường
-    return [
-      AppPermissions.viewMenu,
-      AppPermissions.openTable,
-      AppPermissions.changeTable,
-      AppPermissions.sendKitchen,
-      AppPermissions.createBill,
-      AppPermissions.applyPromotion,
-      AppPermissions.printBill,
-    ].contains(permKey);
+    if (isOwner) return true;
+    return AppPermissions.rolePresets[presetId]?.contains(permKey) ?? false;
   }
 }
 
-/// Danh sách quyền hạn chi tiết trong hệ thống nhà hàng F&B
+/// Thông tin một quyền hạn trong danh mục.
 class AppPermission {
   final String key;
   final String label;
@@ -215,6 +167,8 @@ class AppPermissions {
   static const String catInventory = 'Kho hàng & Nguyên vật liệu';
   static const String catSupplier = 'Nhà cung cấp & Nhập hàng';
   static const String catPromoAdvanced = 'Khuyến mãi nâng cao';
+  static const String catCustomer = 'Khách hàng & Tích điểm';
+  static const String catOps = 'Vận hành & Thiết bị';
 
   // 1. Thực đơn & Giá
   static const String viewMenu = 'VIEW_MENU';
@@ -290,6 +244,58 @@ class AppPermissions {
   static const String exportCodes = 'EXPORT_CODES'; // Xuất danh sách mã
   static const String overrideManualDiscount = 'OVERRIDE_MANUAL_DISCOUNT'; // Nhạy cảm
 
+  // Quyền bổ sung sau rà soát phân quyền (docs/PERMISSIONS_AUDIT.md)
+  static const String copyMenu = 'COPY_MENU'; // Nhạy cảm
+  static const String deleteItem = 'DELETE_ITEM';
+  static const String manageTables = 'MANAGE_TABLES';
+  static const String redeemPoints = 'REDEEM_POINTS';
+  static const String viewCustomers = 'VIEW_CUSTOMERS';
+  static const String manageCustomers = 'MANAGE_CUSTOMERS';
+  static const String adjustPoints = 'ADJUST_POINTS'; // Nhạy cảm
+  static const String manageLoyalty = 'MANAGE_LOYALTY'; // Nhạy cảm
+  static const String exportReports = 'EXPORT_REPORTS';
+  static const String exportAuditLogs = 'EXPORT_AUDIT_LOGS'; // Nhạy cảm
+  static const String exportData = 'EXPORT_DATA';
+  static const String viewCashShifts = 'VIEW_CASH_SHIFTS';
+  static const String viewOnlineOrders = 'VIEW_ONLINE_ORDERS';
+  static const String manageOnlineOrders = 'MANAGE_ONLINE_ORDERS';
+  static const String viewKitchen = 'VIEW_KITCHEN';
+  static const String manageManagerPin = 'MANAGE_MANAGER_PIN'; // Nhạy cảm
+  static const String manageChamcongLink = 'MANAGE_CHAMCONG_LINK'; // Nhạy cảm
+  static const String createSampleData = 'CREATE_SAMPLE_DATA';
+
+  /// Quyền mặc định theo vai trò (mã chuẩn). Quản lý = HỢP Quản lý 1 + Quản lý 2 cũ;
+  /// Nhân viên = HỢP Thu ngân + Phục vụ cũ. Chủ quán: toàn quyền (không liệt kê).
+  /// Bản song song: web/lib/auth.tsx (ROLE_PERMISSIONS) — test parity ở web/test/permission-parity.test.ts.
+  static const Map<String, List<String>> rolePresets = {
+    'ROLE_MANAGER': [
+      'VIEW_MENU', 'EDIT_MENU', 'CHANGE_PRICE', 'MENU_MANAGEMENT', 'OPEN_TABLE',
+      'CHANGE_TABLE', 'MERGE_SPLIT_TABLE', 'SEND_KITCHEN', 'CANCEL_KITCHEN_ITEM',
+      'CREATE_BILL', 'EDIT_BILL', 'APPLY_PROMOTION', 'MANUAL_DISCOUNT', 'DISCOUNT_ITEM',
+      'CANCEL_BILL', 'PRINT_BILL', 'REPRINT_BILL', 'MANAGE_CASH_SHIFT', 'ADJUST_CASH_SHIFT',
+      'VIEW_REPORTS', 'VIEW_AUDIT_LOGS', 'MANAGE_PROMOTIONS', 'VIEW_INVENTORY',
+      'EDIT_CATALOG_ITEM', 'VIEW_COST_PRICE', 'MANAGE_RECIPES', 'VIEW_SUPPLIERS',
+      'EDIT_SUPPLIERS', 'CREATE_RECEIPT', 'INVENTORY_STOCK_IN', 'COMPLETE_RECEIPT',
+      'CREATE_PURCHASE_RETURN', 'RECORD_SUPPLIER_PAYMENT', 'CREATE_STOCKTAKE',
+      'APPROVE_STOCKTAKE', 'CREATE_TRANSFER', 'RECEIVE_TRANSFER', 'CREATE_WASTE',
+      'INVENTORY_WASTE', 'CREATE_INTERNAL_USE', 'INVENTORY_STOCK_OUT', 'CREATE_PRODUCTION',
+      'CREATE_CAMPAIGN', 'EDIT_CAMPAIGN', 'ACTIVATE_CAMPAIGN', 'MANAGE_CODES', 'COPY_MENU',
+      'DELETE_ITEM', 'MANAGE_TABLES', 'REDEEM_POINTS', 'VIEW_CUSTOMERS', 'MANAGE_CUSTOMERS',
+      'ADJUST_POINTS', 'EXPORT_REPORTS', 'EXPORT_AUDIT_LOGS', 'EXPORT_DATA',
+      'VIEW_CASH_SHIFTS', 'VIEW_ONLINE_ORDERS', 'MANAGE_ONLINE_ORDERS', 'VIEW_KITCHEN',
+      'MANAGE_MANAGER_PIN', 'CREATE_SAMPLE_DATA',
+    ],
+    'ROLE_STAFF': [
+      'VIEW_MENU', 'OPEN_TABLE', 'CHANGE_TABLE', 'SEND_KITCHEN', 'CREATE_BILL',
+      'APPLY_PROMOTION', 'PRINT_BILL', 'DELETE_ITEM', 'REDEEM_POINTS', 'VIEW_CUSTOMERS',
+      'MANAGE_CUSTOMERS', 'VIEW_ONLINE_ORDERS', 'MANAGE_ONLINE_ORDERS', 'VIEW_KITCHEN',
+      'MANAGE_CASH_SHIFT', 'VIEW_CASH_SHIFTS',
+    ],
+    'ROLE_KITCHEN': [
+      'VIEW_MENU', 'SEND_KITCHEN', 'VIEW_KITCHEN',
+    ],
+  };
+
   static bool isSensitive(String permKey) {
     const sensitive = {
       cancelBill,
@@ -309,6 +315,12 @@ class AppPermissions {
       // KM nâng cao nhạy cảm
       overrideManualDiscount,
       manageCodes,
+      copyMenu,
+      adjustPoints,
+      manageLoyalty,
+      exportAuditLogs,
+      manageManagerPin,
+      manageChamcongLink,
     };
     return sensitive.contains(permKey);
   }
@@ -657,6 +669,116 @@ class AppPermissions {
       label: 'Chiết khấu vượt quy định',
       category: catPromoAdvanced,
       description: 'Áp dụng giảm giá thủ công vượt mức giới hạn (Cực kỳ nhạy cảm).',
+    ),
+
+    // Bổ sung sau rà soát phân quyền
+    AppPermission(
+      key: copyMenu,
+      label: 'Sao chép thực đơn giữa các quán',
+      category: catMenu,
+      description: 'Sao chép món, danh mục, topping từ quán này sang quán khác (ghi đè thực đơn quán đích).',
+    ),
+    AppPermission(
+      key: deleteItem,
+      label: 'Xóa món chưa gửi bếp',
+      category: catTableOrder,
+      description: 'Bỏ món khỏi đơn khi chưa gửi bếp (bắt buộc nhập lý do, ghi log).',
+    ),
+    AppPermission(
+      key: manageTables,
+      label: 'Quản lý bàn & khu vực',
+      category: catTableOrder,
+      description: 'Thêm, sửa, xóa bàn và khu vực bàn; sắp xếp sơ đồ bàn.',
+    ),
+    AppPermission(
+      key: redeemPoints,
+      label: 'Đổi điểm tích lũy',
+      category: catCustomer,
+      description: 'Dùng điểm của khách để giảm giá khi thanh toán.',
+    ),
+    AppPermission(
+      key: viewCustomers,
+      label: 'Xem khách hàng',
+      category: catCustomer,
+      description: 'Xem danh sách khách hàng, điểm và hạng thành viên.',
+    ),
+    AppPermission(
+      key: manageCustomers,
+      label: 'Thêm & Sửa khách hàng',
+      category: catCustomer,
+      description: 'Tạo mới, cập nhật thông tin khách hàng (không gồm chỉnh điểm).',
+    ),
+    AppPermission(
+      key: adjustPoints,
+      label: 'Chỉnh điểm khách hàng',
+      category: catCustomer,
+      description: 'Cộng/trừ điểm trực tiếp cho khách (Nhạy cảm - ghi log).',
+    ),
+    AppPermission(
+      key: manageLoyalty,
+      label: 'Cấu hình tích điểm & hạng',
+      category: catCustomer,
+      description: 'Tỷ lệ tích/đổi điểm, mốc hạng thành viên, chia sẻ điểm toàn hệ thống (Nhạy cảm).',
+    ),
+    AppPermission(
+      key: exportReports,
+      label: 'Xuất báo cáo',
+      category: catReports,
+      description: 'Tải báo cáo doanh thu, ca, sản phẩm, kho, khuyến mãi ra Excel/PDF.',
+    ),
+    AppPermission(
+      key: exportAuditLogs,
+      label: 'Xuất lịch sử kiểm soát',
+      category: catReports,
+      description: 'Tải nhật ký thao tác nhân viên ra file (Nhạy cảm).',
+    ),
+    AppPermission(
+      key: exportData,
+      label: 'Xuất dữ liệu Excel',
+      category: catAdmin,
+      description: 'Xuất danh sách nhân sự, hàng hóa, khách hàng ra file Excel.',
+    ),
+    AppPermission(
+      key: viewCashShifts,
+      label: 'Xem lịch sử ca & két',
+      category: catShift,
+      description: 'Xem danh sách ca làm việc, tiền đầu ca/cuối ca và chênh lệch.',
+    ),
+    AppPermission(
+      key: viewOnlineOrders,
+      label: 'Xem đơn online',
+      category: catOps,
+      description: 'Xem danh sách đơn đặt hàng online.',
+    ),
+    AppPermission(
+      key: manageOnlineOrders,
+      label: 'Xử lý đơn online',
+      category: catOps,
+      description: 'Nhận, từ chối, hoàn tất đơn online.',
+    ),
+    AppPermission(
+      key: viewKitchen,
+      label: 'Xem màn hình Bếp/Bar',
+      category: catOps,
+      description: 'Mở màn hình KDS và cập nhật trạng thái chế biến.',
+    ),
+    AppPermission(
+      key: manageManagerPin,
+      label: 'Đặt PIN duyệt quản lý',
+      category: catAdmin,
+      description: 'Đặt/đổi mã PIN dùng để duyệt thao tác nhạy cảm tại quầy.',
+    ),
+    AppPermission(
+      key: manageChamcongLink,
+      label: 'Liên kết Chấm Công Trạm',
+      category: catAdmin,
+      description: 'Liên kết/ngắt liên kết quán với ứng dụng Chấm Công Trạm (Nhạy cảm).',
+    ),
+    AppPermission(
+      key: createSampleData,
+      label: 'Tạo dữ liệu mẫu',
+      category: catAdmin,
+      description: 'Sinh đơn hàng và khuyến mãi mẫu để thử hệ thống.',
     ),
   ];
 }

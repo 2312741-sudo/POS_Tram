@@ -13,6 +13,8 @@
  *  - getChamCongLinkStatus({ storeCode })
  *      → { linked, chamCongStoreId?, chamCongStoreName?, linkedAt?, provisionedCount }
  */
+import { ROLE_STAFF, roleLabel } from "./roles";
+
 
 export type ChamCongMethod = "google" | "apple" | { email: string; password: string };
 
@@ -78,7 +80,7 @@ export function parseChamCongSignInResponse(data: unknown): ChamCongSignInRespon
       customToken,
       storeCode,
       uid: str(data.uid),
-      roleId: str(data.roleId) || "ROLE_WAITER",
+      roleId: str(data.roleId) || "ROLE_STAFF",
       isNewAccount: data.isNewAccount === true,
     };
   }
@@ -138,18 +140,8 @@ export function parseChamCongLinkStatus(data: unknown): ChamCongLinkStatus {
   };
 }
 
-export const ROLE_LABELS_VI: Record<string, string> = {
-  ROLE_OWNER: "Chủ quán",
-  ROLE_MANAGER_1: "Quản lý 1",
-  ROLE_MANAGER_2: "Quản lý 2",
-  ROLE_MANAGER: "Quản lý",
-  ROLE_CASHIER: "Thu ngân",
-  ROLE_WAITER: "Phục vụ",
-  ROLE_KITCHEN: "Bếp",
-};
-
 export function roleLabelVi(roleId: string): string {
-  return ROLE_LABELS_VI[(roleId || "").toUpperCase()] || roleId || "Phục vụ";
+  return roleLabel(roleId || ROLE_STAFF);
 }
 
 /** Thông báo khi tài khoản Chấm Công đăng nhập được nhưng vai trò POS không vào được Web Quản trị. */

@@ -1,6 +1,7 @@
 // lib/core/utils/format_utils.dart
 import 'package:intl/intl.dart';
 import '../domain/order_integrity.dart';
+import '../permissions/app_permissions.dart';
 
 class FormatUtils {
   static final _currencyFormat = NumberFormat('#,###', 'vi_VN');
@@ -51,28 +52,7 @@ class FormatUtils {
     return BillCodeGenerator.fallback(at: DateTime.now(), prefix: prefix);
   }
 
-  static String roleLabel(String role) {
-    switch (role.toUpperCase()) {
-      case 'ROLE_OWNER':
-      case 'OWNER':
-        return 'Chủ Quán';
-      case 'ROLE_MANAGER':
-      case 'MANAGER':
-        return 'Quản Lý';
-      case 'ROLE_CASHIER':
-      case 'CASHIER':
-        return 'Thu Ngân';
-      case 'ROLE_WAITER':
-      case 'WAITER':
-      case 'STAFF':
-        return 'Nhân Viên Phục Vụ';
-      case 'ROLE_KITCHEN':
-      case 'KITCHEN':
-        return 'Bếp / Bar';
-      default:
-        return role;
-    }
-  }
+  static String roleLabel(String role) => roleDisplayLabel(role);
 
   static String waitTime(Duration duration) {
     final minutes = duration.inMinutes;

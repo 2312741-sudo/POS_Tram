@@ -28,8 +28,8 @@ describe("importCustomerToStore - quyền gọi", () => {
     expect(isCashierRole("employee")).toBe(true);
   });
 
-  it("2. Phục vụ, bếp, tài khoản bị khóa, không thuộc quán bị từ chối", () => {
-    expect(canCallerImportCustomer(waiter, true)).toBe(false);
+  it("2. Bếp, tài khoản bị khóa, không thuộc quán bị từ chối (Phục vụ đã gộp vào Nhân viên)", () => {
+    expect(canCallerImportCustomer(waiter, true)).toBe(true);
     expect(canCallerImportCustomer(kitchen, true)).toBe(false);
     expect(canCallerImportCustomer(lockedCashier, true)).toBe(false);
     expect(canCallerImportCustomer(cashier, false)).toBe(false); // không có userIndex

@@ -9,9 +9,31 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../permissions/app_permissions.dart';
 import 'report_date_utils.dart';
 
+/// Người dùng không có quyền xuất file (EXPORT_REPORTS / EXPORT_DATA).
+class ExportPermissionException implements Exception {
+  final String message;
+  const ExportPermissionException(this.message);
+  @override
+  String toString() => message;
+}
+
 class ReportExportService {
+  /// Kiểm tra quyền xuất file. Mặc định cho phép (test/đơn vị); main.dart gắn bộ kiểm tra theo người đăng nhập.
+  static bool Function(String permission) permissionGate = (_) => true;
+
+  /// Mã quyền cần có: báo cáo CRM (khách hàng) = EXPORT_DATA, còn lại = EXPORT_REPORTS.
+  static String permissionFor(String reportCode) =>
+      reportCode.startsWith('CRM_') ? AppPermissions.exportData : AppPermissions.exportReports;
+
+  static void ensureCanExport(String reportCode) {
+    if (!permissionGate(permissionFor(reportCode))) {
+      throw const ExportPermissionException('Bạn không có quyền xuất báo cáo. Liên hệ Chủ quán để được cấp quyền.');
+    }
+  }
+
   static const String brandPrimaryHex = '#7E2930';
   static final PdfColor brandPrimaryColor = PdfColor.fromHex(brandPrimaryHex);
   static final PdfColor tableHeaderBg = PdfColor.fromHex('#F8F4EE');
@@ -82,6 +104,7 @@ class ReportExportService {
     List<dynamic>? totalRow,
     Map<String, List<List<dynamic>>>? additionalSheets,
   }) async {
+    ensureCanExport(reportCode);
     final excel = Excel.createExcel();
     final sheetName = reportCode.length > 25 ? reportCode.substring(0, 25) : reportCode;
     final sheet = excel[sheetName];
@@ -192,6 +215,7 @@ class ReportExportService {
     List<dynamic>? totalRow,
     PdfPageFormat pageFormat = PdfPageFormat.a4,
   }) async {
+    ensureCanExport(reportCode);
     final pdf = pw.Document();
 
     // Nạp font tiếng Việt hỗ trợ Unicode đầy đủ

@@ -47,7 +47,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     final lastMonth = DateTime(now.year, now.month - 1, 1);
 
     return _bills.where((b) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
       if (_period == 'TODAY') {
         return dt.year == now.year && dt.month == now.month && dt.day == now.day;
       }
@@ -105,7 +105,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     final targetList = _filteredBills;
     return List.generate(24, (h) {
       final rev = targetList.where((b) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(b.closedAt ?? b.createdAt);
+        final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
         return dt.hour == h;
       }).fold(0, (s, b) => s + b.finalAmount);
       return {'hour': '${h}h', 'revenue': rev};

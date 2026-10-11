@@ -4,7 +4,7 @@
  * Pure TypeScript functions, độc lập hoàn toàn với React, có thể kiểm thử 100%.
  */
 import { lineGross as rawLineGross, type RawOrderLine } from "./order-math";
-import { deletionReportFromBills } from "./item-deletion";
+import { billDeletedItems, deletionReportFromBills } from "./item-deletion";
 
 export interface OrderItem {
   id?: number | string;
@@ -453,8 +453,8 @@ export function deduplicateBills(rawList: HistoryOrder[]): HistoryOrder[] {
       map.set(bill.id, bill);
     } else {
       const existing = map.get(bill.id)!;
-      const existingTime = Number(existing.closedAt || existing.createdAt || existing.timestamp || 0);
-      const newTime = Number(bill.closedAt || bill.createdAt || bill.timestamp || 0);
+      const existingTime = Math.max(Number(existing.cancelledAt || 0), Number(existing.closedAt || existing.createdAt || existing.timestamp || 0));
+      const newTime = Math.max(Number(bill.cancelledAt || 0), Number(bill.closedAt || bill.createdAt || bill.timestamp || 0));
       if (newTime >= existingTime) {
         map.set(bill.id, bill);
       }
@@ -512,20 +512,43 @@ export function mergeHistoryAndBills(
 
 /**
  * Quy tắc lựa chọn trường thời gian xếp ngày (Đặc tả mục 3.4)
- * 1. closedAt (PAID, REFUNDED)
- * 2. createdAt (OPEN, CANCELLED)
- * 3. timestamp (fallback)
+ * - PAID / REFUNDED: closedAt → createdAt → timestamp
+ * - CANCELLED: cancelledAt → closedAt → timestamp → createdAt (đơn hủy thuộc NGÀY HỦY,
+ *   vì đơn có thể mở từ nhiều ngày trước rồi mới bị hủy)
+ * - OPEN / khác: createdAt → closedAt → timestamp
  */
 export function getBillTimestamp(bill: HistoryOrder): number {
-  if (bill.status === "PAID" || bill.status === "REFUNDED") {
-    if (bill.closedAt) return Number(bill.closedAt);
+  const ts = (v: unknown): number => {
+    if (v == null || v === "") return 0;
+    const n = typeof v === "number" ? v : Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+    if (typeof v === "string") {
+      const d = new Date(v).getTime();
+      return Number.isFinite(d) && d > 0 ? d : 0;
+    }
+    return 0;
+  };
+  const status = String(bill.status || "").toUpperCase();
+  if (status === "CANCELLED") {
+    return ts(bill.cancelledAt) || ts(bill.closedAt) || ts(bill.timestamp) || ts(bill.createdAt);
   }
-  if (bill.createdAt) return Number(bill.createdAt);
-  if (bill.closedAt) return Number(bill.closedAt);
-  if (bill.timestamp) {
-    return typeof bill.timestamp === "number" ? bill.timestamp : new Date(bill.timestamp).getTime();
+  if (status === "PAID" || status === "REFUNDED") {
+    const c = ts(bill.closedAt);
+    if (c) return c;
   }
-  return 0;
+  return ts(bill.createdAt) || ts(bill.closedAt) || ts(bill.timestamp);
+}
+
+/**
+ * Giá trị đơn hủy: max(tạm tính/tổng tiền, tổng tiền món đã xóa).
+ * Đơn hủy bằng "Xóa hết món" có subTotal = 0 vì mọi món đã bị xóa trước khi hủy.
+ * LƯU Ý: đây là dòng kiểm toán riêng, KHÔNG cộng chung với "Tổng tiền xóa món".
+ */
+export function cancelledBillValue(b: HistoryOrder): number {
+  const base = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0)) || 0;
+  const fromEntries = billDeletedItems(b as never).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const deleted = fromEntries > 0 ? fromEntries : Number((b as { deletedItemsAmount?: unknown }).deletedItemsAmount || 0) || 0;
+  return Math.max(base, deleted);
 }
 
 /**
@@ -731,8 +754,7 @@ export function calculateOverviewReport(bills: HistoryOrder[], refundAmountParam
       totalCostPrice += bCogs;
     } else if (status === "CANCELLED") {
       cancelledBillsCount++;
-      const val = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0));
-      cancelledTotalValue += val;
+      cancelledTotalValue += cancelledBillValue(b);
     } else if (status === "REFUNDED") {
       refundedBillsCount++;
       const rAmt = Number(b.refundAmount != null ? b.refundAmount : (b.finalAmount || b.totalAmount || 0));
@@ -1361,7 +1383,7 @@ export function calculateCancellationReport(bills: HistoryOrder[]): Cancellation
   const list: CancelledBillItem[] = [];
 
   for (const b of cancelledBills) {
-    const val = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0));
+    const val = cancelledBillValue(b);
     totalLossValue += val;
 
     const items = extractBillItems(b);
@@ -1369,7 +1391,7 @@ export function calculateCancellationReport(bills: HistoryOrder[]): Cancellation
 
     const reason: string = String(b.reason || b.notes || b.cancelReason || b.cancellationReason || "Khách hủy đơn");
     const staffName = b.staffFullName || b.cashierName || b.username || "Nhân viên";
-    const cancelledAt = Number(b.cancelledAt || b.closedAt || b.createdAt || b.timestamp || Date.now());
+    const cancelledAt = getBillTimestamp(b) || Date.now();
 
     list.push({
       billId: b.id,

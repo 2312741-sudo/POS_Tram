@@ -1,5 +1,6 @@
 // Pure Dart date utilities for reports (UTC+7 / Asia/Ho_Chi_Minh)
 // Không import Flutter framework
+import '../../data/models/bill_model.dart';
 
 class ReportDateUtils {
   static const Duration utc7Offset = Duration(hours: 7);
@@ -9,13 +10,22 @@ class ReportDateUtils {
     return DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: true).add(utc7Offset);
   }
 
-  /// Lấy mốc thời gian của hóa đơn theo thứ tự ưu tiên:
-  /// 1. closedAt (cho PAID / REFUNDED)
-  /// 2. createdAt
-  static DateTime getBillDateTime(int? closedAt, int createdAt, [String? status]) {
-    final ms = (closedAt != null && closedAt > 0) ? closedAt : createdAt;
+  /// Lấy mốc thời gian của hóa đơn (docs/REPORT_SPEC.md §3.4):
+  /// - CANCELLED: cancelledAt → closedAt → createdAt (đơn hủy thuộc NGÀY HỦY)
+  /// - PAID / REFUNDED: closedAt → createdAt
+  static DateTime getBillDateTime(int? closedAt, int createdAt, [String? status, int? cancelledAt]) {
+    bool ok(int? v) => v != null && v > 0;
+    int ms;
+    if (status == 'CANCELLED') {
+      ms = ok(cancelledAt) ? cancelledAt! : (ok(closedAt) ? closedAt! : createdAt);
+    } else {
+      ms = ok(closedAt) ? closedAt! : createdAt;
+    }
     return toUtc7(ms);
   }
+
+  /// Mốc xếp ngày của một hóa đơn theo quy tắc §3.4.
+  static DateTime billDateTime(BillModel b) => toUtc7(b.reportTimeMs);
 
   /// Bắt đầu của ngày (00:00:00.000) ở UTC+7
   static DateTime startOfDay(DateTime dt) {

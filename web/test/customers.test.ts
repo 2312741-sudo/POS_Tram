@@ -37,12 +37,12 @@ describe("parseStoreCustomers", () => {
 });
 
 describe("quyền khách hàng (khớp database.rules.json)", () => {
-  it("đọc: Chủ quán / Quản lý / Thu ngân; Phục vụ, Bếp bị chặn", () => {
-    for (const r of ["owner", "ROLE_OWNER", "manager", "manager_2", "ROLE_MANAGER_1", "cashier", "ROLE_CASHIER", "employee"]) {
+  it("đọc: Chủ quán / Quản lý / Nhân viên (Thu ngân + Phục vụ đã gộp); Bếp bị chặn", () => {
+    for (const r of ["owner", "ROLE_OWNER", "manager", "manager_2", "ROLE_MANAGER_1", "cashier", "ROLE_CASHIER", "employee", "waiter", "ROLE_WAITER", "ROLE_STAFF"]) {
       expect(canReadCustomers(r)).toBe(true);
     }
-    for (const r of ["waiter", "ROLE_WAITER", "ROLE_KITCHEN", ""]) expect(canReadCustomers(r)).toBe(false);
-    expect(canReadCustomers("waiter", true)).toBe(true);
+    for (const r of ["ROLE_KITCHEN", ""]) expect(canReadCustomers(r)).toBe(false);
+    expect(canReadCustomers("ROLE_KITCHEN", true)).toBe(true);
   });
 
   it("sửa tỷ lệ điểm (storeInfo): chỉ Chủ quán", () => {
