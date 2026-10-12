@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
+import '../auth/delete_account_dialog.dart';
 import '../../widgets/theme_mode_selector.dart';
 import '../../widgets/manager_pin_dialogs.dart';
 import '../../core/theme/app_theme.dart';
@@ -280,6 +281,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     showSetApprovalPinDialog(context);
                   } else if (val == 'THEME') {
                     showThemeModeDialog(context);
+                  } else if (val == 'DELETE_ACCOUNT') {
+                    await DeleteAccountDialog.start(context);
                   } else if (val == 'LOGOUT') {
                     await _auth.logout();
                     if (context.mounted) context.go('/login');
@@ -349,6 +352,16 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                         Icon(Icons.palette_outlined, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Giao diện (Sáng/Tối)'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'DELETE_ACCOUNT',
+                    child: Row(
+                      children: [
+                        Icon(Icons.no_accounts_outlined, size: 18, color: context.tc.danger),
+                        const SizedBox(width: 8),
+                        Text('Xóa tài khoản của tôi', style: TextStyle(color: context.tc.danger)),
                       ],
                     ),
                   ),

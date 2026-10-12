@@ -45,12 +45,8 @@
 	<string>POS Trạm cần quyền truy cập Bluetooth để kết nối và in hóa đơn/phiếu bếp ra máy in nhiệt.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>POS Trạm cần kết nối Bluetooth với máy in nhiệt để in phiếu.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>POS Trạm cần dùng máy ảnh để chụp ảnh món cho thực đơn.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>POS Trạm cần truy cập mạng nội bộ để kết nối máy in hóa đơn và phiếu bếp qua mạng LAN (cổng 9100).</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>POS Trạm cần micro khi quay video bằng máy ảnh; ứng dụng không ghi âm trong lúc bán hàng.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>POS Trạm cần truy cập thư viện ảnh để bạn chọn ảnh cho món trong thực đơn.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

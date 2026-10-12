@@ -19,6 +19,11 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+/// Chủ quán gốc không thể tự xóa tài khoản (máy chủ trả ROOT_OWNER). [message] là nội dung tiếng Việt từ máy chủ.
+class AccountDeletionBlockedException extends AuthException {
+  const AccountDeletionBlockedException(super.message);
+}
+
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
@@ -428,6 +433,44 @@ class AuthService extends ChangeNotifier {
     )).catchError((_) {});
 
     _currentUser = _currentUser!.copyWith(mustChangePassword: false);
+    notifyListeners();
+  }
+
+  /// Tự xóa tài khoản (Apple 5.1.1(v)) → gọi Cloud Function deleteMyAccount.
+  /// Ném [AccountDeletionBlockedException] nếu là Chủ quán gốc (ROOT_OWNER), [AuthException] nếu lỗi khác.
+  Future<void> deleteOwnAccount() async {
+    try {
+      final callable = _functions.httpsCallable(
+        'deleteMyAccount',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      await callable.call<dynamic>({'confirm': 'XOA'});
+    } on FirebaseFunctionsException catch (e) {
+      final details = e.details;
+      final code = details is Map ? details['code'] : null;
+      final message = e.message ?? 'Không thể xóa tài khoản. Vui lòng thử lại.';
+      if (code == 'ROOT_OWNER') throw AccountDeletionBlockedException(message);
+      throw AuthException(message);
+    } catch (e) {
+      if (e is AuthException) rethrow;
+      throw const AuthException('Không thể kết nối đến máy chủ. Vui lòng thử lại.');
+    }
+  }
+
+  /// Kết thúc phiên sau khi tài khoản đã bị xóa. KHÔNG ghi audit LOGOUT vì tài khoản không còn tồn tại.
+  Future<void> endSessionAfterAccountDeletion() async {
+    try {
+      await _firebaseAuth.signOut();
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyUsername);
+      await prefs.remove(_keyRole);
+      await prefs.remove(_keyFullName);
+      await prefs.remove(_keyUid);
+    } catch (_) {}
+    _currentUser = null;
     notifyListeners();
   }
 

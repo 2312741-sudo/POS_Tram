@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../auth/delete_account_dialog.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -187,6 +188,21 @@ class _KitchenScreenState extends State<KitchenScreen> {
                     const Icon(Icons.logout, color: AppColors.danger, size: 18),
                     const SizedBox(width: 8),
                     Text('Đăng xuất', style: GoogleFonts.beVietnamPro(color: AppColors.danger)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                onTap: () {
+                  // onTap của PopupMenuItem chạy trước khi menu đóng hẳn; lùi một khung để dialog mở đúng
+                  Future.microtask(() {
+                    if (mounted) DeleteAccountDialog.start(context);
+                  });
+                },
+                child: Row(
+                  children: [
+                    const Icon(Icons.no_accounts_outlined, color: AppColors.danger, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Xóa tài khoản của tôi', style: GoogleFonts.beVietnamPro(color: AppColors.danger)),
                   ],
                 ),
               ),

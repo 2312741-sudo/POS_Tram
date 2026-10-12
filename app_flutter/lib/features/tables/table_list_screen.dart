@@ -12,6 +12,7 @@ import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 import '../auth/change_password_dialog.dart';
+import '../auth/delete_account_dialog.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/theme_mode_selector.dart';
 import 'widgets/table_card.dart';
@@ -1562,6 +1563,14 @@ class _TableListScreenState extends State<TableListScreen> {
             onTap: () {
               Navigator.pop(context);
               ChangePasswordDialog.show(context);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.no_accounts_outlined, color: context.tc.danger),
+            title: Text('Xóa tài khoản của tôi', style: TextStyle(color: context.tc.danger)),
+            onTap: () {
+              Navigator.pop(context);
+              DeleteAccountDialog.start(context);
             },
           ),
 

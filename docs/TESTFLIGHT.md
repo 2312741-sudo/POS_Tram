@@ -77,8 +77,6 @@ Tạo một cửa hàng và tài khoản **riêng cho việc duyệt** (không d
 | Bluetooth | Kết nối máy in nhiệt | Kết nối và in hóa đơn / phiếu bếp |
 | Mạng nội bộ | In qua máy in LAN (cổng 9100) | Kết nối máy in qua mạng LAN |
 | Thư viện ảnh | Chọn ảnh món | Chọn ảnh cho món trong thực đơn |
-| Máy ảnh | Chụp ảnh món | Chụp ảnh món cho thực đơn |
-| Micro | Chỉ khi quay video bằng máy ảnh | Không ghi âm khi bán hàng |
 | Đăng nhập bằng Apple | Đăng nhập qua Chấm Công Trạm | Entitlement `com.apple.developer.applesignin` |
 
 ## 6. Quy trình build và tải lên

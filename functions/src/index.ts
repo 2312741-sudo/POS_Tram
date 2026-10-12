@@ -673,6 +673,9 @@ export { verifyManagerPin, setManagerPin } from "./managerPin";
 // Đăng nhập bằng Chấm Công Trạm (xem chamCong.ts, docs/CHAMCONG_SSO.md)
 export { chamCongSignIn, linkChamCongStore, unlinkChamCongStore, getChamCongLinkStatus } from "./chamCong";
 
+// Tự xóa tài khoản (Apple 5.1.1(v)) — xem deleteMyAccount.ts, docs/APP_REVIEW.md
+export { deleteMyAccount } from "./deleteMyAccount";
+
 // Điểm DÙNG CHUNG toàn chuỗi: bản ghi loyalty_members + callable/trigger (xem sharedLoyaltyHandlers.ts)
 export {
   applyLoyaltyEarn,
