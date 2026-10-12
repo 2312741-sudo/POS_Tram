@@ -32,14 +32,15 @@ describe("loyalty-ledger-client", () => {
     expect(dayEndMs("2026-01-02")! - dayStartMs("2026-01-02")!).toBe(86_399_999);
   });
 
-  it("CSV có chi nhánh, BOM và escape dấu nháy", () => {
+  it("CSV có tên cửa hàng + mã chi nhánh, BOM và escape dấu nháy", () => {
     const csv = buildLedgerCsv(
       [{ opId: "o", memberKey: "m", memberName: 'An "Bo"', memberPhone: "0912", type: "redeem", points: -10, balanceAfter: 5, billId: "b", billCode: "HD1", storeCode: "TRAM01", customerId: "", staff: "q", note: "", at: 1 }],
-      () => "T"
+      () => "T",
+      (code) => (code === "TRAM01" ? "TRẠM CHANH" : code)
     );
     const [head, line] = csv.replace("﻿", "").split("\n");
     expect(csv.startsWith("﻿")).toBe(true);
-    expect(head).toContain('"Chi nhánh"');
-    expect(line).toBe('"T","TRAM01","An ""Bo""","0912","Đổi điểm","-10","5","HD1","","q"'.replace('"-10","5"', '"-10","5"'));
+    expect(head).toContain('"Cửa hàng","Mã chi nhánh"');
+    expect(line).toBe('"T","TRẠM CHANH","TRAM01","An ""Bo""","0912","Đổi điểm","-10","5","HD1","","q"'.replace('"-10","5"', '"-10","5"'));
   });
 });

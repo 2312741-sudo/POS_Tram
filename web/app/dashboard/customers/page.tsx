@@ -874,7 +874,7 @@ export default function CustomersPage() {
                 <thead>
                   <tr style={{ textAlign: "left", color: "var(--subtext)" }}>
                     <th style={{ padding: "4px 8px" }}>Thời gian</th>
-                    <th style={{ padding: "4px 8px" }}>Chi nhánh</th>
+                    <th style={{ padding: "4px 8px" }}>Cửa hàng</th>
                     <th style={{ padding: "4px 8px" }}>Nghiệp vụ</th>
                     <th style={{ padding: "4px 8px", textAlign: "right" }}>Điểm</th>
                     <th style={{ padding: "4px 8px", textAlign: "right" }}>Số dư sau</th>
@@ -885,7 +885,10 @@ export default function CustomersPage() {
                   {historyRows.map((r) => (
                     <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{r.at ? new Date(r.at).toLocaleString("vi-VN") : "—"}</td>
-                      <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{r.storeCode || "—"}</td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <div style={{ fontWeight: 600 }}>{(r.storeCode && stores.find((st) => st.storeCode === r.storeCode)?.storeName) || r.storeCode || "—"}</div>
+                        {r.storeCode ? <div style={{ fontSize: 11, color: "var(--subtext)", fontFamily: "monospace" }}>{r.storeCode}</div> : null}
+                      </td>
                       <td style={{ padding: "4px 8px" }}>{LEDGER_TYPE_LABEL[r.type]}</td>
                       <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, color: r.points < 0 ? "var(--danger, #B3261E)" : "#137333" }}>
                         {r.points > 0 ? "+" : ""}{formatNumber(r.points)}

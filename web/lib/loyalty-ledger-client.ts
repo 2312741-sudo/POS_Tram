@@ -116,10 +116,14 @@ export function dayEndMs(v: string): number | undefined {
 const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 /** CSV (có BOM cho Excel) từ các dòng sổ cái, kèm cột Chi nhánh */
-export function buildLedgerCsv(entries: LoyaltyLedgerEntry[], fmtTime: (ms: number) => string): string {
-  const head = ["Thời gian", "Chi nhánh", "Khách hàng", "SĐT", "Loại", "Biến động", "Số dư sau", "Mã hóa đơn", "Lý do", "Người thực hiện"];
+export function buildLedgerCsv(
+  entries: LoyaltyLedgerEntry[],
+  fmtTime: (ms: number) => string,
+  storeNameOf: (storeCode: string) => string = (c) => c
+): string {
+  const head = ["Thời gian", "Cửa hàng", "Mã chi nhánh", "Khách hàng", "SĐT", "Loại", "Biến động", "Số dư sau", "Mã hóa đơn", "Lý do", "Người thực hiện"];
   const lines = entries.map((r) =>
-    [fmtTime(r.at), r.storeCode, r.memberName || r.customerId, r.memberPhone, ledgerKindLabel(r.type), r.points, r.balanceAfter, r.billCode || r.billId, r.note, r.staff]
+    [fmtTime(r.at), storeNameOf(r.storeCode), r.storeCode, r.memberName || r.customerId, r.memberPhone, ledgerKindLabel(r.type), r.points, r.balanceAfter, r.billCode || r.billId, r.note, r.staff]
       .map(esc)
       .join(",")
   );

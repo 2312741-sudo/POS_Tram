@@ -121,10 +121,11 @@ function LoyaltyHistoryContent() {
     }
   };
 
-  const showBranch = storeSel === "ALL" && stores.length > 1;
+  /** Tên cửa hàng theo mã chi nhánh (thiếu tên thì dùng mã) */
+  const storeNameOf = (code: string) => stores.find((st) => st.storeCode === code)?.storeName || code;
 
   const exportCsv = () => {
-    const blob = new Blob([buildLedgerCsv(entries, fmtTime)], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([buildLedgerCsv(entries, fmtTime, storeNameOf)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `lich-su-diem-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -139,7 +140,7 @@ function LoyaltyHistoryContent() {
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
     </div>
   );
-  const cols = showBranch ? 8 : 7;
+  const cols = 8;
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: 1280, margin: "0 auto" }}>
@@ -214,7 +215,7 @@ function LoyaltyHistoryContent() {
           <thead>
             <tr style={{ background: "var(--bg)" }}>
               <th style={th}>Thời gian</th>
-              {showBranch && <th style={th}>Chi nhánh</th>}
+              <th style={th}>Cửa hàng</th>
               <th style={th}>Khách hàng</th>
               <th style={th}>Loại</th>
               <th style={{ ...th, textAlign: "right" }}>Biến động</th>
@@ -234,7 +235,10 @@ function LoyaltyHistoryContent() {
               entries.map((r) => (
                 <tr key={`${r.memberKey}~${r.opId}`}>
                   <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtTime(r.at)}</td>
-                  {showBranch && <td style={{ ...td, fontFamily: "monospace" }}>{r.storeCode}</td>}
+                  <td style={td}>
+                    <div style={{ fontWeight: 600 }}>{storeNameOf(r.storeCode)}</div>
+                    <div style={{ fontSize: 11, color: "var(--subtext)", fontFamily: "monospace" }}>{r.storeCode}</div>
+                  </td>
                   <td style={{ ...td, fontWeight: 600 }}>
                     {r.memberName || r.customerId || "—"}
                     {r.memberPhone && <div style={{ fontSize: 11, fontWeight: 400, color: "var(--subtext)" }}>{r.memberPhone}</div>}
