@@ -6,6 +6,7 @@
 
 - **Quản lý / Chủ quán:** Trung tâm quản lý (Manager Hub) → nút menu ⋮ (góc trên bên phải) → **Xóa tài khoản của tôi**.
 - **Thu ngân / Phục vụ:** Màn hình Bàn → nút **Menu chức năng** (tooltip "Menu chức năng") → **Xóa tài khoản của tôi** (nằm ngay dưới mục Đổi Mật Khẩu).
+- **Bếp / Bar:** Màn bếp → nút ⋮ góc trên bên phải → **Xóa tài khoản của tôi**.
 
 **Luồng**
 
@@ -30,6 +31,7 @@ Chủ quán gốc (root owner) của một chi nhánh không tự xóa được 
 - Tài khoản nhân viên được tạo qua "Đăng nhập bằng Chấm Công Trạm" cũng xóa được theo cùng luồng.
 - Dữ liệu bán hàng không bị xóa cứng (yêu cầu kế toán và pháp lý); chỉ thông tin nhận dạng cá nhân bị xóa.
 
-## 2. Trạng thái còn mở
+## 2. Trạng thái
 
-- Vai trò **Bếp** (màn hình Bếp `features/kitchen/`) chưa có lối vào "Xóa tài khoản của tôi". Cần bổ sung trước khi nộp nếu tài khoản bếp có thể tự tạo/đăng nhập.
+- Cả bốn vai trò (Chủ quán, Quản lý, Nhân viên, Bếp) đều có lối vào "Xóa tài khoản của tôi".
+- Ghi chú đầy đủ gửi Apple (kèm tài khoản demo) nằm ở `docs/private/APP_REVIEW_NOTES.md` — thư mục này không đưa lên git.
