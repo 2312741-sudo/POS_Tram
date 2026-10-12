@@ -11,6 +11,8 @@ import {
   isStaffRole,
   resolveStaffAuthUid,
   isChamCongAccount,
+  sanitizeCustomPermissions,
+  OWNER_GRANT_ONLY_PERMISSIONS,
 } from "./permissions";
 
 describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
@@ -100,3 +102,27 @@ describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
     expect(isChamCongAccount("u1", {})).toBe(false);
   });
 });
+
+describe("Quyền chỉ Chủ quán được cấp (Quản lý không được hủy/xóa đơn, xem nhật ký trừ khi Chủ cấp)", () => {
+  const owner = { roleId: "ROLE_OWNER", isActive: true };
+  const rootOwner = { roleId: "x", isRootOwner: true };
+  const manager = { roleId: "ROLE_MANAGER_1", isActive: true };
+
+  it("danh sách quyền Chủ-cấp-riêng gồm hủy hóa đơn, hủy món đã gửi bếp, xem/xuất nhật ký thao tác", () => {
+    expect([...OWNER_GRANT_ONLY_PERMISSIONS].sort()).toEqual(["CANCEL_BILL", "CANCEL_KITCHEN_ITEM", "EXPORT_AUDIT_LOGS", "VIEW_AUDIT_LOGS"]);
+  });
+
+  it("Chủ quán cấp được mọi quyền khi tạo tài khoản", () => {
+    expect(sanitizeCustomPermissions(owner, ["CANCEL_BILL", "VIEW_AUDIT_LOGS", "EXPORT_CODES"])).toEqual(["CANCEL_BILL", "VIEW_AUDIT_LOGS", "EXPORT_CODES"]);
+    expect(sanitizeCustomPermissions(rootOwner, ["CANCEL_BILL"])).toEqual(["CANCEL_BILL"]);
+  });
+
+  it("Quản lý bị loại các quyền Chủ-cấp-riêng; quyền thường giữ nguyên; bỏ trùng và giá trị lạ", () => {
+    expect(
+      sanitizeCustomPermissions(manager, ["CANCEL_BILL", "CANCEL_KITCHEN_ITEM", "VIEW_AUDIT_LOGS", "EXPORT_AUDIT_LOGS", "VIEW_REPORTS", "VIEW_REPORTS", 5, "", null])
+    ).toEqual(["VIEW_REPORTS"]);
+    expect(sanitizeCustomPermissions(manager, undefined)).toEqual([]);
+    expect(sanitizeCustomPermissions(null, ["CANCEL_BILL"])).toEqual([]);
+  });
+});
+

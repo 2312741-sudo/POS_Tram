@@ -14,6 +14,7 @@ import {
   resolveStaffAuthUid,
   isChamCongAccount,
   UserProfile,
+  sanitizeCustomPermissions,
 } from "./permissions";
 import {
   AnyMap,
@@ -138,7 +139,7 @@ export const createStaffAccount = onCall(
         isRootOwner: false,
         isActive: true,
         phone: phone ? String(phone).trim() : "",
-        customPermissions: Array.isArray(customPermissions) ? customPermissions : [],
+        customPermissions: sanitizeCustomPermissions(caller, customPermissions),
         createdAt: Date.now(),
         mustChangePassword: true,
       };

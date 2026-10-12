@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useMemo } from "react";
 import { useDashboardData } from "@/lib/data-context";
+import { hasPermission, useAuth } from "@/lib/auth";
+import { listShiftOwners } from "@/lib/shift-scope";
 import {
   calculateCashShiftReport,
   formatVND,
@@ -16,8 +18,6 @@ import {
   Store,
   Search,
   Printer,
-  Eye,
-  EyeOff,
   FileSpreadsheet,
   Coins,
   Wallet,
@@ -26,34 +26,39 @@ import {
 } from "lucide-react";
 
 export default function ShiftsPage() {
+  const { user: guardUser } = useAuth();
+  // Phiếu bàn giao ca: chỉ người có VIEW_SHIFT_HANDOVER (chủ/quản lý) — nhân viên không thấy
+  if (!hasPermission(guardUser, "VIEW_SHIFT_HANDOVER")) {
+    return (
+      <div style={{ padding: "32px", color: "var(--subtext)", fontSize: "14px" }}>
+        Bạn không có quyền xem phiếu bàn giao ca. Liên hệ chủ quán hoặc quản lý.
+      </div>
+    );
+  }
+  return <ShiftsContent />;
+}
+
+function ShiftsContent() {
   const {
     stores,
     currentStoreCode,
     setCurrentStoreCode,
     cashShifts,
     historyData,
-    updateStoreShiftDifferenceSetting,
   } = useDashboardData();
+  const { user } = useAuth();
+  // Ca của tài khoản khác cần VIEW_ALL_SHIFTS; phiếu bàn giao cần VIEW_SHIFT_HANDOVER (chặn ở ShiftsPage)
+  const canViewAllShifts = hasPermission(user, "VIEW_ALL_SHIFTS");
+  const [ownerFilter, setOwnerFilter] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   const [selectedShift, setSelectedShift] = useState<CashShiftAuditItem | null>(null);
-  const [updatingSetting, setUpdatingSetting] = useState(false);
 
-  // Current store info for setting toggle
   const targetStore = useMemo(() => {
     if (currentStoreCode === "ALL") return stores[0];
     return stores.find((s) => s.storeCode === currentStoreCode) || stores[0];
   }, [stores, currentStoreCode]);
-
-  const allowDifference = targetStore?.allowStaffViewShiftDifference ?? true;
-
-  const handleToggleDifference = async () => {
-    if (!targetStore) return;
-    setUpdatingSetting(true);
-    await updateStoreShiftDifferenceSetting(targetStore.storeCode, !allowDifference);
-    setUpdatingSetting(false);
-  };
 
   // Run pure calculation function to audit cash shifts
   const auditedShifts = useMemo(() => {
@@ -65,6 +70,7 @@ export default function ShiftsPage() {
       if (statusFilter === "OPEN" && s.status !== "OPEN") return false;
       if (statusFilter === "CLOSED" && s.status === "OPEN") return false;
       if (currentStoreCode !== "ALL" && s.storeCode && s.storeCode !== currentStoreCode) return false;
+      if (canViewAllShifts && ownerFilter && (s.staffUsername || "") !== ownerFilter) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -75,7 +81,9 @@ export default function ShiftsPage() {
       }
       return true;
     });
-  }, [auditedShifts, statusFilter, currentStoreCode, searchQuery]);
+  }, [auditedShifts, statusFilter, currentStoreCode, searchQuery, canViewAllShifts, ownerFilter]);
+
+  const ownerOptions = useMemo(() => listShiftOwners(auditedShifts), [auditedShifts]);
 
   // Aggregate KPI summary
   const summaryKpi = useMemo(() => {
@@ -259,69 +267,23 @@ export default function ShiftsPage() {
           </div>
         </div>
 
-        {/* Manager Toggle Setting Card */}
-        <div
-          style={{
-            marginTop: "16px",
-            padding: "14px 18px",
-            background: allowDifference ? "#F2F9F7" : "var(--warning-bg)",
-            border: `1px solid ${allowDifference ? "#B8E3D8" : "#F7E1B5"}`,
-            borderRadius: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "14px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "10px",
-                background: allowDifference ? "var(--success)" : "#C47820",
-                color: "#FFFFFF",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+        {canViewAllShifts && (
+          <div style={{ marginTop: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <select
+              aria-label="Lọc theo tài khoản"
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+              style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "10px", padding: "8px 12px", fontSize: "13px", fontWeight: "600", color: "var(--text)", cursor: "pointer" }}
             >
-              {allowDifference ? <Eye size={18} /> : <EyeOff size={18} />}
-            </div>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text)" }}>
-                Chế độ hiển thị chênh lệch tiền két khi nhân viên kết ca:{" "}
-                <span style={{ color: allowDifference ? "var(--success)" : "#C47820" }}>
-                  {allowDifference ? "Đang BẬT (Công khai)" : "Đang TẮT (Kiểm đếm mù)"}
-                </span>
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
-                {allowDifference
-                  ? "Nhân viên thu ngân được xem số dư lý thuyết và chênh lệch thừa/thiếu ngay trên app khi chốt ca."
-                  : "Chế độ kiểm đếm mù: Nhân viên chỉ khai báo tiền mặt đếm được trong két, không biết trước số dư dự kiến. Quản lý kiểm tra đối soát trên Web."}
-              </div>
-            </div>
+              <option value="">Tất cả tài khoản</option>
+              {ownerOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <button
-            onClick={handleToggleDifference}
-            disabled={updatingSetting}
-            style={{
-              padding: "8px 16px",
-              background: allowDifference ? "#C93B2B" : "var(--success)",
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              cursor: updatingSetting ? "not-allowed" : "pointer",
-              transition: "all 0.2s",
-            }}
-          >
-            {updatingSetting ? "Đang cập nhật..." : allowDifference ? "Tắt xem chênh lệch (Bật đếm mù)" : "Bật cho nhân viên xem"}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* KPI Cards */}

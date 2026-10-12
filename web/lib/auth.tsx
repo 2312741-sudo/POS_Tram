@@ -126,9 +126,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Quản lý = hợp Quản lý 1 + Quản lý 2
   [ROLE_MANAGER]: [
     "VIEW_MENU", "EDIT_MENU", "CHANGE_PRICE", "MENU_MANAGEMENT", "OPEN_TABLE", "CHANGE_TABLE",
-    "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CANCEL_KITCHEN_ITEM", "CREATE_BILL", "EDIT_BILL",
-    "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "CANCEL_BILL", "PRINT_BILL",
-    "REPRINT_BILL", "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT", "VIEW_REPORTS", "VIEW_AUDIT_LOGS",
+    "MERGE_SPLIT_TABLE", "SEND_KITCHEN", "CREATE_BILL", "EDIT_BILL",
+    "APPLY_PROMOTION", "MANUAL_DISCOUNT", "DISCOUNT_ITEM", "PRINT_BILL",
+    "REPRINT_BILL", "MANAGE_CASH_SHIFT", "ADJUST_CASH_SHIFT", "VIEW_REPORTS",
     "MANAGE_PROMOTIONS", "VIEW_INVENTORY", "EDIT_CATALOG_ITEM", "VIEW_COST_PRICE",
     "MANAGE_RECIPES", "VIEW_SUPPLIERS", "EDIT_SUPPLIERS", "CREATE_RECEIPT", "INVENTORY_STOCK_IN",
     "COMPLETE_RECEIPT", "CREATE_PURCHASE_RETURN", "RECORD_SUPPLIER_PAYMENT", "CREATE_STOCKTAKE",
@@ -136,18 +136,19 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "CREATE_INTERNAL_USE", "INVENTORY_STOCK_OUT", "CREATE_PRODUCTION", "CREATE_CAMPAIGN",
     "EDIT_CAMPAIGN", "ACTIVATE_CAMPAIGN", "MANAGE_CODES", "COPY_MENU", "DELETE_ITEM",
     "MANAGE_TABLES", "REDEEM_POINTS", "VIEW_CUSTOMERS", "MANAGE_CUSTOMERS", "ADJUST_POINTS",
-    "EXPORT_REPORTS", "EXPORT_AUDIT_LOGS", "EXPORT_DATA", "VIEW_CASH_SHIFTS", "VIEW_ONLINE_ORDERS",
+    "EXPORT_REPORTS", "EXPORT_DATA", "VIEW_CASH_SHIFTS", "VIEW_ONLINE_ORDERS",
     "MANAGE_ONLINE_ORDERS", "VIEW_KITCHEN", "MANAGE_MANAGER_PIN",
-    "CREATE_SAMPLE_DATA",
+    "CREATE_SAMPLE_DATA", "VIEW_SHIFT_HANDOVER", "VIEW_ALL_SHIFTS", "VIEW_ALL_BILLS_HISTORY",
+    "TOGGLE_ITEM_AVAILABILITY", "MANAGE_NOTE_CATALOG",
   ],
   // Nhân viên = hợp Thu ngân + Phục vụ
   [ROLE_STAFF]: [
     "VIEW_MENU", "OPEN_TABLE", "CHANGE_TABLE", "SEND_KITCHEN", "CREATE_BILL", "APPLY_PROMOTION",
     "PRINT_BILL", "DELETE_ITEM", "REDEEM_POINTS", "VIEW_CUSTOMERS", "MANAGE_CUSTOMERS",
     "VIEW_ONLINE_ORDERS", "MANAGE_ONLINE_ORDERS", "VIEW_KITCHEN", "MANAGE_CASH_SHIFT",
-    "VIEW_CASH_SHIFTS",
+    "VIEW_CASH_SHIFTS", "TOGGLE_ITEM_AVAILABILITY",
   ],
-  [ROLE_KITCHEN]: ["VIEW_MENU", "SEND_KITCHEN", "VIEW_KITCHEN"],
+  [ROLE_KITCHEN]: ["VIEW_MENU", "SEND_KITCHEN", "VIEW_KITCHEN", "TOGGLE_ITEM_AVAILABILITY"],
 };
 
 /** Mã vai trò (đã chuẩn hóa) của người dùng. */
@@ -181,7 +182,8 @@ export function hasPermission(user: User | null, permission: string): boolean {
     INVENTORY_WASTE: ["CREATE_WASTE"],
     CREATE_WASTE: ["INVENTORY_WASTE"],
     DISCOUNT_ITEM: ["MANUAL_DISCOUNT"],
-    MENU_MANAGEMENT: ["EDIT_MENU", "VIEW_MENU"],
+    // Chỉ EDIT_MENU thay thế được MENU_MANAGEMENT — VIEW_MENU (xem thực đơn khi gọi món) KHÔNG đủ để quản lý thực đơn.
+    MENU_MANAGEMENT: ["EDIT_MENU"],
   };
 
   if (aliases[permission]) {
@@ -230,13 +232,19 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     return hasPermission(user, "VIEW_REPORTS");
   }
   if (pathname.startsWith("/dashboard/shifts")) {
-    return hasPermission(user, "VIEW_CASH_SHIFTS") || hasPermission(user, "VIEW_REPORTS");
+    // Phiếu bàn giao ca: chỉ Chủ/Quản lý (hoặc tài khoản được cấp) — Nhân viên mặc định KHÔNG thấy
+    return (
+      hasPermission(user, "VIEW_SHIFT_HANDOVER") ||
+      hasPermission(user, "VIEW_ALL_SHIFTS") ||
+      hasPermission(user, "VIEW_REPORTS")
+    );
   }
   if (pathname.startsWith("/dashboard/customers")) {
     return hasPermission(user, "VIEW_CUSTOMERS") || hasPermission(user, "VIEW_REPORTS");
   }
   if (pathname.startsWith("/dashboard/products")) {
-    return hasPermission(user, "VIEW_MENU");
+    // Quản lý thực đơn / danh mục / topping: cần quyền quản lý, VIEW_MENU (xem khi gọi món) KHÔNG đủ
+    return hasPermission(user, "MENU_MANAGEMENT");
   }
   if (pathname.startsWith("/dashboard/tables")) {
     return hasPermission(user, "OPEN_TABLE");

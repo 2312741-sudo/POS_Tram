@@ -88,7 +88,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       subtitle: Text('${p.category} • ${p.key}', style: const TextStyle(fontSize: 11)),
                       value: isChecked,
                       activeColor: context.tc.primary,
-                      onChanged: (val) {
+                      // Quyền hủy/xóa hóa đơn & xem nhật ký thao tác: chỉ Chủ quán được cấp/thu hồi
+                      onChanged: (!AuthService().isOwner && AppPermissions.isOwnerGrantOnly(p.key))
+                          ? null
+                          : (val) {
                         setDlgState(() {
                           if (val == true) {
                             selected.add(p.key);

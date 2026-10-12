@@ -17,6 +17,9 @@ class CartItemCard extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
+  /// Món đã báo hết hàng sau khi được thêm vào giỏ (chỉ cảnh báo, không xóa món).
+  final bool soldOut;
+
   /// Nội dung nhãn giảm giá của dòng món, gồm số phần được giảm
   /// (VD: "🏷️ Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
   static String discountLabel(OrderItemModel item) {
@@ -36,6 +39,7 @@ class CartItemCard extends StatelessWidget {
     required this.onDiscount,
     required this.onIncrement,
     required this.onDecrement,
+    this.soldOut = false,
   });
 
   @override
@@ -72,6 +76,13 @@ class CartItemCard extends StatelessWidget {
                             color: context.tc.textPrimary,
                           ),
                         ),
+                        if (soldOut && !item.isSentKitchen)
+                          StatusBadge(
+                            label: 'Món đã hết hàng',
+                            color: context.tc.danger,
+                            icon: Icons.warning_amber_rounded,
+                            fontSize: 10,
+                          ),
                         if (item.isSentKitchen)
                           StatusBadge(
                             label: 'Đã gửi bếp',

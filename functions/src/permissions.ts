@@ -71,6 +71,37 @@ export function isStaffRole(roleId?: string): boolean {
   return normalizeRoleId(roleId) === ROLE_STAFF_ID;
 }
 
+/**
+ * Quyền CHỈ Chủ quán được cấp thêm (qua customPermissions) cho từng tài khoản — Quản lý mặc định KHÔNG có,
+ * và Quản lý cũng không tự cấp / cấp cho người khác. Giữ đồng bộ với:
+ *  - app_flutter/lib/core/permissions/app_permissions.dart (ownerGrantOnly)
+ *  - web/lib/permission-catalog.ts (OWNER_GRANT_ONLY_PERMISSIONS)
+ *  - database.rules.json (users/$uid/customPermissions/$i .validate — hiện chặn đủ 4 mã này)
+ */
+export const OWNER_GRANT_ONLY_PERMISSIONS: readonly string[] = [
+  "CANCEL_BILL",
+  "CANCEL_KITCHEN_ITEM",
+  "VIEW_AUDIT_LOGS",
+  "EXPORT_AUDIT_LOGS",
+];
+
+/**
+ * Lọc danh sách quyền riêng khi tạo tài khoản: chỉ chuỗi hợp lệ; người gọi KHÔNG phải Chủ quán
+ * thì bị bỏ các quyền thuộc [OWNER_GRANT_ONLY_PERMISSIONS].
+ */
+export function sanitizeCustomPermissions(caller: UserProfile | null, requested: unknown): string[] {
+  if (!Array.isArray(requested)) return [];
+  const isOwner = !!caller && isOwnerRole(caller.roleId, caller.isRootOwner);
+  const out: string[] = [];
+  for (const p of requested) {
+    if (typeof p !== "string" || !p.trim()) continue;
+    const code = p.trim();
+    if (!isOwner && OWNER_GRANT_ONLY_PERMISSIONS.includes(code)) continue;
+    if (!out.includes(code)) out.push(code);
+  }
+  return out;
+}
+
 export function canCallerManageUsers(caller: UserProfile | null): boolean {
   if (!caller || caller.isActive === false) return false;
   return isOwnerRole(caller.roleId, caller.isRootOwner) || isManagerRole(caller.roleId);

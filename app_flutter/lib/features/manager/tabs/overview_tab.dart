@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../../../core/permissions/app_permissions.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
@@ -46,8 +48,13 @@ class _OverviewTabState extends State<OverviewTab> {
     _loadData();
   }
 
+  bool get _canViewAudit {
+    final auth = AuthService();
+    return auth.isRootOwner || auth.can(AppPermissions.viewAuditLogs);
+  }
+
   void _loadData() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) setState(() { _bills = b; _loading = false; });
     });
     _fb.tablesStream().listen((t) {
@@ -56,9 +63,12 @@ class _OverviewTabState extends State<OverviewTab> {
     _fb.onlineOrdersStream().listen((o) {
       if (mounted) setState(() => _onlineOrders = o);
     });
-    _fb.auditLogsStream().listen((a) {
-      if (mounted) setState(() => _auditLogs = a);
-    });
+    // Nhật ký thao tác chỉ đọc được khi có quyền VIEW_AUDIT_LOGS (rules cũng chặn).
+    if (_canViewAudit) {
+      _fb.auditLogsStream().listen((a) {
+        if (mounted) setState(() => _auditLogs = a);
+      }, onError: (Object e) => debugPrint('Không tải được nhật ký thao tác: $e'));
+    }
   }
 
   List<BillModel> get _todayPaidBills {
@@ -77,6 +87,7 @@ class _OverviewTabState extends State<OverviewTab> {
   int get _pendingOnlineOrders => _onlineOrders.where((o) => o.isPending).length;
 
   int get _todaySuspiciousCount {
+    if (!_canViewAudit) return 0;
     final now = DateTime.now();
     return _auditLogs.where((l) {
       final dt = DateTime.fromMillisecondsSinceEpoch(l.timestamp);
@@ -502,15 +513,17 @@ class _OverviewTabState extends State<OverviewTab> {
                   onTap: () => context.push('/inventory'),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildActionShortcut(
-                  label: 'Giám Sát',
-                  icon: Icons.shield_outlined,
-                  color: context.tc.danger,
-                  onTap: widget.onGoToAudit,
+              if (_canViewAudit) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildActionShortcut(
+                    label: 'Giám Sát',
+                    icon: Icons.shield_outlined,
+                    color: context.tc.danger,
+                    onTap: widget.onGoToAudit,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 30),

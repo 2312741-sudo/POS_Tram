@@ -203,3 +203,51 @@ describe("quyền", () => {
     expect(canCopyMenu(null, yes)).toBe(false);
   });
 });
+
+describe("danh mục note & topping", () => {
+  const src: MenuSnapshot = {
+    products: {
+      "Trà A": { id: 1, name: "Trà A", price: 1, category: "Trà", noteGroupIds: ["n1"], toppingGroupIds: ["__none__"] },
+      "Bánh B": { id: 2, name: "Bánh B", price: 1, category: "Bánh", noteGroupIds: ["ghost"] },
+    },
+    categories: { Trà: { name: "Trà", noteGroupIds: ["n1"], toppingGroupIds: ["t1", "t2"] }, Bánh: { name: "Bánh" } },
+    notes: {},
+    noteGroups: { n1: { name: "Đồ uống", items: [{ id: "a", text: "Ít đá" }] } },
+    toppingGroups: {
+      t1: { name: "Topping trà", items: [{ id: "1", name: "Trân châu", price: 5000 }] },
+      t2: { name: "Sốt", multi: false, items: [{ id: "2", name: "Dâu", price: 0 }] },
+    },
+  };
+
+  it("đích trống: sao chép nhóm, giữ id nguồn, đổi id trong phần gắn", () => {
+    const plan = buildCopyPlan({ source: src, target: empty, noteKey });
+    expect(plan.groupsToAdd).toBe(3);
+    expect((plan.updates["note_groups/n1"] as { name: string }).name).toBe("Đồ uống");
+    expect(plan.updates["categories/Trà"]).toEqual({ name: "Trà", noteGroupIds: ["n1"], toppingGroupIds: ["t1", "t2"] });
+    const a = plan.updates["products/Trà A"] as Record<string, unknown>;
+    expect(a.noteGroupIds).toEqual(["n1"]);
+    expect(a.toppingGroupIds).toEqual(["__none__"]);
+    // id nhóm không còn ở nguồn → "không có" (không rơi về kế thừa)
+    expect((plan.updates["products/Bánh B"] as Record<string, unknown>).noteGroupIds).toEqual(["__none__"]);
+  });
+
+  it("đích đã có nhóm trùng tên: dùng lại, không ghi đè; trùng id khác tên thì cấp id mới", () => {
+    const target: MenuSnapshot = { ...empty, noteGroups: { x9: { name: "ĐỒ UỐNG", items: [] } }, toppingGroups: { t1: { name: "Khác hẳn", items: [] } } };
+    const plan = buildCopyPlan({ source: src, target, noteKey });
+    expect("note_groups/n1" in plan.updates).toBe(false);
+    expect((plan.updates["products/Trà A"] as Record<string, unknown>).noteGroupIds).toEqual(["x9"]);
+    expect("topping_groups/t1" in plan.updates).toBe(false);
+    expect(plan.updates["topping_groups/t1_2"]).toBeTruthy();
+    expect((plan.updates["categories/Trà"] as Record<string, unknown>).toppingGroupIds).toEqual(["t1_2", "t2"]);
+  });
+
+  it("nhóm món có sẵn ở đích chỉ bổ sung phần gắn khi đích chưa có; tắt copyCatalog thì bỏ hết", () => {
+    const plan = buildCopyPlan({ source: src, target: { ...empty, categories: { Trà: { name: "Trà" } } }, noteKey });
+    expect(plan.updates["categories/Trà/noteGroupIds"]).toEqual(["n1"]);
+    const off = buildCopyPlan({ source: src, target: empty, options: { copyCatalog: false }, noteKey });
+    expect(off.groupsToAdd).toBe(0);
+    expect(Object.keys(off.updates).some((k) => k.startsWith("note_groups") || k.startsWith("topping_groups"))).toBe(false);
+    expect("noteGroupIds" in (off.updates["products/Trà A"] as object)).toBe(false);
+    expect("noteGroupIds" in (off.updates["categories/Trà"] as object)).toBe(false);
+  });
+});

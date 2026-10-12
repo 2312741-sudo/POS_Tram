@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { defaultSelection, describeSelection, getProductOptions, makeConfiguredLine, type OptionProduct } from "../lib/product-options";
 import { addLineToOrder } from "../lib/web-order";
 import { lineUnitPrice } from "../lib/order-math";
+import { parseCatalog } from "../lib/item-options";
 
 const actor = { username: "nv1" };
 const tea: OptionProduct = { id: "1", name: "Trà đào", price: 30000, category: "Trà", sizes: { S: 0, M: 5000, L: 10000 } };
@@ -54,3 +55,42 @@ describe("tùy chọn món", () => {
     expect(addLineToOrder(addLineToOrder([], a), diff)).toHaveLength(2);
   });
 });
+
+describe("tùy chọn món theo danh mục note & topping", () => {
+  const catalog = parseCatalog(
+    { n1: { name: "Đồ uống", sortOrder: 1, items: [{ id: "a", text: "Ít đá" }] } },
+    { t1: { name: "Topping trà", sortOrder: 1, items: [{ id: "1", name: "Trân châu", price: 7000 }] } }
+  );
+  const bakery: OptionProduct = { id: "5", name: "Bánh lăn choco - Size 30", price: 40000, category: "Bánh Lăn Nướng" };
+
+  it("đã cấu hình nhưng chưa gắn gì: bánh không có topping/note; trà thuộc nhóm đã gắn mới có", () => {
+    expect(getProductOptions(bakery, [{ name: "Bánh Lăn Nướng" }], [bakery], catalog).hasAny).toBe(false);
+    const o = getProductOptions(tea, [{ name: "Trà", noteGroupIds: ["n1"], toppingGroupIds: ["t1"] }], [tea, ...tops], catalog);
+    expect(o.catalogMode).toBe(true);
+    expect(o.toppings).toEqual([{ name: "Trân châu", price: 7000 }]);
+    expect(o.noteChips).toEqual(["Ít đá"]);
+    expect(o.toppingGroups.map((g) => g.id)).toEqual(["t1"]);
+  });
+
+  it("món ghi đè nhóm món; gắn note cho bánh thì bánh hiện chip note nhưng vẫn không có topping", () => {
+    const o = getProductOptions({ ...tea, toppingGroupIds: ["__none__"] }, [{ name: "Trà", toppingGroupIds: ["t1"] }], [tea], catalog);
+    expect(o.toppings).toEqual([]);
+    const b = getProductOptions({ ...bakery, noteGroupIds: ["n1"] }, [], [bakery], catalog);
+    expect(b.hasAny).toBe(true);
+    expect(b.toppings).toEqual([]);
+    expect(b.noteChips).toEqual(["Ít đá"]);
+  });
+
+  it("chưa cấu hình (catalog rỗng/không truyền) giữ cách cũ", () => {
+    const o = getProductOptions(tea, [], [tea, ...tops], parseCatalog(null, null));
+    expect(o.catalogMode).toBe(false);
+    expect(o.toppings.length).toBeGreaterThan(0);
+  });
+
+  it("giá topping lấy từ nhóm khi tạo dòng", () => {
+    const o = getProductOptions(tea, [{ name: "Trà", toppingGroupIds: ["t1"] }], [tea], catalog);
+    const line = makeConfiguredLine(tea, o, { ...defaultSelection(o), toppings: ["Trân châu"] }, 1, "", actor, 1);
+    expect(line.toppingPrice).toBe(7000);
+  });
+});
+

@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth, canAccessRoute } from "@/lib/auth";
 import Sidebar from "@/components/Sidebar";
 import { DashboardDataProvider, useDashboardData } from "@/lib/data-context";
 import { Store, Settings, Menu, Moon, Sun } from "lucide-react";
@@ -193,6 +193,7 @@ export default function DashboardLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -220,6 +221,10 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
+  // Chặn truy cập thẳng bằng đường dẫn: trang không thuộc quyền của tài khoản → thông báo, không hiển thị nội dung.
+  // Trang chủ /dashboard luôn mở (là nơi đáp sau đăng nhập).
+  const routeAllowed = pathname === "/dashboard" || canAccessRoute(user, pathname);
+
   return (
     <DashboardDataProvider>
       <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
@@ -246,7 +251,19 @@ export default function DashboardLayout({
               overflowY: "auto",
             }}
           >
-            {children}
+            {routeAllowed ? (
+              children
+            ) : (
+              <div role="alert" style={{ padding: "48px 24px", textAlign: "center", color: "var(--text)" }}>
+                <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Bạn không có quyền truy cập trang này</h1>
+                <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
+                  Liên hệ Chủ quán để được cấp quyền (mục Nhân viên và phân quyền).
+                </p>
+                <Link href="/dashboard" className="btn-secondary">
+                  Về trang chủ
+                </Link>
+              </div>
+            )}
           </main>
         </div>
       </div>

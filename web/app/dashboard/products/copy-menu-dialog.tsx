@@ -250,6 +250,7 @@ export default function CopyMenuDialog({
                   <label style={labelStyle}><input type="checkbox" checked={opts.copyCategories} onChange={(e) => setOpt("copyCategories", e.target.checked)} /> Tạo nhóm còn thiếu ở đích (theo tên)</label>
                   <label style={labelStyle}><input type="checkbox" checked={opts.copyOptions} onChange={(e) => setOpt("copyOptions", e.target.checked)} /> Size, topping, đường/đá</label>
                   <label style={labelStyle}><input type="checkbox" checked={opts.copyNotes} onChange={(e) => setOpt("copyNotes", e.target.checked)} /> Ghi chú mẫu</label>
+                  <label style={labelStyle}><input type="checkbox" checked={opts.copyCatalog} onChange={(e) => setOpt("copyCatalog", e.target.checked)} /> Danh mục note &amp; topping (và phần gắn vào món)</label>
                   <label style={labelStyle}><input type="checkbox" checked={opts.copyImages} onChange={(e) => setOpt("copyImages", e.target.checked)} /> Hình ảnh</label>
                 </div>
               </div>
@@ -292,6 +293,7 @@ export default function CopyMenuDialog({
                         <span>Bỏ qua: <b>{tp.plan.counts.skip}</b></span>
                         <span>Nhóm mới: <b>{tp.plan.counts.categories}</b></span>
                         <span>Ghi chú mới: <b>{tp.plan.counts.notes}</b></span>
+                        <span>Nhóm note/topping mới: <b>{tp.plan.counts.groups}</b></span>
                       </div>
                     )}
                   </div>

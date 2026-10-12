@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../core/domain/shift_scope.dart';
 import '../../core/reports/report_calculator.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
@@ -73,7 +74,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   }
 
   void _loadData() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) setState(() { _bills = b; _loading = false; });
     });
     _fb.tablesStream().listen((t) {
@@ -287,6 +288,29 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     final list = staffSet.toList();
     list.sort();
     return list;
+  }
+
+  /// Chủ/quản lý: chi tiết ca/két theo từng tài khoản trong kỳ báo cáo (ngoài số gộp ở trên).
+  List<Widget> _buildPerAccountShiftSection() {
+    final rows = summarizeShiftsByOwner(_shifts.where((s) => _isWithinRange(s.openedAt)));
+    if (rows.isEmpty) return const [];
+    final showHandover = _auth.canViewShiftHandover;
+    return [
+      const SizedBox(height: 12),
+      _buildSectionCard(
+        title: 'CA / KÉT THEO TỪNG TÀI KHOẢN',
+        rows: [
+          for (final r in rows)
+            _buildReportRow(
+              r.staffFullName.isNotEmpty ? r.staffFullName : r.staffUsername,
+              FormatUtils.vnd(r.totalRevenue),
+              subtitle: '${r.shiftCount} ca • TM ${FormatUtils.vnd(r.cashSales)} • QR ${FormatUtils.vnd(r.qrSales)}'
+                  '${showHandover ? " • Lệch ${r.difference >= 0 ? "+" : ""}${FormatUtils.vnd(r.difference)}" : ""}',
+              isBold: true,
+            ),
+        ],
+      ),
+    ];
   }
 
   // ==================== TAB 3: HÀNG HÓA CALCULATIONS ====================
@@ -1357,6 +1381,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             ),
           ],
         ),
+        if (_auth.canViewAllShifts) ..._buildPerAccountShiftSection(),
         const SizedBox(height: 24),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:tram_flutter/core/permissions/app_permissions.dart';
 import 'package:tram_flutter/core/permissions/role_catalog.dart';
 import 'package:tram_flutter/core/permissions/route_permissions.dart';
 import 'package:tram_flutter/data/models/role_model.dart';
+import 'package:tram_flutter/data/models/user_model.dart';
 
 void main() {
   group('normalizeRoleId', () {
@@ -46,7 +47,7 @@ void main() {
       final m = AppPermissions.rolePresets[kRoleManager]!.toSet();
       for (final p in [
         AppPermissions.openTable, AppPermissions.manageCashShift, AppPermissions.viewReports,
-        AppPermissions.adjustCashShift, AppPermissions.managePromotions, AppPermissions.viewAuditLogs,
+        AppPermissions.adjustCashShift, AppPermissions.managePromotions,
         AppPermissions.copyMenu,
       ]) {
         expect(m.contains(p), isTrue, reason: p);
@@ -60,6 +61,91 @@ void main() {
       }
       expect(s.contains(AppPermissions.cancelBill), isFalse);
       expect(UserRole.owner.hasDefaultPermission('ANYTHING'), isTrue);
+    });
+  });
+
+  group('quy tắc vai trò (docs/ROLE_RULES.md)', () {
+    Set<String> preset(String r) => AppPermissions.rolePresets[r]!.toSet();
+
+    test('Quản lý mặc định KHÔNG hủy/xóa hóa đơn, không hủy món đã gửi bếp, không xem/xuất nhật ký thao tác', () {
+      final m = preset(kRoleManager);
+      for (final p in AppPermissions.ownerGrantOnly) {
+        expect(m.contains(p), isFalse, reason: p);
+      }
+      expect(AppPermissions.ownerGrantOnly.toSet(), {
+        AppPermissions.cancelBill,
+        AppPermissions.cancelKitchenItem,
+        AppPermissions.viewAuditLogs,
+        AppPermissions.exportAuditLogs,
+      });
+    });
+
+    test('Chủ cấp riêng qua customPermissions thì Quản lý dùng được (customPermissions chỉ THÊM)', () {
+      final granted = UserModel(
+        uid: 'm',
+        username: 'ql',
+        fullName: 'QL',
+        roleId: 'ROLE_MANAGER',
+        isRootOwner: false,
+        customPermissions: [AppPermissions.cancelBill, AppPermissions.viewAuditLogs],
+      );
+      expect(granted.can(AppPermissions.cancelBill), isTrue);
+      expect(granted.can(AppPermissions.viewAuditLogs), isTrue);
+      expect(granted.can(AppPermissions.cancelKitchenItem), isFalse);
+      expect(RoutePermissions.allowed('/audit-logs', granted.can), isTrue);
+    });
+
+    test('Nhân viên và Bếp không có quyền quản lý thực đơn; VIEW_MENU không đủ để vào các màn quản lý thực đơn', () {
+      for (final r in [kRoleStaff, kRoleKitchen]) {
+        final p = preset(r);
+        expect(p.contains(AppPermissions.manageMenu), isFalse, reason: r);
+        expect(p.contains(AppPermissions.editMenu), isFalse, reason: r);
+        expect(p.contains(AppPermissions.deleteMenu), isFalse, reason: r);
+        expect(p.contains(AppPermissions.changePrice), isFalse, reason: r);
+        expect(p.contains(AppPermissions.manageTables), isFalse, reason: r);
+        expect(p.contains(AppPermissions.manageNoteCatalog), isFalse, reason: r);
+        final u = UserModel(uid: 'u', username: 'u', fullName: 'U', roleId: r, isRootOwner: false);
+        expect(u.can(AppPermissions.viewMenu), isTrue, reason: r);
+        expect(u.can(AppPermissions.manageMenu), isFalse, reason: r); // không còn alias VIEW_MENU
+        for (final path in ['/menu-management', '/category-management', '/zone-management']) {
+          expect(RoutePermissions.allowed(path, u.can), isFalse, reason: '$r $path');
+        }
+      }
+      final mgr = UserModel(uid: 'm', username: 'm', fullName: 'M', roleId: 'ROLE_MANAGER', isRootOwner: false);
+      expect(RoutePermissions.allowed('/menu-management', mgr.can), isTrue);
+      expect(RoutePermissions.allowed('/category-management', mgr.can), isTrue);
+    });
+
+    test('Nhật ký thao tác và phiếu bàn giao ca: Nhân viên/Bếp không vào được; Quản lý vào được phiếu bàn giao', () {
+      final staff = UserModel(uid: 's', username: 's', fullName: 'S', roleId: 'ROLE_STAFF', isRootOwner: false);
+      final mgr = UserModel(uid: 'm', username: 'm', fullName: 'M', roleId: 'ROLE_MANAGER', isRootOwner: false);
+      expect(RoutePermissions.allowed('/audit-logs', staff.can), isFalse);
+      expect(RoutePermissions.allowed('/audit-logs', mgr.can), isFalse);
+      expect(RoutePermissions.allowed('/cash-shifts', staff.can), isFalse);
+      expect(RoutePermissions.allowed('/cash-shifts', mgr.can), isTrue);
+    });
+
+    test('Quyền mới: phân phối mặc định theo vai trò', () {
+      final m = preset(kRoleManager);
+      for (final p in [
+        AppPermissions.viewShiftHandover, AppPermissions.viewAllShifts, AppPermissions.viewAllBillsHistory,
+        AppPermissions.toggleItemAvailability, AppPermissions.manageNoteCatalog,
+      ]) {
+        expect(m.contains(p), isTrue, reason: p);
+      }
+      for (final r in [kRoleStaff, kRoleKitchen]) {
+        final p = preset(r);
+        expect(p.contains(AppPermissions.toggleItemAvailability), isTrue, reason: r);
+        expect(p.contains(AppPermissions.viewShiftHandover), isFalse, reason: r);
+        expect(p.contains(AppPermissions.viewAllShifts), isFalse, reason: r);
+        expect(p.contains(AppPermissions.viewAllBillsHistory), isFalse, reason: r);
+        expect(p.contains(AppPermissions.manageNoteCatalog), isFalse, reason: r);
+      }
+      // Chủ quán có tất cả (kể cả mã mới)
+      expect(UserRole.owner.hasDefaultPermission(AppPermissions.viewShiftHandover), isTrue);
+      expect(AppPermissions.allPermissions.map((p) => p.key), containsAll([
+        'VIEW_SHIFT_HANDOVER', 'VIEW_ALL_SHIFTS', 'VIEW_ALL_BILLS_HISTORY', 'TOGGLE_ITEM_AVAILABILITY', 'MANAGE_NOTE_CATALOG',
+      ]));
     });
   });
 

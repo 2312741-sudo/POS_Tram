@@ -27,7 +27,15 @@ class AccountDeletionBlockedException extends AuthException {
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal();
+  AuthService._internal() {
+    // Ca/két tách theo tài khoản: repository hỏi danh tính hiện tại mỗi lần cần
+    _fb.setShiftIdentityProvider(() => (
+          uid: _currentUser?.uid ?? '',
+          username: _currentUser?.username ?? '',
+          canViewAll: can(AppPermissions.viewAllShifts),
+          canViewAllBills: can(AppPermissions.viewAllBillsHistory),
+        ));
+  }
 
   static const String _keyStoreCode = 'STORE_CODE';
   static const String _keyRememberStore = 'REMEMBER_STORE';
@@ -77,6 +85,11 @@ class AuthService extends ChangeNotifier {
   bool get isOwner => isRootOwner || currentRole.isOwner;
   bool get isManager => currentRole.isManager;
   bool get canAccessManagerHub => isOwner || isManager || can(AppPermissions.viewReports);
+  /// Xem phiếu bàn giao ca / số kỳ vọng / chênh lệch két (chủ, quản lý).
+  bool get canViewShiftHandover => can(AppPermissions.viewShiftHandover);
+  bool get canViewAllShifts => can(AppPermissions.viewAllShifts);
+  bool get canViewAllBillsHistory => can(AppPermissions.viewAllBillsHistory);
+  String get currentUid => _currentUser?.uid ?? '';
   bool get mustChangePassword => _currentUser?.mustChangePassword ?? false;
 
   /// Kiểm tra người dùng hiện tại có quyền permKey

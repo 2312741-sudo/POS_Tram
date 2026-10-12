@@ -22,6 +22,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final _auth = AuthService();
 
   String _search = '';
+  String? _staffFilter; // chủ/quản lý: lọc theo tài khoản thu tiền
   DateTime _selectedDate = DateTime.now();
   final String _selectedPaymentMethod = 'ALL';
   String _selectedStatus = 'ALL'; // 'ALL', 'PAID', 'CANCELLED'
@@ -91,10 +92,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
       body: StreamBuilder<List<BillModel>>(
-        stream: _fb.billsStream(),
+        stream: _fb.myBillsStream(),
         initialData: const [],
         builder: (context, snapshot) {
-          final allBills = snapshot.data ?? [];
+          final streamBills = snapshot.data ?? [];
+          // Nhân viên chỉ thấy HĐ của mình; chủ/quản lý (VIEW_ALL_BILLS_HISTORY) thấy hết + lọc theo tài khoản
+          final allBills = _fb.scopeVisibleBills(streamBills, filterUsername: _staffFilter);
+          final staffOptions = <String, String>{
+            for (final b in streamBills)
+              if (b.staffUsername.isNotEmpty)
+                b.staffUsername: b.staffFullName.isNotEmpty ? '${b.staffFullName} (${b.staffUsername})' : b.staffUsername,
+          };
           final filtered = allBills.where((b) {
             // Status match
             if (_selectedStatus != 'ALL' && b.status != _selectedStatus) {
@@ -185,6 +193,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ],
                       ),
                     ),
+                    if (_auth.canViewAllBillsHistory && staffOptions.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      DropdownButton<String?>(
+                        isExpanded: true,
+                        isDense: true,
+                        value: staffOptions.containsKey(_staffFilter) ? _staffFilter : null,
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('Tất cả tài khoản')),
+                          for (final e in staffOptions.entries) DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
+                        ],
+                        onChanged: (v) => setState(() => _staffFilter = v),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     // Revenue summary bar
                     Container(

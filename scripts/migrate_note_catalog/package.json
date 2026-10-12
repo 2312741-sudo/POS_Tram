@@ -1,0 +1,14 @@
+{
+  "name": "migrate-note-catalog",
+  "version": "1.0.0",
+  "description": "Nhập topping / ghi chú mẫu cũ vào danh mục note & topping mới (dry-run mặc định)",
+  "main": "migrate.js",
+  "scripts": {
+    "test": "node --test plan.test.js",
+    "dry-run": "node migrate.js",
+    "apply": "node migrate.js --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.1.0"
+  }
+}

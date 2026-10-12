@@ -41,7 +41,7 @@ class _BillsTabState extends State<BillsTab> {
   }
 
   void _loadData() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) {
         setState(() {
           _allBills = b;

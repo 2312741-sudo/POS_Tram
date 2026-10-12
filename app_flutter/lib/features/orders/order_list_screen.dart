@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/domain/item_options.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'widgets/item_option_pickers.dart';
 import '../../core/utils/format_utils.dart';
 import '../cash_shift/cash_shift_dialog.dart';
+import '../../core/domain/product_availability.dart';
+import '../kitchen/sold_out_actions.dart';
 
 class OrderListScreen extends StatefulWidget {
   final TableModel table;
@@ -29,6 +33,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   List<OrderItemModel> _cart = [];
   List<CategoryModel> _categories = [];
   List<String> _backendNotePresets = [];
+  ItemCatalog _catalog = const ItemCatalog(); // danh mục note & topping (chưa cấu hình = hành vi cũ)
   bool _loading = false;
   bool _isShiftOpen = false;
   final _searchCtrl = TextEditingController();
@@ -106,6 +111,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _fb.categoriesStream(storeCode: storeCode).listen((cats) {
       if (mounted) setState(() => _categories = cats);
     });
+    _fb.itemCatalogStream(storeCode: storeCode).listen((c) {
+      if (mounted) setState(() => _catalog = c);
+    });
     _fb.productNotesStream(storeCode: storeCode).listen((notes) {
       if (mounted) {
         final list = notes
@@ -131,7 +139,45 @@ class _OrderListScreenState extends State<OrderListScreen> {
     return _cart.where((i) => i.productId == product.id && i.name == product.name).fold(0, (sum, i) => sum + i.quantity);
   }
 
+  /// Món đã báo hết: không cho thêm (kiểm tra theo dữ liệu realtime mới nhất).
+  bool _blockIfSoldOut(ProductModel product) {
+    ProductModel latest = product;
+    for (final p in _products) {
+      if (p.name == product.name) { latest = p; break; }
+    }
+    if (isProductAvailable(latest)) return false;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${product.name} đã hết hàng'), duration: const Duration(seconds: 2)));
+    return true;
+  }
+
+  /// Giữ lâu một món để báo hết / bật lại (cần quyền TOGGLE_ITEM_AVAILABILITY).
+  Future<void> _toggleSoldOutDialog(ProductModel product) async {
+    if (!canToggleAvailability(_auth)) return;
+    final soldOutNow = !isProductAvailable(product);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(soldOutNow ? 'Bật lại ${product.name}?' : 'Báo hết ${product.name}?'),
+        content: Text(soldOutNow ? 'Món sẽ bán được trở lại trên mọi thiết bị.' : 'Món sẽ hiện "Hết hàng" và không thể thêm vào đơn trên mọi thiết bị.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(soldOutNow ? 'Bật lại' : 'Báo hết')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await SoldOutActions(auth: _auth).setSoldOut(product, !soldOutNow);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không cập nhật được ${product.name}: $e'), backgroundColor: AppColors.danger));
+    }
+  }
+
   Future<void> _quickAddToCart(ProductModel product) async {
+    if (_blockIfSoldOut(product)) return;
     if (!await _ensureShiftOpen() || !mounted) return;
 
     final staffUser = _auth.currentUser?.username ?? 'staff';
@@ -181,6 +227,24 @@ class _OrderListScreenState extends State<OrderListScreen> {
   int get _cartTotal => _cart.fold(0, (s, p) => s + p.itemTotal);
   int get _cartCount => _cart.fold(0, (s, p) => s + p.quantity);
 
+  /// Nhóm note/topping được gắn cho món (món ghi đè nhóm món). Chưa cấu hình danh mục -> legacy.
+  ResolvedItemOptions _resolveOptions(ProductModel product) {
+    CategoryModel? cat;
+    for (final c in _categories) {
+      if (c.name.trim().toLowerCase() == product.category.trim().toLowerCase()) {
+        cat = c;
+        break;
+      }
+    }
+    return resolveItemOptions(
+      productNoteGroupIds: product.noteGroupIds,
+      productToppingGroupIds: product.toppingGroupIds,
+      categoryNoteGroupIds: cat?.noteGroupIds,
+      categoryToppingGroupIds: cat?.toppingGroupIds,
+      catalog: _catalog,
+    );
+  }
+
   // ==================== KIOTVIET PRODUCT CUSTOMIZER ====================
   Future<void> _showProductCustomizer(ProductModel product) async {
     if (!await _ensureShiftOpen() || !mounted) return;
@@ -223,10 +287,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ProductModel(id: 9008, name: 'Thạch chanh', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
     ];
 
+    final resolved = _resolveOptions(product);
+    final catalogMode = !resolved.legacy; // đã cấu hình danh mục: chỉ hiện nhóm được gắn
     final Map<String, ProductModel?> toppingItemMap = {};
     final List<String> availableToppingNames = [];
 
-    if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
+    if (catalogMode) {
+      resolved.toppingPrices.forEach((n, p) {
+        toppingItemMap[n] = ProductModel(name: n, price: p, unit: 'phần', category: 'Topping', isTopping: true);
+        availableToppingNames.add(n);
+      });
+    } else if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
       for (final tId in matchedCategory.allowedToppingIds) {
         final match = _products.firstWhere(
           (p) => p.id.toString() == tId ||
@@ -297,7 +368,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         builder: (context, setModalState) {
           int toppingPrice = 0;
           for (final topName in selectedToppings) {
-            toppingPrice += toppingItemMap[topName]?.price ?? 5000;
+            toppingPrice += toppingItemMap[topName]?.price ?? (catalogMode ? 0 : 5000);
           }
           final int unitPrice = product.price + sizeExtra + toppingPrice;
           final int totalPrice = unitPrice * quantity;
@@ -406,8 +477,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // 3. TOPPINGS (Topping đi kèm)
-                  if (hasToppings) ...[
+                  // 3. TOPPINGS (theo nhóm đã gắn khi đã cấu hình danh mục; chưa cấu hình = danh sách cũ)
+                  if (catalogMode && resolved.toppingGroups.isNotEmpty) ...[
+                    ToppingGroupsSection(
+                      groups: resolved.toppingGroups,
+                      selected: selectedToppings,
+                      onToggle: (g, name) => setModalState(() {
+                        final next = toggleTopping(selected: selectedToppings, group: g, name: name);
+                        selectedToppings
+                          ..clear()
+                          ..addAll(next);
+                      }),
+                      onRemoveExtra: (n) => setModalState(() => selectedToppings.remove(n)),
+                      onClearAll: () => setModalState(() => selectedToppings.clear()),
+                    ),
+                  ],
+                  if (!catalogMode && hasToppings) ...[
                     Text('Topping thêm:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Wrap(
@@ -453,9 +538,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   ),
                   const SizedBox(height: 8),
                   Builder(builder: (_) {
-                    final presets = _backendNotePresets.isNotEmpty
-                        ? _backendNotePresets
-                        : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về'];
+                    final presets = catalogMode
+                        ? resolved.noteChips
+                        : (_backendNotePresets.isNotEmpty
+                            ? _backendNotePresets
+                            : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về']);
                     return Wrap(
                       spacing: 6,
                       runSpacing: 4,
@@ -848,14 +935,24 @@ class _OrderListScreenState extends State<OrderListScreen> {
         final bool hasOptions = product.sizes.isNotEmpty ||
             product.hasIceSugarOptions ||
             product.allowedToppings.isNotEmpty ||
-            isDrinkOrTea;
+            isDrinkOrTea ||
+            (() {
+              final r = _resolveOptions(product);
+              return !r.legacy && (r.toppingGroups.isNotEmpty || r.noteGroups.isNotEmpty);
+            })();
 
         return _ProductListRow(
           product: product,
           quantity: qty,
           hasOptions: hasOptions,
-          onTap: () => _showProductCustomizer(product),
+          soldOut: !isProductAvailable(product),
+          onLongPress: canToggleAvailability(_auth) ? () => _toggleSoldOutDialog(product) : null,
+          onTap: () {
+            if (_blockIfSoldOut(product)) return;
+            _showProductCustomizer(product);
+          },
           onAdd: () {
+            if (_blockIfSoldOut(product)) return;
             if (hasOptions) {
               _showProductCustomizer(product);
             } else {
@@ -892,8 +989,12 @@ class _ProductListRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
+  final bool soldOut;
+  final VoidCallback? onLongPress;
 
   const _ProductListRow({
+    required this.soldOut,
+    this.onLongPress,
     required this.product,
     required this.quantity,
     required this.hasOptions,
@@ -906,7 +1007,9 @@ class _ProductListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isInCart = quantity > 0;
 
-    return Container(
+    return Opacity(
+      opacity: soldOut ? 0.55 : 1,
+      child: Container(
       decoration: BoxDecoration(
         color: isInCart ? context.tc.primaryLight.withValues(alpha: 0.35) : context.tc.card,
         borderRadius: BorderRadius.circular(14),
@@ -927,6 +1030,7 @@ class _ProductListRow extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -961,15 +1065,29 @@ class _ProductListRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        product.name,
-                        style: GoogleFonts.beVietnamPro(
-                          color: context.tc.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              product.name,
+                              style: GoogleFonts.beVietnamPro(
+                                color: context.tc.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (soldOut) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: context.tc.danger, borderRadius: BorderRadius.circular(6)),
+                              child: const Text('Hết hàng', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Row(
@@ -1025,7 +1143,13 @@ class _ProductListRow extends StatelessWidget {
                 const SizedBox(width: 10),
 
                 // Action buttons
-                if (!isInCart)
+                if (!isInCart && soldOut)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(10)),
+                    child: Text('Thêm', style: GoogleFonts.beVietnamPro(color: context.tc.textHint, fontSize: 13, fontWeight: FontWeight.bold)),
+                  )
+                else if (!isInCart)
                   InkWell(
                     onTap: onAdd,
                     borderRadius: BorderRadius.circular(10),
@@ -1081,13 +1205,13 @@ class _ProductListRow extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       InkWell(
-                        onTap: onAdd,
+                        onTap: soldOut ? null : onAdd,
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: context.tc.primary,
+                            color: soldOut ? context.tc.textHint : context.tc.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.add, color: Colors.white, size: 16),
@@ -1100,6 +1224,7 @@ class _ProductListRow extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 

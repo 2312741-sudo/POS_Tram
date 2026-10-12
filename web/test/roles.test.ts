@@ -53,7 +53,7 @@ describe("danh mục quyền & bảng quyền mặc định", () => {
   it("chỉ 4 mã vai trò chuẩn; Quản lý ⊇ hợp QL1 + QL2; có COPY_MENU", () => {
     expect(Object.keys(ROLE_PERMISSIONS).sort()).toEqual(["ROLE_KITCHEN", "ROLE_MANAGER", "ROLE_OWNER", "ROLE_STAFF"]);
     const mgr = new Set(ROLE_PERMISSIONS.ROLE_MANAGER);
-    for (const p of ["OPEN_TABLE", "MANAGE_CASH_SHIFT", "VIEW_REPORTS", "ADJUST_CASH_SHIFT", "MANAGE_PROMOTIONS", "VIEW_AUDIT_LOGS", "COPY_MENU"]) {
+    for (const p of ["OPEN_TABLE", "MANAGE_CASH_SHIFT", "VIEW_REPORTS", "ADJUST_CASH_SHIFT", "MANAGE_PROMOTIONS", "COPY_MENU"]) {
       expect(mgr.has(p), p).toBe(true);
     }
     expect(mgr.has("MANAGE_USERS")).toBe(false);

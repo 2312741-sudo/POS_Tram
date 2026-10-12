@@ -32,7 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _loadData() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) setState(() { _bills = b; _loading = false; });
     });
     _fb.tablesStream().listen((t) {

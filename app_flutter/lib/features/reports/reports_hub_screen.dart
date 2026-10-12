@@ -149,7 +149,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       if (mounted) setState(() => _stores = stores);
 
       // Listen streams
-      _fb.billsStream().listen((bills) {
+      _fb.myBillsStream().listen((bills) {
         if (mounted) {
           setState(() {
             _allBills = bills;

@@ -9,9 +9,12 @@ import { generateBillCode } from "./bill-code";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
 import { errorMessage } from "./errors";
+import { hasPermission, useAuth } from "./auth";
+import { scopeShifts } from "./shift-scope";
 import type { AppliedDiscount } from "./pricing-engine";
 import { PromotionLimitError, reserveAllPromotions, rollbackAllPromotions, type PromotionReservation } from "./promotion-commit";
 import { copyWholeMenu } from "./menu-copy-run";
+import { encodeGroupIds, parseGroupIds } from "./item-options";
 import {
   appendDeletedItemsJson,
   billDeletionFields,
@@ -204,6 +207,14 @@ export interface ProductItem {
   sizes?: Record<string, number>;
   allowedToppings?: string[];
   hasIceSugarOptions?: boolean | null;
+  /** Báo hết món (xem lib/product-availability.ts). Thiếu = còn bán. */
+  isAvailable?: boolean;
+  soldOutAt?: number | null;
+  soldOutBy?: string | null;
+  soldOutUntil?: number | null;
+  /** Danh mục note/topping áp dụng cho món: không có trường = kế thừa nhóm món; ["__none__"] = không có (xem item-options.ts) */
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 export interface CategoryItem {
@@ -212,6 +223,8 @@ export interface CategoryItem {
   storeName?: string;
   name: string;
   allowedToppingIds?: string[];
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 export interface UserItem {
@@ -283,6 +296,8 @@ export interface CashShiftItem {
   shiftCode: string;
   shiftName?: string;
   storeCode: string;
+  /** uid chủ ca (ca cũ trước khi tách theo tài khoản: không có → nhận diện theo staffUsername) */
+  staffUid?: string;
   staffUsername: string;
   staffFullName: string;
   openedAt: number;
@@ -366,7 +381,7 @@ interface DashboardContextType {
   /** Đánh dấu bàn đã in phiếu tạm tính (prePrintedAt/prePrintedBy) */
   markTablePrePrinted: (table: TableItem, username?: string) => Promise<{ success: boolean; error?: string }>;
   saveProduct: (
-    productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean },
+    productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean; noteGroupIds?: string[] | null; toppingGroupIds?: string[] | null },
     storeCode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (productId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
@@ -374,7 +389,8 @@ interface DashboardContextType {
     categoryName: string,
     storeCode?: string,
     oldCategoryName?: string,
-    allowedToppingIds?: string[]
+    allowedToppingIds?: string[],
+    groupIds?: { noteGroupIds?: string[] | null; toppingGroupIds?: string[] | null }
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCategory: (
     categoryName: string,
@@ -615,6 +631,8 @@ function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
 }
 
 export function DashboardDataProvider({ children }: { children: React.ReactNode }) {
+  // Người đang đăng nhập — dùng chốt chặn quyền hủy/xóa hóa đơn (CANCEL_BILL) ở tầng xử lý, ngoài UI và rules
+  const { user: actingUser } = useAuth();
   // Store management state
   // Store management state: hydrat hóa từ sessionStorage để render tức thì 0ms không nháy trắng
   const [stores, setStores] = useState<StoreItem[]>(() => {
@@ -775,6 +793,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             id,
             name: typeof c === "string" ? c : (c.name || id),
             allowedToppingIds: typeof c === "object" && c !== null && Array.isArray(c.allowedToppingIds) ? c.allowedToppingIds : [],
+            noteGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.noteGroupIds) : undefined,
+            toppingGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.toppingGroupIds) : undefined,
             storeCode: code,
           });
         });
@@ -1092,9 +1112,17 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   }, [rawCashShifts]);
 
   const scopedCashShifts = useMemo(() => {
-    if (currentStoreCode === "ALL") return allCashShifts;
-    return allCashShifts.filter((s) => (s.storeCode || "TRAM01") === currentStoreCode);
-  }, [allCashShifts, currentStoreCode]);
+    const byStore =
+      currentStoreCode === "ALL"
+        ? allCashShifts
+        : allCashShifts.filter((s) => (s.storeCode || "TRAM01") === currentStoreCode);
+    // Ca/két độc lập theo tài khoản: tài khoản không có VIEW_ALL_SHIFTS chỉ thấy ca của chính mình
+    return scopeShifts(
+      byStore,
+      { uid: actingUser?.uid, username: actingUser?.username },
+      hasPermission(actingUser, "VIEW_ALL_SHIFTS"),
+    );
+  }, [allCashShifts, currentStoreCode, actingUser]);
 
   // Compute products across all stores and scoped to currentStoreCode
   const allProducts = useMemo(() => {
@@ -1940,7 +1968,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const saveProduct = useCallback(
     async (
-      productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean },
+      productData: { id?: string; name: string; code?: string; price: number; costPrice?: number; unit?: string; category?: string; imageBase64?: string; isTopping?: boolean; noteGroupIds?: string[] | null; toppingGroupIds?: string[] | null },
       storeCode?: string
     ) => {
       try {
@@ -1954,6 +1982,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           category: (productData.category || "").trim(),
           isTopping: Boolean(productData.isTopping),
         };
+        // Gắn danh mục note/topping: undefined = không đụng; null = xóa trường (kế thừa nhóm món); mảng rỗng = "không có"
+        if (productData.noteGroupIds !== undefined) payload.noteGroupIds = encodeGroupIds(productData.noteGroupIds);
+        if (productData.toppingGroupIds !== undefined) payload.toppingGroupIds = encodeGroupIds(productData.toppingGroupIds);
         if (productData.imageBase64 !== undefined) {
           payload.imageBase64 = productData.imageBase64;
         }
@@ -1993,7 +2024,13 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   );
 
   const saveCategory = useCallback(
-    async (categoryName: string, storeCode?: string, oldCategoryName?: string, allowedToppingIds?: string[]) => {
+    async (
+      categoryName: string,
+      storeCode?: string,
+      oldCategoryName?: string,
+      allowedToppingIds?: string[],
+      groupIds?: { noteGroupIds?: string[] | null; toppingGroupIds?: string[] | null }
+    ) => {
       try {
         const cleanName = categoryName.trim();
         if (!cleanName) return { success: false, error: "Tên danh mục không được để trống" };
@@ -2003,8 +2040,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           : [storeCode];
 
         for (const code of targetStores) {
+          // Khi đổi tên: giữ lại các trường gắn note/topping của nhóm cũ (trừ khi form gửi giá trị mới)
+          const carried: Record<string, unknown> = {};
           // If renaming: remove old key, update products
           if (oldCategoryName && oldCategoryName !== cleanName) {
+            const oldSnap = await get(ref(db, `stores/${code}/categories/${oldCategoryName}`)).catch(() => null);
+            const oldVal = oldSnap && oldSnap.exists() ? oldSnap.val() : null;
+            if (oldVal && typeof oldVal === "object") {
+              for (const f of ["allowedToppingIds", "noteGroupIds", "toppingGroupIds"]) if (oldVal[f] != null) carried[f] = oldVal[f];
+            }
             await remove(ref(db, `stores/${code}/categories/${oldCategoryName}`)).catch(() => {});
 
             // Update any products under this store using the old category name
@@ -2015,10 +2059,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           }
 
           // Save new category with allowedToppingIds if provided
-          const catPayload: Record<string, unknown> = { name: cleanName };
+          const catPayload: Record<string, unknown> = { name: cleanName, ...carried };
           if (allowedToppingIds !== undefined) {
             catPayload.allowedToppingIds = allowedToppingIds;
           }
+          if (groupIds?.noteGroupIds !== undefined) catPayload.noteGroupIds = groupIds.noteGroupIds ? encodeGroupIds(groupIds.noteGroupIds) : null;
+          if (groupIds?.toppingGroupIds !== undefined) catPayload.toppingGroupIds = groupIds.toppingGroupIds ? encodeGroupIds(groupIds.toppingGroupIds) : null;
           await update(ref(db, `stores/${code}/categories/${cleanName}`), catPayload);
         }
 
@@ -2186,6 +2232,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       reason: string,
       storeCode?: string
     ): Promise<{ success: boolean; error?: string }> => {
+      if (!hasPermission(actingUser, "CANCEL_BILL")) {
+        return { success: false, error: "Bạn không có quyền hủy hóa đơn (cần quyền CANCEL_BILL — liên hệ Chủ quán)." };
+      }
       try {
         const order = allHistory.find((h) => h.id === orderId);
         if (!order) return { success: false, error: "Không tìm thấy hóa đơn" };
@@ -2257,7 +2306,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi khi hủy hóa đơn" };
       }
     },
-    [allHistory, currentStoreCode]
+    [allHistory, currentStoreCode, actingUser]
   );
 
   const deleteOrder = useCallback(
@@ -2265,6 +2314,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       orderId: string,
       storeCode?: string
     ): Promise<{ success: boolean; error?: string }> => {
+      if (!hasPermission(actingUser, "CANCEL_BILL")) {
+        return { success: false, error: "Bạn không có quyền xóa hóa đơn (cần quyền CANCEL_BILL — liên hệ Chủ quán)." };
+      }
       try {
         const order = allHistory.find((h) => h.id === orderId);
         const targetStoreCode = storeCode || order?.storeCode || resolveWriteStoreCode(currentStoreCode);
@@ -2299,7 +2351,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi khi xóa hóa đơn" };
       }
     },
-    [allHistory, currentStoreCode]
+    [allHistory, currentStoreCode, actingUser]
   );
 
   const refreshAll = useCallback(() => {

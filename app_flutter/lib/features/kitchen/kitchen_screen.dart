@@ -6,6 +6,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../auth/delete_account_dialog.dart';
+import 'sold_out_actions.dart';
+import 'sold_out_sheet.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -157,6 +159,19 @@ class _KitchenScreenState extends State<KitchenScreen> {
               ],
             ),
           ),
+          if (canToggleAvailability())
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: OutlinedButton.icon(
+                onPressed: () => SoldOutSheet.show(context),
+                icon: const Icon(Icons.no_meals_outlined, size: 18),
+                label: const Text('Hết món'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: AppColors.kitchenCardBorder),
+                ),
+              ),
+            ),
           if (_visibleOrders.isNotEmpty)
             Container(
               width: 36, height: 36,

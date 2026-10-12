@@ -37,6 +37,8 @@ const PAGE_SIZE = 20;
 export default function OrdersPage() {
   const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder } = useDashboardData();
   const { user } = useAuth();
+  // Hủy / xóa hóa đơn: chỉ Chủ quán hoặc tài khoản được cấp CANCEL_BILL (Quản lý mặc định KHÔNG có)
+  const canCancelBill = hasPermission(user, "CANCEL_BILL");
   const [showSamples, setShowSamples] = useState(false);
   const canManageSamples =
     isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "CREATE_SAMPLE_DATA") && currentStoreCode !== "ALL";
@@ -1016,7 +1018,7 @@ export default function OrdersPage() {
                 flexWrap: "wrap",
               }}
             >
-              {selectedOrder.status !== "CANCELLED" && (
+              {canCancelBill && selectedOrder.status !== "CANCELLED" && (
                 <button
                   className="btn-secondary"
                   onClick={async () => {
@@ -1043,6 +1045,7 @@ export default function OrdersPage() {
                   Hủy Hóa Đơn
                 </button>
               )}
+              {canCancelBill && (
               <button
                 className="btn-secondary"
                 onClick={async () => {
@@ -1067,6 +1070,7 @@ export default function OrdersPage() {
                 <Trash2 size={16} />
                 Xóa Vĩnh Viễn
               </button>
+              )}
               <button
                 className="btn-secondary"
                 onClick={() => handlePrint(selectedOrder)}

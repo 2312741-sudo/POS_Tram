@@ -1,4 +1,6 @@
 import '../../core/domain/customer_search.dart';
+import '../../core/domain/shift_scope.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
@@ -18,9 +20,46 @@ class ReportRepository {
   final DatabaseReference Function() _getCashShiftsRef;
   final void Function(String storeCode)? _onSwitchStore;
 
-  CashShiftModel? activeShiftCache;
+  /// Danh tính tài khoản hiện tại để tách ca/két theo tài khoản (do AuthService đăng ký).
+  /// canViewAll = có quyền VIEW_ALL_SHIFTS (chủ / quản lý).
+  ({String uid, String username, bool canViewAll, bool canViewAllBills}) Function()? shiftIdentityProvider;
 
-  List<CashShiftModel>? _cachedCashShiftsList;
+  ({String uid, String username, bool canViewAll, bool canViewAllBills}) get shiftIdentity {
+    final p = shiftIdentityProvider;
+    if (p != null) return p();
+    String uid = '';
+    try {
+      uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    } catch (_) {}
+    return (uid: uid, username: '', canViewAll: false, canViewAllBills: false);
+  }
+
+  /// Ca vừa mở cục bộ, chờ luồng realtime xác nhận (tránh khoảng trống khi mạng chậm).
+  CashShiftModel? _optimisticOpenShift;
+
+  /// Ca ĐANG MỞ CỦA TÀI KHOẢN HIỆN TẠI (không bao giờ là ca của người khác).
+  CashShiftModel? get activeShiftCache {
+    final id = shiftIdentity;
+    final fromList = findOwnOpenShift(_cachedCashShiftsList ?? const <CashShiftModel>[], uid: id.uid, username: id.username);
+    if (fromList != null) return fromList;
+    final o = _optimisticOpenShift;
+    if (o != null && o.isOpen && shiftOwnedBy(o, uid: id.uid, username: id.username)) return o;
+    return null;
+  }
+
+  /// Ca đang mở của tài khoản hiện tại trong một danh sách ca bất kỳ.
+  CashShiftModel? ownOpenShiftIn(Iterable<CashShiftModel> shifts) {
+    final id = shiftIdentity;
+    return findOwnOpenShift(shifts, uid: id.uid, username: id.username) ?? activeShiftCache;
+  }
+
+  /// Chỉ giữ những ca tài khoản hiện tại được phép thấy.
+  List<CashShiftModel> scopeVisibleShifts(Iterable<CashShiftModel> shifts, {String? filterOwner}) {
+    final id = shiftIdentity;
+    return scopeShifts(shifts, uid: id.uid, username: id.username, canViewAll: id.canViewAll, filterOwner: filterOwner);
+  }
+
+  List<CashShiftModel>? _cachedCashShiftsList; // TOÀN BỘ ca của chi nhánh (thô); luôn lọc qua scopeVisibleShifts khi trả ra
   Stream<List<CashShiftModel>>? _cachedCashShiftsStream;
   Stream<List<CashShiftModel>>? _underlyingBroadcastStream;
   StreamSubscription<List<CashShiftModel>>? _underlyingCashShiftsSub;
@@ -55,7 +94,7 @@ class ReportRepository {
   static bool useFirestoreCustomers = false;
 
   void clearShiftCache() {
-    activeShiftCache = null;
+    _optimisticOpenShift = null;
     _cachedCashShiftsList = null;
     _underlyingCashShiftsSub?.cancel();
     _underlyingCashShiftsSub = null;
@@ -230,7 +269,9 @@ class ReportRepository {
   }
 
   // ==================== KIOTVIET CASH SHIFT (QUẢN LÝ KÉT TIỀN CA) ====================
-  List<CashShiftModel>? get cachedCashShiftsList => _cachedCashShiftsList;
+  /// Danh sách ca đã lọc theo tài khoản (nhân viên: chỉ ca của mình; chủ/quản lý: tất cả).
+  List<CashShiftModel>? get cachedCashShiftsList =>
+      _cachedCashShiftsList == null ? null : scopeVisibleShifts(_cachedCashShiftsList!);
 
   Stream<List<CashShiftModel>> cashShiftsStream() {
     if (_cachedCashShiftsStream != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
@@ -241,23 +282,20 @@ class ReportRepository {
 
     final rawStream = cashShiftsRef.onValue.map<List<CashShiftModel>>((event) {
       if (!event.snapshot.exists || event.snapshot.value == null) {
-        activeShiftCache = null;
         _cachedCashShiftsList = <CashShiftModel>[];
         return <CashShiftModel>[];
       }
       final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
       final list = map.entries
+          .where((e) => e.value is Map)
           .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
           .where((s) => s.openedAt > 0)
           .toList()
         ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
-      final openOne = list.where((s) => s.isOpen).firstOrNull;
-      activeShiftCache = openOne;
       _cachedCashShiftsList = list;
+      if (list.any((s) => s.id == _optimisticOpenShift?.id)) _optimisticOpenShift = null;
       return list;
-    }).handleError((_) => (activeShiftCache != null && activeShiftCache!.isOpen)
-        ? [activeShiftCache!]
-        : (_cachedCashShiftsList ?? <CashShiftModel>[]));
+    }).handleError((_) => _cachedCashShiftsList ?? <CashShiftModel>[]);
 
     final broadcast = rawStream.asBroadcastStream();
     _underlyingBroadcastStream = broadcast;
@@ -268,10 +306,10 @@ class ReportRepository {
     _cachedCashShiftsStream = Stream<List<CashShiftModel>>.multi((controller) {
       // Replay ngay lập tức dữ liệu cache nếu có cho listener mới (tránh việc listener mới bị kẹt không nhận được dữ liệu ban đầu)
       if (_cachedCashShiftsList != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
-        controller.add(_cachedCashShiftsList!);
+        controller.add(scopeVisibleShifts(_cachedCashShiftsList!));
       }
       final sub = broadcast.listen(
-        (data) => controller.add(data),
+        (data) => controller.add(scopeVisibleShifts(data)),
         onError: (err, st) => controller.addError(err, st),
         onDone: () => controller.close(),
       );
@@ -283,88 +321,80 @@ class ReportRepository {
     return _cachedCashShiftsStream!;
   }
 
+  List<CashShiftModel> _parseShifts(Object? value) {
+    if (value is! Map) return <CashShiftModel>[];
+    return Map<dynamic, dynamic>.from(value).entries
+        .where((e) => e.value is Map)
+        .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value as Map), e.key.toString()))
+        .where((s) => s.openedAt > 0)
+        .toList()
+      ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+  }
+
   Future<List<CashShiftModel>> getRecentCashShifts({int limit = 50, bool forceRefresh = false}) async {
     if (!forceRefresh &&
         _cachedCashShiftsList != null &&
         _cachedCashShiftsList!.isNotEmpty &&
         _cachedCashShiftsStoreCode == _currentStoreCode) {
-      return _cachedCashShiftsList!;
+      return scopeVisibleShifts(_cachedCashShiftsList!);
     }
     try {
-      final snap = await cashShiftsRef.limitToLast(limit).get().timeout(const Duration(seconds: 4));
+      // Lấy dư để sau khi lọc theo tài khoản vẫn đủ ca của chính họ
+      final snap = await cashShiftsRef.limitToLast(limit * 4).get().timeout(const Duration(seconds: 4));
       if (!snap.exists || snap.value == null) {
         if (_cachedCashShiftsStoreCode == _currentStoreCode && _cachedCashShiftsList != null) {
-          return _cachedCashShiftsList!;
+          return scopeVisibleShifts(_cachedCashShiftsList!);
         }
         return <CashShiftModel>[];
       }
-      final map = Map<dynamic, dynamic>.from(snap.value as Map);
-      final list = map.entries
-          .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-          .where((s) => s.openedAt > 0)
-          .toList()
-        ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+      final list = _parseShifts(snap.value);
       _cachedCashShiftsList = list;
       _cachedCashShiftsStoreCode = _currentStoreCode;
-      final openOne = list.where((s) => s.isOpen).firstOrNull;
-      if (openOne != null) {
-        activeShiftCache = openOne;
-      }
-      return list;
+      return scopeVisibleShifts(list);
     } catch (_) {
-      return _cachedCashShiftsList ?? <CashShiftModel>[];
+      return scopeVisibleShifts(_cachedCashShiftsList ?? <CashShiftModel>[]);
     }
   }
 
+  /// Ca đang mở của TÀI KHOẢN HIỆN TẠI (null nếu tài khoản này chưa mở ca, dù người khác đang có ca mở).
   Future<CashShiftModel?> getCurrentOpenShift({bool forceRefresh = false}) async {
-    if (!forceRefresh && activeShiftCache != null && activeShiftCache!.isOpen) {
-      return activeShiftCache;
-    }
-    if (!forceRefresh && _cachedCashShiftsList != null && _cachedCashShiftsStoreCode == _currentStoreCode) {
-      final found = _cachedCashShiftsList!.where((s) => s.isOpen && s.openedAt > 0).firstOrNull;
-      if (found != null) {
-        activeShiftCache = found;
-        return found;
-      }
-    }
+    final cached = activeShiftCache;
+    if (!forceRefresh && cached != null && cached.isOpen) return cached;
+    final id = shiftIdentity;
     try {
-      final snap = await cashShiftsRef.get().timeout(const Duration(seconds: 5));
-      if (!snap.exists || snap.value == null) {
-        activeShiftCache = null;
-        return null;
-      }
-      final map = Map<dynamic, dynamic>.from(snap.value as Map);
-      CashShiftModel? foundOpen;
-      for (final entry in map.entries) {
-        final shift = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(entry.value), entry.key.toString());
-        if (shift.isOpen && shift.openedAt > 0) {
-          foundOpen = shift;
-          break;
-        }
-      }
-      activeShiftCache = foundOpen;
-      return foundOpen;
+      final snap = await cashShiftsRef.limitToLast(300).get().timeout(const Duration(seconds: 5));
+      if (!snap.exists || snap.value == null) return null;
+      final all = _parseShifts(snap.value);
+      // Cập nhật bản sao thô để activeShiftCache/lọc dùng được ngay
+      _cachedCashShiftsList = all;
+      _cachedCashShiftsStoreCode = _currentStoreCode;
+      return findOwnOpenShift(all, uid: id.uid, username: id.username);
     } catch (_) {
-      return (activeShiftCache != null && activeShiftCache!.isOpen) ? activeShiftCache : null;
+      final c = activeShiftCache;
+      return (c != null && c.isOpen) ? c : null;
     }
   }
 
   Future<void> openCashShift(CashShiftModel shift) async {
-    activeShiftCache = shift;
+    final id = shiftIdentity;
+    if (shift.staffUid.isEmpty || (id.uid.isNotEmpty && shift.staffUid != id.uid)) {
+      throw Exception('Ca phải được mở bởi chính tài khoản đang đăng nhập');
+    }
+    _optimisticOpenShift = shift;
     if (_cachedCashShiftsList != null) {
       _cachedCashShiftsList = [shift, ..._cachedCashShiftsList!.where((s) => s.id != shift.id)];
     }
     try {
-      // Đảm bảo không có ca cũ nào bị treo ở trạng thái OPEN
-      final snap = await cashShiftsRef.get().timeout(const Duration(seconds: 3));
+      // Mỗi tài khoản 1 ca: đóng ca CŨ CÒN TREO của CHÍNH tài khoản này (không đụng ca người khác)
+      final snap = await cashShiftsRef.limitToLast(300).get().timeout(const Duration(seconds: 3));
       if (snap.exists && snap.value != null) {
-        final map = Map<dynamic, dynamic>.from(snap.value as Map);
-        for (final entry in map.entries) {
-          final s = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(entry.value), entry.key.toString());
-          if (s.isOpen && s.id != shift.id) {
-            s.status = 'CLOSED';
-            s.closedAt = shift.openedAt;
-            await cashShiftsRef.child(s.id).set(s.toMap()).catchError((_) {});
+        for (final s in _parseShifts(snap.value)) {
+          if (s.isOpen && s.id != shift.id && shiftOwnedBy(s, uid: shift.staffUid, username: shift.staffUsername)) {
+            await cashShiftsRef.child(s.id).update({
+              'status': 'CLOSED',
+              'closedAt': shift.openedAt,
+              'staffUid': shift.staffUid,
+            }).catchError((_) {});
           }
         }
       }
@@ -439,9 +469,7 @@ class ReportRepository {
       final v = res.snapshot.value;
       if (!res.committed || v == null) return null;
       final updated = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(v as Map), shiftId);
-      if (activeShiftCache == null || activeShiftCache!.id == shiftId) {
-        activeShiftCache = updated.isOpen ? updated : activeShiftCache;
-      }
+      if (_optimisticOpenShift?.id == shiftId) _optimisticOpenShift = updated.isOpen ? updated : null;
       if (_cachedCashShiftsList != null) {
         _cachedCashShiftsList = _cachedCashShiftsList!.map((s) => s.id == shiftId ? updated : s).toList();
       }
@@ -483,10 +511,19 @@ class ReportRepository {
     );
   }
 
+  /// Chốt ca. Chỉ CHỦ CA được chốt; người có VIEW_ALL_SHIFTS (chủ/quản lý) được đóng bắt buộc ca
+  /// của tài khoản khác (có ghi nhật ký kiểm toán FORCE_CLOSE_SHIFT).
   Future<void> closeCashShift(CashShiftModel shift, int actualCash, String notes) async {
-    activeShiftCache = null;
+    final id = shiftIdentity;
+    final isOwnerOfShift = shiftOwnedBy(shift, uid: id.uid, username: id.username);
+    if (!isOwnerOfShift && !id.canViewAll) {
+      throw Exception('Bạn không thể chốt ca của tài khoản khác');
+    }
+    final forced = !isOwnerOfShift;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (_optimisticOpenShift?.id == shift.id) _optimisticOpenShift = null;
     shift.status = 'CLOSED';
-    shift.closedAt = DateTime.now().millisecondsSinceEpoch;
+    shift.closedAt = nowMs;
     shift.actualCash = actualCash;
     shift.difference = actualCash - shift.expectedCash;
     shift.notes = notes;
@@ -501,21 +538,28 @@ class ReportRepository {
         'actualCash': shift.actualCash,
         'difference': shift.difference,
         'notes': shift.notes,
+        if (forced) 'forceClosedByUid': id.uid,
+        if (forced) 'forceClosedByUsername': id.username,
       }),
       'chốt ca ${shift.shiftCode}',
     );
     logAction(AuditLogModel(
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-      username: shift.staffUsername,
-      userFullName: shift.staffFullName,
-      userRole: 'CASHIER',
-      action: 'CLOSE_SHIFT',
+      timestamp: nowMs,
+      username: forced ? id.username : shift.staffUsername,
+      userFullName: forced ? id.username : shift.staffFullName,
+      userRole: forced ? 'MANAGER' : 'CASHIER',
+      action: forced ? 'FORCE_CLOSE_SHIFT' : 'CLOSE_SHIFT',
       targetType: 'SHIFT',
       targetId: shift.shiftCode,
-      details: 'Chốt ca ${shift.shiftCode}: Doanh số ${shift.totalRevenue}đ, Lệch: ${shift.difference}đ',
+      details: forced
+          ? 'Đóng bắt buộc ca ${shift.shiftCode} của ${shift.staffUsername}: Doanh số ${shift.totalRevenue}đ, Lệch: ${shift.difference}đ'
+          : 'Chốt ca ${shift.shiftCode}: Doanh số ${shift.totalRevenue}đ, Lệch: ${shift.difference}đ',
+      isSuspicious: forced,
     ));
   }
 
+  /// Trừ doanh số khi hủy/xóa hóa đơn đã thanh toán: tiền hoàn ra từ két CỦA TÀI KHOẢN THỰC HIỆN
+  /// (ca đang mở của chính họ); không có ca mở thì bỏ qua như trước đây.
   Future<void> deductCashShiftSale(String paymentMethod, int amount) async {
     final shift = activeShiftCache ?? await getCurrentOpenShift();
     if (shift == null || !shift.isOpen) return;
@@ -756,13 +800,7 @@ class ReportRepository {
               .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
               .toList();
           final deduped = ReportCalculator.deduplicateBills(list);
-          return deduped.where((b) {
-            if (b.shiftId != null && b.shiftId!.isNotEmpty) {
-              return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
-            }
-            final closeT = shift.closedAt ?? 9999999999999;
-            return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
-          }).toList();
+          return deduped.where((b) => billBelongsToShift(b, shift)).toList();
         }
       } catch (_) {
         final startDt = DateTime.fromMillisecondsSinceEpoch(shift.openedAt);
@@ -772,13 +810,7 @@ class ReportRepository {
           startDate: startDt.subtract(const Duration(hours: 1)),
           endDate: endDt.add(const Duration(hours: 1)),
         );
-        return all.where((b) {
-          if (b.shiftId != null && b.shiftId!.isNotEmpty) {
-            return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
-          }
-          final closeT = shift.closedAt ?? 9999999999999;
-          return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
-        }).toList();
+        return all.where((b) => billBelongsToShift(b, shift)).toList();
       }
     } catch (_) {
       return <BillModel>[];

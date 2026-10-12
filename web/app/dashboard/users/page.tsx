@@ -24,7 +24,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { exportUsers } from "@/lib/export";
-import { PERMISSION_CATALOG } from "@/lib/permission-catalog";
+import { PERMISSION_CATALOG, OWNER_GRANT_ONLY_PERMISSIONS } from "@/lib/permission-catalog";
 import {
   ROLE_OWNER,
   ROLE_MANAGER,
@@ -141,6 +141,7 @@ const emptyForm: UserForm = {
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, loading: authLoading, storeCode: activeStoreCode } = useAuth();
+  const canGrantOwnerOnly = currentUser?.isRootOwner === true || normalizeRoleId(currentUser?.roleId || currentUser?.role || "") === ROLE_OWNER;
 
   const {
     stores,
@@ -1274,7 +1275,10 @@ export default function UsersPage() {
                     border: "1px solid var(--border)",
                   }}
                 >
-                  {AVAILABLE_CUSTOM_PERMISSIONS.map((perm) => {
+                  {AVAILABLE_CUSTOM_PERMISSIONS.filter(
+                    // Hủy/xóa hóa đơn, xem/xuất nhật ký thao tác: chỉ Chủ quán được cấp hoặc thu hồi
+                    (perm) => canGrantOwnerOnly || !OWNER_GRANT_ONLY_PERMISSIONS.includes(perm.id)
+                  ).map((perm) => {
                     const checked = form.customPermissions.includes(perm.id);
                     return (
                       <label

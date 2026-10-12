@@ -32,19 +32,19 @@ nhãn và quyền mặc định theo vai trò — được khóa bằng test `we
 | `CHANGE_TABLE` | Đổi bàn / Chuyển khu vực | Bàn & Gọi món | ✓ | ✓ | ✓ |  |  |
 | `MERGE_SPLIT_TABLE` | Ghép bàn & Tách bàn | Bàn & Gọi món | ✓ | ✓ |  |  |  |
 | `SEND_KITCHEN` | Gửi bếp / Pha chế | Bàn & Gọi món | ✓ | ✓ | ✓ | ✓ |  |
-| `CANCEL_KITCHEN_ITEM` | Hủy món đã gửi bếp | Bàn & Gọi món | ✓ | ✓ |  |  |  |
+| `CANCEL_KITCHEN_ITEM` | Hủy món đã gửi bếp | Bàn & Gọi món | ✓ |  |  |  |  |
 | `CREATE_BILL` | Tạo hóa đơn & Thanh toán | Hóa đơn & Thanh toán | ✓ | ✓ | ✓ |  |  |
 | `EDIT_BILL` | Chỉnh sửa hóa đơn | Hóa đơn & Thanh toán | ✓ | ✓ |  |  |  |
 | `APPLY_PROMOTION` | Áp dụng mã Voucher/CTKM | Hóa đơn & Thanh toán | ✓ | ✓ | ✓ |  |  |
 | `MANUAL_DISCOUNT` | Chiết khấu thủ công | Hóa đơn & Thanh toán | ✓ | ✓ |  |  |  |
 | `DISCOUNT_ITEM` | Giảm giá món | Hóa đơn & Thanh toán | ✓ | ✓ |  |  |  |
-| `CANCEL_BILL` | Hủy hóa đơn đã thanh toán | Hóa đơn & Thanh toán | ✓ | ✓ |  |  |  |
+| `CANCEL_BILL` | Hủy hóa đơn đã thanh toán | Hóa đơn & Thanh toán | ✓ |  |  |  |  |
 | `PRINT_BILL` | In hóa đơn | Hóa đơn & Thanh toán | ✓ | ✓ | ✓ |  |  |
 | `REPRINT_BILL` | In lại hóa đơn cũ | Hóa đơn & Thanh toán | ✓ | ✓ |  |  |  |
 | `MANAGE_CASH_SHIFT` | Quản lý ca két tiền | Ca làm việc & Két tiền | ✓ | ✓ | ✓ |  |  |
 | `ADJUST_CASH_SHIFT` | Thu/Chi két tiền mặt | Ca làm việc & Két tiền | ✓ | ✓ |  |  |  |
 | `VIEW_REPORTS` | Xem báo cáo doanh thu | Báo cáo & Thao tác log | ✓ | ✓ |  |  |  |
-| `VIEW_AUDIT_LOGS` | Xem lịch sử kiểm soát | Báo cáo & Thao tác log | ✓ | ✓ |  |  |  |
+| `VIEW_AUDIT_LOGS` | Xem lịch sử kiểm soát | Báo cáo & Thao tác log | ✓ |  |  |  |  |
 | `MANAGE_USERS` | Quản lý tài khoản nhân sự | Quản trị hệ thống & Cài đặt | ✓ |  |  |  |  |
 | `MANAGE_ROLES_PERMISSIONS` | Cấu hình vai trò & phân quyền | Quản trị hệ thống & Cài đặt | ✓ |  |  |  |  |
 | `MANAGE_PROMOTIONS` | Cài đặt khuyến mãi | Quản trị hệ thống & Cài đặt | ✓ | ✓ |  |  |  |
@@ -86,7 +86,7 @@ nhãn và quyền mặc định theo vai trò — được khóa bằng test `we
 | `ADJUST_POINTS` | Chỉnh điểm khách hàng | Khách hàng & Tích điểm | ✓ | ✓ |  |  | mới |
 | `MANAGE_LOYALTY` | Cấu hình tích điểm & hạng | Khách hàng & Tích điểm | ✓ |  |  |  | mới |
 | `EXPORT_REPORTS` | Xuất báo cáo | Báo cáo & Thao tác log | ✓ | ✓ |  |  | mới |
-| `EXPORT_AUDIT_LOGS` | Xuất lịch sử kiểm soát | Báo cáo & Thao tác log | ✓ | ✓ |  |  | mới |
+| `EXPORT_AUDIT_LOGS` | Xuất lịch sử kiểm soát | Báo cáo & Thao tác log | ✓ |  |  |  | mới |
 | `EXPORT_DATA` | Xuất dữ liệu Excel | Quản trị hệ thống & Cài đặt | ✓ | ✓ |  |  | mới |
 | `VIEW_CASH_SHIFTS` | Xem lịch sử ca & két | Ca làm việc & Két tiền | ✓ | ✓ | ✓ |  | mới |
 | `VIEW_ONLINE_ORDERS` | Xem đơn online | Vận hành & Thiết bị | ✓ | ✓ | ✓ |  | mới |
@@ -95,14 +95,19 @@ nhãn và quyền mặc định theo vai trò — được khóa bằng test `we
 | `MANAGE_MANAGER_PIN` | Đặt PIN duyệt quản lý | Quản trị hệ thống & Cài đặt | ✓ | ✓ |  |  | mới |
 | `MANAGE_CHAMCONG_LINK` | Liên kết Chấm Công Trạm | Quản trị hệ thống & Cài đặt | ✓ |  |  |  | mới |
 | `CREATE_SAMPLE_DATA` | Tạo dữ liệu mẫu | Quản trị hệ thống & Cài đặt | ✓ | ✓ |  |  | mới |
+| `VIEW_SHIFT_HANDOVER` | Xem phiếu bàn giao ca | Ca làm việc & Két tiền | ✓ | ✓ |  |  | mới (vòng quy tắc vai trò) |
+| `VIEW_ALL_SHIFTS` | Xem ca/két của tài khoản khác | Ca làm việc & Két tiền | ✓ | ✓ |  |  | mới (vòng quy tắc vai trò) |
+| `VIEW_ALL_BILLS_HISTORY` | Xem lịch sử hóa đơn của mọi tài khoản | Hóa đơn & Thanh toán | ✓ | ✓ |  |  | mới (vòng quy tắc vai trò) |
+| `TOGGLE_ITEM_AVAILABILITY` | Bật/tắt món hết hàng | Thực đơn & Giá bán | ✓ | ✓ | ✓ | ✓ | mới (vòng quy tắc vai trò) |
+| `MANAGE_NOTE_CATALOG` | Quản lý danh mục note & topping | Thực đơn & Giá bán | ✓ | ✓ |  |  | mới (vòng quy tắc vai trò) |
 
-Chủ quán luôn có mọi quyền. Quản lý không có mặc định: `DELETE_MENU`, `MANAGE_USERS`, `MANAGE_ROLES_PERMISSIONS`, `MANAGE_STORE_SETTINGS`,
+Chủ quán luôn có mọi quyền. Quản lý không có mặc định: `CANCEL_BILL`, `CANCEL_KITCHEN_ITEM`, `VIEW_AUDIT_LOGS`, `EXPORT_AUDIT_LOGS` (đã gỡ ở vòng quy tắc vai trò, xem §7), `DELETE_MENU`, `MANAGE_USERS`, `MANAGE_ROLES_PERMISSIONS`, `MANAGE_STORE_SETTINGS`,
 `IMPORT_CATALOG`, `CANCEL_RECEIPT`, `EXPORT_CODES`, `OVERRIDE_MANUAL_DISCOUNT`, `MANAGE_LOYALTY`, `MANAGE_CHAMCONG_LINK`.
 
 ## 3. Quyền mặc định của vai trò gộp
 
-- **Quản lý** = QL1 ∪ QL2 (cả bộ Dart lẫn bộ Web, vốn đã lệch nhau): thực đơn (xem/sửa/giá/quản lý), bàn (đổi/ghép/tách), hủy món đã gửi bếp, hóa đơn
-  (sửa/hủy/in lại), chiết khấu thủ công + giảm giá món, ca két (mở/kết/thu chi), báo cáo + nhật ký, khuyến mãi (CTKM, mã), kho/NCC/nhập-xuất-hủy-kiểm-chuyển-sản xuất,
+- **Quản lý** = QL1 ∪ QL2 (cả bộ Dart lẫn bộ Web, vốn đã lệch nhau) TRỪ các quyền hủy/xóa & nhật ký đã gỡ (§7): thực đơn (xem/sửa/giá/quản lý), bàn (đổi/ghép/tách), hóa đơn
+  (sửa/in lại; KHÔNG hủy), chiết khấu thủ công + giảm giá món, ca két (mở/kết/thu chi), báo cáo + nhật ký, khuyến mãi (CTKM, mã), kho/NCC/nhập-xuất-hủy-kiểm-chuyển-sản xuất,
   giá vốn, công thức, thanh toán công nợ NCC, và các quyền mới (xem bảng). Quản lý cũ mã `ROLE_MANAGER` trên Web trước đây chỉ có bộ QL2 → nay **được thêm** quyền.
 - **Nhân viên** = Thu ngân ∪ Phục vụ: `VIEW_MENU`, `OPEN_TABLE`, `CHANGE_TABLE`, `SEND_KITCHEN`, `CREATE_BILL`, `APPLY_PROMOTION`, `PRINT_BILL`
   + mới: `DELETE_ITEM`, `REDEEM_POINTS`, `VIEW_CUSTOMERS`, `MANAGE_CUSTOMERS`, `VIEW_ONLINE_ORDERS`, `MANAGE_ONLINE_ORDERS`, `VIEW_KITCHEN`, `MANAGE_CASH_SHIFT`, `VIEW_CASH_SHIFTS`.
@@ -129,17 +134,17 @@ Muốn giữ người chỉ gọi món ở mức thấp: gán vai trò **Bếp**
 | Hủy món đã gửi bếp | `CANCEL_KITCHEN_ITEM` (+PIN QL) | QL | `order_cart_screen.dart`, Web tables; functions `managerPinLogic` |
 | Thanh toán, in hóa đơn | `CREATE_BILL`, `PRINT_BILL` | QL, NV | `order_cart_screen.dart`; rules `bills/history` |
 | In lại hóa đơn cũ | `REPRINT_BILL` | QL | `history_screen.dart` |
-| Hủy/hoàn hóa đơn đã thanh toán, xóa lịch sử | `CANCEL_BILL` | QL | `history_screen.dart`, `bill_detail_sheet.dart`; rules xóa bill chỉ Chủ+QL |
+| Hủy/hoàn hóa đơn đã thanh toán, xóa lịch sử | `CANCEL_BILL` | Chủ (QL khi được cấp) | `history_screen.dart`, `bill_detail_sheet.dart`, `order_cart_screen.dart`; Web `orders/page.tsx` + `data-context.tsx`; rules xóa/hủy bill đã chốt: Chủ hoặc có `CANCEL_BILL` |
 | Chiết khấu thủ công / giảm giá món | `MANUAL_DISCOUNT`, `DISCOUNT_ITEM` (+PIN QL) | QL | `order_cart_screen.dart`; Web `LineDiscountDialog` |
 | Áp dụng voucher/CTKM | `APPLY_PROMOTION` | QL, NV | `order_cart_screen.dart` |
 | Đổi điểm tích lũy khi thanh toán | `REDEEM_POINTS` (mới) | QL, NV | `order_cart_screen.dart _showUsePointsDialog` |
 | CRUD khuyến mãi / bật-tắt / mã voucher / hủy mã | `MANAGE_PROMOTIONS`, `CREATE/EDIT/ACTIVATE_CAMPAIGN`, `MANAGE_CODES`, `EXPORT_CODES` | QL (trừ `EXPORT_CODES`) | Flutter routes `/promotions`,`/campaigns`,`/campaign-form`,`/voucher-management`; Web `/dashboard/promotions` |
 | Mở/kết ca két | `MANAGE_CASH_SHIFT` | QL, NV | `cash_shift_dialog.dart` (`_openShift`,`_closeShift`) |
 | Thu/chi két phát sinh | `ADJUST_CASH_SHIFT` | QL | `cash_shift_dialog.dart` (`_addAdjustment`) |
-| Xem lịch sử ca / phiếu bàn giao | `VIEW_CASH_SHIFTS` (mới) | QL, NV | Flutter route `/cash-shifts`; Web `/dashboard/shifts` |
+| Xem lịch sử ca / phiếu bàn giao | `VIEW_SHIFT_HANDOVER` / `VIEW_ALL_SHIFTS` (phiếu bàn giao), `VIEW_CASH_SHIFTS` (mới) | QL (NV chỉ ca của mình) | Flutter route `/cash-shifts`; Web `/dashboard/shifts` |
 | Báo cáo doanh thu, cuối ngày, sản phẩm, KM, khách | `VIEW_REPORTS` | QL | Flutter routes `/dashboard`,`/reports-hub`,`/end-of-day-report`; Web `canAccessRoute` |
 | Xuất báo cáo Excel/PDF/in | `EXPORT_REPORTS` (mới) | QL | Flutter `report_export_service.dart` (+`revenue_tab`,`bills_tab`); Web `lib/export.ts` + `export-guard.ts` |
-| Xem / xuất nhật ký thao tác | `VIEW_AUDIT_LOGS`, `EXPORT_AUDIT_LOGS` (mới) | QL | Flutter route `/audit-logs`; Web `/dashboard/audit` + `export.ts exportAuditLogs` |
+| Xem / xuất nhật ký thao tác | `VIEW_AUDIT_LOGS`, `EXPORT_AUDIT_LOGS` (mới) | Chủ (QL khi được cấp) | Flutter route `/audit-logs`; Web `/dashboard/audit` + `export.ts exportAuditLogs` |
 | Khách hàng CRM: xem | `VIEW_CUSTOMERS` (mới) | QL, NV | Flutter route `/customers`; Web `customers/page.tsx` (kèm điều kiện rules) |
 | Khách hàng: thêm/sửa | `MANAGE_CUSTOMERS` (mới) | QL, NV | rules `customers` (Chủ/QL/NV); mã hành động `CUSTOMER_CREATE` |
 | Chỉnh điểm trực tiếp | `ADJUST_POINTS` (mới) | QL | Web `customers/page.tsx` (`canAdjust`); rules `customers` |
@@ -181,3 +186,29 @@ Muốn giữ người chỉ gọi món ở mức thấp: gán vai trò **Bếp**
 - Người có `customPermissions` chứa `VIEW_REPORTS` nhưng chưa có `EXPORT_REPORTS`/`VIEW_CUSTOMERS` (cho trang khách: `VIEW_REPORTS` vẫn được chấp nhận) sẽ **mất khả năng xuất file** cho tới khi được cấp `EXPORT_REPORTS`.
 - Rules RTDB **không** thay đổi để gác theo mã quyền (rules chỉ biết nhóm vai trò) → kẻ có token có thể bỏ qua kiểm tra giao diện; các quyền nhạy cảm (xóa/hủy bill, điểm, kho) đã được rules giới hạn theo nhóm Chủ/QL/NV.
 - Quản lý **không còn** đặt lại mật khẩu / khóa tài khoản của Quản lý khác (trước đây được) — chống chiếm quyền ngang hàng; Chủ quán vẫn làm được.
+
+## 7. Vòng "quy tắc vai trò" (docs/ROLE_RULES.md) — mã mới và THAY ĐỔI HÀNH VI
+
+**Mã mới** (đã thêm vào cả `app_permissions.dart` và `permission-catalog.ts`, có test parity): `VIEW_SHIFT_HANDOVER`, `VIEW_ALL_SHIFTS`,
+`VIEW_ALL_BILLS_HISTORY`, `TOGGLE_ITEM_AVAILABILITY`, `MANAGE_NOTE_CATALOG` — mặc định xem bảng §2.
+
+**Quản lý mất các quyền mặc định sau (CHỈ Chủ quán cấp lại được qua `customPermissions`):**
+`CANCEL_BILL` (hủy/xóa hóa đơn), `CANCEL_KITCHEN_ITEM` (hủy món đã gửi bếp, đồng thời mất quyền duyệt PIN cho thao tác này),
+`VIEW_AUDIT_LOGS` (xem Lịch sử thao tác / tab Giám sát / banner "thao tác nghi vấn"), `EXPORT_AUDIT_LOGS`.
+Bốn mã này gom trong danh sách "Chủ-cấp-riêng" (`AppPermissions.ownerGrantOnly`, `OWNER_GRANT_ONLY_PERMISSIONS` ở web và functions): Quản lý không tự cấp
+và không cấp cho người khác (UI ẩn/vô hiệu, rules `customPermissions/$i`, Cloud Function `createStaffAccount` lọc).
+
+**Di trú / hành vi cần báo Chủ quán:** tài khoản Quản lý đang tồn tại **giữ nguyên vai trò đã lưu**; quyền mặc định tính **lúc chạy** từ bảng vai trò
+nên Quản lý **mất ngay** các quyền trên ngay khi cập nhật app/web (không cần di trú dữ liệu). Hệ quả: (1) Quản lý không còn thấy tab "Giám sát", mục Audit, banner nghi vấn;
+(2) không hủy/xóa hóa đơn đã thanh toán; (3) không hủy món đã gửi bếp và không duyệt PIN cho việc đó — Nhân viên cần Chủ quán duyệt.
+Muốn giữ cho một Quản lý cụ thể: Chủ vào "Nhân viên và phân quyền" (Web) hoặc "Ma trận phân quyền" (Flutter) tích các quyền trên cho người đó.
+Nếu cửa hàng từng **lưu bản ghi vai trò** `roles/ROLE_MANAGER` (qua màn Danh sách vai trò) có chứa các mã này thì Quản lý vẫn được hưởng ở UI (bản ghi vai trò chỉ cộng) — Chủ cần bỏ chọn ở đó.
+
+**Quản lý thực đơn:** gỡ alias `MENU_MANAGEMENT ⇐ VIEW_MENU` (cả Dart lẫn Web) — trước đây mọi Nhân viên/Bếp có `VIEW_MENU` nên vượt được cổng `MENU_MANAGEMENT`.
+`/menu-management` giờ cần `MENU_MANAGEMENT` hoặc `EDIT_MENU`; Web `/dashboard/products` cần `MENU_MANAGEMENT`; mục "Quản Lý Thực Đơn" trong menu Flutter ẩn với Nhân viên/Bếp.
+
+**Cổng truy cập trang Web:** `app/dashboard/layout.tsx` nay chặn nội dung khi `canAccessRoute` = sai (trước đây chỉ ẩn khỏi Sidebar, gõ thẳng URL vẫn hiện trang).
+
+**Rules RTDB (`database.rules.json`):** xem `docs/ROLE_RULES.md` §6. Lưu ý kỹ thuật: RTDB rules **không duyệt được mảng**, nên "customPermissions chứa mã" được kiểm bằng cách
+dò 40 chỉ số đầu của mảng (`customPermissions/0..39`) — Chủ không nên cấp quá 40 quyền riêng cho một Quản lý (mã nằm sau vị trí 39 sẽ bị rules từ chối, an toàn theo hướng chặn).
+

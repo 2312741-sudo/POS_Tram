@@ -218,7 +218,7 @@ void main() {
         expect(rootOwner.can('ANY_UNKNOWN_FUTURE_PERMISSION'), isTrue); // Sovereign rule
       });
 
-      test('Quản lý 1 (ROLE_MANAGER_1): có quyền chiết khấu, hủy món, kho hàng nhưng không có MANAGE_USERS', () {
+      test('Quản lý 1 (ROLE_MANAGER_1): có quyền chiết khấu, kho hàng nhưng không có MANAGE_USERS, không hủy món đã gửi bếp', () {
         final manager1 = UserModel(
           uid: 'm1_uid',
           username: 'quanly1',
@@ -230,7 +230,8 @@ void main() {
         expect(manager1.can(AppPermissions.viewMenu), isTrue);
         expect(manager1.can(AppPermissions.editMenu), isTrue);
         expect(manager1.can(AppPermissions.manualDiscount), isTrue);
-        expect(manager1.can(AppPermissions.cancelKitchenItem), isTrue);
+        // Quản lý mặc định KHÔNG hủy món đã gửi bếp (Chủ quán cấp riêng qua customPermissions)
+        expect(manager1.can(AppPermissions.cancelKitchenItem), isFalse);
         expect(manager1.can(AppPermissions.viewInventory), isTrue);
         expect(manager1.can(AppPermissions.viewReports), isTrue);
 
@@ -251,7 +252,11 @@ void main() {
           expect(manager.can(AppPermissions.manageCashShift), isTrue, reason: id);
           expect(manager.can(AppPermissions.viewReports), isTrue, reason: id);
           expect(manager.can(AppPermissions.editMenu), isTrue, reason: id); // từng chỉ có ở QL1
-          expect(manager.can(AppPermissions.cancelKitchenItem), isTrue, reason: id);
+          // Quản lý mặc định KHÔNG hủy/xóa đơn, KHÔNG xem nhật ký thao tác
+          expect(manager.can(AppPermissions.cancelKitchenItem), isFalse, reason: id);
+          expect(manager.can(AppPermissions.cancelBill), isFalse, reason: id);
+          expect(manager.can(AppPermissions.viewAuditLogs), isFalse, reason: id);
+          expect(manager.can(AppPermissions.exportAuditLogs), isFalse, reason: id);
           expect(manager.can(AppPermissions.copyMenu), isTrue, reason: id);
           expect(manager.can(AppPermissions.manageUsers), isFalse, reason: id);
           expect(manager.can(AppPermissions.manageLoyalty), isFalse, reason: id); // chỉ Chủ quán

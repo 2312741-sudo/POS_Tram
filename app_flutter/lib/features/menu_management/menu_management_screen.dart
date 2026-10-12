@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
@@ -15,7 +16,10 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'attachment_picker.dart';
 import 'copy_menu_dialog.dart';
+import 'note_catalog_access.dart';
+import 'note_catalog_screen.dart';
 
 class MenuManagementScreen extends StatefulWidget {
   const MenuManagementScreen({super.key});
@@ -38,6 +42,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
   StreamSubscription<List<ProductModel>>? _prodSub;
   StreamSubscription<List<CategoryModel>>? _catSub;
+  StreamSubscription<ItemCatalog>? _catalogSub;
+  ItemCatalog _catalog = const ItemCatalog();
   StreamSubscription<List<StoreInfoModel>>? _storesSub;
 
   @override
@@ -52,6 +58,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   void dispose() {
     _prodSub?.cancel();
     _catSub?.cancel();
+    _catalogSub?.cancel();
     _storesSub?.cancel();
     super.dispose();
   }
@@ -76,6 +83,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     setState(() => _loading = true);
     _prodSub?.cancel();
     _catSub?.cancel();
+    _catalogSub?.cancel();
+    _catalogSub = _fb.itemCatalogStream(storeCode: storeCode).listen((c) {
+      if (mounted) setState(() => _catalog = c);
+    });
 
     _prodSub = _fb.productsStream(storeCode: storeCode).listen((p) {
       if (mounted) {
@@ -121,7 +132,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     String selectedCat = existing?.category ?? (_categories.isNotEmpty ? _categories.first.name : '');
     String? base64Image = existing?.imageBase64;
     bool isTopping = existing?.isTopping ?? false;
-    
+    final canCatalog = canManageNoteCatalog(_auth);
+    List<String>? noteIds = existing?.noteGroupIds; // null = kế thừa nhóm món
+    List<String>? toppingIds = existing?.toppingGroupIds;
+
     showDialog(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -223,6 +237,38 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   activeColor: context.tc.primary,
                   onChanged: (val) => setSt(() => isTopping = val ?? false),
                 ),
+                if (canCatalog && !isTopping) ...[
+                  Builder(builder: (_) {
+                    CategoryModel? cat;
+                    for (final c in _categories) {
+                      if (c.name == selectedCat) cat = c;
+                    }
+                    String names(List<String>? ids, Map<String, String> byId) {
+                      final l = (ids ?? const <String>[]).map((i) => byId[i]).whereType<String>().toList();
+                      return l.isEmpty ? 'không có' : l.join(', ');
+                    }
+                    final noteById = {for (final g in _catalog.noteGroups) g.id: g.name};
+                    final topById = {for (final g in _catalog.toppingGroups) g.id: g.name};
+                    return Column(children: [
+                      AttachmentPicker(
+                        title: 'Danh mục note áp dụng',
+                        icon: Icons.sticky_note_2_outlined,
+                        options: [for (final g in _catalog.noteGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
+                        value: noteIds,
+                        inheritedLabel: names(cat?.noteGroupIds, noteById),
+                        onChanged: (v) => setSt(() => noteIds = v),
+                      ),
+                      AttachmentPicker(
+                        title: 'Nhóm topping áp dụng',
+                        icon: Icons.add_circle_outline,
+                        options: [for (final g in _catalog.toppingGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
+                        value: toppingIds,
+                        inheritedLabel: names(cat?.toppingGroupIds, topById),
+                        onChanged: (v) => setSt(() => toppingIds = v),
+                      ),
+                    ]);
+                  }),
+                ],
               ],
             ),
           ),
@@ -252,6 +298,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   imageResourceName: base64Image == null ? existing?.imageResourceName : null,
                   isAvailable: existing?.isAvailable ?? true,
                   isTopping: isTopping,
+                  // Chỉ người có quyền quản lý danh mục mới đổi phần gắn note/topping
+                  noteGroupIds: canCatalog ? noteIds : null,
+                  toppingGroupIds: canCatalog ? toppingIds : null,
+                  clearNoteGroupIds: canCatalog && noteIds == null,
+                  clearToppingGroupIds: canCatalog && toppingIds == null,
                 );
                 await _fb.saveProduct(product, storeCode: _selectedStoreCode);
                 await _fb.logAction(AuditLogModel(
@@ -274,21 +325,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     );
   }
 
+  void _openNoteCatalog() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => NoteCatalogScreen(storeCode: _selectedStoreCode)));
+  }
+
   Future<void> _toggleProductAvailability(ProductModel product) async {
-    final updated = ProductModel(
-      id: product.id,
-      name: product.name,
-      code: product.code,
-      price: product.price,
-      unit: product.unit,
-      category: product.category,
-      imageBase64: product.imageBase64,
-      imageResourceName: product.imageResourceName,
-      isAvailable: !product.isAvailable,
-      sizes: product.sizes,
-      allowedToppings: product.allowedToppings,
-      hasIceSugarOptions: product.hasIceSugarOptions,
-    );
+    final updated = product.copyWith(isAvailable: !product.isAvailable); // giữ nguyên mọi trường (topping, giá vốn, gắn note...)
     await _fb.saveProduct(updated, storeCode: _selectedStoreCode);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -395,6 +437,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             onPressed: () => context.push('/category-management', extra: _selectedStoreCode),
             tooltip: 'Quản lý danh mục',
           ),
+          if (canManageNoteCatalog(_auth))
+            IconButton(
+              icon: const Icon(Icons.sticky_note_2_outlined, color: Colors.white),
+              tooltip: 'Danh mục note & topping',
+              onPressed: _openNoteCatalog,
+            ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (val) {
@@ -429,6 +477,19 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       ),
       body: Column(
         children: [
+          if (_catalog.isLegacy && canManageNoteCatalog(_auth))
+            InkWell(
+              onTap: _openNoteCatalog,
+              child: Container(
+                width: double.infinity,
+                color: Colors.amber.shade100,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  'Chưa cấu hình danh mục note/topping — bấm để thiết lập',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.brown.shade900),
+                ),
+              ),
+            ),
           // Store Selector Bar
           Container(
             color: context.tc.cardElevated,

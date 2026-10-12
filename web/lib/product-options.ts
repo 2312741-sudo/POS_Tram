@@ -6,6 +6,7 @@
  */
 import type { RawOrderLine } from "./order-math";
 import { productIdValue, type OrderActor } from "./web-order";
+import { isLegacyCatalog, noteChips, resolveItemOptions, type ItemCatalog, type ToppingGroup } from "./item-options";
 
 export const SUGAR_OPTIONS = ["100% đường", "70% đường", "50% đường", "30% đường", "Không đường"];
 export const ICE_OPTIONS = ["100% đá", "70% đá", "50% đá", "Không đá", "Uống nóng"];
@@ -23,11 +24,16 @@ export interface OptionProduct {
   sizes?: Record<string, number>;
   allowedToppings?: string[];
   hasIceSugarOptions?: boolean | null;
+  /** Gắn danh mục note/topping (xem item-options.ts) */
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 export interface OptionCategory {
   name: string;
   allowedToppingIds?: string[];
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 export interface ToppingOption {
@@ -44,6 +50,12 @@ export interface ProductOptions {
   sizes: SizeOption[];
   toppings: ToppingOption[];
   iceSugar: boolean;
+  /** Chi nhánh đã cấu hình danh mục note/topping → chỉ hiện nhóm được gắn */
+  catalogMode: boolean;
+  /** Nhóm topping được gắn (chỉ khi catalogMode) — để hiển thị theo nhóm / luật chọn một, tối đa */
+  toppingGroups: ToppingGroup[];
+  /** Câu note nhanh từ các nhóm note được gắn (chỉ khi catalogMode) */
+  noteChips: string[];
   /** Món có bất kỳ tùy chọn nào cần hỏi */
   hasAny: boolean;
 }
@@ -73,8 +85,13 @@ function isDrinkCategory(category: string | undefined): boolean {
   return ["trà", "tea", "cà phê", "cafe", "coffee", "nước", "uống", "sinh tố", "đá xay", "sữa", "matcha"].some((k) => c.includes(k));
 }
 
-export function getProductOptions(product: OptionProduct, categories: OptionCategory[], allProducts: OptionProduct[]): ProductOptions {
-  if (product.isTopping) return { sizes: [], toppings: [], iceSugar: false, hasAny: false };
+export function getProductOptions(
+  product: OptionProduct,
+  categories: OptionCategory[],
+  allProducts: OptionProduct[],
+  catalog?: ItemCatalog
+): ProductOptions {
+  if (product.isTopping) return { sizes: [], toppings: [], iceSugar: false, catalogMode: false, toppingGroups: [], noteChips: [], hasAny: false };
 
   // --- size
   let sizeMap: Record<string, number> = {};
@@ -106,8 +123,19 @@ export function getProductOptions(product: OptionProduct, categories: OptionCate
   }
   // Chỉ hỏi topping với món đồ uống/có cấu hình topping — món ăn khác không bị hỏi topping mặc định
   const wantsToppings = isDrinkCategory(product.category) || isDefaultDrink(product.category) || !!cat?.allowedToppingIds?.length || !!product.allowedToppings?.length || sizes.length > 0;
-  const uniq: ToppingOption[] = [];
+  let uniq: ToppingOption[] = [];
   for (const t of wantsToppings ? toppings : []) if (!uniq.some((x) => lc(x.name) === lc(t.name))) uniq.push(t);
+
+  // Đã cấu hình danh mục note/topping: chỉ hiện nhóm được gắn cho món / nhóm món (mặc định không có gì)
+  const resolved = catalog && !isLegacyCatalog(catalog) ? resolveItemOptions(product, cat, catalog) : null;
+  let toppingGroups: ToppingGroup[] = [];
+  let chips: string[] = [];
+  if (resolved) {
+    toppingGroups = resolved.toppingGroups;
+    chips = noteChips(resolved);
+    uniq = [];
+    for (const g of toppingGroups) for (const t of g.items) if (!uniq.some((x) => lc(x.name) === lc(t.name))) uniq.push({ name: t.name, price: t.price });
+  }
 
   const iceSugar =
     product.hasIceSugarOptions === true ||
@@ -115,7 +143,7 @@ export function getProductOptions(product: OptionProduct, categories: OptionCate
     sizes.length > 0 ||
     isDrinkCategory(product.category);
 
-  return { sizes, toppings: uniq, iceSugar, hasAny: sizes.length > 0 || uniq.length > 0 || iceSugar };
+  return { sizes, toppings: uniq, iceSugar, catalogMode: !!resolved, toppingGroups, noteChips: chips, hasAny: sizes.length > 0 || uniq.length > 0 || iceSugar || chips.length > 0 };
 }
 
 export interface OptionSelection {

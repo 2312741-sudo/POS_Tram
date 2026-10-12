@@ -16,6 +16,8 @@
  */
 
 import { normalizeRoleId, ROLE_MANAGER, ROLE_OWNER } from "./roles";
+import { SOLD_OUT_FIELDS } from "./product-availability";
+import { NO_GROUPS } from "./item-options";
 
 export type RawNode = Record<string, unknown>;
 export type ConflictPolicy = "skip" | "overwrite" | "duplicate";
@@ -24,6 +26,9 @@ export interface MenuSnapshot {
   products: Record<string, unknown>;
   categories: Record<string, unknown>;
   notes: Record<string, unknown>;
+  /** Danh mục note & topping (note_groups / topping_groups) — thiếu = không có */
+  noteGroups?: Record<string, unknown>;
+  toppingGroups?: Record<string, unknown>;
 }
 
 export interface CopyOptions {
@@ -32,6 +37,8 @@ export interface CopyOptions {
   /** size / topping / đường-đá */
   copyOptions: boolean;
   copyNotes: boolean;
+  /** Sao chép danh mục note/topping và phần gắn vào nhóm món / món (đổi lại id nhóm ở đích) */
+  copyCatalog: boolean;
   /** imageBase64 / imageResourceName (URL hoặc tên ảnh) */
   copyImages: boolean;
   conflict: ConflictPolicy;
@@ -45,6 +52,7 @@ export const DEFAULT_COPY_OPTIONS: CopyOptions = {
   copyCategories: true,
   copyOptions: true,
   copyNotes: true,
+  copyCatalog: true,
   copyImages: true,
   conflict: "skip",
 };
@@ -81,11 +89,13 @@ export interface CopyPlan {
   productOps: ProductOp[];
   categoryOps: CategoryOp[];
   notesToAdd: number;
+  /** Số nhóm note/topping được thêm ở đích */
+  groupsToAdd: number;
   /** Đường dẫn ghi, tương đối theo stores/{đích} */
   updates: Record<string, unknown>;
   /** id nguồn → id đích (nối công thức/kho) */
   idMap: Record<string, number>;
-  counts: { create: number; overwrite: number; skip: number; duplicate: number; categories: number; notes: number };
+  counts: { create: number; overwrite: number; skip: number; duplicate: number; categories: number; notes: number; groups: number };
 }
 
 const IMAGE_FIELDS = ["imageBase64", "imageResourceName", "imageUrl", "image"];
@@ -228,6 +238,59 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
   }
 
   const updates: Record<string, unknown> = {};
+
+  // ---- Danh mục note & topping: gộp theo tên (không ghi đè nhóm có sẵn), nhóm mới giữ id nguồn nếu còn trống
+  let groupsToAdd = 0;
+  const planGroups = (node: string, src: Record<string, unknown>, tgt: Record<string, unknown>): Map<string, string> => {
+    const map = new Map<string, string>();
+    if (!opt.copyCatalog) return map;
+    const used = new Set(Object.keys(tgt));
+    const byName = new Map<string, string>();
+    for (const [k, v] of Object.entries(tgt)) {
+      const n = normalizeName(isObj(v) && v.name != null ? v.name : k);
+      if (!byName.has(n)) byName.set(n, k);
+    }
+    for (const k of Object.keys(src).sort()) {
+      const v = src[k];
+      if (!isObj(v)) continue;
+      const norm = normalizeName(v.name != null ? v.name : k);
+      const hit = byName.get(norm);
+      if (hit) {
+        map.set(k, hit);
+        continue;
+      }
+      let id = sanitizeKey(k) || "group";
+      let n = 1;
+      while (used.has(id)) {
+        n++;
+        id = `${sanitizeKey(k)}_${n}`;
+      }
+      used.add(id);
+      byName.set(norm, id);
+      map.set(k, id);
+      updates[`${node}/${id}`] = v;
+      groupsToAdd++;
+    }
+    return map;
+  };
+  const noteGroupMap = planGroups("note_groups", toRecord(input.source.noteGroups), toRecord(input.target.noteGroups));
+  const toppingGroupMap = planGroups("topping_groups", toRecord(input.source.toppingGroups), toRecord(input.target.toppingGroups));
+
+  /** Đổi id nhóm nguồn → đích; undefined = không có trường. Id nguồn không còn = bỏ; hết sạch → "không có". */
+  const remapGroupIds = (raw: unknown, map: Map<string, string>): string[] | undefined => {
+    if (raw == null || !opt.copyCatalog) return undefined;
+    const ids = Array.isArray(raw) ? raw.map(String) : isObj(raw) ? Object.values(raw).map(String) : [];
+    if (ids.length === 0) return undefined;
+    const out: string[] = [];
+    for (const i of ids) {
+      const m = i === NO_GROUPS ? undefined : map.get(i);
+      if (m && !out.includes(m)) out.push(m);
+    }
+    return out.length ? out : [NO_GROUPS];
+  };
+  const tgtCatKeyByNorm = new Map<string, string>();
+  for (const [k, node] of Object.entries(tgtCats)) tgtCatKeyByNorm.set(normalizeName(categoryName(node, k)), k);
+
   const idMap: Record<string, number> = {};
   const productOps: ProductOp[] = [];
   const categoryOps: CategoryOp[] = [];
@@ -239,7 +302,19 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
     const norm = normalizeName(srcCatName);
     const existing = tgtCatByNorm.get(norm);
     if (existing) {
-      if (!plannedCats.has(norm) && !categoryOps.some((c) => normalizeName(c.name) === norm)) categoryOps.push({ name: existing, action: "exists" });
+      if (!plannedCats.has(norm) && !categoryOps.some((c) => normalizeName(c.name) === norm)) {
+        categoryOps.push({ name: existing, action: "exists" });
+        // Nhóm món có sẵn ở đích: chỉ bổ sung phần gắn note/topping nếu ở đích chưa có
+        const tKey = tgtCatKeyByNorm.get(norm);
+        const tNode = tKey != null ? tgtCats[tKey] : null;
+        const sNode = srcCatNodeByNorm.get(norm)?.node;
+        if (tKey != null && isObj(tNode) && isObj(sNode)) {
+          const n = remapGroupIds(sNode.noteGroupIds, noteGroupMap);
+          const t = remapGroupIds(sNode.toppingGroupIds, toppingGroupMap);
+          if (n && tNode.noteGroupIds == null) updates[`categories/${sanitizeKey(tKey)}/noteGroupIds`] = n;
+          if (t && tNode.toppingGroupIds == null) updates[`categories/${sanitizeKey(tKey)}/toppingGroupIds`] = t;
+        }
+      }
       return existing;
     }
     if (!opt.copyCategories) return srcCatName;
@@ -247,6 +322,10 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
     const name = srcNode?.name || srcCatName;
     const payload: RawNode = { name };
     if (srcNode && isObj(srcNode.node) && srcNode.node.allowedToppingIds != null) payload.allowedToppingIds = srcNode.node.allowedToppingIds;
+    if (srcNode && isObj(srcNode.node)) {
+      payload.noteGroupIds = remapGroupIds(srcNode.node.noteGroupIds, noteGroupMap);
+      payload.toppingGroupIds = remapGroupIds(srcNode.node.toppingGroupIds, toppingGroupMap);
+    }
     updates[`categories/${sanitizeKey(name)}`] = cleanNode(payload);
     plannedCats.add(norm);
     tgtCatByNorm.set(norm, name);
@@ -268,6 +347,15 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
     out.id = targetId;
     out.name = name;
     out.category = category;
+    // Phần gắn note/topping: đổi sang id nhóm ở đích (không sao chép danh mục thì bỏ hẳn, vì id vô nghĩa ở đích)
+    for (const f of ["noteGroupIds", "toppingGroupIds"] as const) {
+      const mapped = remapGroupIds(node[f], f === "noteGroupIds" ? noteGroupMap : toppingGroupMap);
+      if (mapped) out[f] = mapped;
+      else delete out[f];
+    }
+    // Món sao chép luôn ở trạng thái còn bán: bỏ trạng thái "báo hết" của chi nhánh nguồn.
+    out.isAvailable = true;
+    for (const f of SOLD_OUT_FIELDS) delete out[f];
     void key;
     return cleanNode(out);
   };
@@ -304,6 +392,8 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
       const payload = buildPayload(key, node, isObj(tNode) && tNode.name ? String(tNode.name) : name, cat, tId);
       // Ghi từng trường: giữ nguyên các trường đích có mà nguồn không có (vd. tồn nội bộ)
       for (const [f, v] of Object.entries(payload)) updates[`products/${existingKey}/${f}`] = v;
+      // Xóa dấu vết "báo hết" còn sót ở món đích (null = xóa trường trong update đa đường dẫn).
+      for (const f of SOLD_OUT_FIELDS) updates[`products/${existingKey}/${f}`] = null;
       if (sourceId != null) idMap[String(sourceId)] = tId;
       productOps.push({ ...base, action: "overwrite", targetKey: existingKey, targetId: tId });
       continue;
@@ -375,6 +465,7 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
     productOps,
     categoryOps,
     notesToAdd,
+    groupsToAdd,
     updates,
     idMap,
     counts: {
@@ -384,6 +475,7 @@ export function buildCopyPlan(input: BuildPlanInput): CopyPlan {
       duplicate: count("duplicate"),
       categories: categoryOps.filter((c) => c.action === "create").length,
       notes: notesToAdd,
+      groups: groupsToAdd,
     },
   };
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth, canAccessRoute } from "@/lib/auth";
+import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isOwnerRoleId, normalizeRoleId, ROLE_MANAGER, ROLE_KITCHEN, MANAGER_ROLE_LABEL, STAFF_ROLE_LABEL, KITCHEN_ROLE_LABEL } from "@/lib/roles";
 import {
   LayoutDashboard,
@@ -25,6 +26,7 @@ import {
   BadgePercent,
   ListChecks,
   History,
+  StickyNote,
 } from "lucide-react";
 
 const navItems = [
@@ -38,6 +40,7 @@ const navItems = [
   { href: "/dashboard/orders", label: "Giao dịch / Hóa đơn", icon: ShoppingBag },
   { href: "/dashboard/revenue", label: "Báo cáo Doanh thu", icon: TrendingUp },
   { href: "/dashboard/products", label: "Thực đơn & Sản phẩm", icon: Package },
+  { href: "/dashboard/note-catalog", label: "Danh mục note & topping", icon: StickyNote },
   { href: "/dashboard/inventory", label: "Kho hàng & NVL", icon: Warehouse },
   { href: "/dashboard/promotions", label: "Khuyến mãi & Voucher", icon: Tag },
   { href: "/dashboard/reports/promotions", label: "Báo cáo khuyến mãi", icon: BadgePercent },
@@ -91,7 +94,9 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   };
 
   // Lọc danh mục hiển thị theo quyền người dùng (RBAC)
-  const visibleNavItems = navItems.filter((item) => canAccessRoute(user, item.href));
+  const visibleNavItems = navItems.filter(
+    (item) => canAccessRoute(user, item.href) && (item.href !== "/dashboard/note-catalog" || canManageNoteCatalog(user))
+  );
 
   return (
     <>

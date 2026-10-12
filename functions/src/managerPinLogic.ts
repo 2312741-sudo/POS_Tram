@@ -56,8 +56,9 @@ export function verifyPinHash(pin: string, stored: StoredPin | null | undefined)
 
 /** Quyền theo vai trò — chỉ các quyền liên quan tới duyệt PIN (khớp web/lib/auth.tsx) */
 const ROLE_APPROVAL_PERMS: Record<string, ApprovableAction[]> = {
-  // Quản lý (đã gộp QL1 + QL2): hợp của hai bộ quyền cũ
-  ROLE_MANAGER: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
+  // Quản lý (đã gộp QL1 + QL2): mặc định chỉ duyệt giảm giá món. CANCEL_KITCHEN_ITEM (hủy món đã gửi bếp)
+  // chỉ Chủ quán, hoặc Quản lý được Chủ cấp riêng qua customPermissions.
+  ROLE_MANAGER: ["DISCOUNT_ITEM"],
 };
 
 /** Hồ sơ có thể làm người duyệt (chủ quán / quản lý đang hoạt động) */

@@ -267,7 +267,8 @@ describe("POS Trạm - Security Rules: hóa đơn, bàn, bếp", () => {
     await assertSucceeds(cashier.ref("stores/TRAM01/bills/open_bill").update({ status: "PAID", closedAt: Date.now(), paymentMethod: "CASH" }));
     await assertSucceeds(cashier.ref("stores/TRAM01/history/open_bill").set({ id: "open_bill", status: "PAID", totalAmount: 50000 }));
     await assertFails(cashier.ref("stores/TRAM01/bills/paid_bill").remove());
-    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/bills/paid_bill").remove());
+    // Quản lý MẶC ĐỊNH không được xóa hóa đơn đã thanh toán (cần Chủ cấp CANCEL_BILL — xem nhóm RR)
+    await assertFails(db("manager_uid").ref("stores/TRAM01/bills/paid_bill").remove());
     await assertSucceeds(db("owner_uid").ref("stores/TRAM01/history/paid_bill").remove());
   });
 
@@ -586,11 +587,11 @@ describe("POS Trạm - Security Rules: điểm khách hàng & trừ kho thử l�
 describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (không lan quyền đọc từ stores/{s})", () => {
   // Các nút mọi thành viên quán (kể cả Phục vụ / Bếp) cần đọc để vận hành POS
   const memberReadable = [
-    "storeInfo", "users", "products", "categories", "product_notes", "zones", "tables", "bills", "history",
+    "storeInfo", "users", "products", "categories", "product_notes", "note_groups", "topping_groups", "zones", "tables", "bills", "history",
     "kitchen_orders", "online_orders", "cash_shifts", "promotions", "campaigns", "vouchers", "voucher_lookup",
     "campaign_counters", "customer_campaign_counters", "inventory", "catalog_items", "stock_balances",
     "stock_events", "bill_stock_applied", "bill_stock_lines", "stock_retry_queue", "counters",
-    "inventory_documents", "supplier_ledger", "suppliers", "receipts", "loyalty_applied", "audit_logs",
+    "inventory_documents", "supplier_ledger", "suppliers", "receipts", "loyalty_applied",
     "payment_events", "recipes", "migration_log", "roles",
   ];
 
@@ -602,6 +603,10 @@ describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (khô
     }
     await assertSucceeds(db("waiter_uid").ref("stores/TRAM01/bills/open_bill").get());
     await assertSucceeds(db("waiter_uid").ref("stores/TRAM01/users/waiter_uid").get());
+    // Nhật ký thao tác (audit_logs) KHÔNG phải nút mọi thành viên đọc được — xem nhóm AL
+    for (const uid of ["waiter_uid", "kitchen_uid"]) {
+      await assertFails(db(uid).ref("stores/TRAM01/audit_logs").get());
+    }
   });
 
   it("RC2. Phục vụ và Bếp KHÔNG đọc được customers (cả danh sách lẫn từng khách)", async () => {
@@ -654,7 +659,7 @@ describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (khô
       expect(typeof store[child][".read"], `stores/$storeCode/${child} thiếu .read`).toBe("string");
     }
     // Danh sách test RC1 + customers + point_history (chỉ Thu ngân trở lên đọc) phải phủ hết nút con (thêm nút mới → cập nhật test)
-    expect([...memberReadable, "customers", "point_history"].sort()).toEqual(children.sort());
+    expect([...memberReadable, "customers", "point_history", "audit_logs"].sort()).toEqual(children.sort());
     expect(children).not.toContain("login_attempts");
   });
 
@@ -835,7 +840,7 @@ describe("POS Trạm - Security Rules: gộp vai trò (ROLE_MANAGER / ROLE_STAFF
       await assertSucceeds(db(uid).ref("stores/TRAM01/bills/open_chk").update({ status: "PAID", closedAt: Date.now(), paymentMethod: "CASH" }));
       await assertSucceeds(db(uid).ref("stores/TRAM01/customers").get());
       await assertSucceeds(db(uid).ref("stores/TRAM01/customers/c_mr1").set({ name: "Khách", phone: "0911111111" }));
-      await assertSucceeds(db(uid).ref(`stores/TRAM01/cash_shifts/s_${uid}`).set({ id: `s_${uid}`, status: "OPEN" }));
+      await assertSucceeds(db(uid).ref(`stores/TRAM01/cash_shifts/s_${uid}`).set({ id: `s_${uid}`, status: "OPEN", staffUid: uid }));
       await env().withSecurityRulesDisabled(async (context) => {
         await context.database().ref("stores/TRAM01/bills/open_chk").update({ status: "OPEN" });
       });
@@ -858,12 +863,14 @@ describe("POS Trạm - Security Rules: gộp vai trò (ROLE_MANAGER / ROLE_STAFF
     await assertFails(kitchen.ref("stores/TRAM01/cash_shifts/s_k").set({ id: "s_k", status: "OPEN" }));
   });
 
-  it("MR4. Mọi mã Quản lý (ROLE_MANAGER, manager_1, ROLE_MANAGER_2) ghi được thực đơn và xóa hóa đơn", async () => {
+  it("MR4. Mọi mã Quản lý (ROLE_MANAGER, manager_1, ROLE_MANAGER_2) ghi được thực đơn; xóa hóa đơn đã thanh toán thì cần quyền CANCEL_BILL riêng", async () => {
     for (const uid of Object.keys(managerIds)) {
       await assertSucceeds(db(uid).ref(`stores/TRAM01/products/p_${uid}`).set({ name: "Trà", price: 20000 }));
-      await assertSucceeds(db(uid).ref("stores/TRAM01/bills/paid_chk").remove());
+      await assertFails(db(uid).ref("stores/TRAM01/bills/paid_chk").remove());
+      // Hóa đơn chưa chốt (mở) thì Quản lý vẫn xóa được như cũ
+      await assertSucceeds(db(uid).ref("stores/TRAM01/bills/open_chk").remove());
       await env().withSecurityRulesDisabled(async (context) => {
-        await context.database().ref("stores/TRAM01/bills/paid_chk").set({ id: "paid_chk", status: "PAID", finalAmount: 10000, subTotal: 10000 });
+        await context.database().ref("stores/TRAM01/bills/open_chk").set({ id: "open_chk", status: "OPEN", finalAmount: 10000, subTotal: 10000 });
       });
     }
   });
@@ -876,5 +883,283 @@ describe("POS Trạm - Security Rules: gộp vai trò (ROLE_MANAGER / ROLE_STAFF
     await assertSucceeds(cashier.ref("stores/TRAM01/customers/CLV1/lastVisitAt").set(1791741842208));
     await assertFails(cashier.ref("stores/TRAM01/customers/CLV1/diem_hien_tai").set(9999));
     await assertFails(cashier.ref("stores/TRAM01/customers/CLV1/totalPoints").set(9999));
+  });
+});
+
+describe("POS Trạm - Security Rules: báo hết món (isAvailable / soldOut*)", () => {
+  const P = "stores/TRAM01/products/Tra dao";
+  beforeEach(async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref(P).set({ id: 9, name: "Trà đào", price: 30000, category: "Trà", isAvailable: true });
+    });
+  });
+
+  it("SO1. Bếp bật/tắt isAvailable và ghi soldOutAt/By/Until bằng một lệnh update", async () => {
+    const k = db("kitchen_uid");
+    await assertSucceeds(k.ref(P).update({ isAvailable: false, soldOutAt: 1791741842208, soldOutBy: "bep", soldOutUntil: 1791800000000 }));
+    await assertSucceeds(k.ref(P + "/isAvailable").set(true));
+    await assertSucceeds(k.ref(P).update({ soldOutAt: null, soldOutBy: null, soldOutUntil: null }));
+  });
+
+  it("SO2. Bếp không đổi được giá, tên, không xóa món, không tạo món mới", async () => {
+    const k = db("kitchen_uid");
+    await assertFails(k.ref(P + "/price").set(1));
+    await assertFails(k.ref(P + "/name").set("Hack"));
+    await assertFails(k.ref(P).update({ isAvailable: false, price: 1 }));
+    await assertFails(k.ref(P).remove());
+    await assertFails(k.ref(P).set({ name: "Trà đào", price: 30000, isAvailable: false }));
+    await assertFails(k.ref("stores/TRAM01/products/Mon moi/isAvailable").set(false));
+  });
+
+  it("SO3. Nhân viên (cashier, ROLE_STAFF) và quản lý bật/tắt được; chủ/quản lý vẫn sửa giá", async () => {
+    await assertSucceeds(db("cashier_uid").ref(P + "/isAvailable").set(false));
+    await assertSucceeds(db("manager_uid").ref(P + "/isAvailable").set(true));
+    await assertSucceeds(db("manager_uid").ref(P + "/price").set(35000));
+    await assertSucceeds(db("owner_uid").ref(P + "/price").set(36000));
+    await assertFails(db("cashier_uid").ref(P + "/price").set(1));
+  });
+
+  it("SO4. Kiểm tra kiểu dữ liệu", async () => {
+    const k = db("kitchen_uid");
+    await assertFails(k.ref(P + "/isAvailable").set("false"));
+    await assertFails(k.ref(P + "/soldOutAt").set("hôm nay"));
+    await assertFails(k.ref(P + "/soldOutUntil").set("mai"));
+    await assertFails(k.ref(P + "/soldOutBy").set(123));
+    await assertFails(k.ref(P + "/soldOutBy").set("x".repeat(65)));
+    await assertSucceeds(k.ref(P + "/soldOutBy").set("x".repeat(64)));
+  });
+
+  it("SO5. Người ngoài quán, quán khác và tài khoản bị khóa không được ghi", async () => {
+    await assertFails(db("unindexed_uid").ref(P + "/isAvailable").set(false));
+    await assertFails(db("storeB_uid").ref(P + "/isAvailable").set(false));
+    await assertFails(db("inactive_uid").ref(P + "/isAvailable").set(false));
+    await assertFails(db("noindex_uid").ref(P + "/isAvailable").set(false));
+  });
+});
+
+describe("POS Trạm - Security Rules: ca/két tiền độc lập theo tài khoản (cash_shifts)", () => {
+  const shiftOf = (uid: string, extra: Record<string, unknown> = {}) => ({
+    id: `sh_${uid}`, status: "OPEN", staffUid: uid, staffUsername: uid, openedAt: 1000, initialCash: 100000, totalCashSales: 0, ...extra,
+  });
+  const P = (id: string) => `stores/TRAM01/cash_shifts/${id}`;
+
+  beforeEach(async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      const users: Record<string, string> = {
+        sh_staff_a: "ROLE_STAFF", sh_staff_b: "ROLE_CASHIER", sh_mgr: "ROLE_MANAGER", sh_owner: "ROLE_OWNER", sh_kitchen: "ROLE_KITCHEN",
+      };
+      for (const [uid, roleId] of Object.entries(users)) {
+        await d.ref(`userIndex/${uid}/TRAM01`).set(true);
+        await d.ref(`stores/TRAM01/users/${uid}`).set({ username: uid, fullName: uid, roleId, isActive: true });
+      }
+      await d.ref(P("sh_sh_staff_a")).set(shiftOf("sh_staff_a"));
+      await d.ref(P("sh_closed_a")).set(shiftOf("sh_staff_a", { id: "sh_closed_a", status: "CLOSED", closedAt: 2000 }));
+      // Ca cũ (chưa có staffUid) của sh_staff_a, nhận diện theo username
+      await d.ref(P("sh_legacy_a")).set({ id: "sh_legacy_a", status: "OPEN", staffUsername: "sh_staff_a", openedAt: 500 });
+    });
+  });
+
+  it("SH1. Nhân viên tạo/cập nhật ca CỦA MÌNH được; cộng dồn doanh số (transaction) được", async () => {
+    const a = db("sh_staff_a");
+    await assertSucceeds(a.ref(P("sh_new_a")).set(shiftOf("sh_staff_a", { id: "sh_new_a" })));
+    await assertSucceeds(a.ref(P("sh_sh_staff_a")).update({ totalCashSales: 50000 }));
+    await assertSucceeds(a.ref(P("sh_sh_staff_a")).update({ status: "CLOSED", closedAt: 3000, actualCash: 150000 }));
+  });
+
+  it("SH2. Nhân viên KHÔNG tạo ca mang tên người khác, không sửa/đóng ca người khác, không giả staffUid", async () => {
+    const b = db("sh_staff_b");
+    await assertFails(b.ref(P("sh_fake")).set(shiftOf("sh_staff_a", { id: "sh_fake" })));
+    await assertFails(b.ref(P("sh_nouid")).set({ id: "sh_nouid", status: "OPEN", openedAt: 1 }));
+    await assertFails(b.ref(P("sh_sh_staff_a")).update({ totalCashSales: 999 }));
+    await assertFails(b.ref(P("sh_sh_staff_a")).update({ status: "CLOSED", closedAt: 5 }));
+    await assertFails(b.ref(P("sh_sh_staff_a")).update({ staffUid: "sh_staff_b" }));
+    await assertFails(b.ref(P("sh_sh_staff_a")).remove());
+    await assertFails(b.ref("stores/TRAM01/cash_shifts").set({}));
+  });
+
+  it("SH3. Nhân viên không sửa lại ca đã chốt (kể cả ca của mình) và không chiếm ca cũ của người khác", async () => {
+    const a = db("sh_staff_a");
+    await assertFails(a.ref(P("sh_closed_a")).update({ actualCash: 1, difference: 0 }));
+    await assertFails(a.ref(P("sh_closed_a")).update({ status: "OPEN" }));
+    await assertFails(db("sh_staff_b").ref(P("sh_legacy_a")).update({ status: "CLOSED", closedAt: 9 }));
+  });
+
+  it("SH4. Ca cũ (không có staffUid) chỉ chủ ca theo username đóng được", async () => {
+    await assertSucceeds(db("sh_staff_a").ref(P("sh_legacy_a")).update({ status: "CLOSED", closedAt: 9, staffUid: "sh_staff_a" }));
+  });
+
+  it("SH5. Quản lý/Chủ đọc mọi ca và đóng bắt buộc ca của người khác; Bếp không ghi/đọc", async () => {
+    for (const uid of ["sh_mgr", "sh_owner"]) {
+      await assertSucceeds(db(uid).ref("stores/TRAM01/cash_shifts").get());
+      await assertSucceeds(db(uid).ref(P("sh_sh_staff_a")).update({ status: "CLOSED", closedAt: 7, forceClosedBy: uid }));
+      await env().withSecurityRulesDisabled(async (c) => { await c.database().ref(P("sh_sh_staff_a")).set(shiftOf("sh_staff_a")); });
+    }
+    const k = db("sh_kitchen");
+    await assertFails(k.ref(P("sh_k")).set(shiftOf("sh_kitchen", { id: "sh_k" })));
+    await assertFails(k.ref(P("sh_sh_staff_a")).update({ totalCashSales: 1 }));
+  });
+});
+
+describe("POS Trạm - Security Rules: danh mục note & topping (note_groups / topping_groups)", () => {
+  const noteGroup = { name: "Đồ uống", sortOrder: 1, active: true, items: [{ id: "a", text: "Ít đá" }] };
+  const toppingGroup = { name: "Topping trà", sortOrder: 1, active: true, multi: true, max: 0, items: [{ id: "1", name: "Trân châu", price: 5000 }] };
+
+  it("NG1. Chủ và quản lý ghi/xóa được cả hai nút", async () => {
+    for (const uid of ["owner_uid", "manager_uid"]) {
+      await assertSucceeds(db(uid).ref("stores/TRAM01/note_groups/g1").set(noteGroup));
+      await assertSucceeds(db(uid).ref("stores/TRAM01/topping_groups/g1").set(toppingGroup));
+      await assertSucceeds(db(uid).ref("stores/TRAM01/note_groups/g1").remove());
+      await assertSucceeds(db(uid).ref("stores/TRAM01/topping_groups/g1").remove());
+    }
+  });
+
+  it("NG2. Thu ngân, phục vụ, bếp, quản lý bị khóa không ghi/xóa được", async () => {
+    await env().withSecurityRulesDisabled(async (c) => {
+      await c.database().ref("stores/TRAM01/note_groups/g2").set(noteGroup);
+      await c.database().ref("stores/TRAM01/topping_groups/g2").set(toppingGroup);
+    });
+    for (const uid of ["cashier_uid", "waiter_uid", "kitchen_uid", "inactive_mgr_uid"]) {
+      await assertFails(db(uid).ref("stores/TRAM01/note_groups/g3").set(noteGroup));
+      await assertFails(db(uid).ref("stores/TRAM01/topping_groups/g3").set(toppingGroup));
+      await assertFails(db(uid).ref("stores/TRAM01/note_groups/g2").remove());
+      await assertFails(db(uid).ref("stores/TRAM01/topping_groups/g2").remove());
+    }
+  });
+
+  it("NG3. Mọi thành viên quán đọc được (để gọi món); người ngoài chi nhánh và chủ chi nhánh khác thì không", async () => {
+    await env().withSecurityRulesDisabled(async (c) => {
+      await c.database().ref("stores/TRAM01/note_groups/g4").set(noteGroup);
+      await c.database().ref("stores/TRAM01/topping_groups/g4").set(toppingGroup);
+    });
+    for (const uid of ["owner_uid", "manager_uid", "cashier_uid", "waiter_uid", "kitchen_uid"]) {
+      await assertSucceeds(db(uid).ref("stores/TRAM01/note_groups").get());
+      await assertSucceeds(db(uid).ref("stores/TRAM01/topping_groups").get());
+    }
+    await assertFails(db("storeB_uid").ref("stores/TRAM01/note_groups").get());
+    await assertFails(db("storeB_uid").ref("stores/TRAM01/topping_groups").set(toppingGroup));
+  });
+
+  it("NG4. Chủ chi nhánh này không ghi được danh mục của chi nhánh khác; quản lý gắn danh mục vào món/nhóm món được", async () => {
+    await assertFails(db("owner_uid").ref("stores/TRAM02/note_groups/g5").set(noteGroup));
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01").update({
+      "products/Tra dao/noteGroupIds": ["g1"],
+      "categories/Trà/toppingGroupIds": ["__none__"],
+    }));
+    await assertFails(db("cashier_uid").ref("stores/TRAM01/products/Tra dao/noteGroupIds").set(["g1"]));
+  });
+});
+
+describe("POS Trạm - Security Rules: Quản lý không hủy/xóa hóa đơn, không xem nhật ký thao tác trừ khi được Chủ cấp (RR)", () => {
+  beforeEach(async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      for (const uid of ["mgr_cp_uid", "mgr_cp2_uid", "mgr_audit_uid", "staff_cp_uid", "staff_audit_uid"]) {
+        await d.ref(`userIndex/${uid}/TRAM01`).set(true);
+      }
+      // Quản lý được Chủ cấp CANCEL_BILL (đứng ở vị trí thứ 3 trong mảng customPermissions)
+      await d.ref("stores/TRAM01/users/mgr_cp_uid").set({ username: "ql_cp", roleId: "ROLE_MANAGER", isActive: true, customPermissions: ["EXPORT_CODES", "DELETE_MENU", "CANCEL_BILL"] });
+      // Quản lý có quyền khác nhưng KHÔNG có CANCEL_BILL / VIEW_AUDIT_LOGS
+      await d.ref("stores/TRAM01/users/mgr_cp2_uid").set({ username: "ql_cp2", roleId: "ROLE_MANAGER", isActive: true, customPermissions: ["EXPORT_CODES"] });
+      await d.ref("stores/TRAM01/users/mgr_audit_uid").set({ username: "ql_audit", roleId: "ROLE_MANAGER", isActive: true, customPermissions: ["VIEW_AUDIT_LOGS"] });
+      // Nhân viên được cấp CANCEL_BILL / VIEW_AUDIT_LOGS riêng
+      await d.ref("stores/TRAM01/users/staff_cp_uid").set({ username: "nv_cp", roleId: "ROLE_STAFF", isActive: true, customPermissions: ["CANCEL_BILL"] });
+      await d.ref("stores/TRAM01/users/staff_audit_uid").set({ username: "nv_audit", roleId: "ROLE_STAFF", isActive: true, customPermissions: ["VIEW_AUDIT_LOGS"] });
+      await d.ref("stores/TRAM01/audit_logs/log_seed").set({ timestamp: Date.now(), action: "CANCEL_BILL", username: "x" });
+      await d.ref("stores/TRAM01/bills/closed_chk").set({ id: "closed_chk", status: "CANCELLED", finalAmount: 0, subTotal: 0 });
+    });
+  });
+
+  const resetPaid = async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      await d.ref("stores/TRAM01/bills/paid_bill").set({ id: "paid_bill", billCode: "HD-1", status: "PAID", finalAmount: 100000, subTotal: 100000 });
+      await d.ref("stores/TRAM01/history/paid_bill").set({ id: "paid_bill", billCode: "HD-1", status: "PAID", totalAmount: 100000 });
+    });
+  };
+
+  it("RR1. Quản lý mặc định KHÔNG xóa được hóa đơn đã thanh toán/đã hủy (bills và history)", async () => {
+    const mgr = db("manager_uid");
+    await assertFails(mgr.ref("stores/TRAM01/bills/paid_bill").remove());
+    await assertFails(mgr.ref("stores/TRAM01/history/paid_bill").remove());
+    await assertFails(mgr.ref("stores/TRAM01/bills/closed_chk").remove());
+    await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/bills/paid_bill").remove()); // có quyền khác nhưng không có CANCEL_BILL
+  });
+
+  it("RR2. Quản lý được cấp CANCEL_BILL (customPermissions) xóa được; Chủ quán luôn xóa được", async () => {
+    await assertSucceeds(db("mgr_cp_uid").ref("stores/TRAM01/bills/paid_bill").remove());
+    await assertSucceeds(db("mgr_cp_uid").ref("stores/TRAM01/history/paid_bill").remove());
+    await resetPaid();
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/bills/paid_bill").remove());
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/history/paid_bill").remove());
+  });
+
+  it("RR3. Hủy hóa đơn ĐÃ THANH TOÁN (ghi đè PAID -> CANCELLED) cần Chủ hoặc CANCEL_BILL; nhân viên/quản lý mặc định bị chặn", async () => {
+    const cancelled = { id: "paid_bill", billCode: "HD-1", status: "CANCELLED", finalAmount: 100000, subTotal: 100000, cancelReason: "test" };
+    await assertFails(db("manager_uid").ref("stores/TRAM01/bills/paid_bill").set(cancelled));
+    await assertFails(db("manager_uid").ref("stores/TRAM01/history/paid_bill").update({ status: "CANCELLED" }));
+    await assertFails(db("cashier_uid").ref("stores/TRAM01/bills/paid_bill").set(cancelled));
+    await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/bills/paid_bill").set(cancelled));
+    await assertSucceeds(db("mgr_cp_uid").ref("stores/TRAM01/bills/paid_bill").set(cancelled));
+    await assertSucceeds(db("staff_cp_uid").ref("stores/TRAM01/history/paid_bill").update({ status: "CANCELLED" }));
+    await resetPaid();
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/bills/paid_bill").set(cancelled));
+  });
+
+  it("RR4. Luồng thường ngày không đổi: thu ngân thanh toán, hủy bàn đang mở, quản lý xóa hóa đơn mở", async () => {
+    await assertSucceeds(db("cashier_uid").ref("stores/TRAM01/bills/open_bill").update({ status: "PAID", closedAt: Date.now(), paymentMethod: "CASH" }));
+    await assertSucceeds(db("cashier_uid").ref("stores/TRAM01/bills/BILL_CANCELLED_9").set({ status: "CANCELLED", finalAmount: 0, totalAmount: 5000 }));
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/bills/BILL_CANCELLED_10").set({ status: "CANCELLED", finalAmount: 0, totalAmount: 5000 }));
+    await env().withSecurityRulesDisabled(async (context) => {
+      await context.database().ref("stores/TRAM01/bills/open2").set({ id: "open2", status: "OPEN", finalAmount: 1, subTotal: 1 });
+    });
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/bills/open2").remove());
+    await assertFails(db("cashier_uid").ref("stores/TRAM01/bills/paid_bill").remove());
+  });
+
+  it("RR5. Chỉ Chủ quán, hoặc Quản lý có VIEW_AUDIT_LOGS, đọc được audit_logs; nhân viên/bếp không bao giờ", async () => {
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertSucceeds(db("mgr_audit_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertSucceeds(db("mgr_audit_uid").ref("stores/TRAM01/audit_logs").orderByChild("timestamp").limitToLast(150).get());
+    await assertFails(db("manager_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertFails(db("mgr_cp_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertFails(db("cashier_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertFails(db("staff_audit_uid").ref("stores/TRAM01/audit_logs").get()); // nhân viên: kể cả customPermissions
+    await assertFails(db("kitchen_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertFails(db("storeB_uid").ref("stores/TRAM01/audit_logs").get());
+  });
+
+  it("RR6. Ghi audit_logs vẫn mở cho mọi thành viên đang hoạt động (thao tác tự ghi nhật ký); không ghi đè/xóa", async () => {
+    for (const uid of ["manager_uid", "cashier_uid", "kitchen_uid", "owner_uid"]) {
+      await assertSucceeds(db(uid).ref(`stores/TRAM01/audit_logs/log_${uid}`).set({ timestamp: Date.now(), action: "LOGIN", username: uid }));
+    }
+    await assertFails(db("manager_uid").ref("stores/TRAM01/audit_logs/log_seed").remove());
+    await assertFails(db("manager_uid").ref("stores/TRAM01/audit_logs/log_seed/action").set("X"));
+  });
+
+  it("RR7. Chỉ Chủ quán cấp được CANCEL_BILL / VIEW_AUDIT_LOGS qua customPermissions; Quản lý không tự cấp, không cấp cho người khác", async () => {
+    const path = "stores/TRAM01/users/cashier_uid/customPermissions";
+    await assertFails(db("manager_uid").ref(path).set(["CANCEL_BILL"]));
+    await assertFails(db("manager_uid").ref(path).set(["VIEW_AUDIT_LOGS"]));
+    await assertFails(db("manager_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL"]));
+    await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/users/mgr_cp2_uid/customPermissions").set(["EXPORT_CODES", "CANCEL_BILL"]));
+    await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL"]));
+    // Quản lý vẫn cấp được quyền thường cho Nhân viên (không thuộc nhóm bảo vệ)
+    await assertSucceeds(db("manager_uid").ref(path).set(["VIEW_REPORTS"]));
+    // Chủ quán cấp được cho một Quản lý cụ thể
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL", "VIEW_AUDIT_LOGS"]));
+    // ...và quyền có hiệu lực ngay trên rules
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/audit_logs").get());
+    await assertSucceeds(db("manager_uid").ref("stores/TRAM01/bills/paid_bill").remove());
+    // Thu hồi (Chủ gỡ) thì mất quyền
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").remove());
+    await assertFails(db("manager_uid").ref("stores/TRAM01/audit_logs").get());
+  });
+
+  it("RR8. Cấu trúc: audit_logs vẫn có .read dạng chuỗi và chỉ mục timestamp", () => {
+    const al = parsedRules.rules.stores.$storeCode.audit_logs;
+    expect(typeof al[".read"]).toBe("string");
+    expect(al[".read"]).toContain("VIEW_AUDIT_LOGS");
+    expect(al[".indexOn"]).toContain("timestamp");
   });
 });

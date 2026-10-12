@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import {
   Search,
@@ -26,8 +27,14 @@ import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
 import { useAuth, hasPermission } from "@/lib/auth";
 import { canCopyMenu } from "@/lib/menu-copy";
+import { isProductAvailable, soldOutNote } from "@/lib/product-availability";
+import { writeSoldOut } from "@/lib/product-availability-run";
 import CopyMenuDialog from "./copy-menu-dialog";
 import { errorMessage } from "@/lib/errors";
+import { useItemCatalog } from "@/lib/note-catalog";
+import { canManageNoteCatalog } from "@/lib/note-catalog-access";
+import { isLegacyCatalog } from "@/lib/item-options";
+import GroupAttachmentPicker from "@/components/GroupAttachmentPicker";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -43,6 +50,9 @@ interface ProductFormData {
   imageBase64: string;
   storeCode: string;
   isTopping: boolean;
+  /** Gắn danh mục note/topping: undefined = kế thừa nhóm món (xem item-options.ts) */
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 const emptyProductForm: ProductFormData = {
@@ -61,6 +71,8 @@ interface CategoryFormData {
   name: string;
   storeCode: string;
   allowedToppingIds: string[];
+  noteGroupIds?: string[];
+  toppingGroupIds?: string[];
 }
 
 const emptyCategoryForm: CategoryFormData = {
@@ -153,6 +165,24 @@ export default function ProductsPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editCategoryOriginalName, setEditCategoryOriginalName] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormData>(emptyCategoryForm);
+
+  // Danh mục note & topping của chi nhánh đang sửa (món / nhóm món) — để chọn phần gắn
+  const allowCatalog = canManageNoteCatalog(user);
+  const catalogStore = !allowCatalog
+    ? null
+    : showProductModal
+      ? resolveWriteStoreCode(productForm.storeCode || currentStoreCode)
+      : showCategoryModal && categoryForm.storeCode && categoryForm.storeCode !== "ALL"
+        ? categoryForm.storeCode
+        : null;
+  const { catalog: editCatalog } = useItemCatalog(catalogStore);
+  const { catalog: bannerCatalog, loaded: bannerLoaded } = useItemCatalog(allowCatalog ? targetStoreCode : null);
+  const noteOptions = editCatalog.noteGroups.map((g) => ({ id: g.id, name: g.name, active: g.active }));
+  const toppingOptions = editCatalog.toppingGroups.map((g) => ({ id: g.id, name: g.name, active: g.active }));
+  const groupNames = (ids: string[] | undefined, all: { id: string; name: string }[]) => {
+    const l = (ids ?? []).map((id) => all.find((g) => g.id === id)?.name).filter(Boolean);
+    return l.length ? l.join(", ") : "không có";
+  };
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState("");
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<CategoryItem | null>(null);
@@ -233,6 +263,8 @@ export default function ProductsPage() {
       imageBase64: p.imageBase64 || "",
       storeCode: p.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : ""),
       isTopping: Boolean(p.isTopping || p.category?.toLowerCase() === "topping"),
+      noteGroupIds: p.noteGroupIds,
+      toppingGroupIds: p.toppingGroupIds,
     });
     setProductError("");
     setQuickAddCatOpen(false);
@@ -292,6 +324,8 @@ export default function ProductsPage() {
           category: productForm.category.trim(),
           imageBase64: productForm.imageBase64,
           isTopping: productForm.isTopping,
+          // Chỉ người có quyền quản lý danh mục mới đổi phần gắn; null = quay về kế thừa nhóm món
+          ...(allowCatalog ? { noteGroupIds: productForm.noteGroupIds ?? null, toppingGroupIds: productForm.toppingGroupIds ?? null } : {}),
         },
         targetStore
       );
@@ -305,6 +339,34 @@ export default function ProductsPage() {
       setProductError(errorMessage(e) || "Lỗi lưu dữ liệu");
     }
     setProductSaving(false);
+  };
+
+  // ===== Báo hết món (còn / hết) =====
+  const [soldOutUntilTomorrow, setSoldOutUntilTomorrow] = useState(false);
+  const [availBusy, setAvailBusy] = useState<string | null>(null);
+  const [availError, setAvailError] = useState("");
+  const canToggleAvailability = hasPermission(user, "TOGGLE_ITEM_AVAILABILITY");
+
+  const toggleSoldOut = async (p: ProductItem, soldOut: boolean) => {
+    const key = `${p.storeCode || ""}_${p.id}`;
+    if (availBusy === key) return;
+    setAvailBusy(key);
+    setAvailError("");
+    try {
+      // Firebase áp dụng ghi cục bộ ngay (lạc quan); nếu rules từ chối, giao diện tự quay lại trạng thái cũ.
+      await writeSoldOut(db, {
+        storeCode: resolveWriteStoreCode(p.storeCode),
+        productKey: p.id,
+        productName: p.name,
+        soldOut,
+        untilNextReset: soldOutUntilTomorrow,
+        actor: { username: user?.username || "admin_web", fullName: user?.fullName, role: user?.roleId || user?.role },
+      });
+    } catch (e) {
+      setAvailError(`Không cập nhật được ${p.name}: ${errorMessage(e)}`);
+    } finally {
+      setAvailBusy(null);
+    }
   };
 
   const handleDeleteProduct = async () => {
@@ -333,6 +395,8 @@ export default function ProductsPage() {
       name: c.name,
       storeCode: c.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "ALL"),
       allowedToppingIds: c.allowedToppingIds || [],
+      noteGroupIds: c.noteGroupIds,
+      toppingGroupIds: c.toppingGroupIds,
     });
     setCategoryError("");
     setShowCategoryModal(true);
@@ -358,7 +422,13 @@ export default function ProductsPage() {
         cleanName,
         categoryForm.storeCode,
         editCategoryOriginalName || undefined,
-        categoryForm.allowedToppingIds
+        categoryForm.allowedToppingIds,
+        allowCatalog && categoryForm.storeCode !== "ALL"
+          ? {
+              noteGroupIds: categoryForm.noteGroupIds?.length ? categoryForm.noteGroupIds : null,
+              toppingGroupIds: categoryForm.toppingGroupIds?.length ? categoryForm.toppingGroupIds : null,
+            }
+          : undefined
       );
       if (!res.success) {
         setCategoryError(res.error || "Lỗi lưu danh mục");
@@ -605,6 +675,15 @@ export default function ProductsPage() {
         </button>
       </div>
 
+      {allowCatalog && bannerLoaded && isLegacyCatalog(bannerCatalog) && (
+        <Link
+          href="/dashboard/note-catalog"
+          style={{ display: "block", padding: "10px 14px", borderRadius: 10, background: "var(--warning-bg, #FFF4D6)", color: "var(--warning, #7A5200)", fontSize: 13, fontWeight: 600 }}
+        >
+          Chưa cấu hình danh mục note/topping — bấm để thiết lập
+        </Link>
+      )}
+
       {/* Store Quick Switcher Bar */}
       {stores.length > 0 && (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -795,6 +874,12 @@ export default function ProductsPage() {
             </div>
           </div>
 
+          {availError && (
+            <div role="alert" style={{ padding: "10px 14px", borderRadius: "10px", background: "var(--danger-bg)", color: "var(--danger)", fontSize: "13px" }}>
+              {availError}
+            </div>
+          )}
+
           {/* Products Table */}
           <div className="table-wrapper">
             <table>
@@ -808,6 +893,15 @@ export default function ProductsPage() {
                   <th>Giá bán</th>
                   <th>Giá vốn</th>
                   <th>Đơn vị</th>
+                  <th>
+                    Tình trạng
+                    {canToggleAvailability && (
+                      <label style={{ display: "block", fontSize: "10px", fontWeight: 400, cursor: "pointer" }}>
+                        <input type="checkbox" checked={soldOutUntilTomorrow} onChange={(e) => setSoldOutUntilTomorrow(e.target.checked)} />{" "}
+                        Hết đến hết ngày
+                      </label>
+                    )}
+                  </th>
                   <th>Thao tác</th>
                 </tr>
               </thead>
@@ -815,7 +909,7 @@ export default function ProductsPage() {
                 {filteredProducts.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={currentStoreCode === "ALL" ? 9 : 8}
+                      colSpan={currentStoreCode === "ALL" ? 10 : 9}
                       style={{ textAlign: "center", padding: "48px", color: "var(--muted)" }}
                     >
                       <div style={{ fontSize: "36px", marginBottom: "8px" }}>🍽️</div>
@@ -948,6 +1042,36 @@ export default function ProductsPage() {
                         {p.costPrice != null && p.costPrice > 0 ? formatVND(p.costPrice) : <span style={{ color: "var(--muted)" }}>—</span>}
                       </td>
                       <td style={{ color: "var(--subtext)" }}>{p.unit || "Phần"}</td>
+                      <td>
+                        {(() => {
+                          const available = isProductAvailable(p);
+                          const note = available ? "" : soldOutNote(p);
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                              <button
+                                type="button"
+                                disabled={!canToggleAvailability || availBusy === `${p.storeCode || ""}_${p.id}`}
+                                onClick={() => toggleSoldOut(p, available)}
+                                title={canToggleAvailability ? (available ? "Báo hết món" : "Bật lại món") : "Bạn không có quyền bật/tắt món hết hàng"}
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: "8px",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  cursor: canToggleAvailability ? "pointer" : "default",
+                                  border: "1px solid",
+                                  borderColor: available ? "var(--success)" : "var(--danger)",
+                                  background: available ? "transparent" : "var(--danger-bg)",
+                                  color: available ? "var(--success)" : "var(--danger)",
+                                }}
+                              >
+                                {available ? "Còn" : "Hết"}
+                              </button>
+                              {note && <span style={{ fontSize: "10px", color: "var(--muted)" }}>{note}</span>}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td>
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button
@@ -1589,6 +1713,27 @@ export default function ProductsPage() {
                 </label>
               </div>
 
+              {allowCatalog && !productForm.isTopping && (
+                <>
+                  <GroupAttachmentPicker
+                    title="Danh mục note áp dụng"
+                    isProduct
+                    options={noteOptions}
+                    value={productForm.noteGroupIds}
+                    onChange={(v) => setProductForm((f) => ({ ...f, noteGroupIds: v }))}
+                    inheritedLabel={groupNames(allCategories.find((c) => c.name === productForm.category && c.storeCode === (productForm.storeCode || currentStoreCode))?.noteGroupIds, noteOptions)}
+                  />
+                  <GroupAttachmentPicker
+                    title="Nhóm topping áp dụng"
+                    isProduct
+                    options={toppingOptions}
+                    value={productForm.toppingGroupIds}
+                    onChange={(v) => setProductForm((f) => ({ ...f, toppingGroupIds: v }))}
+                    inheritedLabel={groupNames(allCategories.find((c) => c.name === productForm.category && c.storeCode === (productForm.storeCode || currentStoreCode))?.toppingGroupIds, toppingOptions)}
+                  />
+                </>
+              )}
+
               {/* Category Dropdown + Quick Add */}
               <div>
                 <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
@@ -1790,6 +1935,31 @@ export default function ProductsPage() {
                   )}
                 </div>
               </div>
+
+              {allowCatalog && categoryForm.storeCode && categoryForm.storeCode !== "ALL" && (
+                <>
+                  <GroupAttachmentPicker
+                    title="Danh mục note áp dụng cho nhóm này"
+                    isProduct={false}
+                    options={noteOptions}
+                    value={categoryForm.noteGroupIds}
+                    onChange={(v) => setCategoryForm((f) => ({ ...f, noteGroupIds: v }))}
+                  />
+                  <GroupAttachmentPicker
+                    title="Nhóm topping áp dụng cho nhóm này"
+                    isProduct={false}
+                    options={toppingOptions}
+                    value={categoryForm.toppingGroupIds}
+                    onChange={(v) => setCategoryForm((f) => ({ ...f, toppingGroupIds: v }))}
+                  />
+                  <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
+                    Áp dụng cho mọi món trong nhóm, trừ món đã chọn “Tùy chỉnh cho món này”. Để trống = nhóm không có note/topping.
+                  </p>
+                </>
+              )}
+              {allowCatalog && categoryForm.storeCode === "ALL" && (
+                <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>Chọn một chi nhánh cụ thể để gắn danh mục note &amp; topping (mỗi chi nhánh có danh mục riêng).</p>
+              )}
 
               {editCategoryOriginalName && (
                 <div

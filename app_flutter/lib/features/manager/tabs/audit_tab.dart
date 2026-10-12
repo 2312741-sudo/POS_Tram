@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/permissions/app_permissions.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
@@ -17,6 +19,7 @@ class _AuditTabState extends State<AuditTab> {
   final _fb = FirebaseService();
   List<AuditLogModel> _logs = [];
   bool _loading = true;
+  bool _denied = false;
 
   String _search = '';
   String _categoryFilter = 'ALL'; // 'ALL', 'SUSPICIOUS', 'CANCEL', 'PAYMENT', 'TABLE', 'SHIFT'
@@ -28,6 +31,13 @@ class _AuditTabState extends State<AuditTab> {
   }
 
   void _loadLogs() {
+    final auth = AuthService();
+    if (!(auth.isRootOwner || auth.can(AppPermissions.viewAuditLogs))) {
+      // Không có quyền xem nhật ký thao tác: không đăng ký luồng dữ liệu (rules cũng chặn đọc).
+      _loading = false;
+      _denied = true;
+      return;
+    }
     _fb.auditLogsStream().listen((list) {
       if (mounted) {
         setState(() {
@@ -69,6 +79,18 @@ class _AuditTabState extends State<AuditTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (_denied) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Bạn không có quyền xem lịch sử thao tác. Liên hệ Chủ quán để được cấp quyền.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.beVietnamPro(fontSize: 14, color: context.tc.textSecondary),
+          ),
+        ),
+      );
+    }
     if (_loading && _logs.isEmpty) {
       return Center(child: CircularProgressIndicator(color: context.tc.primary));
     }

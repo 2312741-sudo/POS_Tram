@@ -39,7 +39,7 @@ class _RevenueTabState extends State<RevenueTab> {
   }
 
   void _loadData() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) {
         setState(() {
           _bills = b;

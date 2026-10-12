@@ -4,6 +4,8 @@ import { ChefHat, Minus, Plus, Save, Search, StickyNote, Trash2 } from "lucide-r
 import ModalShell, { btnGhost, errorBox } from "./ModalShell";
 import { lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, type RawOrderLine } from "@/lib/order-math";
 import { addLineToOrder, makeOrderLine, type OrderActor } from "@/lib/web-order";
+import { isProductAvailable, type AvailabilityFields } from "@/lib/product-availability";
+import { toggleTopping, type ItemCatalog } from "@/lib/item-options";
 import {
   ICE_OPTIONS,
   SUGAR_OPTIONS,
@@ -17,6 +19,9 @@ import {
   type ProductOptions,
 } from "@/lib/product-options";
 
+/** Món kèm trạng thái báo hết (isAvailable / soldOutUntil) */
+type DialogProduct = OptionProduct & AvailabilityFields;
+
 const fmt = (n: number) => `${new Intl.NumberFormat("vi-VN").format(n)}đ`;
 
 interface Props {
@@ -27,8 +32,10 @@ interface Props {
   /** Món đã có trên bàn (để người gọi biết đang thêm vào đơn nào) */
   existingCount: number;
   /** Toàn bộ món của chi nhánh (kể cả topping — để tính giá topping) */
-  products: OptionProduct[];
+  products: DialogProduct[];
   categories: OptionCategory[];
+  /** Danh mục note & topping của chi nhánh (chưa cấu hình/không truyền = cách hiển thị cũ) */
+  catalog?: ItemCatalog;
   actor: OrderActor;
   canSendKitchen: boolean;
   saving?: boolean;
@@ -42,7 +49,7 @@ interface Props {
  * Món có size / topping / đường / đá sẽ mở bảng chọn tùy chọn (cùng quy tắc với POS).
  */
 export default function WebOrderDialog({
-  tableName, zone, opening, existingCount, products, categories: optionCategories, actor, canSendKitchen, saving, error, onCancel, onSubmit,
+  tableName, zone, opening, existingCount, products, categories: optionCategories, catalog, actor, canSendKitchen, saving, error, onCancel, onSubmit,
 }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -63,13 +70,17 @@ export default function WebOrderDialog({
     return sellable.filter((p) => (category === "ALL" || p.category === category) && (!q || p.name.toLowerCase().includes(q)));
   }, [sellable, search, category]);
 
+  // Món đã có trong giỏ nhưng vừa bị báo hết: chỉ cảnh báo, không tự xóa
+  const soldOutNames = useMemo(() => new Set(products.filter((p) => !isProductAvailable(p)).map((p) => p.name)), [products]);
+
   const { subTotal } = summarizeOrderLines(lines);
   const totalQty = lines.reduce((s, l) => s + lineQuantity(l), 0);
 
   const [picking, setPicking] = useState<{ product: OptionProduct; opts: ProductOptions; sel: OptionSelection; qty: number; note: string } | null>(null);
 
-  const add = (p: OptionProduct) => {
-    const opts = getProductOptions(p, optionCategories, products);
+  const add = (p: DialogProduct) => {
+    if (!isProductAvailable(p)) return; // món đã báo hết: không cho thêm
+    const opts = getProductOptions(p, optionCategories, products, catalog);
     if (!opts.hasAny) {
       setLines((prev) => addLineToOrder(prev, makeOrderLine(p, 1, "", actor, Date.now())));
       return;
@@ -149,7 +160,26 @@ export default function WebOrderDialog({
                   </OptionGroup>
                 </>
               )}
-              {picking.opts.toppings.length > 0 && (
+              {picking.opts.catalogMode
+                ? picking.opts.toppingGroups.map((g) => (
+                    <OptionGroup key={g.id} label={`${g.name}${!g.multi ? " (chọn 1)" : g.max > 0 ? ` (tối đa ${g.max})` : ""}`}>
+                      {g.items.map((t) => {
+                        const on = picking.sel.toppings.includes(t.name);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            style={chip(on)}
+                            onClick={() => setPicking({ ...picking, sel: { ...picking.sel, toppings: toggleTopping(picking.sel.toppings, g, t.name) } })}
+                          >
+                            {t.name}{t.price > 0 ? ` +${fmt(t.price)}` : ""}
+                          </button>
+                        );
+                      })}
+                    </OptionGroup>
+                  ))
+                : null}
+              {!picking.opts.catalogMode && picking.opts.toppings.length > 0 && (
                 <OptionGroup label="Topping (chọn nhiều)">
                   {picking.opts.toppings.map((t) => {
                     const on = picking.sel.toppings.includes(t.name);
@@ -182,6 +212,27 @@ export default function WebOrderDialog({
                 <button type="button" style={btnGhost} onClick={() => setPicking(null)}>Hủy</button>
                 <button type="button" className="btn-primary" onClick={confirmPicking}>Thêm vào đơn</button>
               </div>
+              {picking.opts.noteChips.length > 0 && (
+                <OptionGroup label="Ghi chú nhanh">
+                  {picking.opts.noteChips.map((n) => {
+                    const on = picking.note.includes(n);
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        style={chip(on)}
+                        onClick={() => {
+                          const parts = picking.note.split(",").map((x) => x.trim()).filter(Boolean);
+                          const next = on ? parts.filter((x) => x !== n) : [...parts, n];
+                          setPicking({ ...picking, note: next.join(", ").slice(0, 80) });
+                        }}
+                      >
+                        {n}
+                      </button>
+                    );
+                  })}
+                </OptionGroup>
+              )}
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", marginBottom: 8 }}>
@@ -201,17 +252,27 @@ export default function WebOrderDialog({
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, maxHeight: 380, overflowY: "auto", paddingRight: 4 }}>
             {shown.length === 0 && <div style={{ fontSize: 13, color: "var(--subtext)", gridColumn: "1 / -1" }}>Không có món phù hợp</div>}
-            {shown.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => add(p)}
-                style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4, fontWeight: 600 }}>{fmt(p.price)}</div>
-              </button>
-            ))}
+            {shown.map((p) => {
+              const out = !isProductAvailable(p);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={out}
+                  aria-label={out ? `${p.name} (hết hàng)` : p.name}
+                  onClick={() => add(p)}
+                  style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", cursor: out ? "not-allowed" : "pointer", opacity: out ? 0.55 : 1 }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4, fontWeight: 600 }}>{fmt(p.price)}</div>
+                  {out && (
+                    <span style={{ display: "inline-block", marginTop: 4, padding: "1px 6px", borderRadius: 6, background: "var(--danger, #b4232c)", color: "#fff", fontSize: 10, fontWeight: 700 }}>
+                      Hết hàng
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -225,6 +286,11 @@ export default function WebOrderDialog({
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, fontWeight: 600 }}>
                   <span>
                     {String(l.name ?? "")}
+                    {soldOutNames.has(String(l.name ?? "")) && (
+                      <span style={{ display: "inline-block", marginLeft: 6, padding: "1px 6px", borderRadius: 6, background: "var(--danger, #b4232c)", color: "#fff", fontSize: 10, fontWeight: 700 }}>
+                        Món đã hết hàng
+                      </span>
+                    )}
                     {describeSelection(l) && <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "var(--subtext)" }}>{describeSelection(l)}</span>}
                   </span>
                   <span>{fmt(lineUnitPrice(l) * lineQuantity(l))}</span>

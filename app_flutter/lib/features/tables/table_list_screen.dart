@@ -316,7 +316,7 @@ class _TableListScreenState extends State<TableListScreen> {
             initialData: _fb.activeShiftCache != null ? [_fb.activeShiftCache!] : null,
             builder: (context, snapshot) {
               final shifts = snapshot.data ?? (_fb.activeShiftCache != null ? [_fb.activeShiftCache!] : <CashShiftModel>[]);
-              final activeShift = shifts.where((s) => s.isOpen).firstOrNull ?? _fb.activeShiftCache;
+              final activeShift = _fb.ownOpenShiftIn(shifts);
               final isOpen = activeShift != null && activeShift.isOpen;
 
               return Padding(
@@ -452,7 +452,7 @@ class _TableListScreenState extends State<TableListScreen> {
                     return const SizedBox.shrink();
                   }
                   final shifts = shiftSnap.data ?? (_fb.activeShiftCache != null ? [_fb.activeShiftCache!] : <CashShiftModel>[]);
-                  final activeShift = shifts.where((s) => s.isOpen).firstOrNull ?? _fb.activeShiftCache;
+                  final activeShift = _fb.ownOpenShiftIn(shifts);
                   final isShiftOpen = activeShift != null && activeShift.isOpen;
 
                   if (isShiftOpen) return const SizedBox.shrink();
@@ -1509,7 +1509,7 @@ class _TableListScreenState extends State<TableListScreen> {
               title: const Text('Nhân viên và phân quyền'),
               onTap: () => _navigateTo('/user-management'),
             ),
-          if (_auth.isRootOwner || _auth.can(AppPermissions.viewMenu))
+          if (_auth.isRootOwner || _auth.can(AppPermissions.manageMenu) || _auth.can(AppPermissions.editMenu))
             ListTile(
               leading: const Icon(Icons.menu_book_outlined),
               title: const Text('Quản Lý Thực Đơn'),

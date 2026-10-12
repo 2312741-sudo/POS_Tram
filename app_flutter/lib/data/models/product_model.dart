@@ -1,3 +1,5 @@
+import '../../core/domain/item_options.dart';
+
 // ==================== PRODUCT MODEL (KIOTVIET FNB) ====================
 class ProductModel {
   final int id;
@@ -10,10 +12,19 @@ class ProductModel {
   final String? imageBase64;
   final String? imageResourceName;
   final bool isAvailable;
+  // Báo hết món (bếp/nhân viên): thời điểm báo, người báo, và mốc tự bật lại (epoch ms).
+  final int? soldOutAt;
+  final String? soldOutBy;
+  final int? soldOutUntil;
+  /// Khóa nút products/{dbKey} thật trong RTDB (Flutter: tên món; món tạo từ web: push id). Không ghi ngược.
+  final String? dbKey;
   final Map<String, int> sizes; // Ví dụ: {'M': 0, 'L': 5000}
   final List<String> allowedToppings; // Danh sách topping được phép thêm
   final bool hasIceSugarOptions; // Hỗ trợ chọn % đá, đường
   final bool isTopping; // Cờ đánh dấu món là Topping
+  // Danh mục note/topping áp dụng cho món: null = kế thừa nhóm món; [] = ghi đè "không có" (xem item_options.dart)
+  final List<String>? noteGroupIds;
+  final List<String>? toppingGroupIds;
 
   ProductModel({
     this.id = 0,
@@ -26,10 +37,16 @@ class ProductModel {
     this.imageBase64,
     this.imageResourceName,
     this.isAvailable = true,
+    this.soldOutAt,
+    this.soldOutBy,
+    this.soldOutUntil,
+    this.dbKey,
     this.sizes = const {},
     this.allowedToppings = const [],
     this.hasIceSugarOptions = false,
     this.isTopping = false,
+    this.noteGroupIds,
+    this.toppingGroupIds,
   });
 
   String? get assetPath {
@@ -85,11 +102,17 @@ class ProductModel {
         category: cat,
         imageBase64: map['imageBase64']?.toString(),
         imageResourceName: map['imageResourceName']?.toString(),
-        isAvailable: map['isAvailable'] ?? true,
+        isAvailable: map['isAvailable'] != false,
+        soldOutAt: (map['soldOutAt'] as num?)?.toInt(),
+        soldOutBy: map['soldOutBy']?.toString(),
+        soldOutUntil: (map['soldOutUntil'] as num?)?.toInt(),
+        dbKey: key,
         sizes: sizesMap,
         allowedToppings: toppings,
         hasIceSugarOptions: hasIceSugar,
         isTopping: isTop,
+        noteGroupIds: parseGroupIds(map['noteGroupIds']),
+        toppingGroupIds: parseGroupIds(map['toppingGroupIds']),
       );
     }
     return ProductModel(name: key ?? '', price: 0, unit: 'Phần', category: 'Khác');
@@ -106,10 +129,15 @@ class ProductModel {
     'imageBase64': imageBase64,
     'imageResourceName': imageResourceName,
     'isAvailable': isAvailable,
+    if (soldOutAt != null) 'soldOutAt': soldOutAt,
+    if (soldOutBy != null) 'soldOutBy': soldOutBy,
+    if (soldOutUntil != null) 'soldOutUntil': soldOutUntil,
     if (sizes.isNotEmpty) 'sizes': sizes,
     if (allowedToppings.isNotEmpty) 'allowedToppings': allowedToppings,
     'hasIceSugarOptions': hasIceSugarOptions,
     'isTopping': isTopping,
+    if (noteGroupIds != null) 'noteGroupIds': encodeGroupIds(noteGroupIds),
+    if (toppingGroupIds != null) 'toppingGroupIds': encodeGroupIds(toppingGroupIds),
   };
 
   ProductModel copyWith({
@@ -123,10 +151,18 @@ class ProductModel {
     String? imageBase64,
     String? imageResourceName,
     bool? isAvailable,
+    int? soldOutAt,
+    String? soldOutBy,
+    int? soldOutUntil,
+    String? dbKey,
     Map<String, int>? sizes,
     List<String>? allowedToppings,
     bool? hasIceSugarOptions,
     bool? isTopping,
+    List<String>? noteGroupIds,
+    List<String>? toppingGroupIds,
+    bool clearNoteGroupIds = false,
+    bool clearToppingGroupIds = false,
   }) => ProductModel(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -138,9 +174,15 @@ class ProductModel {
     imageBase64: imageBase64 ?? this.imageBase64,
     imageResourceName: imageResourceName ?? this.imageResourceName,
     isAvailable: isAvailable ?? this.isAvailable,
+    soldOutAt: soldOutAt ?? this.soldOutAt,
+    soldOutBy: soldOutBy ?? this.soldOutBy,
+    soldOutUntil: soldOutUntil ?? this.soldOutUntil,
+    dbKey: dbKey ?? this.dbKey,
     sizes: sizes ?? this.sizes,
     allowedToppings: allowedToppings ?? this.allowedToppings,
     hasIceSugarOptions: hasIceSugarOptions ?? this.hasIceSugarOptions,
     isTopping: isTopping ?? this.isTopping,
+    noteGroupIds: clearNoteGroupIds ? null : (noteGroupIds ?? this.noteGroupIds),
+    toppingGroupIds: clearToppingGroupIds ? null : (toppingGroupIds ?? this.toppingGroupIds),
   );
 }

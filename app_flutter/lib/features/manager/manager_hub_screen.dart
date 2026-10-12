@@ -144,6 +144,10 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
         final currentStore = _auth.currentStoreInfo;
         final storeName = currentStore?.storeName ?? 'POS Trạm';
         final storeCode = _auth.currentStoreCode;
+        // Tab "Giám sát" (nhật ký thao tác) chỉ hiện khi có VIEW_AUDIT_LOGS — Quản lý mặc định KHÔNG có.
+        final canAudit = _auth.isRootOwner || _auth.can(AppPermissions.viewAuditLogs);
+        final tabCount = canAudit ? 5 : 4;
+        final tabIndex = _currentIndex >= tabCount ? 0 : _currentIndex;
         final roleName = _auth.isOwner ? 'CHỦ QUÁN' : 'QUẢN LÝ';
 
         return Scaffold(
@@ -381,7 +385,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
           ),
           body: IndexedStack(
             key: ValueKey('hub_body_${_auth.currentStoreCode}'),
-            index: _currentIndex,
+            index: tabIndex,
             children: [
               OverviewTab(
                 key: ValueKey('overview_${_auth.currentStoreCode}'),
@@ -394,7 +398,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               RevenueTab(key: ValueKey('revenue_${_auth.currentStoreCode}')),
               AnalyticsTab(key: ValueKey('analytics_${_auth.currentStoreCode}')),
               BillsTab(key: ValueKey('bills_${_auth.currentStoreCode}')),
-              AuditTab(key: ValueKey('audit_${_auth.currentStoreCode}')),
+              if (canAudit) AuditTab(key: ValueKey('audit_${_auth.currentStoreCode}')),
             ],
           ),
           bottomNavigationBar: Container(
@@ -406,7 +410,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               ],
             ),
             child: BottomNavigationBar(
-              currentIndex: _currentIndex,
+              currentIndex: tabIndex,
               onTap: (index) => setState(() => _currentIndex = index),
               type: BottomNavigationBarType.fixed,
               backgroundColor: context.tc.card,
@@ -415,28 +419,29 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               selectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold),
               unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.normal),
               elevation: 0,
-              items: const [
-                BottomNavigationBarItem(
+              items: [
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.dashboard_outlined),
                   activeIcon: Icon(Icons.dashboard),
                   label: 'Tổng quan',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.monetization_on_outlined),
                   activeIcon: Icon(Icons.monetization_on),
                   label: 'Doanh thu',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.bar_chart_outlined),
                   activeIcon: Icon(Icons.bar_chart),
                   label: 'Phân tích',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.receipt_long_outlined),
                   activeIcon: Icon(Icons.receipt_long),
                   label: 'Hóa đơn',
                 ),
-                BottomNavigationBarItem(
+                if (canAudit)
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.shield_outlined),
                   activeIcon: Icon(Icons.shield),
                   label: 'Giám sát',

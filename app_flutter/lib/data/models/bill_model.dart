@@ -43,6 +43,8 @@ class BillModel {
   /// Thời điểm hủy đơn (epoch ms) — chỉ có với đơn CANCELLED.
   int? cancelledAt;
   String status; // 'OPEN', 'PAID', 'CANCELLED', 'REFUNDED'
+  /// uid tài khoản thu tiền (HĐ cũ không có → so khớp theo staffUsername)
+  final String? staffUid;
   final String staffUsername;
   final String staffFullName;
   List<OrderItemModel> items;
@@ -77,6 +79,7 @@ class BillModel {
     this.closedAt,
     this.cancelledAt,
     this.status = 'OPEN',
+    this.staffUid,
     required this.staffUsername,
     required this.staffFullName,
     required this.items,
@@ -173,6 +176,7 @@ class BillModel {
       closedAt: (map['closedAt'] as num?)?.toInt(),
       cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
       status: map['status']?.toString() ?? 'OPEN',
+      staffUid: map['staffUid']?.toString(),
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
       items: items,
@@ -252,6 +256,7 @@ class BillModel {
     if (closedAt != null) 'closedAt': closedAt,
     if (cancelledAt != null) 'cancelledAt': cancelledAt,
     'status': status,
+    if (staffUid != null && staffUid!.isNotEmpty) 'staffUid': staffUid,
     'staffUsername': staffUsername,
     'staffFullName': staffFullName,
     'cashierName': staffFullName.isNotEmpty ? staffFullName : staffUsername,

@@ -28,7 +28,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   }
 
   void _loadBills() {
-    _fb.billsStream().listen((b) {
+    _fb.myBillsStream().listen((b) {
       if (mounted) {
         setState(() {
           _bills = b.where((e) => e.status == 'PAID').toList();

@@ -84,6 +84,23 @@ export const PERMISSION_CATALOG: PermissionCode[] = [
   { key: "MANAGE_MANAGER_PIN", label: "Đặt PIN duyệt quản lý", category: "Quản trị hệ thống & Cài đặt", description: "Đặt/đổi mã PIN dùng để duyệt thao tác nhạy cảm tại quầy." },
   { key: "MANAGE_CHAMCONG_LINK", label: "Liên kết Chấm Công Trạm", category: "Quản trị hệ thống & Cài đặt", description: "Liên kết/ngắt liên kết quán với ứng dụng Chấm Công Trạm (Nhạy cảm)." },
   { key: "CREATE_SAMPLE_DATA", label: "Tạo dữ liệu mẫu", category: "Quản trị hệ thống & Cài đặt", description: "Sinh đơn hàng và khuyến mãi mẫu để thử hệ thống." },
+  { key: "VIEW_SHIFT_HANDOVER", label: "Xem phiếu bàn giao ca", category: "Ca làm việc & Két tiền", description: "Xem phiếu bàn giao ca (tiền đầu ca, doanh thu, chênh lệch két) khi chốt ca." },
+  { key: "VIEW_ALL_SHIFTS", label: "Xem ca/két của tài khoản khác", category: "Ca làm việc & Két tiền", description: "Xem ca làm việc và két tiền của các tài khoản khác (mặc định chỉ thấy ca của mình)." },
+  { key: "VIEW_ALL_BILLS_HISTORY", label: "Xem lịch sử hóa đơn của mọi tài khoản", category: "Hóa đơn & Thanh toán", description: "Xem hóa đơn do tài khoản khác lập (mặc định chỉ thấy hóa đơn của chính mình)." },
+  { key: "TOGGLE_ITEM_AVAILABILITY", label: "Bật/tắt món hết hàng", category: "Thực đơn & Giá bán", description: "Đánh dấu món hết hàng / còn hàng ngay tại quầy hoặc màn hình bếp." },
+  { key: "MANAGE_NOTE_CATALOG", label: "Quản lý danh mục note & topping", category: "Thực đơn & Giá bán", description: "Thêm, sửa, xóa các note và topping dùng chung khi gọi món." },
+];
+
+/**
+ * Quyền CHỈ Chủ quán được cấp thêm cho từng tài khoản (customPermissions): Quản lý mặc định KHÔNG có,
+ * không tự cấp / cấp cho người khác (UI + RTDB rules + Cloud Function createStaffAccount cùng chặn).
+ * Giữ đồng bộ: app_permissions.dart (ownerGrantOnly), functions/src/permissions.ts, database.rules.json.
+ */
+export const OWNER_GRANT_ONLY_PERMISSIONS: readonly string[] = [
+  "CANCEL_BILL",
+  "CANCEL_KITCHEN_ITEM",
+  "VIEW_AUDIT_LOGS",
+  "EXPORT_AUDIT_LOGS",
 ];
 
 export interface ActionCode {

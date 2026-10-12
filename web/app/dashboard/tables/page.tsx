@@ -103,6 +103,7 @@ import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinD
 import TableTransferDialog from "@/components/TableTransferDialog";
 import ZoneSetupDialog from "@/components/ZoneSetupDialog";
 import WebOrderDialog from "@/components/WebOrderDialog";
+import { useItemCatalog } from "@/lib/note-catalog";
 import { canAdjustPoints as canManageLayout, canEditPointConfig, canReadCustomers } from "@/lib/customers";
 import CustomerPickerDialog from "@/components/CustomerPickerDialog";
 import LoyaltyPanel from "@/components/LoyaltyPanel";
@@ -848,16 +849,20 @@ export default function TablesPage() {
             .map((p) => ({
               id: p.id, name: p.name, price: p.price, code: p.code, category: p.category, unit: p.unit, isTopping: p.isTopping,
               sizes: p.sizes, allowedToppings: p.allowedToppings, hasIceSugarOptions: p.hasIceSugarOptions,
+              noteGroupIds: p.noteGroupIds, toppingGroupIds: p.toppingGroupIds,
+              isAvailable: p.isAvailable, soldOutUntil: p.soldOutUntil,
             }))
         : [],
     [products, orderTarget, currentStoreCode]
   );
+  // Danh mục note & topping của chi nhánh của bàn đang gọi món (chỉ nghe khi mở hộp thoại gọi món)
+  const { catalog: orderCatalog } = useItemCatalog(orderTarget ? orderTarget.storeCode || currentStoreCode : null);
   const orderableCategories = useMemo(
     () =>
       orderTarget
         ? allCategories
             .filter((c) => (c.storeCode || currentStoreCode) === (orderTarget.storeCode || currentStoreCode))
-            .map((c) => ({ name: c.name, allowedToppingIds: c.allowedToppingIds }))
+            .map((c) => ({ name: c.name, allowedToppingIds: c.allowedToppingIds, noteGroupIds: c.noteGroupIds, toppingGroupIds: c.toppingGroupIds }))
         : [],
     [allCategories, orderTarget, currentStoreCode]
   );
@@ -2593,6 +2598,7 @@ export default function TablesPage() {
           existingCount={parseOrderItems(orderTarget.currentOrderJson).length}
           products={orderableProducts}
           categories={orderableCategories}
+          catalog={orderCatalog}
           actor={orderActor}
           canSendKitchen={canSendKitchenFromWeb}
           saving={orderSaving}

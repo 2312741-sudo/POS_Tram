@@ -96,12 +96,15 @@ describe("Ma trận phân quyền RBAC & Quyền riêng (AUTH_CONTRACT Section 4
     expect(hasPermission(manager1, "VIEW_MENU")).toBe(true);
     expect(hasPermission(manager1, "EDIT_MENU")).toBe(true);
     expect(hasPermission(manager1, "CHANGE_PRICE")).toBe(true);
-    expect(hasPermission(manager1, "VIEW_AUDIT_LOGS")).toBe(true);
     expect(hasPermission(manager1, "MANUAL_DISCOUNT")).toBe(true);
     expect(hasPermission(manager1, "VIEW_INVENTORY")).toBe(true);
 
     // Bị giới hạn
     expect(hasPermission(manager1, "MANAGE_USERS")).toBe(false);
+    // Quản lý mặc định không hủy/xóa hóa đơn, không xem nhật ký thao tác (Chủ cấp riêng)
+    expect(hasPermission(manager1, "VIEW_AUDIT_LOGS")).toBe(false);
+    expect(hasPermission(manager1, "CANCEL_BILL")).toBe(false);
+    expect(hasPermission(manager1, "CANCEL_KITCHEN_ITEM")).toBe(false);
     expect(hasPermission(manager1, "DELETE_MENU")).toBe(false);
     expect(hasPermission(manager1, "MANAGE_STORE_SETTINGS")).toBe(false);
   });
@@ -112,7 +115,8 @@ describe("Ma trận phân quyền RBAC & Quyền riêng (AUTH_CONTRACT Section 4
       expect(hasPermission(m, "OPEN_TABLE")).toBe(true);
       expect(hasPermission(m, "VIEW_REPORTS")).toBe(true);
       expect(hasPermission(m, "MANAGE_CASH_SHIFT")).toBe(true);
-      expect(hasPermission(m, "VIEW_AUDIT_LOGS")).toBe(true); // từng chỉ có ở QL1
+      expect(hasPermission(m, "VIEW_AUDIT_LOGS")).toBe(false); // đã gỡ khỏi mặc định (Chủ cấp riêng)
+      expect(hasPermission(createMockUser({ roleId: id, customPermissions: ["VIEW_AUDIT_LOGS"] }), "VIEW_AUDIT_LOGS")).toBe(true);
       expect(hasPermission(m, "VIEW_INVENTORY")).toBe(true);
       expect(hasPermission(m, "COPY_MENU")).toBe(true);
       expect(hasPermission(m, "MANAGE_USERS")).toBe(false);
@@ -168,10 +172,11 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
     expect(canAccessRoute(owner, "/dashboard/revenue")).toBe(true);
   });
 
-  it("Quản lý 1 truy cập được báo cáo & nhật ký nhưng KHÔNG vào được trang người dùng & cài đặt chi nhánh", () => {
+  it("Quản lý 1 truy cập được báo cáo nhưng KHÔNG vào được nhật ký (trừ khi được cấp), trang người dùng & cài đặt chi nhánh", () => {
     const manager1 = createMockUser("ROLE_MANAGER_1");
     expect(canAccessRoute(manager1, "/dashboard")).toBe(true);
-    expect(canAccessRoute(manager1, "/dashboard/audit")).toBe(true);
+    expect(canAccessRoute(manager1, "/dashboard/audit")).toBe(false);
+    expect(canAccessRoute(createMockUser("ROLE_MANAGER_1", false, ["VIEW_AUDIT_LOGS"]), "/dashboard/audit")).toBe(true);
     expect(canAccessRoute(manager1, "/dashboard/inventory")).toBe(true);
     expect(canAccessRoute(manager1, "/dashboard/revenue")).toBe(true);
 
@@ -191,7 +196,7 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
     expect(canAccessRoute(manager2, "/dashboard/revenue")).toBe(true);
     expect(canAccessRoute(manager2, "/dashboard/tables")).toBe(true);
 
-    expect(canAccessRoute(manager2, "/dashboard/audit")).toBe(true);
+    expect(canAccessRoute(manager2, "/dashboard/audit")).toBe(false); // nhật ký: Chủ cấp riêng
     expect(canAccessRoute(manager2, "/dashboard/inventory")).toBe(true);
     expect(canAccessRoute(manager2, "/dashboard/users")).toBe(false);
     const staff = createMockUser("ROLE_CASHIER");

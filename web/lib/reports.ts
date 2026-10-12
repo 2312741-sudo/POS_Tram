@@ -124,6 +124,7 @@ export interface CashShiftItem {
   shiftCode: string;
   shiftName?: string;
   storeCode?: string;
+  staffUid?: string;
   staffUsername: string;
   staffFullName: string;
   openedAt: number;

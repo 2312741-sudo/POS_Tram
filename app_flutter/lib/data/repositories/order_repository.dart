@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
+import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
@@ -1010,6 +1011,12 @@ class OrderRepository {
     await ref.child(key).set(product.toMap());
   }
 
+  /// Báo hết / bật lại món: chỉ ghi isAvailable + soldOutAt/By/Until (rules cho bếp & nhân viên đúng các trường này).
+  Future<void> updateProductAvailability(ProductModel product, Map<String, Object?> patch, {String? storeCode}) async {
+    final key = product.dbKey ?? product.name.replaceAll(RegExp(r'[.#$\[\]]'), '_');
+    await getProductsRef(storeCode).child(key).update(patch);
+  }
+
   Future<void> deleteProduct(ProductModel product, {String? storeCode}) async {
     final ref = getProductsRef(storeCode);
     final key = product.name.replaceAll(RegExp(r'[.#$\[\]]'), '_');
@@ -1090,6 +1097,73 @@ class OrderRepository {
     await ref.child(noteId).remove();
   }
 
+  // ==================== DANH MỤC NOTE & TOPPING (note_groups / topping_groups) ====================
+  String _sc(String? storeCode) => (storeCode != null && storeCode.trim().isNotEmpty)
+      ? storeCode.trim().toUpperCase()
+      : _currentStoreCode;
+
+  /// Luồng toàn bộ danh mục note + topping của chi nhánh (gộp hai node)
+  Stream<ItemCatalog> itemCatalogStream({String? storeCode}) {
+    final sc = _sc(storeCode);
+    final noteRef = _root.child('stores').child(sc).child('note_groups');
+    final topRef = _root.child('stores').child(sc).child('topping_groups');
+    late StreamController<ItemCatalog> ctrl;
+    StreamSubscription<DatabaseEvent>? a;
+    StreamSubscription<DatabaseEvent>? b;
+    var notes = <NoteGroup>[];
+    var tops = <ToppingGroup>[];
+    void emit() {
+      if (!ctrl.isClosed) ctrl.add(ItemCatalog(noteGroups: notes, toppingGroups: tops));
+    }
+
+    int byOrder(int so1, String n1, int so2, String n2) => so1 != so2 ? so1.compareTo(so2) : n1.compareTo(n2);
+    ctrl = StreamController<ItemCatalog>(
+      onListen: () {
+        a = noteRef.onValue.listen((e) {
+          final v = e.snapshot.value;
+          notes = v is Map ? (v.entries.map((x) => NoteGroup.fromMap(x.key.toString(), x.value)).toList()
+            ..sort((x, y) => byOrder(x.sortOrder, x.name, y.sortOrder, y.name))) : <NoteGroup>[];
+          emit();
+        }, onError: (_) {});
+        b = topRef.onValue.listen((e) {
+          final v = e.snapshot.value;
+          tops = v is Map ? (v.entries.map((x) => ToppingGroup.fromMap(x.key.toString(), x.value)).toList()
+            ..sort((x, y) => byOrder(x.sortOrder, x.name, y.sortOrder, y.name))) : <ToppingGroup>[];
+          emit();
+        }, onError: (_) {});
+      },
+      onCancel: () async {
+        await a?.cancel();
+        await b?.cancel();
+      },
+    );
+    return ctrl.stream;
+  }
+
+  Future<void> saveNoteGroup(NoteGroup g, {String? storeCode}) =>
+      _root.child('stores').child(_sc(storeCode)).child('note_groups').child(g.id).set(g.toMap());
+
+  Future<void> deleteNoteGroup(String id, {String? storeCode}) =>
+      _root.child('stores').child(_sc(storeCode)).child('note_groups').child(id).remove();
+
+  Future<void> saveToppingGroup(ToppingGroup g, {String? storeCode}) =>
+      _root.child('stores').child(_sc(storeCode)).child('topping_groups').child(g.id).set(g.toMap());
+
+  Future<void> deleteToppingGroup(String id, {String? storeCode}) =>
+      _root.child('stores').child(_sc(storeCode)).child('topping_groups').child(id).remove();
+
+  /// Ghi nhiều đường dẫn (tương đối theo stores/{s}) trong một lần — dùng cho "Nhập từ cấu hình cũ"
+  Future<void> updateStorePaths(Map<String, Object?> updates, {String? storeCode}) =>
+      _root.child('stores').child(_sc(storeCode)).update(updates);
+
+  /// Đọc một lần dữ liệu thô để dựng kế hoạch nhập từ cấu hình cũ
+  Future<Map<String, dynamic>> loadLegacyNoteConfig({String? storeCode}) async {
+    final sc = _sc(storeCode);
+    final names = ['products', 'categories', 'product_notes', 'note_groups', 'topping_groups'];
+    final snaps = await Future.wait(names.map((n) => _root.child('stores/$sc/$n').get()));
+    return {for (var i = 0; i < names.length; i++) names[i]: snaps[i].value};
+  }
+
   /// Đọc thô thực đơn một chi nhánh (món, nhóm, ghi chú mẫu) để dựng kế hoạch sao chép.
   Future<MenuSnapshot> loadMenuSnapshot(String storeCode) async {
     final sc = storeCode.trim().toUpperCase();
@@ -1097,11 +1171,15 @@ class OrderRepository {
       _root.child('stores/$sc/products').get(),
       _root.child('stores/$sc/categories').get(),
       _root.child('stores/$sc/product_notes').get(),
+      _root.child('stores/$sc/note_groups').get(),
+      _root.child('stores/$sc/topping_groups').get(),
     ]);
     return MenuSnapshot(
       products: MenuCopy.toRecord(snaps[0].value),
       categories: MenuCopy.toRecord(snaps[1].value),
       notes: MenuCopy.toRecord(snaps[2].value),
+      noteGroups: MenuCopy.toRecord(snaps[3].value),
+      toppingGroups: MenuCopy.toRecord(snaps[4].value),
     );
   }
 

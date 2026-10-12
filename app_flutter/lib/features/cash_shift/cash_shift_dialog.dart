@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../core/domain/shift_scope.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -35,7 +36,6 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   CashShiftModel? _currentShift;
   bool _isLoading = true;
   bool _isSubmitting = false;
-  bool _allowStaffViewDifference = true;
   late TabController _tabController;
   StreamSubscription<List<CashShiftModel>>? _shiftSub;
   StreamSubscription<List<BillModel>>? _billsSub;
@@ -47,29 +47,14 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   final _actualCashCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
-  bool get _isManagerOrOwner {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    return user.isOwner ||
-        user.isManager ||
-        user.can(AppPermissions.viewReports) ||
-        user.can(AppPermissions.manageStoreSettings) ||
-        _auth.canAccessManagerHub;
-  }
-
-  bool get _canViewDifference => _isManagerOrOwner || _allowStaffViewDifference;
+  /// Số kỳ vọng / chênh lệch / phiếu bàn giao chỉ dành cho người có VIEW_SHIFT_HANDOVER (chủ, quản lý).
+  /// Nhân viên chốt ca theo kiểm đếm mù: tự đếm và nhập số tiền thực tế.
+  bool get _canViewDifference => _auth.canViewShiftHandover;
 
   Map<String, dynamic> _computeShiftPromoStats() {
     if (_currentShift == null) return {};
     final shift = _currentShift!;
-    final bills = _shiftBills.where((b) {
-      if (b.status != 'PAID') return false;
-      if (b.shiftId != null && b.shiftId!.isNotEmpty) {
-        return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
-      }
-      final closeT = shift.closedAt ?? 9999999999999;
-      return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
-    }).toList();
+    final bills = _shiftBills.where((b) => b.status == 'PAID' && billBelongsToShift(b, shift)).toList();
 
     int discountedItemsCount = 0;
     int discountedItemsTotal = 0;
@@ -128,7 +113,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     // Real-time synchronization with Firebase Realtime Database
     _shiftSub = _fb.cashShiftsStream().listen((shifts) {
       if (!mounted) return;
-      final openShift = shifts.where((s) => s.isOpen).firstOrNull ?? _fb.activeShiftCache;
+      final openShift = _fb.ownOpenShiftIn(shifts);
       setState(() {
         if (openShift != null && openShift.isOpen) {
           _currentShift = openShift;
@@ -142,7 +127,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       });
     });
 
-    _billsSub = _fb.billsStream().listen((bills) {
+    _billsSub = _fb.myBillsStream().listen((bills) {
       if (!mounted) return;
       setState(() {
         _shiftBills = bills;
@@ -166,11 +151,6 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   }
 
   Future<void> _loadShift() async {
-    try {
-      final storeInfo = await _fb.getStoreInfo();
-      _allowStaffViewDifference = storeInfo.allowStaffViewShiftDifference;
-    } catch (_) {}
-
     final shift = _fb.activeShiftCache ?? await _fb.getCurrentOpenShift();
     if (mounted) {
       setState(() {
@@ -209,6 +189,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       id: 'SHIFT_${now.millisecondsSinceEpoch}',
       shiftCode: shiftCode,
       storeCode: _auth.currentStoreCode,
+      staffUid: _auth.currentUid,
       staffUsername: _auth.currentUser?.username ?? 'staff',
       staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
       openedAt: now.millisecondsSinceEpoch,
@@ -288,7 +269,17 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     if (_currentShift == null || _isSubmitting) return;
     if (!_requirePermission(AppPermissions.manageCashShift, 'kết ca / chốt két')) return;
     final shiftToClose = _currentShift!;
-    final actual = int.tryParse(_actualCashCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? shiftToClose.expectedCash;
+    final actual = resolveActualCash(
+      input: _actualCashCtrl.text,
+      expectedCash: shiftToClose.expectedCash,
+      canViewHandover: _canViewDifference,
+    );
+    if (actual == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập số tiền mặt bạn đã kiểm đếm trong két'), backgroundColor: AppColors.danger),
+      );
+      return;
+    }
     final notes = _notesCtrl.text.trim();
 
     setState(() => _isSubmitting = true);
@@ -588,43 +579,6 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 ],
               ),
             ),
-            if (_isManagerOrOwner)
-              InkWell(
-                onTap: () async {
-                  final nextVal = !_allowStaffViewDifference;
-                  await _fb.updateStoreShiftDifferenceSetting(nextVal);
-                  if (!mounted) return;
-                  setState(() => _allowStaffViewDifference = nextVal);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(nextVal
-                            ? 'Đã BẬT cho phép nhân viên xem chênh lệch khi kết ca'
-                            : 'Đã TẮT (Ẩn chênh lệch két đối với nhân viên)'),
-                        backgroundColor: nextVal ? AppColors.success : AppColors.warningInk,
-                      ),
-                    );
-                  }
-                },
-                child: Row(
-                  children: [
-                    Icon(
-                      _allowStaffViewDifference ? Icons.visibility : Icons.visibility_off,
-                      size: 14,
-                      color: _allowStaffViewDifference ? context.tc.success : context.tc.textHint,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _allowStaffViewDifference ? 'NV xem lệch: BẬT' : 'NV xem lệch: TẮT',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _allowStaffViewDifference ? context.tc.success : context.tc.textHint,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
         const SizedBox(height: 8),

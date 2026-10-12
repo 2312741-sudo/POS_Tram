@@ -1,4 +1,5 @@
 // lib/data/services/firebase_service.dart
+import '../../core/domain/shift_scope.dart';
 import '../../core/domain/customer_search.dart';
 import 'dart:async';
 
@@ -14,6 +15,7 @@ import 'export_service.dart';
 import 'inventory_service.dart';
 import 'campaign_service.dart';
 import '../../core/domain/order_integrity.dart' show StockRetryPlanner;
+import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
 
 export '../repositories/seed_data.dart';
@@ -197,6 +199,15 @@ class FirebaseService {
   // ==================== BILLS ====================
   Stream<List<BillModel>> billsStream() => _orderRepo.billsStream();
 
+  /// Hóa đơn tài khoản hiện tại được phép thấy: nhân viên chỉ thấy HĐ của mình (người thu tiền hoặc
+  /// người tạo/thêm món); chủ/quản lý (VIEW_ALL_BILLS_HISTORY) thấy tất cả. Lọc phía client.
+  Stream<List<BillModel>> myBillsStream() => _orderRepo.billsStream().map((b) => scopeVisibleBills(b));
+
+  List<BillModel> scopeVisibleBills(Iterable<BillModel> bills, {String? filterUsername}) {
+    final id = _reportRepo.shiftIdentity;
+    return scopeBills(bills, uid: id.uid, username: id.username, canViewAll: id.canViewAllBills, filterUsername: filterUsername);
+  }
+
   Future<BillModel?> getBill(String billId) => _orderRepo.getBill(billId);
 
   Future<void> saveBill(BillModel bill) => _orderRepo.saveBill(bill);
@@ -337,6 +348,9 @@ class FirebaseService {
   Stream<List<ProductModel>> productsStream({String? storeCode}) =>
       _orderRepo.productsStream(storeCode: storeCode);
 
+  Future<void> updateProductAvailability(ProductModel product, Map<String, Object?> patch, {String? storeCode}) =>
+      _orderRepo.updateProductAvailability(product, patch, storeCode: storeCode);
+
   Future<List<ProductModel>> getProducts({String? storeCode}) =>
       _orderRepo.getProducts(storeCode: storeCode);
 
@@ -366,6 +380,23 @@ class FirebaseService {
 
   Future<void> deleteProductNote(String noteId, {String? storeCode}) =>
       _orderRepo.deleteProductNote(noteId, storeCode: storeCode);
+
+  // Danh mục note & topping (note_groups / topping_groups)
+  Stream<ItemCatalog> itemCatalogStream({String? storeCode}) => _orderRepo.itemCatalogStream(storeCode: storeCode);
+
+  Future<void> saveNoteGroup(NoteGroup g, {String? storeCode}) => _orderRepo.saveNoteGroup(g, storeCode: storeCode);
+
+  Future<void> deleteNoteGroup(String id, {String? storeCode}) => _orderRepo.deleteNoteGroup(id, storeCode: storeCode);
+
+  Future<void> saveToppingGroup(ToppingGroup g, {String? storeCode}) => _orderRepo.saveToppingGroup(g, storeCode: storeCode);
+
+  Future<void> deleteToppingGroup(String id, {String? storeCode}) => _orderRepo.deleteToppingGroup(id, storeCode: storeCode);
+
+  Future<void> updateStorePaths(Map<String, Object?> updates, {String? storeCode}) =>
+      _orderRepo.updateStorePaths(updates, storeCode: storeCode);
+
+  Future<Map<String, dynamic>> loadLegacyNoteConfig({String? storeCode}) =>
+      _orderRepo.loadLegacyNoteConfig(storeCode: storeCode);
 
   Future<int> copyMenuBetweenStores({
     required String fromStoreCode,
@@ -445,6 +476,19 @@ class FirebaseService {
 
   // ==================== KIOTVIET CASH SHIFT ====================
   CashShiftModel? get activeShiftCache => _reportRepo.activeShiftCache;
+
+  /// AuthService đăng ký danh tính (uid, username, quyền xem mọi ca) để ca/két tách theo tài khoản.
+  void setShiftIdentityProvider(({String uid, String username, bool canViewAll, bool canViewAllBills}) Function() provider) {
+    _reportRepo.shiftIdentityProvider = provider;
+  }
+
+  ({String uid, String username, bool canViewAll, bool canViewAllBills}) get shiftIdentity => _reportRepo.shiftIdentity;
+
+  /// Ca đang mở của TÀI KHOẢN HIỆN TẠI trong danh sách [shifts] (không bao giờ trả ca của người khác).
+  CashShiftModel? ownOpenShiftIn(Iterable<CashShiftModel> shifts) => _reportRepo.ownOpenShiftIn(shifts);
+
+  List<CashShiftModel> scopeVisibleShifts(Iterable<CashShiftModel> shifts, {String? filterOwner}) =>
+      _reportRepo.scopeVisibleShifts(shifts, filterOwner: filterOwner);
 
   List<CashShiftModel>? get cachedCashShiftsList => _reportRepo.cachedCashShiftsList;
 

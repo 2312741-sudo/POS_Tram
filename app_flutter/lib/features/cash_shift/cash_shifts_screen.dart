@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../core/permissions/app_permissions.dart';
+import '../../core/domain/shift_scope.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -30,25 +30,16 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
   String _searchQuery = '';
   String _statusFilter = 'ALL'; // ALL, OPEN, CLOSED
   DateTime? _selectedDate;
-  bool _allowStaffViewDifference = true;
-  bool _updatingSetting = false;
+  String? _ownerFilter; // lọc theo tài khoản (chỉ chủ/quản lý có VIEW_ALL_SHIFTS)
 
-  bool get _isManagerOrOwner {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-    return user.isOwner ||
-        user.isManager ||
-        user.can(AppPermissions.viewReports) ||
-        user.can(AppPermissions.manageStoreSettings) ||
-        _auth.canAccessManagerHub;
-  }
+  bool get _canViewAllShifts => _auth.canViewAllShifts;
 
-  bool get _canViewDifference => _isManagerOrOwner || _allowStaffViewDifference;
+  /// Phiếu bàn giao (số kỳ vọng, chênh lệch, in/chia sẻ) chỉ dành cho người có VIEW_SHIFT_HANDOVER.
+  bool get _canViewDifference => _auth.canViewShiftHandover;
 
   @override
   void initState() {
     super.initState();
-    _loadStoreSetting();
     _initShiftsData();
   }
 
@@ -57,17 +48,6 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     _safetyTimeoutTimer?.cancel();
     _shiftsSub?.cancel();
     super.dispose();
-  }
-
-  Future<void> _loadStoreSetting() async {
-    try {
-      final store = await _fb.getStoreInfo();
-      if (mounted) {
-        setState(() {
-          _allowStaffViewDifference = store.allowStaffViewShiftDifference;
-        });
-      }
-    } catch (_) {}
   }
 
   void _initShiftsData() {
@@ -137,13 +117,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
 
   List<BillModel> _getShiftBills(CashShiftModel shift, {List<BillModel>? bills}) {
     final list = bills ?? _shiftBillsCache[shift.id] ?? <BillModel>[];
-    return list.where((b) {
-      if (b.shiftId != null && b.shiftId!.isNotEmpty) {
-        return b.shiftId == shift.id || b.shiftId == shift.shiftCode;
-      }
-      final closeT = shift.closedAt ?? 9999999999999;
-      return b.createdAt >= shift.openedAt && b.createdAt <= closeT;
-    }).toList();
+    return list.where((b) => billBelongsToShift(b, shift)).toList();
   }
 
   Map<String, dynamic> _computeShiftPromoStats(CashShiftModel shift, {List<BillModel>? bills}) {
@@ -296,27 +270,8 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     );
   }
 
-  Future<void> _toggleAllowDifference(bool val) async {
-    setState(() => _updatingSetting = true);
-    await _fb.updateStoreShiftDifferenceSetting(val);
-    setState(() {
-      _allowStaffViewDifference = val;
-      _updatingSetting = false;
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(val
-              ? 'Đã BẬT cho phép nhân viên xem chênh lệch khi kết ca'
-              : 'Đã TẮT (Ẩn chênh lệch két đối với nhân viên khi kết ca)'),
-          backgroundColor: val ? AppColors.success : AppColors.warningInk,
-        ),
-      );
-    }
-  }
-
   List<CashShiftModel> get _filteredShifts {
-    return _shifts.where((s) {
+    return _fb.scopeVisibleShifts(_shifts, filterOwner: _ownerFilter).where((s) {
       if (_statusFilter == 'OPEN' && !s.isOpen) return false;
       if (_statusFilter == 'CLOSED' && s.isOpen) return false;
 
@@ -346,7 +301,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _buildSlipSheet(shift),
+      builder: (ctx) => _canViewDifference ? _buildSlipSheet(shift) : _buildMyShiftSummary(shift),
     );
   }
 
@@ -622,6 +577,17 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                 },
               ),
             ),
+            if (shift.isOpen && !_isOwnShift(shift) && _canViewAllShifts) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: Icon(Icons.lock_outline, size: 18, color: context.tc.danger),
+                  label: Text('Đóng ca bắt buộc', style: TextStyle(color: context.tc.danger, fontWeight: FontWeight.bold)),
+                  onPressed: () => _forceCloseShift(shift),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -741,11 +707,11 @@ Ghi chú: ${shift.notes}
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Phiếu Bàn Giao Ca',
+              _canViewDifference ? 'Phiếu Bàn Giao Ca' : 'Ca Của Tôi',
               style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Xem phiên giao két & chênh lệch của nhân viên',
+              _canViewDifference ? 'Xem phiên giao két & chênh lệch của nhân viên' : 'Lịch sử ca làm việc của riêng bạn',
               style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
             ),
           ],
@@ -776,66 +742,8 @@ Ghi chú: ${shift.notes}
       ),
       body: Column(
         children: [
-          // Manager Control Banner for Difference Toggle
-          if (_isManagerOrOwner)
-            Container(
-              margin: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: context.tc.card,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.tc.borderLight),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _allowStaffViewDifference
-                          ? context.tc.successLight
-                          : context.tc.warningLight,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      _allowStaffViewDifference ? Icons.visibility : Icons.visibility_off,
-                      color: _allowStaffViewDifference
-                          ? context.tc.success
-                          : context.tc.warningInk,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Xem chênh lệch tiền két khi kết ca',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          _allowStaffViewDifference
-                              ? 'Nhân viên nhìn thấy số dư lý thuyết và chênh lệch'
-                              : 'Ẩn chênh lệch: Nhân viên kiểm đếm mù, chỉ Quản lý xem đối soát',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 11,
-                            color: context.tc.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _allowStaffViewDifference,
-                    activeThumbColor: context.tc.primary,
-                    onChanged: _updatingSetting ? null : _toggleAllowDifference,
-                  ),
-                ],
-              ),
-            ),
+          // Chủ/quản lý: lọc ca theo tài khoản
+          if (_canViewAllShifts) _buildOwnerFilter(),
 
           // Search & Filter Row
           Padding(
@@ -949,6 +857,117 @@ Ghi chú: ${shift.notes}
                             },
                           ),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOwnerFilter() {
+    final owners = <String, String>{}; // username -> tên hiển thị
+    for (final s in _shifts) {
+      if (s.staffUsername.isEmpty) continue;
+      owners[s.staffUsername] = s.staffFullName.isNotEmpty ? '${s.staffFullName} (${s.staffUsername})' : s.staffUsername;
+    }
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: context.tc.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.tc.borderLight),
+      ),
+      child: DropdownButton<String?>(
+        isExpanded: true,
+        value: owners.containsKey(_ownerFilter) ? _ownerFilter : null,
+        underline: const SizedBox(),
+        hint: const Text('Tất cả tài khoản'),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Tất cả tài khoản')),
+          for (final e in owners.entries) DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
+        ],
+        onChanged: (v) => setState(() => _ownerFilter = v),
+      ),
+    );
+  }
+
+  bool _isOwnShift(CashShiftModel s) {
+    final id = _fb.shiftIdentity;
+    return shiftOwnedBy(s, uid: id.uid, username: id.username);
+  }
+
+  /// Đóng bắt buộc ca của tài khoản khác (chủ/quản lý): nhập tiền kiểm đếm + ghi chú, có nhật ký kiểm toán.
+  Future<void> _forceCloseShift(CashShiftModel shift) async {
+    final cashCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Đóng ca bắt buộc'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Ca ${shift.shiftCode} của ${shift.staffFullName} (${shift.staffUsername}) sẽ bị đóng. Thao tác được ghi vào nhật ký.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: cashCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Tiền mặt kiểm đếm thực tế', suffixText: 'đ'),
+            ),
+            TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Lý do đóng ca')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Đóng ca')),
+        ],
+      ),
+    );
+    final actual = resolveActualCash(input: cashCtrl.text, expectedCash: shift.expectedCash, canViewHandover: true);
+    final note = 'Đóng bắt buộc: ${noteCtrl.text.trim()}';
+    cashCtrl.dispose();
+    noteCtrl.dispose();
+    if (ok != true || actual == null) return;
+    try {
+      await _fb.closeCashShift(shift, actual, note);
+      if (!mounted) return;
+      Navigator.of(context).maybePop(); // đóng bảng chi tiết
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã đóng ca ${shift.shiftCode}'), backgroundColor: AppColors.success),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không đóng được ca: $e'), backgroundColor: AppColors.danger));
+    }
+  }
+
+  /// Chi tiết ca cho tài khoản KHÔNG có quyền xem phiếu bàn giao: chỉ doanh số + số tiền mình đã kiểm đếm.
+  Widget _buildMyShiftSummary(CashShiftModel shift) {
+    final openedStr = DateFormat('HH:mm - dd/MM/yyyy').format(DateTime.fromMillisecondsSinceEpoch(shift.openedAt));
+    final closedStr = shift.closedAt != null
+        ? DateFormat('HH:mm - dd/MM/yyyy').format(DateTime.fromMillisecondsSinceEpoch(shift.closedAt!))
+        : 'Đang mở';
+    return Container(
+      decoration: BoxDecoration(
+        color: context.tc.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('CA CỦA TÔI', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.primary)),
+          const SizedBox(height: 12),
+          _buildSlipMetaRow('Mã ca:', shift.shiftCode),
+          _buildSlipMetaRow('Giờ mở ca:', openedStr),
+          _buildSlipMetaRow('Giờ kết ca:', closedStr),
+          const Divider(height: 20),
+          _buildNumberRow('Tổng doanh số ca:', FormatUtils.vnd(shift.totalRevenue), isBold: true),
+          if (!shift.isOpen) _buildNumberRow('Tiền mặt tôi đã kiểm đếm:', FormatUtils.vnd(shift.actualCash ?? 0)),
+          const SizedBox(height: 8),
+          Text(
+            'Phiếu bàn giao và số đối soát két chỉ dành cho Quản lý.',
+            style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
           ),
         ],
       ),
@@ -1086,6 +1105,7 @@ Ghi chú: ${shift.notes}
                         ),
                       ],
                     ),
+                    if (_canViewDifference)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [

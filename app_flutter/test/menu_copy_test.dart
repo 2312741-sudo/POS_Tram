@@ -190,4 +190,58 @@ void main() {
       expect(MenuCopy.canCopyMenu(isOwnerOrManager: false, canEditMenu: true), isFalse);
     });
   });
+
+  group('danh mục note & topping', () {
+    final src = MenuSnapshot(
+      products: {
+        'Trà A': {'id': 1, 'name': 'Trà A', 'price': 1, 'category': 'Trà', 'noteGroupIds': ['n1'], 'toppingGroupIds': ['__none__']},
+        'Bánh B': {'id': 2, 'name': 'Bánh B', 'price': 1, 'category': 'Bánh', 'noteGroupIds': ['ghost']},
+      },
+      categories: {
+        'Trà': {'name': 'Trà', 'noteGroupIds': ['n1'], 'toppingGroupIds': ['t1', 't2']},
+        'Bánh': {'name': 'Bánh'},
+      },
+      noteGroups: {'n1': {'name': 'Đồ uống', 'items': [{'id': 'a', 'text': 'Ít đá'}]}},
+      toppingGroups: {
+        't1': {'name': 'Topping trà', 'items': [{'id': '1', 'name': 'Trân châu', 'price': 5000}]},
+        't2': {'name': 'Sốt', 'multi': false, 'items': [{'id': '2', 'name': 'Dâu', 'price': 0}]},
+      },
+    );
+
+    test('đích trống: sao chép nhóm, giữ id nguồn, đổi id trong phần gắn', () {
+      final plan = MenuCopy.buildPlan(source: src, target: const MenuSnapshot(), noteKey: nk);
+      expect(plan.groupsToAdd, 3);
+      expect((plan.updates['note_groups/n1'] as Map)['name'], 'Đồ uống');
+      expect(plan.updates['categories/Trà'], {'name': 'Trà', 'noteGroupIds': ['n1'], 'toppingGroupIds': ['t1', 't2']});
+      final a = plan.updates['products/Trà A'] as Map;
+      expect(a['noteGroupIds'], ['n1']);
+      expect(a['toppingGroupIds'], ['__none__']);
+      // id nhóm không còn ở nguồn -> "không có" (không rơi về kế thừa)
+      expect((plan.updates['products/Bánh B'] as Map)['noteGroupIds'], ['__none__']);
+    });
+
+    test('đích đã có nhóm trùng tên: dùng lại, không ghi đè, id khác thì đổi id; id trùng khác tên thì cấp id mới', () {
+      final target = MenuSnapshot(
+        noteGroups: {'x9': {'name': 'ĐỒ UỐNG', 'items': []}},
+        toppingGroups: {'t1': {'name': 'Khác hẳn', 'items': []}},
+      );
+      final plan = MenuCopy.buildPlan(source: src, target: target, noteKey: nk);
+      expect(plan.updates.containsKey('note_groups/n1'), isFalse);
+      expect((plan.updates['products/Trà A'] as Map)['noteGroupIds'], ['x9']);
+      expect(plan.updates.containsKey('topping_groups/t1'), isFalse);
+      expect(plan.updates['topping_groups/t1_2'], isNotNull);
+      expect((plan.updates['categories/Trà'] as Map)['toppingGroupIds'], ['t1_2', 't2']);
+    });
+
+    test('nhóm món đã có ở đích: chỉ bổ sung phần gắn khi đích chưa có; tắt copyCatalog thì bỏ hết', () {
+      final target = MenuSnapshot(categories: {'Trà': {'name': 'Trà'}});
+      final plan = MenuCopy.buildPlan(source: src, target: target, noteKey: nk);
+      expect(plan.updates['categories/Trà/noteGroupIds'], ['n1']);
+      final off = MenuCopy.buildPlan(source: src, target: const MenuSnapshot(), options: const CopyOptions(copyCatalog: false), noteKey: nk);
+      expect(off.groupsToAdd, 0);
+      expect(off.updates.keys.any((k) => k.startsWith('note_groups') || k.startsWith('topping_groups')), isFalse);
+      expect((off.updates['products/Trà A'] as Map).containsKey('noteGroupIds'), isFalse);
+      expect((off.updates['categories/Trà'] as Map).containsKey('noteGroupIds'), isFalse);
+    });
+  });
 }

@@ -20,15 +20,19 @@ import { errorMessage } from "./errors";
 export const COPY_CHUNK_PATHS = 400;
 
 export async function loadMenuSnapshot(db: Database, storeCode: string): Promise<MenuSnapshot> {
-  const [p, c, n] = await Promise.all([
+  const [p, c, n, ng, tg] = await Promise.all([
     get(ref(db, `stores/${storeCode}/products`)),
     get(ref(db, `stores/${storeCode}/categories`)),
     get(ref(db, `stores/${storeCode}/product_notes`)),
+    get(ref(db, `stores/${storeCode}/note_groups`)),
+    get(ref(db, `stores/${storeCode}/topping_groups`)),
   ]);
   return {
     products: (p.val() as Record<string, unknown>) || {},
     categories: (c.val() as Record<string, unknown>) || {},
     notes: (n.val() as Record<string, unknown>) || {},
+    noteGroups: (ng.val() as Record<string, unknown>) || {},
+    toppingGroups: (tg.val() as Record<string, unknown>) || {},
   };
 }
 

@@ -10,6 +10,11 @@
 //  - [CopyPlan.idMap] (id nguồn -> id đích) để nối công thức/kho nếu cần.
 // Không bao giờ xóa gì ở đích: kế hoạch chỉ gồm các đường dẫn ghi.
 
+import 'item_options.dart' show kNoGroups;
+
+/// Các trường trạng thái báo hết món — không sao chép sang chi nhánh khác.
+const List<String> soldOutFields = ['soldOutAt', 'soldOutBy', 'soldOutUntil'];
+
 enum ConflictPolicy { skip, overwrite, duplicate }
 
 enum ProductAction { create, overwrite, skip, duplicate }
@@ -18,13 +23,26 @@ class MenuSnapshot {
   final Map<String, dynamic> products;
   final Map<String, dynamic> categories;
   final Map<String, dynamic> notes;
-  const MenuSnapshot({this.products = const {}, this.categories = const {}, this.notes = const {}});
+
+  /// Danh mục note & topping (note_groups / topping_groups)
+  final Map<String, dynamic> noteGroups;
+  final Map<String, dynamic> toppingGroups;
+  const MenuSnapshot({
+    this.products = const {},
+    this.categories = const {},
+    this.notes = const {},
+    this.noteGroups = const {},
+    this.toppingGroups = const {},
+  });
 }
 
 class CopyOptions {
   final bool copyCategories;
   final bool copyOptions;
   final bool copyNotes;
+
+  /// Sao chép danh mục note/topping và phần gắn vào nhóm món / món (đổi lại id nhóm ở đích)
+  final bool copyCatalog;
   final bool copyImages;
   final ConflictPolicy conflict;
 
@@ -36,6 +54,7 @@ class CopyOptions {
     this.copyCategories = true,
     this.copyOptions = true,
     this.copyNotes = true,
+    this.copyCatalog = true,
     this.copyImages = true,
     this.conflict = ConflictPolicy.skip,
     this.preserveIds,
@@ -84,6 +103,9 @@ class CopyPlan {
   final List<CategoryOp> categoryOps;
   final int notesToAdd;
 
+  /// Số nhóm note/topping được thêm ở đích
+  final int groupsToAdd;
+
   /// Đường dẫn ghi, tương đối theo stores/{đích}
   final Map<String, Object?> updates;
   final Map<int, int> idMap;
@@ -92,6 +114,7 @@ class CopyPlan {
     required this.productOps,
     required this.categoryOps,
     required this.notesToAdd,
+    this.groupsToAdd = 0,
     required this.updates,
     required this.idMap,
   });
@@ -239,6 +262,60 @@ class MenuCopy {
     });
 
     final updates = <String, Object?>{};
+
+    // --- Danh mục note & topping: gộp theo tên (không ghi đè nhóm có sẵn), nhóm mới giữ id nguồn nếu còn trống
+    var groupsToAdd = 0;
+    Map<String, String> planGroups(String node, Map<String, dynamic> src, Map<String, dynamic> tgt) {
+      final map = <String, String>{};
+      if (!options.copyCatalog) return map;
+      final used = tgt.keys.toSet();
+      final byName = <String, String>{};
+      tgt.forEach((k, v) => byName.putIfAbsent(normalizeName(_obj(v)?['name'] ?? k), () => k));
+      final keys = src.keys.toList()..sort();
+      for (final k in keys) {
+        final v = _obj(src[k]);
+        if (v == null) continue;
+        final norm = normalizeName(v['name'] ?? k);
+        final hit = byName[norm];
+        if (hit != null) {
+          map[k] = hit;
+          continue;
+        }
+        var id = sanitizeKey(k);
+        if (id.isEmpty) id = 'group';
+        var n = 1;
+        while (used.contains(id)) {
+          n++;
+          id = '${sanitizeKey(k)}_$n';
+        }
+        used.add(id);
+        byName[norm] = id;
+        map[k] = id;
+        updates['$node/$id'] = v;
+        groupsToAdd++;
+      }
+      return map;
+    }
+
+    final noteGroupMap = planGroups('note_groups', toRecord(source.noteGroups), toRecord(target.noteGroups));
+    final toppingGroupMap = planGroups('topping_groups', toRecord(source.toppingGroups), toRecord(target.toppingGroups));
+
+    /// Đổi id nhóm nguồn -> đích; null = không có trường. Id nguồn không còn tồn tại = bỏ; hết sạch -> "không có".
+    List<String>? remapGroupIds(Object? raw, Map<String, String> map) {
+      if (raw == null || !options.copyCatalog) return null;
+      final ids = raw is List ? raw.map((e) => e.toString()).toList() : (raw is Map ? raw.values.map((e) => e.toString()).toList() : <String>[]);
+      if (ids.isEmpty) return null;
+      final out = <String>[];
+      for (final i in ids) {
+        final m = i == kNoGroups ? null : map[i];
+        if (m != null && !out.contains(m)) out.add(m);
+      }
+      return out.isEmpty ? [kNoGroups] : out;
+    }
+
+    final tgtCatKeyByNorm = <String, String>{};
+    tgtCats.forEach((k, node) => tgtCatKeyByNorm[normalizeName(_categoryName(node, k))] = k);
+
     final idMap = <int, int>{};
     final productOps = <ProductOp>[];
     final categoryOps = <CategoryOp>[];
@@ -249,7 +326,19 @@ class MenuCopy {
       final norm = normalizeName(srcCatName);
       final existing = tgtCatByNorm[norm];
       if (existing != null) {
-        if (!categoryOps.any((c) => normalizeName(c.name) == norm)) categoryOps.add(CategoryOp(existing, create: false));
+        if (!categoryOps.any((c) => normalizeName(c.name) == norm)) {
+          categoryOps.add(CategoryOp(existing, create: false));
+          // Nhóm món có sẵn ở đích: chỉ bổ sung phần gắn note/topping nếu ở đích chưa có
+          final tKey = tgtCatKeyByNorm[norm];
+          final tNode = tKey == null ? null : _obj(tgtCats[tKey]);
+          final sNode = _obj(srcCatByNorm[norm]?.value);
+          if (tKey != null && tNode != null && sNode != null) {
+            final n = remapGroupIds(sNode['noteGroupIds'], noteGroupMap);
+            final t = remapGroupIds(sNode['toppingGroupIds'], toppingGroupMap);
+            if (n != null && tNode['noteGroupIds'] == null) updates['categories/${sanitizeKey(tKey)}/noteGroupIds'] = n;
+            if (t != null && tNode['toppingGroupIds'] == null) updates['categories/${sanitizeKey(tKey)}/toppingGroupIds'] = t;
+          }
+        }
         return existing;
       }
       if (!options.copyCategories) return srcCatName;
@@ -258,6 +347,10 @@ class MenuCopy {
       final payload = <String, Object?>{'name': name};
       final allowed = _obj(srcNode?.value)?['allowedToppingIds'];
       if (allowed != null) payload['allowedToppingIds'] = allowed;
+      final cn = remapGroupIds(_obj(srcNode?.value)?['noteGroupIds'], noteGroupMap);
+      final ct = remapGroupIds(_obj(srcNode?.value)?['toppingGroupIds'], toppingGroupMap);
+      if (cn != null) payload['noteGroupIds'] = cn;
+      if (ct != null) payload['toppingGroupIds'] = ct;
       updates['categories/${sanitizeKey(name)}'] = payload;
       tgtCatByNorm[norm] = name;
       categoryOps.add(CategoryOp(name, create: true));
@@ -286,6 +379,20 @@ class MenuCopy {
       out['id'] = targetId;
       out['name'] = name;
       out['category'] = category;
+      // Phần gắn note/topping: đổi sang id nhóm ở đích (không sao chép danh mục thì bỏ hẳn, vì id vô nghĩa ở đích)
+      for (final f in const ['noteGroupIds', 'toppingGroupIds']) {
+        final mapped = remapGroupIds(node[f], f == 'noteGroupIds' ? noteGroupMap : toppingGroupMap);
+        if (mapped == null) {
+          out.remove(f);
+        } else {
+          out[f] = mapped;
+        }
+      }
+      // Món sao chép luôn ở trạng thái còn bán: bỏ trạng thái "báo hết" của chi nhánh nguồn.
+      out['isAvailable'] = true;
+      for (final f in soldOutFields) {
+        out.remove(f);
+      }
       return out;
     }
 
@@ -323,6 +430,10 @@ class MenuCopy {
         buildPayload(node, tName, cat, tId).forEach((f, v) {
           if (v != null) updates['products/$existingKey/$f'] = v;
         });
+        // Xóa dấu vết "báo hết" còn sót ở món đích (null = xóa trường trong update đa đường dẫn).
+        for (final f in soldOutFields) {
+          updates['products/$existingKey/$f'] = null;
+        }
         if (sourceId != null) idMap[sourceId] = tId;
         productOps.add(op(ProductAction.overwrite, existingKey, tId));
         continue;
@@ -394,7 +505,14 @@ class MenuCopy {
       }
     }
 
-    return CopyPlan(productOps: productOps, categoryOps: categoryOps, notesToAdd: notesToAdd, updates: updates, idMap: idMap);
+    return CopyPlan(
+      productOps: productOps,
+      categoryOps: categoryOps,
+      notesToAdd: notesToAdd,
+      groupsToAdd: groupsToAdd,
+      updates: updates,
+      idMap: idMap,
+    );
   }
 
   /// Chia các đường dẫn thành lô <= [maxPaths].

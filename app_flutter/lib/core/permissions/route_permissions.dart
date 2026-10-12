@@ -26,10 +26,11 @@ class RoutePermissions {
     ],
     '/campaign-form': [AppPermissions.createCampaign, AppPermissions.editCampaign, AppPermissions.managePromotions],
     '/voucher-management': [AppPermissions.manageCodes, AppPermissions.managePromotions],
-    '/audit-logs': [AppPermissions.viewAuditLogs],
+    '/audit-logs': [AppPermissions.viewAuditLogs], // Quản lý mặc định KHÔNG có — Chủ quán cấp riêng
     '/permissions-matrix': [AppPermissions.manageRolesPermissions],
     '/user-management': [AppPermissions.manageUsers],
-    '/menu-management': [AppPermissions.viewMenu],
+    // Quản lý thực đơn: Nhân viên / Bếp (chỉ có VIEW_MENU) không vào được — kể cả gõ thẳng đường dẫn.
+    '/menu-management': [AppPermissions.manageMenu, AppPermissions.editMenu],
     '/category-management': [AppPermissions.manageMenu, AppPermissions.editMenu],
     '/zone-management': [AppPermissions.manageTables],
     '/online-orders': [AppPermissions.viewOnlineOrders],
@@ -37,7 +38,8 @@ class RoutePermissions {
     '/dashboard': [AppPermissions.viewReports],
     '/reports-hub': [AppPermissions.viewReports],
     '/end-of-day-report': [AppPermissions.viewReports],
-    '/cash-shifts': [AppPermissions.viewCashShifts, AppPermissions.viewReports, AppPermissions.manageCashShift],
+    // Phiếu bàn giao ca: Chủ/Quản lý (hoặc tài khoản được cấp) — Nhân viên mặc định KHÔNG vào được
+    '/cash-shifts': [AppPermissions.viewShiftHandover, AppPermissions.viewAllShifts, AppPermissions.viewReports],
     '/customers': [AppPermissions.viewCustomers, AppPermissions.viewReports],
     '/inventory': [AppPermissions.viewInventory],
     '/purchase-receipt': [AppPermissions.viewInventory],

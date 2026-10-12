@@ -45,9 +45,11 @@ describe("manager approval", () => {
   it("quyền duyệt khớp máy chủ", () => {
     expect(canUserApprove({ roleId: "ROLE_OWNER" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
     expect(canUserApprove({ roleId: "ROLE_MANAGER_2" }, "DISCOUNT_ITEM")).toBe(true);
-    expect(canUserApprove({ roleId: "ROLE_MANAGER_2" }, "CANCEL_KITCHEN_ITEM")).toBe(true); // QL1+QL2 đã gộp
-    expect(canUserApprove({ roleId: "ROLE_MANAGER" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
-    expect(canUserApprove({ roleId: "manager_1" }, "CANCEL_KITCHEN_ITEM")).toBe(true);
+    // Quản lý mặc định KHÔNG duyệt hủy món đã gửi bếp; được Chủ cấp riêng thì duyệt được
+    expect(canUserApprove({ roleId: "ROLE_MANAGER_2" }, "CANCEL_KITCHEN_ITEM")).toBe(false);
+    expect(canUserApprove({ roleId: "ROLE_MANAGER" }, "CANCEL_KITCHEN_ITEM")).toBe(false);
+    expect(canUserApprove({ roleId: "manager_1" }, "CANCEL_KITCHEN_ITEM")).toBe(false);
+    expect(canUserApprove({ roleId: "manager_1", customPermissions: ["CANCEL_KITCHEN_ITEM"] }, "CANCEL_KITCHEN_ITEM")).toBe(true);
     expect(canUserApprove({ roleId: "ROLE_CASHIER", customPermissions: ["DISCOUNT_ITEM"] }, "DISCOUNT_ITEM")).toBe(false);
     expect(canUserApprove({ roleId: "ROLE_OWNER", isActive: false }, "DISCOUNT_ITEM")).toBe(false);
   });

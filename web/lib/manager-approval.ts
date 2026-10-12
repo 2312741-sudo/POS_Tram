@@ -125,9 +125,10 @@ interface ApproverSource {
   customPermissions?: unknown;
 }
 
-// Quản lý đã gộp QL1 + QL2: duyệt cả giảm giá món lẫn hủy món đã gửi bếp
+// Quản lý mặc định chỉ duyệt được giảm giá món. Hủy món đã gửi bếp (CANCEL_KITCHEN_ITEM) là quyền Chủ quán
+// phải cấp riêng qua customPermissions (xem docs/ROLE_RULES.md) — khớp functions/src/managerPinLogic.ts.
 const ROLE_APPROVAL: Record<string, ApprovalAction[]> = {
-  [ROLE_MANAGER]: ["DISCOUNT_ITEM", "CANCEL_KITCHEN_ITEM"],
+  [ROLE_MANAGER]: ["DISCOUNT_ITEM"],
 };
 
 /** Khớp managerPinLogic.approverHasPermission phía máy chủ */

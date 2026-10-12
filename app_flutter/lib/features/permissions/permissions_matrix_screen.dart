@@ -72,6 +72,13 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
       return;
     }
 
+    if (!_auth.isOwner && AppPermissions.isOwnerGrantOnly(permKey)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chỉ Chủ quán được cấp hoặc thu hồi quyền này.')),
+      );
+      return;
+    }
+
     List<String> newCustom = List.from(user.customPermissions);
 
     if (newValue) {

@@ -222,7 +222,8 @@ class UserModel {
       'INVENTORY_WASTE': ['CREATE_WASTE'],
       'CREATE_WASTE': ['INVENTORY_WASTE'],
       'DISCOUNT_ITEM': ['MANUAL_DISCOUNT'],
-      'MENU_MANAGEMENT': ['EDIT_MENU', 'VIEW_MENU'],
+      // Chỉ EDIT_MENU thay thế được MENU_MANAGEMENT — VIEW_MENU (xem thực đơn khi gọi món) KHÔNG đủ để quản lý thực đơn.
+      'MENU_MANAGEMENT': ['EDIT_MENU'],
     };
 
     final alts = aliases[permKey];

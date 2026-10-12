@@ -4,6 +4,8 @@ class CashShiftModel {
   final String shiftCode;
   String shiftName;
   final String storeCode;
+  /// uid Firebase Auth của chủ ca (ca cũ trước khi tách theo tài khoản: rỗng → nhận diện theo staffUsername)
+  final String staffUid;
   final String staffUsername;
   final String staffFullName;
   final int openedAt;
@@ -24,6 +26,7 @@ class CashShiftModel {
     String? shiftCode,
     this.shiftName = '',
     required this.storeCode,
+    this.staffUid = '',
     required this.staffUsername,
     required this.staffFullName,
     required this.openedAt,
@@ -61,6 +64,7 @@ class CashShiftModel {
       shiftCode: map['shiftCode']?.toString() ?? id,
       shiftName: map['shiftName']?.toString() ?? '',
       storeCode: map['storeCode']?.toString() ?? '',
+      staffUid: map['staffUid']?.toString() ?? '',
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
       openedAt: (map['openedAt'] as num?)?.toInt() ?? 0,
@@ -83,6 +87,7 @@ class CashShiftModel {
     'shiftCode': shiftCode,
     'shiftName': shiftName,
     'storeCode': storeCode,
+    if (staffUid.isNotEmpty) 'staffUid': staffUid,
     'staffUsername': staffUsername,
     'staffFullName': staffFullName,
     'openedAt': openedAt,

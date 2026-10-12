@@ -1,5 +1,6 @@
 // lib/features/orders/order_cart_screen.dart
 import '../../core/domain/order_integrity.dart';
+import '../../core/domain/product_availability.dart';
 import '../crm/customer_management_screen.dart';
 import '../../core/domain/customer_search.dart';
 import 'widgets/customer_picker_sheet.dart';
@@ -12,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/printer/receipt_printer.dart';
+import '../../core/domain/item_options.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/manager_pin_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -20,6 +22,7 @@ import '../../core/vietqr/vietqr_generator.dart';
 import '../../data/models/app_models.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'widgets/item_option_pickers.dart';
 import '../../data/services/campaign_service.dart';
 import '../../data/services/loyalty_service.dart';
 import '../promotions/voucher_check.dart';
@@ -65,6 +68,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   List<ProductModel> _products = [];
   List<CategoryModel> _categories = [];
   List<String> _backendNotePresets = [];
+  ItemCatalog _catalog = const ItemCatalog(); // danh mục note & topping (chưa cấu hình = hành vi cũ)
 
   // KiotViet CRM Customer Loyalty
   KmtCustomerModel? _selectedCustomer;
@@ -123,8 +127,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       }
     }));
 
+    _subscriptions.add(_fb.itemCatalogStream(storeCode: storeCode).listen((c) {
+      if (mounted) setState(() => _catalog = c);
+    }));
+
     _subscriptions.add(_fb.cashShiftsStream().listen((shifts) {
-      final openOne = shifts.where((s) => s.isOpen).firstOrNull;
+      final openOne = _fb.ownOpenShiftIn(shifts);
       if (mounted) {
         setState(() => _isShiftOpen = openOne != null);
       }
@@ -904,6 +912,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     tableName: '${widget.table.name} (Tách)',
                     zone: widget.table.zone,
                     createdAt: DateTime.now().millisecondsSinceEpoch,
+                    staffUid: _auth.currentUid,
                     staffUsername: _auth.currentUser?.username ?? 'staff',
                     staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
                     items: splitItems,
@@ -1487,10 +1496,31 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       ProductModel(id: 9008, name: 'Thạch chanh', price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
     ];
 
+    final resolved = resolveItemOptions(
+      productNoteGroupIds: originalProduct?.noteGroupIds,
+      productToppingGroupIds: originalProduct?.toppingGroupIds,
+      categoryNoteGroupIds: matchedCategory?.noteGroupIds,
+      categoryToppingGroupIds: matchedCategory?.toppingGroupIds,
+      catalog: _catalog,
+    );
+    final catalogMode = !resolved.legacy; // đã cấu hình danh mục: chỉ hiện nhóm được gắn
     final Map<String, ProductModel?> toppingItemMap = {};
     final List<String> availableToppingNames = [];
+    final List<String> catalogExtras = []; // topping đã chọn trước đó nhưng không còn trong danh mục
 
-    if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
+    if (catalogMode) {
+      resolved.toppingPrices.forEach((n, p) {
+        toppingItemMap[n] = ProductModel(name: n, price: p, unit: 'phần', category: 'Topping', isTopping: true);
+        availableToppingNames.add(n);
+      });
+      final inCatalogSum = item.selectedToppings.where(toppingItemMap.containsKey).fold<int>(0, (a, n) => a + (toppingItemMap[n]?.price ?? 0));
+      catalogExtras.addAll(item.selectedToppings.where((n) => !toppingItemMap.containsKey(n)));
+      final extraTotal = item.toppingPrice - inCatalogSum;
+      final extraEach = catalogExtras.isEmpty || extraTotal <= 0 ? 0 : extraTotal ~/ catalogExtras.length;
+      for (final n in catalogExtras) {
+        toppingItemMap[n] = ProductModel(name: n, price: extraEach, unit: 'phần', category: 'Topping');
+      }
+    } else if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
       for (final tId in matchedCategory.allowedToppingIds) {
         final match = _products.firstWhere(
           (p) => p.id.toString() == tId ||
@@ -1532,7 +1562,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
 
     // Ensure previously selected toppings in item are preserved in mapping
-    for (final top in item.selectedToppings) {
+    for (final top in (catalogMode ? const <String>[] : item.selectedToppings)) {
       if (!availableToppingNames.contains(top)) {
         availableToppingNames.insert(0, top);
         toppingItemMap[top] = ProductModel(name: top, price: 5000, unit: 'phần', category: 'Topping');
@@ -1565,7 +1595,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         builder: (context, setModalState) {
           int calcToppingPrice = 0;
           for (final topName in selectedToppings) {
-            calcToppingPrice += toppingItemMap[topName]?.price ?? 5000;
+            calcToppingPrice += toppingItemMap[topName]?.price ?? (catalogMode ? 0 : 5000);
           }
           final int unitPrice = item.price + sizeExtra + calcToppingPrice;
           final int totalPrice = unitPrice * item.quantity;
@@ -1684,8 +1714,23 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // 3. TOPPINGS
-                  if (availableToppingNames.isNotEmpty) ...[
+                  // 3. TOPPINGS (theo nhóm đã gắn khi đã cấu hình danh mục; chưa cấu hình = danh sách cũ)
+                  if (catalogMode && (resolved.toppingGroups.isNotEmpty || catalogExtras.any(selectedToppings.contains))) ...[
+                    ToppingGroupsSection(
+                      groups: resolved.toppingGroups,
+                      selected: selectedToppings,
+                      extras: catalogExtras,
+                      onToggle: (g, name) => setModalState(() {
+                        final next = toggleTopping(selected: selectedToppings, group: g, name: name);
+                        selectedToppings
+                          ..clear()
+                          ..addAll(next);
+                      }),
+                      onRemoveExtra: (n) => setModalState(() => selectedToppings.remove(n)),
+                      onClearAll: () => setModalState(() => selectedToppings.clear()),
+                    ),
+                  ],
+                  if (!catalogMode && availableToppingNames.isNotEmpty) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1751,9 +1796,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                   const SizedBox(height: 8),
                   Builder(builder: (_) {
-                    final presets = _backendNotePresets.isNotEmpty
-                        ? _backendNotePresets
-                        : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về', 'Ít đường', 'Uống nóng'];
+                    final presets = catalogMode
+                        ? resolved.noteChips
+                        : (_backendNotePresets.isNotEmpty
+                            ? _backendNotePresets
+                            : const ['Ít ngọt', 'Nhiều đá', 'Không đá', 'Ít đá', 'Để riêng đá', 'Mang về', 'Ít đường', 'Uống nóng']);
                     return Wrap(
                       spacing: 6,
                       runSpacing: 4,
@@ -2866,6 +2913,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     return true;
   }
 
+  /// Món trong giỏ đã bị báo hết hàng (theo danh sách món realtime). Chỉ cảnh báo, không xóa khỏi đơn.
+  bool _isCartItemSoldOut(OrderItemModel item) {
+    for (final p in _products) {
+      if (p.name == item.name && (item.productId == 0 || p.id == item.productId || p.id == 0)) {
+        return !isProductAvailable(p);
+      }
+    }
+    return false;
+  }
+
   Future<void> _goToAddItems() async {
     if (!await _ensureShiftOpen() || !mounted) return;
 
@@ -3021,6 +3078,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       createdAt: widget.table.openedAt ?? DateTime.now().millisecondsSinceEpoch,
       closedAt: DateTime.now().millisecondsSinceEpoch,
       status: status,
+      staffUid: _auth.currentUid,
       staffUsername: staffUser,
       staffFullName: staffName,
       items: _cart,
@@ -3198,6 +3256,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           onDiscount: () => _showItemDiscountDialog(index),
                           onIncrement: () => _incrementItem(index),
                           onDecrement: () => _decrementItem(index),
+                          soldOut: _isCartItemSoldOut(_cart[index]),
                         ),
                       );
 

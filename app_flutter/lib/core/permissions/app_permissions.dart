@@ -264,16 +264,23 @@ class AppPermissions {
   static const String manageChamcongLink = 'MANAGE_CHAMCONG_LINK'; // Nhạy cảm
   static const String createSampleData = 'CREATE_SAMPLE_DATA';
 
+  // Quyền bổ sung vòng "quy tắc vai trò" (docs/ROLE_RULES.md)
+  static const String viewShiftHandover = 'VIEW_SHIFT_HANDOVER'; // Phiếu bàn giao ca
+  static const String viewAllShifts = 'VIEW_ALL_SHIFTS'; // Ca/két của tài khoản khác
+  static const String viewAllBillsHistory = 'VIEW_ALL_BILLS_HISTORY'; // Lịch sử hóa đơn mọi tài khoản
+  static const String toggleItemAvailability = 'TOGGLE_ITEM_AVAILABILITY'; // Bật/tắt món hết hàng
+  static const String manageNoteCatalog = 'MANAGE_NOTE_CATALOG'; // Danh mục note & topping
+
   /// Quyền mặc định theo vai trò (mã chuẩn). Quản lý = HỢP Quản lý 1 + Quản lý 2 cũ;
   /// Nhân viên = HỢP Thu ngân + Phục vụ cũ. Chủ quán: toàn quyền (không liệt kê).
   /// Bản song song: web/lib/auth.tsx (ROLE_PERMISSIONS) — test parity ở web/test/permission-parity.test.ts.
   static const Map<String, List<String>> rolePresets = {
     'ROLE_MANAGER': [
       'VIEW_MENU', 'EDIT_MENU', 'CHANGE_PRICE', 'MENU_MANAGEMENT', 'OPEN_TABLE',
-      'CHANGE_TABLE', 'MERGE_SPLIT_TABLE', 'SEND_KITCHEN', 'CANCEL_KITCHEN_ITEM',
+      'CHANGE_TABLE', 'MERGE_SPLIT_TABLE', 'SEND_KITCHEN',
       'CREATE_BILL', 'EDIT_BILL', 'APPLY_PROMOTION', 'MANUAL_DISCOUNT', 'DISCOUNT_ITEM',
-      'CANCEL_BILL', 'PRINT_BILL', 'REPRINT_BILL', 'MANAGE_CASH_SHIFT', 'ADJUST_CASH_SHIFT',
-      'VIEW_REPORTS', 'VIEW_AUDIT_LOGS', 'MANAGE_PROMOTIONS', 'VIEW_INVENTORY',
+      'PRINT_BILL', 'REPRINT_BILL', 'MANAGE_CASH_SHIFT', 'ADJUST_CASH_SHIFT',
+      'VIEW_REPORTS', 'MANAGE_PROMOTIONS', 'VIEW_INVENTORY',
       'EDIT_CATALOG_ITEM', 'VIEW_COST_PRICE', 'MANAGE_RECIPES', 'VIEW_SUPPLIERS',
       'EDIT_SUPPLIERS', 'CREATE_RECEIPT', 'INVENTORY_STOCK_IN', 'COMPLETE_RECEIPT',
       'CREATE_PURCHASE_RETURN', 'RECORD_SUPPLIER_PAYMENT', 'CREATE_STOCKTAKE',
@@ -281,20 +288,34 @@ class AppPermissions {
       'INVENTORY_WASTE', 'CREATE_INTERNAL_USE', 'INVENTORY_STOCK_OUT', 'CREATE_PRODUCTION',
       'CREATE_CAMPAIGN', 'EDIT_CAMPAIGN', 'ACTIVATE_CAMPAIGN', 'MANAGE_CODES', 'COPY_MENU',
       'DELETE_ITEM', 'MANAGE_TABLES', 'REDEEM_POINTS', 'VIEW_CUSTOMERS', 'MANAGE_CUSTOMERS',
-      'ADJUST_POINTS', 'EXPORT_REPORTS', 'EXPORT_AUDIT_LOGS', 'EXPORT_DATA',
+      'ADJUST_POINTS', 'EXPORT_REPORTS', 'EXPORT_DATA',
       'VIEW_CASH_SHIFTS', 'VIEW_ONLINE_ORDERS', 'MANAGE_ONLINE_ORDERS', 'VIEW_KITCHEN',
       'MANAGE_MANAGER_PIN', 'CREATE_SAMPLE_DATA',
+      'VIEW_SHIFT_HANDOVER', 'VIEW_ALL_SHIFTS', 'VIEW_ALL_BILLS_HISTORY',
+      'TOGGLE_ITEM_AVAILABILITY', 'MANAGE_NOTE_CATALOG',
     ],
     'ROLE_STAFF': [
       'VIEW_MENU', 'OPEN_TABLE', 'CHANGE_TABLE', 'SEND_KITCHEN', 'CREATE_BILL',
       'APPLY_PROMOTION', 'PRINT_BILL', 'DELETE_ITEM', 'REDEEM_POINTS', 'VIEW_CUSTOMERS',
       'MANAGE_CUSTOMERS', 'VIEW_ONLINE_ORDERS', 'MANAGE_ONLINE_ORDERS', 'VIEW_KITCHEN',
-      'MANAGE_CASH_SHIFT', 'VIEW_CASH_SHIFTS',
+      'MANAGE_CASH_SHIFT', 'VIEW_CASH_SHIFTS', 'TOGGLE_ITEM_AVAILABILITY',
     ],
     'ROLE_KITCHEN': [
-      'VIEW_MENU', 'SEND_KITCHEN', 'VIEW_KITCHEN',
+      'VIEW_MENU', 'SEND_KITCHEN', 'VIEW_KITCHEN', 'TOGGLE_ITEM_AVAILABILITY',
     ],
   };
+
+  /// Quyền CHỈ Chủ quán được cấp thêm cho từng tài khoản (customPermissions). Quản lý mặc định KHÔNG có
+  /// và không được tự cấp / cấp cho người khác (UI chặn, RTDB rules chặn ghi, Cloud Function lọc khi tạo tài khoản).
+  /// Bản song song: web/lib/permission-catalog.ts (OWNER_GRANT_ONLY_PERMISSIONS), functions/src/permissions.ts.
+  static const List<String> ownerGrantOnly = [
+    'CANCEL_BILL',
+    'CANCEL_KITCHEN_ITEM',
+    'VIEW_AUDIT_LOGS',
+    'EXPORT_AUDIT_LOGS',
+  ];
+
+  static bool isOwnerGrantOnly(String permKey) => ownerGrantOnly.contains(permKey);
 
   static bool isSensitive(String permKey) {
     const sensitive = {
@@ -779,6 +800,37 @@ class AppPermissions {
       label: 'Tạo dữ liệu mẫu',
       category: catAdmin,
       description: 'Sinh đơn hàng và khuyến mãi mẫu để thử hệ thống.',
+    ),
+    // Vòng "quy tắc vai trò" (docs/ROLE_RULES.md)
+    AppPermission(
+      key: viewShiftHandover,
+      label: 'Xem phiếu bàn giao ca',
+      category: catShift,
+      description: 'Xem phiếu bàn giao ca (tiền đầu ca, doanh thu, chênh lệch két) khi chốt ca.',
+    ),
+    AppPermission(
+      key: viewAllShifts,
+      label: 'Xem ca/két của tài khoản khác',
+      category: catShift,
+      description: 'Xem ca làm việc và két tiền của các tài khoản khác (mặc định chỉ thấy ca của mình).',
+    ),
+    AppPermission(
+      key: viewAllBillsHistory,
+      label: 'Xem lịch sử hóa đơn của mọi tài khoản',
+      category: catBilling,
+      description: 'Xem hóa đơn do tài khoản khác lập (mặc định chỉ thấy hóa đơn của chính mình).',
+    ),
+    AppPermission(
+      key: toggleItemAvailability,
+      label: 'Bật/tắt món hết hàng',
+      category: catMenu,
+      description: 'Đánh dấu món hết hàng / còn hàng ngay tại quầy hoặc màn hình bếp.',
+    ),
+    AppPermission(
+      key: manageNoteCatalog,
+      label: 'Quản lý danh mục note & topping',
+      category: catMenu,
+      description: 'Thêm, sửa, xóa các note và topping dùng chung khi gọi món.',
     ),
   ];
 }

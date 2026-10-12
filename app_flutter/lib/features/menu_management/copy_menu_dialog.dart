@@ -42,7 +42,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
   bool _pickMode = false;
   final Set<String> _pickedKeys = {};
   String _search = '';
-  bool _copyCategories = true, _copyOptions = true, _copyNotes = true, _copyImages = true;
+  bool _copyCategories = true, _copyOptions = true, _copyNotes = true, _copyCatalog = true, _copyImages = true;
   ConflictPolicy _conflict = ConflictPolicy.skip;
 
   MenuSnapshot? _snapshot;
@@ -81,6 +81,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
         copyCategories: _copyCategories,
         copyOptions: _copyOptions,
         copyNotes: _copyNotes,
+        copyCatalog: _copyCatalog,
         copyImages: _copyImages,
         conflict: _conflict,
       );
@@ -261,6 +262,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
       CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, value: _copyCategories, onChanged: (v) => setState(() => _copyCategories = v ?? true), title: const Text('Tạo nhóm còn thiếu ở đích (theo tên)')),
       CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, value: _copyOptions, onChanged: (v) => setState(() => _copyOptions = v ?? true), title: const Text('Size, topping, đường/đá')),
       CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, value: _copyNotes, onChanged: (v) => setState(() => _copyNotes = v ?? true), title: const Text('Ghi chú mẫu')),
+      CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, value: _copyCatalog, onChanged: (v) => setState(() => _copyCatalog = v ?? true), title: const Text('Danh mục note & topping (và phần gắn vào món)')),
       CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, value: _copyImages, onChanged: (v) => setState(() => _copyImages = v ?? true), title: const Text('Hình ảnh')),
       _title('5. Món đã có ở đích (trùng tên + nhóm)'),
       RadioGroup<ConflictPolicy>(
@@ -296,7 +298,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
                   '${_conflict == ConflictPolicy.duplicate ? ' • Bản sao: ${_plans[t]!.duplicated}' : ''}'
                   ' • Bỏ qua: ${_plans[t]!.skipped}'
                   ' • Nhóm mới: ${_plans[t]!.categoriesCreated}'
-                  ' • Ghi chú mới: ${_plans[t]!.notesToAdd}',
+                  ' • Ghi chú mới: ${_plans[t]!.notesToAdd} • Nhóm note/topping mới: ${_plans[t]!.groupsToAdd}',
                 ),
             ]),
           ),
