@@ -7,6 +7,8 @@ export const LEGAL = {
   appName: "POS Trạm",
   effectiveDate: "12/10/2026",
   host: "pos-tram.vercel.app",
+  hotline: "0865.062.205",
+  hotlineTel: "tel:0865062205",
   contactEmail: (process.env.NEXT_PUBLIC_PRIVACY_EMAIL || "").trim(),
 } as const;
 

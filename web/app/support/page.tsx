@@ -124,7 +124,7 @@ export default function SupportPage() {
                 Xử lý sự cố gián đoạn bán hàng, lỗi in hóa đơn tức thì.
               </p>
               <a
-                href="tel:0987654321"
+                href={LEGAL.hotlineTel}
                 style={{
                   fontSize: 16,
                   fontWeight: 800,
@@ -133,7 +133,7 @@ export default function SupportPage() {
                   display: "inline-block",
                 }}
               >
-                0987.654.321
+                {LEGAL.hotline}
               </a>
             </div>
 

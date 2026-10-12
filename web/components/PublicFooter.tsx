@@ -53,6 +53,12 @@ export function PublicFooter() {
               <span>Hỗ trợ kỹ thuật: 08:00 - 22:00 (Hàng ngày)</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Phone size={14} color="var(--primary)" />
+              <a href={LEGAL.hotlineTel} style={{ color: "inherit", textDecoration: "none" }}>
+                Hotline: {LEGAL.hotline}
+              </a>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Mail size={14} color="var(--primary)" />
               <span>{LEGAL.contactEmail || "hotro.postram@gmail.com"}</span>
             </div>

@@ -15,6 +15,9 @@
 | Danh mục phụ | Năng suất (Productivity) |
 | Xếp hạng độ tuổi | 4+ (không có nội dung nhạy cảm) |
 | Giá | Miễn phí |
+| Support URL | `https://pos-tram.vercel.app/support` |
+| Marketing URL | `https://pos-tram.vercel.app/marketing` |
+| Hotline hỗ trợ | 0865.062.205 |
 
 ### Mô tả (Description)
 POS Trạm là ứng dụng bán hàng dành cho quán cà phê, trà sữa và nhà hàng. Nhân viên gọi món theo bàn, gửi phiếu bếp, thu tiền (tiền mặt, chuyển khoản, QR), in hóa đơn qua máy in nhiệt Bluetooth hoặc mạng LAN, và quản lý ca két. Chủ quán theo dõi doanh thu, kho, khuyến mãi, khách hàng tích điểm và nhật ký thao tác cho nhiều chi nhánh.
