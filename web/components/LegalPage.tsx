@@ -6,6 +6,8 @@ export function LegalPage({ title, updated, children }: { title: string; updated
   return (
     <main style={{ maxWidth: 820, margin: "0 auto", padding: "32px 16px 64px", color: "var(--text)", lineHeight: 1.65 }}>
       <nav style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, marginBottom: 24 }}>
+        <Link href="/marketing" style={{ color: "var(--subtext)", fontWeight: 500, textDecoration: "none" }}>← Giới thiệu sản phẩm</Link>
+        <Link href="/support" style={{ color: "var(--subtext)", fontWeight: 500, textDecoration: "none" }}>Trung tâm hỗ trợ</Link>
         <Link href="/privacy" style={{ color: "var(--primary)", fontWeight: 600 }}>Chính sách quyền riêng tư</Link>
         <Link href="/privacy-choices" style={{ color: "var(--primary)", fontWeight: 600 }}>Quyền lựa chọn về dữ liệu</Link>
       </nav>
