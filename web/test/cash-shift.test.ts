@@ -32,6 +32,11 @@ describe("ca / két trên web", () => {
     expect(buildOpenShift({ storeCode: "T1", actor, initialCash: -1, existing: [], now: 1 })).toHaveProperty("error");
     expect(buildOpenShift({ storeCode: "T1", actor, initialCash: 1.5, existing: [], now: 1 })).toHaveProperty("error");
     expect(buildOpenShift({ storeCode: "T1", actor, initialCash: 0, existing: [open], now: 1 })).toHaveProperty("error");
+    // đang mở ca ở CỬA HÀNG KHÁC → cũng không được mở (phải chốt trước), thông báo nêu rõ cửa hàng
+    const other = buildOpenShift({ storeCode: "T2", actor, initialCash: 0, existing: [open], now: 1 });
+    expect("error" in other && other.error).toContain("cửa hàng T1");
+    // ca ở cửa hàng khác đã chốt thì mở được
+    expect(buildOpenShift({ storeCode: "T2", actor, initialCash: 0, existing: [{ ...open, status: "CLOSED", closedAt: 5 }], now: 1 })).toHaveProperty("updates");
     expect(buildOpenShift({ storeCode: "T1", actor: { ...actor, uid: "" }, initialCash: 0, existing: [], now: 1 })).toHaveProperty("error");
   });
 

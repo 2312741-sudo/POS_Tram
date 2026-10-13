@@ -179,3 +179,12 @@ Mỗi quán hoặc chi nhánh hoạt động độc lập dưới nút gốc:
   Nhóm hàng của nguyên vật liệu lưu ở `catalog_items.managementGroup` và `groupIds[0]`.
 - Dữ liệu mẫu (đơn + KM từng loại) mang cờ `isSample: true`, mã `MAU-xxxx`; xóa được bằng nút "Xóa dữ liệu mẫu".
 
+### 2.10. Nhân viên làm ở nhiều cửa hàng
+- Một người = MỘT tài khoản Firebase Auth (một mật khẩu); mỗi cửa hàng có hồ sơ riêng `stores/{S}/users/{uid}` (vai trò, isActive, quyền riêng riêng của cửa hàng đó)
+  và `userIndex/{uid}/{S} = true`.
+- Chỉ Chủ quán / Admin của CẢ hai cửa hàng gọi được Cloud Function `assignStaffToStore` ({sourceStoreCode, targetStoreCode, targetUid, roleId ∈ ROLE_MANAGER|ROLE_STAFF|ROLE_KITCHEN});
+  quyền riêng (`customPermissions`) không sao chép. Audit action `ASSIGN_STAFF_TO_STORE`.
+- Khóa nhân viên (`setStaffDisabled`): thuộc ≥ 2 cửa hàng thì chỉ tắt `isActive` ở cửa hàng đang thao tác, KHÔNG khóa tài khoản đăng nhập.
+- Ca/két: một tài khoản chỉ có 1 ca mở tại MỘT thời điểm trên toàn hệ thống — mở ca mới phải chốt ca đang mở ở cửa hàng khác (Web: buildOpenShift; POS: _assertNoOpenShiftElsewhere).
+- Web: vai trò khác Chủ quán chỉ làm ở cửa hàng đã đăng nhập; muốn làm ở cửa hàng khác thì đăng nhập lại với mã cửa hàng đó để nhận đúng vai trò.
+

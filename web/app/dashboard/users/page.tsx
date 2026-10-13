@@ -42,6 +42,7 @@ import { useDashboardData } from "@/lib/data-context";
 import { db, functions } from "@/lib/firebase";
 import { ref, set, update, remove, get } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
+import AssignStoreDialog from "@/components/AssignStoreDialog";
 
 function formatDateTime(timestamp?: number | null) {
   if (!timestamp) return "Chưa đăng nhập";
@@ -141,6 +142,9 @@ const emptyForm: UserForm = {
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, loading: authLoading, storeCode: activeStoreCode } = useAuth();
+  const canAssignStores = currentUser?.isRootOwner === true || normalizeRoleId(currentUser?.roleId || currentUser?.role || "") === ROLE_OWNER;
+  const [assignTarget, setAssignTarget] = useState<DashboardUser | null>(null);
+  const [assignNotice, setAssignNotice] = useState("");
   const canGrantOwnerOnly = currentUser?.isRootOwner === true || normalizeRoleId(currentUser?.roleId || currentUser?.role || "") === ROLE_OWNER;
 
   const {
@@ -942,6 +946,16 @@ export default function UsersPage() {
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", gap: "6px" }}>
+                      {/* Thêm vào cửa hàng khác (Chủ quán / Admin) */}
+                      {canAssignStores && !u.isRootOwner && stores.length > 1 && (
+                        <button
+                          title="Thêm nhân viên này vào cửa hàng khác"
+                          onClick={() => setAssignTarget(u)}
+                          style={{ padding: "6px 8px", borderRadius: "8px", background: "rgba(24,119,242,0.08)", border: "1px solid rgba(24,119,242,0.25)", color: "#1877F2", cursor: "pointer" }}
+                        >
+                          <Store size={15} />
+                        </button>
+                      )}
                       {/* Nút Khóa / Mở */}
                       {!u.isRootOwner && (
                         <button
@@ -1409,6 +1423,23 @@ export default function UsersPage() {
       )}
 
       {/* Modal Đặt lại Mật khẩu Nhân viên */}
+      {assignNotice && (
+        <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", background: "#137333", color: "#fff", padding: "10px 16px", borderRadius: 10, fontSize: 13, zIndex: 1200, maxWidth: "90vw" }} onClick={() => setAssignNotice("")}>
+          {assignNotice}
+        </div>
+      )}
+      {assignTarget && (
+        <AssignStoreDialog
+          staff={{ uid: assignTarget.uid || assignTarget.id, fullName: assignTarget.fullName, username: assignTarget.username }}
+          sourceStoreCode={assignTarget.storeCode || activeStoreCode || ""}
+          stores={stores}
+          onClose={() => setAssignTarget(null)}
+          onDone={(m) => {
+            setAssignTarget(null);
+            setAssignNotice(m);
+          }}
+        />
+      )}
       {resetPasswordTarget && (
         <div className="modal-overlay" onClick={closeResetPassword}>
           <div className="modal-content" style={{ maxWidth: "440px" }} onClick={(e) => e.stopPropagation()}>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, canAccessRoute, homePathFor } from "@/lib/auth";
+import { normalizeRoleId, ROLE_OWNER } from "@/lib/roles";
 import Sidebar from "@/components/Sidebar";
 import { DashboardDataProvider, useDashboardData } from "@/lib/data-context";
 import { Store, Settings, Menu, Moon, Sun } from "lucide-react";
@@ -47,6 +48,14 @@ function ThemeToggle() {
 function HeaderBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { user } = useAuth();
   const { stores, currentStoreCode, setCurrentStoreCode } = useDashboardData();
+  // Vai trò được gán THEO TỪNG cửa hàng: Chủ quán xem mọi cửa hàng; vai trò khác chỉ làm ở cửa hàng đã đăng nhập
+  // (muốn làm ở cửa hàng khác thì đăng nhập lại với mã cửa hàng đó để nhận đúng vai trò/quyền tại đó).
+  const canSwitchStore = user?.isRootOwner === true || normalizeRoleId(user?.roleId || user?.role || "") === ROLE_OWNER;
+  const lockedStore = !canSwitchStore ? user?.storeCode || "" : "";
+  useEffect(() => {
+    if (lockedStore && currentStoreCode !== lockedStore) setCurrentStoreCode(lockedStore);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedStore, currentStoreCode]);
 
   return (
     <header
@@ -119,8 +128,8 @@ function HeaderBar({ onOpenMenu }: { onOpenMenu: () => void }) {
               cursor: "pointer",
             }}
           >
-            <option value="ALL">🌐 Tất cả chi nhánh (Toàn hệ thống)</option>
-            {stores.map((s) => (
+            {canSwitchStore && <option value="ALL">🌐 Tất cả chi nhánh (Toàn hệ thống)</option>}
+            {stores.filter((s) => canSwitchStore || s.storeCode === lockedStore).map((s) => (
               <option key={s.storeCode} value={s.storeCode}>
                 🏪 {s.storeCode} - {s.storeName}
               </option>

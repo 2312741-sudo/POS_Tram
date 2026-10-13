@@ -5,11 +5,12 @@ import { ref, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
-import { buildCloseShift, buildOpenShift, expectedCash, findOwnOpenShift, isShiftOpen, totalRevenue, type ShiftActor } from "@/lib/cash-shift";
+import { buildCloseShift, buildOpenShift, expectedCash, findOwnOpenShift, isShiftOpen, totalRevenue, type ShiftActor, type ShiftLike } from "@/lib/cash-shift";
 import { shiftOwnedBy } from "@/lib/shift-scope";
 import { errorMessage } from "@/lib/errors";
 import { formatVND } from "@/lib/reports";
 import { nowMs } from "@/lib/kitchen";
+import { fetchOwnOpenShift } from "@/lib/cash-shift-run";
 
 const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 18 } as const;
 const input = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 15 } as const;
@@ -57,9 +58,26 @@ export default function MyShiftPage() {
     }
   };
 
-  const doOpen = () => {
+  const doOpen = async () => {
     const v = initialCash.trim() === "" ? 0 : Number(initialCash.replace(/[^0-9]/g, ""));
-    return run(() => buildOpenShift({ storeCode, actor, initialCash: v, existing: mine, now: nowMs() }), "Đã mở ca. Chúc bạn bán hàng tốt!");
+    setError("");
+    setBusy(true);
+    // Xoay ca nhiều cửa hàng: tra ca đang mở của chính mình ở MỌI cửa hàng có quyền
+    const others: ShiftLike[] = [];
+    try {
+      for (const s of stores) {
+        if (s.storeCode === storeCode) continue;
+        try {
+          const o = await fetchOwnOpenShift(db, s.storeCode, { uid: actor.uid, username: actor.username });
+          if (o) others.push({ ...o, storeCode: s.storeCode });
+        } catch {
+          // cửa hàng không đọc được (không thuộc tài khoản) → bỏ qua
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+    return run(() => buildOpenShift({ storeCode, actor, initialCash: v, existing: [...mine, ...others], now: nowMs() }), "Đã mở ca. Chúc bạn bán hàng tốt!");
   };
 
   const doClose = () => {

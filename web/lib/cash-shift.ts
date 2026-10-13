@@ -78,7 +78,10 @@ function auditLog(storeCode: string, now: number, actor: ShiftActor, action: str
 
 export type ShiftBuildResult = { error: string } | { updates: Record<string, unknown>; shiftId: string };
 
-/** Mở ca: tài khoản phải chưa có ca đang mở; đóng nốt ca cũ còn treo của chính mình giống POS */
+/**
+ * Mở ca: tài khoản phải chưa có ca đang mở Ở BẤT KỲ CỬA HÀNG NÀO (nhân viên xoay ca nhiều cửa hàng phải chốt ca
+ * cửa hàng này mới mở ca cửa hàng khác). `existing` gồm ca của tài khoản ở mọi cửa hàng đã đọc được.
+ */
 export function buildOpenShift(args: {
   storeCode: string;
   actor: ShiftActor;
@@ -91,8 +94,11 @@ export function buildOpenShift(args: {
   if (!actor.uid) return { error: "Không xác định được tài khoản đang đăng nhập" };
   if (!Number.isInteger(args.initialCash) || args.initialCash < 0) return { error: "Tiền đầu ca phải là số nguyên ≥ 0" };
   if (args.initialCash > 1_000_000_000) return { error: "Tiền đầu ca quá lớn" };
-  const open = findOwnOpenShift(args.existing, { uid: actor.uid, username: actor.username }, storeCode);
-  if (open) return { error: `Bạn đang có ca ${open.shiftCode || open.id} chưa chốt. Hãy chốt ca trước khi mở ca mới.` };
+  const open = findOwnOpenShift(args.existing, { uid: actor.uid, username: actor.username });
+  if (open) {
+    const where = open.storeCode && open.storeCode !== storeCode ? ` tại cửa hàng ${open.storeCode}` : "";
+    return { error: `Bạn đang có ca ${open.shiftCode || open.id}${where} chưa chốt. Hãy chốt ca đó trước khi mở ca mới.` };
+  }
 
   const shiftId = `SHIFT_${now}_${actor.uid.slice(0, 6)}`;
   const code = shiftCodeFor(now);

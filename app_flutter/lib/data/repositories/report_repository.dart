@@ -397,6 +397,8 @@ class ReportRepository {
     if (shift.staffUid.isEmpty || (id.uid.isNotEmpty && shift.staffUid != id.uid)) {
       throw Exception('Ca phải được mở bởi chính tài khoản đang đăng nhập');
     }
+    // Nhân viên xoay ca nhiều cửa hàng: phải chốt ca đang mở ở cửa hàng khác trước khi mở ca mới
+    await _assertNoOpenShiftElsewhere(shift);
     _optimisticOpenShift = shift;
     if (_cachedCashShiftsList != null) {
       _cachedCashShiftsList = [shift, ..._cachedCashShiftsList!.where((s) => s.id != shift.id)];
@@ -428,6 +430,42 @@ class ReportRepository {
       targetId: shift.shiftCode,
       details: 'Mở ca bán hàng ${shift.shiftCode}, tiền đầu ca: ${shift.initialCash}đ',
     ));
+  }
+
+  /// Ném lỗi nếu CHÍNH tài khoản đang có ca mở ở cửa hàng khác (đọc userIndex rồi cash_shifts theo staffUid).
+  /// Mất mạng / không đọc được cửa hàng nào đó → bỏ qua (không chặn bán hàng).
+  Future<void> _assertNoOpenShiftElsewhere(CashShiftModel shift) async {
+    try {
+      final idx = await _root.child('userIndex').child(shift.staffUid).get().timeout(const Duration(seconds: 4));
+      final v = idx.value;
+      if (v is! Map) return;
+      final here = _currentStoreCode.toUpperCase().trim();
+      for (final e in v.entries) {
+        final code = e.key.toString().toUpperCase().trim();
+        if (e.value != true || code == here) continue;
+        try {
+          final snap = await _root
+              .child('stores')
+              .child(code)
+              .child('cash_shifts')
+              .orderByChild('staffUid')
+              .equalTo(shift.staffUid)
+              .get()
+              .timeout(const Duration(seconds: 4));
+          for (final s in _parseShifts(snap.value)) {
+            if (s.isOpen) {
+              throw _OpenShiftElsewhere('Bạn đang có ca ${s.shiftCode} tại cửa hàng $code chưa chốt. Hãy chốt ca đó trước khi mở ca mới.');
+            }
+          }
+        } on _OpenShiftElsewhere {
+          rethrow;
+        } catch (_) {
+          // cửa hàng không đọc được / mất mạng → bỏ qua
+        }
+      }
+    } on _OpenShiftElsewhere catch (e) {
+      throw Exception(e.message);
+    } catch (_) {}
   }
 
   /// Chờ server xác nhận ghi; quá thời gian (mất mạng) thì coi như đã xếp hàng đồng bộ,
@@ -852,4 +890,10 @@ class ReportRepository {
       return <int, ProductModel>{};
     }
   }
+}
+
+/// Lỗi nội bộ: tài khoản đang có ca mở ở cửa hàng khác
+class _OpenShiftElsewhere implements Exception {
+  final String message;
+  _OpenShiftElsewhere(this.message);
 }

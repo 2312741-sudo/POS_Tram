@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onValueWritten } from "firebase-functions/v2/database";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { ASSIGNABLE_ROLES, buildAssignedProfile, canAssignAcrossStores, countIndexedStores, isAssignableRole, shouldDisableAuthAccount } from "./multiStore";
 import {
   canCallerManageUsers,
   canCallerCreateRole,
@@ -346,12 +347,16 @@ export const setStaffDisabled = onCall(
       throw new HttpsError("permission-denied", "Không thể thực hiện khóa/mở khóa tài khoản này.");
     }
 
+    // Nhân viên làm ở nhiều cửa hàng: chỉ khóa hồ sơ ở cửa hàng này, KHÔNG khóa tài khoản đăng nhập (Auth)
+    const storeCount = countIndexedStores((await db.ref(`userIndex/${authUid}`).get()).val());
+    const touchAuth = shouldDisableAuthAccount(storeCount);
+
     // 1. Cập nhật Auth
-    await auth.updateUser(authUid, { disabled }).catch((e: any) => {
+    if (touchAuth) await auth.updateUser(authUid, { disabled }).catch((e: any) => {
       if (String(e?.code) === "auth/user-not-found") return; // hồ sơ cũ không có Auth: vẫn cập nhật isActive
       throw e;
     });
-    if (disabled) {
+    if (disabled && touchAuth) {
       // Hủy bỏ refresh token ngay lập tức
       await auth.revokeRefreshTokens(authUid).catch(() => {});
     }
@@ -376,6 +381,77 @@ export const setStaffDisabled = onCall(
   }
 );
 
+
+/**
+ * 3b. Gán nhân viên có sẵn vào cửa hàng khác (assignStaffToStore)
+ *
+ * Một người = MỘT tài khoản (một mật khẩu) làm ở nhiều cửa hàng, mỗi cửa hàng một vai trò riêng.
+ * Chỉ Chủ quán / Admin ở CẢ cửa hàng nguồn và đích mới được gọi. Ghi hồ sơ ở cửa hàng đích + userIndex + nhật ký.
+ */
+export const assignStaffToStore = onCall(
+  { region: FUNCTION_REGION },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập trước khi thực hiện.");
+    }
+    const { sourceStoreCode, targetStoreCode, targetUid, roleId } = (request.data || {}) as Record<string, unknown>;
+    if (!sourceStoreCode || !targetStoreCode || !targetUid) {
+      throw new HttpsError("invalid-argument", "Thiếu cửa hàng nguồn / đích hoặc nhân viên.");
+    }
+    if (!isAssignableRole(roleId)) {
+      throw new HttpsError("invalid-argument", `Vai trò phải là một trong: ${ASSIGNABLE_ROLES.join(", ")}.`);
+    }
+    const source = String(sourceStoreCode).trim().toUpperCase();
+    const target = String(targetStoreCode).trim().toUpperCase();
+    if (source === target) throw new HttpsError("invalid-argument", "Cửa hàng đích phải khác cửa hàng hiện tại.");
+
+    const callerUid = request.auth.uid;
+    const [atSource, atTarget] = await Promise.all([findCallerNode(source, callerUid), findCallerNode(target, callerUid)]);
+    if (!canAssignAcrossStores(atSource?.record ?? null, atTarget?.record ?? null)) {
+      throw new HttpsError("permission-denied", "Chỉ Chủ quán / Admin của cả hai cửa hàng mới được gán nhân viên sang cửa hàng khác.");
+    }
+    const targetStoreExists = (await db.ref(`stores/${target}/storeInfo`).get()).exists();
+    if (!targetStoreExists) throw new HttpsError("not-found", `Không tìm thấy cửa hàng ${target}.`);
+
+    const found = await findStaffNode(source, String(targetUid));
+    if (!found) throw new HttpsError("not-found", "Không tìm thấy hồ sơ nhân viên ở cửa hàng hiện tại.");
+    const authUid = resolveStaffAuthUid(found.nodeKey, found.record);
+    if (isOwnerRoleProfile(found.record)) {
+      throw new HttpsError("failed-precondition", "Không gán tài khoản Chủ quán bằng chức năng này.");
+    }
+    try {
+      await auth.getUser(authUid);
+    } catch {
+      throw new HttpsError("failed-precondition", "Nhân viên này chưa có tài khoản đăng nhập hợp lệ.");
+    }
+    if ((await db.ref(`stores/${target}/users/${authUid}`).get()).exists()) {
+      throw new HttpsError("already-exists", `Nhân viên đã có hồ sơ ở cửa hàng ${target}.`);
+    }
+
+    const now = Date.now();
+    const caller = atSource!.record;
+    const profile = buildAssignedProfile(found.record, authUid, roleId, { username: caller.username, storeCode: source }, now);
+    await db.ref().update({
+      [`stores/${target}/users/${authUid}`]: profile,
+      [`userIndex/${authUid}/${target}`]: true,
+      [`stores/${target}/audit_logs/LOG_${now}_assign_${Math.random().toString(36).substring(2, 7)}`]: {
+        timestamp: now,
+        action: "ASSIGN_STAFF_TO_STORE",
+        username: caller.username || "unknown",
+        userFullName: caller.fullName || "",
+        userRole: caller.roleId || "",
+        targetType: "USER",
+        targetId: authUid,
+        details: `Thêm @${found.record.username} từ ${source} vào ${target} với vai trò ${roleId}`,
+      },
+    });
+    return { success: true, uid: authUid, storeCode: target, roleId };
+  }
+);
+
+function isOwnerRoleProfile(p: UserProfile): boolean {
+  return p.isRootOwner === true || /owner|^chu$/i.test(String(p.roleId ?? ""));
+}
 
 /**
  * Xác minh mật khẩu qua Identity Toolkit REST (signInWithPassword).
