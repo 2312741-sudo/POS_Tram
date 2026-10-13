@@ -186,7 +186,6 @@ function TablesPageContent() {
   // Ghim / thứ tự khu (stores/{code}/zones) — đồng bộ với app; "ALL" (nhiều chi nhánh) thì xếp theo tên
   const [zoneMeta, setZoneMeta] = useState<ZoneMeta[]>([]);
   useEffect(() => {
-    setZoneMeta([]);
     if (!currentStoreCode || currentStoreCode === "ALL") return;
     const off = onValue(
       ref(db, `stores/${currentStoreCode}/zones`),
@@ -198,8 +197,8 @@ function TablesPageContent() {
 
   const zones = useMemo(() => {
     const unique = Array.from(new Set(tables.map((t) => t.zone).filter(Boolean))) as string[];
-    return sortZoneNames(unique, zoneMeta);
-  }, [tables, zoneMeta]);
+    return sortZoneNames(unique, currentStoreCode === "ALL" ? [] : zoneMeta);
+  }, [tables, zoneMeta, currentStoreCode]);
   
   // Modals
   const [showModal, setShowModal] = useState(false);
