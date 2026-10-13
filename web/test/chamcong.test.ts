@@ -167,6 +167,9 @@ describe("Vai trò", () => {
     expect(chamCongNotAdminMessage("ROLE_WAITER", true)).toContain("Đã tạo tài khoản POS cho bạn với vai trò Nhân viên");
     expect(chamCongNotAdminMessage("ROLE_CASHIER", false)).toContain("đang ở vai trò Nhân viên");
     expect(chamCongNotAdminMessage("ROLE_WAITER", false)).toContain("Nhân viên");
+    // Không còn nói Web "chỉ dành cho Chủ/Quản lý" (mọi vai trò đăng nhập được)
+    expect(chamCongNotAdminMessage("ROLE_WAITER", false)).not.toContain("chỉ dành cho");
+    expect(chamCongNotAdminMessage("ROLE_WAITER", false)).toContain("đúng quyền");
   });
 });
 

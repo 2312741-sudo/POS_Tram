@@ -150,7 +150,7 @@ export function chamCongNotAdminMessage(roleId: string, isNewAccount: boolean): 
   const prefix = isNewAccount
     ? `Đã tạo tài khoản POS cho bạn với vai trò ${role}.`
     : `Tài khoản POS của bạn đang ở vai trò ${role}.`;
-  return `${prefix} Web Quản trị chỉ dành cho Chủ quán hoặc Quản lý — nhờ chủ quán nâng quyền trong mục Nhân viên.`;
+  return `${prefix} Trên Web bạn chỉ thấy các trang đúng quyền của vai trò này — cần xem thêm trang nào, nhờ chủ quán cấp quyền trong mục Nhân viên và phân quyền.`;
 }
 
 export const CHAMCONG_ERROR_MESSAGES: Record<string, string> = {
