@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
-import { useState, useMemo, useCallback, type CSSProperties } from "react";
+import { Suspense, useState, useMemo, useCallback, type CSSProperties } from "react";
+import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { ref, update } from "firebase/database";
 import {
@@ -132,6 +133,15 @@ import {
 const nowMs = () => Date.now();
 
 export default function TablesPage() {
+  // useSearchParams (nút "Chế độ Order" ở thanh bên dùng ?order=1) cần Suspense để trang vẫn build tĩnh được
+  return (
+    <Suspense fallback={null}>
+      <TablesPageContent />
+    </Suspense>
+  );
+}
+
+function TablesPageContent() {
   const {
     tables,
     loading: ctxLoading,
@@ -204,6 +214,26 @@ export default function TablesPage() {
   } | null>(null);
   const [showSetPin, setShowSetPin] = useState(false);
   const [showZoneSetup, setShowZoneSetup] = useState(false);
+  // Chế độ Order: chạm vào bàn là mở ngay màn gọi món (bàn trống → mở bàn, bàn có khách → thêm món)
+  const orderParam = useSearchParams().get("order");
+  const [orderModeOverride, setOrderModeOverride] = useState<boolean | null>(null);
+  const orderModeStored = (() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem("tram_order_mode") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  const orderMode = canOrderOnWeb && (orderModeOverride ?? (orderParam === "1" || (orderParam === null && orderModeStored)));
+  const toggleOrderMode = () => {
+    const next = !orderMode;
+    setOrderModeOverride(next);
+    try {
+      window.localStorage.setItem("tram_order_mode", next ? "1" : "0");
+    } catch {
+      // trình duyệt chặn lưu — vẫn đổi chế độ trong phiên này
+    }
+  };
   const [orderTarget, setOrderTarget] = useState<Table | null>(null);
   const [orderSaving, setOrderSaving] = useState(false);
   const [orderError, setOrderError] = useState("");
@@ -867,6 +897,12 @@ export default function TablesPage() {
     [allCategories, orderTarget, currentStoreCode]
   );
 
+  /** Chạm vào bàn: Chế độ Order → mở gọi món; ngược lại → xem chi tiết như cũ */
+  const handleTableTap = (t: Table) => {
+    if (orderMode && !(t.isReserved && !t.inUse)) openOrderDialog(t);
+    else if (t.inUse) setSelectedTableForOrder(t);
+  };
+
   const openOrderDialog = (t: Table) => {
     setOrderError("");
     setOrderTarget(t);
@@ -1054,6 +1090,17 @@ export default function TablesPage() {
             <button className="btn-secondary" onClick={() => setShowSetPin(true)} title="Đặt PIN để duyệt thao tác cho nhân viên">
               <KeyRound size={16} />
               PIN duyệt
+            </button>
+          )}
+          {canOrderOnWeb && (
+            <button
+              className={orderMode ? "btn-primary" : "btn-secondary"}
+              onClick={toggleOrderMode}
+              aria-pressed={orderMode}
+              title="Bật để chạm vào bàn là gọi món ngay (dự phòng khi app POS sự cố)"
+            >
+              <ChefHat size={16} />
+              Chế độ Order: {orderMode ? "BẬT" : "TẮT"}
             </button>
           )}
           {canManageLayout(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "MANAGE_TABLES") && (
@@ -1333,7 +1380,7 @@ export default function TablesPage() {
                 return (
                   <div
                     key={t.id}
-                    onClick={() => setSelectedTableForOrder(t)}
+                    onClick={() => handleTableTap(t)}
                     style={{
                       background: "var(--surface)",
                       borderRadius: "16px",
@@ -1949,7 +1996,7 @@ export default function TablesPage() {
                         <div style={{ display: "flex", gap: "8px" }}>
                           {t.inUse && (
                             <button
-                              onClick={() => setSelectedTableForOrder(t)}
+                              onClick={() => handleTableTap(t)}
                               style={{
                                 padding: "6px 10px",
                                 borderRadius: "8px",

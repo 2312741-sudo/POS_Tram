@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useAuth, canAccessRoute } from "@/lib/auth";
+import { useAuth, canAccessRoute, hasPermission } from "@/lib/auth";
 import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isOwnerRoleId, normalizeRoleId, ROLE_MANAGER, ROLE_KITCHEN, MANAGER_ROLE_LABEL, STAFF_ROLE_LABEL, KITCHEN_ROLE_LABEL } from "@/lib/roles";
 import {
@@ -26,6 +26,7 @@ import {
   BadgePercent,
   ListChecks,
   History,
+  ChefHat,
   StickyNote,
 } from "lucide-react";
 
@@ -294,6 +295,27 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
         >
           DANH MỤC QUẢN TRỊ
         </div>
+        {user && hasPermission(user, "OPEN_TABLE") && (
+          <Link
+            href="/dashboard/tables?order=1"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              margin: "4px 4px 10px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: "var(--primary)",
+              color: "#FFFFFF",
+              fontSize: "13px",
+              fontWeight: 700,
+            }}
+          >
+            <ChefHat size={17} />
+            Chế độ Order (Web)
+          </Link>
+        )}
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
