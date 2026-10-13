@@ -175,7 +175,12 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
       expect(canAccessRoute(u, "/dashboard/revenue")).toBe(false);
     }
     expect(canAccessRoute(waiter, "/dashboard/tables")).toBe(true);
-    expect(canAccessRoute(cashier, "/dashboard/orders")).toBe(true);
+    // Xem hóa đơn bị khóa với Nhân viên (và Bếp); cấp riêng qua VIEW_ALL_BILLS_HISTORY thì mới xem được
+    expect(canAccessRoute(cashier, "/dashboard/orders")).toBe(false);
+    expect(canAccessRoute(waiter, "/dashboard/orders")).toBe(false);
+    expect(canAccessRoute(kitchen, "/dashboard/orders")).toBe(false);
+    expect(canAccessRoute(createMockUser("ROLE_STAFF", false, ["VIEW_ALL_BILLS_HISTORY"]), "/dashboard/orders")).toBe(true);
+    expect(canAccessRoute(createMockUser("ROLE_MANAGER"), "/dashboard/orders")).toBe(true);
     expect(canAccessRoute(kitchen, "/dashboard/kitchen")).toBe(true);
     expect(canAccessRoute(kitchen, "/dashboard/tables")).toBe(false);
     expect(canAccessRoute(waiter, "/dashboard/kitchen")).toBe(true); // Phục vụ được xem màn hình Bếp (VIEW_KITCHEN)

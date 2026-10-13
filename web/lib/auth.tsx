@@ -204,7 +204,7 @@ export function isWebAdminRole(roleId: string, isRootOwner?: boolean): boolean {
 export function homePathFor(user: User | null): string {
   if (!user) return "/login";
   if (canAccessRoute(user, "/dashboard")) return "/dashboard";
-  for (const p of ["/dashboard/tables", "/dashboard/kitchen", "/dashboard/orders", "/dashboard/my-shift"]) {
+  for (const p of ["/dashboard/tables", "/dashboard/kitchen", "/dashboard/my-shift", "/dashboard/orders"]) {
     if (canAccessRoute(user, p)) return p;
   }
   return "/dashboard";
@@ -265,7 +265,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     return hasPermission(user, "VIEW_KITCHEN");
   }
   if (pathname.startsWith("/dashboard/orders")) {
-    return hasPermission(user, "CREATE_BILL");
+    // Xem hóa đơn / lịch sử giao dịch: KHÓA với vai trò Nhân viên (CREATE_BILL chỉ để lập hóa đơn khi bán).
+    // Chủ / Quản lý có VIEW_ALL_BILLS_HISTORY; Chủ quán có thể cấp riêng cho từng tài khoản.
+    return hasPermission(user, "VIEW_ALL_BILLS_HISTORY");
   }
 
   return isWebAdminRole(user.roleId || user.role, user.isRootOwner);
