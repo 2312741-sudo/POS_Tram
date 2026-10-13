@@ -216,3 +216,24 @@ export function planCreateStore(args: CreateStorePlanArgs): CreateStorePlan {
   };
   return { updates, zonesFrom: copied ? "copied" : "default" };
 }
+
+/**
+ * Chủ gốc "toàn chuỗi": mọi uid (khác người tạo) là chủ gốc ĐANG HOẠT ĐỘNG ở TẤT CẢ chi nhánh người tạo thuộc về.
+ * Dùng để chi nhánh mới tự có đủ các tài khoản chủ của chuỗi (không chỉ người bấm tạo).
+ * usersByStore: mã chi nhánh -> (uid -> hồ sơ). Trả về uid -> hồ sơ lấy từ chi nhánh đầu tiên.
+ */
+export function chainOwners(
+  usersByStore: Record<string, Record<string, UserProfile> | null>,
+  creatorUid: string
+): Record<string, UserProfile> {
+  const stores = Object.keys(usersByStore);
+  if (stores.length === 0) return {};
+  const isRoot = (u: UserProfile | undefined) => !!u && u.isRootOwner === true && u.isActive !== false;
+  const first = usersByStore[stores[0]] || {};
+  const out: Record<string, UserProfile> = {};
+  for (const [uid, prof] of Object.entries(first)) {
+    if (uid === creatorUid || !isRoot(prof)) continue;
+    if (stores.every((s) => isRoot((usersByStore[s] || {})[uid]))) out[uid] = prof;
+  }
+  return out;
+}

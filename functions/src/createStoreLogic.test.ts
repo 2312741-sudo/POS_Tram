@@ -16,6 +16,25 @@ const staff: UserProfile = { username: "nv", roleId: "ROLE_STAFF", isRootOwner: 
 const inactiveOwner: UserProfile = { username: "chu2", roleId: "ROLE_OWNER", isActive: false };
 const rootOwner: UserProfile = { username: "root", roleId: "ROLE_STAFF", isRootOwner: true, isActive: true };
 
+import { chainOwners } from "./createStoreLogic";
+
+describe("chainOwners", () => {
+  const own = (u: string, extra: Partial<UserProfile> = {}) => ({ username: u, isRootOwner: true, isActive: true, ...extra } as UserProfile);
+  it("chỉ lấy chủ gốc có mặt ở mọi chi nhánh, bỏ người tạo, bỏ bị khóa", () => {
+    const r = chainOwners(
+      {
+        A: { c: own("creator"), x: own("admin"), y: own("onlyA"), z: own("locked", { isActive: false }) },
+        B: { c: own("creator"), x: own("admin"), z: own("locked") },
+      },
+      "c"
+    );
+    expect(Object.keys(r)).toEqual(["x"]);
+  });
+  it("không có chi nhánh -> rỗng", () => {
+    expect(chainOwners({}, "c")).toEqual({});
+  });
+});
+
 describe("normalizeStoreCode", () => {
   it("chuyển thành chữ in hoa và giữ A-Z 0-9 _", () => {
     expect(normalizeStoreCode("  tram_02 ")).toEqual({ code: "TRAM_02" });

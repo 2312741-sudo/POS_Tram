@@ -12,6 +12,8 @@ import { storeCodesFromIndex } from "./deleteMyAccountLogic";
 import {
   StoreInfoInput,
   ZoneLayout,
+  chainOwners,
+  buildOwnerProfileForStore,
   decideOwnerAccess,
   layoutFromSource,
   normalizeStoreCode,
@@ -94,6 +96,20 @@ export const createStore = onCall({ region: FUNCTION_REGION }, async (request) =
     caller: access.profile,
     layout,
   });
+  // Các chủ gốc khác của chuỗi (chủ ở mọi chi nhánh của người tạo) cũng được vào chi nhánh mới
+  try {
+    const snaps = await Promise.all(indexStores.map((s) => db().ref(`stores/${s}/users`).get()));
+    const byStore: Record<string, Record<string, UserProfile>> = {};
+    indexStores.forEach((s, i) => {
+      byStore[s] = (snaps[i].val() || {}) as Record<string, UserProfile>;
+    });
+    for (const [ownerUid, prof] of Object.entries(chainOwners(byStore, uid))) {
+      plan.updates[`userIndex/${ownerUid}/${code}`] = true;
+      plan.updates[`stores/${code}/users/${ownerUid}`] = buildOwnerProfileForStore(prof, ownerUid, code, now);
+    }
+  } catch (err: any) {
+    console.error("createStore: không lấy được danh sách chủ chuỗi", err?.message);
+  }
   try {
     await db().ref().update(plan.updates);
   } catch (err: any) {
