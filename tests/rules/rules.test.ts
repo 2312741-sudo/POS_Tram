@@ -1163,3 +1163,16 @@ describe("POS Trạm - Security Rules: Quản lý không hủy/xóa hóa đơn, 
     expect(al[".indexOn"]).toContain("timestamp");
   });
 });
+
+describe("POS Trạm - Security Rules: ca cũ không có staffUid (RA1)", () => {
+  it("RA1. Chủ ca cũ (khớp username) đóng ca KHÔNG kèm staffUid trong payload; người khác thì bị chặn", async () => {
+    const d = env();
+    await d.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref("userIndex/sh_staff_a/TRAM01").set(true);
+      await ctx.database().ref("stores/TRAM01/users/sh_staff_a").set({ username: "sh_staff_a", fullName: "A", roleId: "ROLE_STAFF", isActive: true });
+      await ctx.database().ref("stores/TRAM01/cash_shifts/ra_legacy").set({ id: "ra_legacy", staffUsername: "sh_staff_a", status: "OPEN", openedAt: 1 });
+    });
+    await assertSucceeds(db("sh_staff_a").ref("stores/TRAM01/cash_shifts/ra_legacy").update({ status: "CLOSED", closedAt: 9 }));
+    await assertFails(db("cashier_uid").ref("stores/TRAM01/cash_shifts/ra_legacy").update({ status: "CLOSED", closedAt: 10 }));
+  });
+});

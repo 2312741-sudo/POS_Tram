@@ -1,9 +1,11 @@
 "use client";
 import { resolveStaffUid } from "./staff-key";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
-import { db, auth } from "./firebase";
+import { db, auth, functions } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
+import { buildCreateStorePayload, type CreateStorePayload } from "./create-store-payload";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
@@ -1221,70 +1223,21 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   // Store Management Actions
   const createStore = useCallback(async (storeData: Partial<StoreItem>, copyMenuFrom?: string) => {
     try {
-      const cleanCode = (storeData.storeCode || "").toUpperCase().trim().replace(/[^A-Z0-9_]/g, "");
-      if (!cleanCode) return { success: false, error: "Mã chi nhánh không được để trống và chỉ gồm chữ cái, số." };
+      // Tạo chi nhánh qua Cloud Function (máy chủ ghi storeInfo/khu/bàn/userIndex/hồ sơ chủ quán + nhật ký
+      // trong MỘT lần ghi; client không ghi trực tiếp vì rules chặn chi nhánh chưa có quyền).
+      const payload = buildCreateStorePayload(storeData);
+      if (!payload.storeCode) return { success: false, error: "Mã chi nhánh không được để trống và chỉ gồm chữ cái, số." };
+      await httpsCallable<CreateStorePayload, { success: boolean; storeCode: string }>(functions, "createStore")(payload);
+      const cleanCode = payload.storeCode;
 
-      const existingRef = ref(db, `stores/${cleanCode}/storeInfo`);
-      const existingSnap = await get(existingRef);
-      if (existingSnap.exists()) {
-        return { success: false, error: `Mã chi nhánh "${cleanCode}" đã tồn tại trên hệ thống!` };
-      }
-
-      const newStoreInfo: StoreItem = {
-        id: cleanCode,
-        storeCode: cleanCode,
-        storeName: storeData.storeName || `POS Trạm - ${cleanCode}`,
-        address: storeData.address || "Chi nhánh mới",
-        phone: storeData.phone || "",
-        wifiName: storeData.wifiName || "Tram_FnB_Free",
-        bankId: storeData.bankId || "MB",
-        bankAccount: storeData.bankAccount || "",
-        accountName: storeData.accountName || "CHU CUA HANG",
-        defaultVatRate: typeof storeData.defaultVatRate === "number" ? storeData.defaultVatRate : 0,
-        allowStackPromotions: storeData.allowStackPromotions ?? true,
-        active: true,
-        createdAt: Date.now(),
-      };
-
-      await set(ref(db, `stores/${cleanCode}/storeInfo`), newStoreInfo);
-
-      // Default zones and tables for the new store
-      const defaultZones = {
-        "Tầng 1": { name: "Tầng 1" },
-        "Tầng 2": { name: "Tầng 2" },
-        "Sân Vườn": { name: "Sân Vườn" },
-      };
-      const defaultTablesMap = {
-        "Tầng 1_Bàn 01": { name: "Bàn 01", zone: "Tầng 1", inUse: false },
-        "Tầng 1_Bàn 02": { name: "Bàn 02", zone: "Tầng 1", inUse: false },
-        "Tầng 1_Bàn 03": { name: "Bàn 03", zone: "Tầng 1", inUse: false },
-        "Tầng 2_Bàn 04": { name: "Bàn 04", zone: "Tầng 2", inUse: false },
-        "Tầng 2_Bàn 05": { name: "Bàn 05", zone: "Tầng 2", inUse: false },
-        "Sân Vườn_Bàn SV1": { name: "Bàn SV1", zone: "Sân Vườn", inUse: false },
-      };
-
-      await set(ref(db, `stores/${cleanCode}/zones`), defaultZones);
-      await set(ref(db, `stores/${cleanCode}/tables`), defaultTablesMap);
-
-      // Sao chép thực đơn từ chi nhánh khác (cùng thư viện với màn Thực đơn → Sao chép thực đơn)
+      // Sao chép thực đơn từ chi nhánh khác (cùng thư viện với màn Thực đơn → Sao chép thực đơn).
+      // Chạy sau khi máy chủ trả về: chủ quán đã có quyền ghi trên chi nhánh mới.
       if (copyMenuFrom) {
         const copied = await copyWholeMenu(db, copyMenuFrom.trim().toUpperCase(), cleanCode, { username: "admin", role: "MANAGER" });
         if (!copied.ok) {
           return { success: false, error: `Đã tạo chi nhánh nhưng sao chép thực đơn lỗi: ${copied.error}` };
         }
       }
-
-      // Log action
-      const logEntry = {
-        action: "CREATE_STORE",
-        targetType: "STORE",
-        targetId: cleanCode,
-        details: `Thêm chi nhánh mới thành công: ${newStoreInfo.storeName} (${cleanCode})`,
-        timestamp: Date.now(),
-        userRole: "MANAGER",
-        username: "admin",
-      };
-      await set(ref(db, `stores/${cleanCode}/audit_logs/LOG_${Date.now()}`), logEntry);
 
       return { success: true };
     } catch (e) {

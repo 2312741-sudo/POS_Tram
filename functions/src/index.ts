@@ -677,6 +677,9 @@ export { chamCongSignIn, linkChamCongStore, unlinkChamCongStore, getChamCongLink
 // Tự xóa tài khoản (Apple 5.1.1(v)) — xem deleteMyAccount.ts, docs/APP_REVIEW.md
 export { deleteMyAccount } from "./deleteMyAccount";
 
+// Tạo chi nhánh mới (chủ quán) — xem createStore.ts, createStoreLogic.ts
+export { createStore } from "./createStore";
+
 // Điểm DÙNG CHUNG toàn chuỗi: bản ghi loyalty_members + callable/trigger (xem sharedLoyaltyHandlers.ts)
 export {
   applyLoyaltyEarn,
