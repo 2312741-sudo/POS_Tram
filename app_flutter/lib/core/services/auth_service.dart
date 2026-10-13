@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart' show DataSnapshot;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/app_models.dart';
@@ -126,20 +127,68 @@ class AuthService extends ChangeNotifier {
     return prefs.getBool(_keyRememberStore) ?? true;
   }
 
-  Future<void> switchStore(String newStoreCode) async {
-    _currentStoreCode = newStoreCode.trim().toUpperCase();
-    _fb.switchStore(_currentStoreCode);
-    _currentStoreInfo = StoreInfoModel(
-      storeCode: _currentStoreCode,
-      // Tên tạm thời; tên thật được nạp từ storeInfo trong refreshRolesAndStoreInfo()
-      storeName: 'POS Trạm - Chi nhánh $_currentStoreCode',
-    );
-    notifyListeners();
+  bool _switchingStore = false;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyStoreCode, _currentStoreCode);
-    await refreshRolesAndStoreInfo();
+  /// Đang chuyển chi nhánh (UI hiển thị trạng thái chờ, không cho bấm tiếp)
+  bool get isSwitchingStore => _switchingStore;
+
+  /// Chuyển chi nhánh. Nạp song song vai trò, thông tin cửa hàng và hồ sơ của chính
+  /// tài khoản ở chi nhánh mới TRƯỚC khi đổi, rồi cập nhật một lần (không hiện tên tạm / dữ liệu chi nhánh cũ).
+  /// Không thuộc chi nhánh mới hoặc bị khóa -> giữ nguyên chi nhánh cũ và ném [AuthException].
+  Future<void> switchStore(String newStoreCode) async {
+    final target = newStoreCode.trim().toUpperCase();
+    if (target.isEmpty || target == _currentStoreCode || _switchingStore) return;
+    final prevCode = _currentStoreCode;
+    _switchingStore = true;
     notifyListeners();
+    try {
+      _fb.switchStore(target);
+      String uid = _currentUser?.uid ?? '';
+      if (uid.isEmpty) {
+        try {
+          uid = _firebaseAuth.currentUser?.uid ?? '';
+        } catch (_) {}
+      }
+      Future<Object?> safe(Future<Object?> Function() f) async {
+        try {
+          return await f().timeout(const Duration(seconds: 6));
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final results = await Future.wait<Object?>([
+        safe(() => _fb.getRoles()),
+        safe(() => _fb.getStoreInfo()),
+        if (uid.isNotEmpty) safe(() => _fb.storeRef.child('users').child(uid).get()),
+      ]);
+      if (uid.isNotEmpty) {
+        final snap = results[2] as DataSnapshot?;
+        if (snap == null || !snap.exists || snap.value is! Map) {
+          throw const AuthException('Không tải được thông tin của bạn ở chi nhánh này. Kiểm tra mạng rồi thử lại.');
+        }
+        final profile = UserModel.fromMap(snap.value as Map, uid);
+        if (!profile.isActive) {
+          throw const AuthException('Tài khoản của bạn đã bị khóa ở chi nhánh này.');
+        }
+        _currentUser = profile;
+      }
+      if (results[0] != null) _cachedRoles = (results[0] as List).cast<RoleModel>();
+      final info = results[1];
+      _currentStoreCode = target;
+      _currentStoreInfo = info is StoreInfoModel
+          ? info
+          : StoreInfoModel(storeCode: target, storeName: 'POS Trạm - $target');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyStoreCode, target);
+    } catch (e) {
+      _fb.switchStore(prevCode);
+      if (e is AuthException) rethrow;
+      throw const AuthException('Không chuyển được chi nhánh. Vui lòng thử lại.');
+    } finally {
+      _switchingStore = false;
+      notifyListeners();
+    }
   }
 
   Future<void> refreshRolesAndStoreInfo() async {

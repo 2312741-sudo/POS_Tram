@@ -237,7 +237,25 @@ class _TableListScreenState extends State<TableListScreen> {
                   final sm = ScaffoldMessenger.of(context);
                   Navigator.pop(ctx);
                   if (!isCurrent) {
-                    await _auth.switchStore(sCode);
+                    final nav = Navigator.of(context, rootNavigator: true);
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())),
+                    );
+                    String? switchError;
+                    try {
+                      await _auth.switchStore(sCode);
+                    } on AuthException catch (e) {
+                      switchError = e.message;
+                    } catch (_) {
+                      switchError = 'Không chuyển được chi nhánh. Vui lòng thử lại.';
+                    }
+                    nav.pop();
+                    if (switchError != null) {
+                      if (mounted) sm.showSnackBar(SnackBar(content: Text(switchError), backgroundColor: Colors.red));
+                      return;
+                    }
                     if (!mounted) return;
                     sm.showSnackBar(
                       SnackBar(
