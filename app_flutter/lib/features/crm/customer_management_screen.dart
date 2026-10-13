@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'customer_delete_service.dart';
 
 class CustomerManagementScreen extends StatefulWidget {
   const CustomerManagementScreen({super.key});
@@ -35,6 +36,61 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  /// Chỉ Chủ quán / Quản lý có quyền quản lý khách hàng mới được xóa khách
+  bool get _canDeleteCustomer => (_auth.isOwner || _auth.isManager) && _auth.can(AppPermissions.manageCustomers);
+
+  Future<void> _confirmDeleteCustomer(KmtCustomerModel c) async {
+    final ctrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('Xóa khách hàng "${c.fullName}"?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Khách hàng sẽ bị xóa khỏi chi nhánh này. Nếu khách không còn ở chi nhánh nào khác, '
+                'toàn bộ điểm tích lũy và lịch sử điểm cũng bị xóa. Hóa đơn cũ được giữ nguyên. '
+                'Không thể hoàn tác.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: 'Gõ XOA để xác nhận', border: OutlineInputBorder()),
+                onChanged: (_) => setLocal(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: context.tc.danger),
+              onPressed: isDeleteCustomerConfirmed(ctrl.text) ? () => Navigator.pop(ctx, true) : null,
+              child: const Text('Xóa khách hàng'),
+            ),
+          ],
+        ),
+      ),
+    );
+    ctrl.dispose();
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final removedMember = await CustomerDeleteService().deleteCustomer(
+        storeCode: _auth.currentStoreCode,
+        customerId: c.id,
+      );
+      messenger.showSnackBar(SnackBar(content: Text(deleteCustomerSuccessMessage(removedMember: removedMember))));
+      if (mounted) await _loadData();
+    } on CustomerDeleteException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message), backgroundColor: context.tc.danger));
+    }
   }
 
   Future<void> _loadData() async {
@@ -475,6 +531,12 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                         ),
                                       ],
                                     ),
+                                    if (_canDeleteCustomer)
+                                      IconButton(
+                                        tooltip: 'Xóa khách hàng',
+                                        icon: Icon(Icons.delete_outline, color: context.tc.danger),
+                                        onPressed: () => _confirmDeleteCustomer(c),
+                                      ),
                                   ],
                                 ),
                               ),

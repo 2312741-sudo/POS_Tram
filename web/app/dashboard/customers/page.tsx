@@ -49,6 +49,7 @@ import {
 import { adjustLoyaltyPoints, getMemberLedger, setLoyaltyConfig } from "@/lib/loyalty-client";
 import { searchCustomers } from "@/lib/customer-search";
 import { errorMessage } from "@/lib/errors";
+import { deleteCustomer, deleteSuccessMessage, isDeleteConfirmed, DELETE_CUSTOMER_CONFIRM } from "@/lib/customer-delete-client";
 import CustomerFormDialog from "@/components/CustomerFormDialog";
 import PointAdjustDialog from "@/components/PointAdjustDialog";
 import LoyaltyTierDialog from "@/components/LoyaltyTierDialog";
@@ -82,6 +83,11 @@ export default function CustomersPage() {
   const [adjustTarget, setAdjustTarget] = useState<StoreCustomer | null>(null);
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<StoreCustomer | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [editingRedeemRate, setEditingRedeemRate] = useState<string>(String(DEFAULT_REDEEM_RATE));
   const [editingEarnRate, setEditingEarnRate] = useState<string>(String(DEFAULT_EARN_RATE));
@@ -98,6 +104,8 @@ export default function CustomersPage() {
   // Rules: chỉ Chủ quán / Quản lý ghi trực tiếp số dư điểm
   const canAdjust = canAdjustPoints(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "ADJUST_POINTS");
   const canManageCustomers = hasPermission(user, "MANAGE_CUSTOMERS");
+  // Xóa khách: chỉ Chủ quán / Quản lý (máy chủ kiểm tra lại) và có quyền MANAGE_CUSTOMERS
+  const canDelete = canAdjustPoints(user?.roleId || user?.role, user?.isRootOwner) && canManageCustomers;
   const specificStore = currentStoreCode !== "ALL" && !!currentStoreCode;
 
   // Chi nhánh cần đọc: "ALL" → mọi chi nhánh truy cập được; ngược lại chỉ chi nhánh đang chọn
@@ -266,7 +274,7 @@ export default function CustomersPage() {
 
   const tiers = ["ALL", ...tierNames];
   const showStoreColumn = currentStoreCode === "ALL";
-  const columnCount = (showStoreColumn ? 9 : 8) + (canAdjust ? 1 : 0);
+  const columnCount = (showStoreColumn ? 9 : 8) + (canAdjust ? 1 : 0) + (canDelete ? 1 : 0);
 
   const actor = {
     username: user?.username || "admin_web",
@@ -334,6 +342,28 @@ export default function CustomersPage() {
       setOpError(errorMessage(e, "Không chỉnh được điểm"));
     } finally {
       setOpSaving(false);
+    }
+  };
+
+  const openDelete = (c: StoreCustomer) => {
+    setDeleteTarget(c);
+    setDeleteConfirmText("");
+    setDeleteError("");
+  };
+
+  const submitDelete = async () => {
+    if (!deleteTarget || deleteBusy || !isDeleteConfirmed(deleteConfirmText)) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await deleteCustomer(deleteTarget.storeCode, deleteTarget.id, deleteConfirmText);
+      setDeleteNotice(deleteSuccessMessage(res));
+      setDeleteTarget(null);
+      setReloadKey((k) => k + 1); // danh sách realtime tự cập nhật; tải lại cho chắc
+    } catch (e) {
+      setDeleteError(errorMessage(e, "Không xóa được khách hàng"));
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -710,6 +740,7 @@ export default function CustomersPage() {
                 <th style={{ padding: "12px 14px", textAlign: "center" }}>Hạng</th>
                 <th style={{ padding: "12px 14px", textAlign: "center" }}>Ngày tham gia</th>
                 {canAdjust && <th style={{ padding: "12px 14px", textAlign: "center" }}>Thao tác</th>}
+                {canDelete && <th style={{ padding: "12px 14px", textAlign: "center" }}>Xóa</th>}
               </tr>
             </thead>
             <tbody>
@@ -818,6 +849,16 @@ export default function CustomersPage() {
                           </Link>
                         </td>
                       )}
+                      {canDelete && (
+                        <td style={{ padding: "8px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() => openDelete(c)}
+                            style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--danger, #B3261E)", background: "var(--bg)", color: "var(--danger, #B3261E)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            Xóa
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -826,6 +867,47 @@ export default function CustomersPage() {
           </table>
         </div>
       </div>
+
+      {deleteNotice && (
+        <div role="status" style={{ position: "fixed", bottom: 20, right: 20, zIndex: 1200, background: "#137333", color: "#fff", padding: "10px 16px", borderRadius: 8, fontSize: 13, maxWidth: 360 }}>
+          {deleteNotice}{" "}
+          <button onClick={() => setDeleteNotice("")} style={{ background: "none", border: "none", color: "#fff", textDecoration: "underline", cursor: "pointer" }}>Đóng</button>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <ModalShell
+          title="Xóa khách hàng"
+          subtitle={`${deleteTarget.hoTen || deleteTarget.id}${deleteTarget.soDienThoai ? ` · ${deleteTarget.soDienThoai}` : ""}`}
+          onClose={() => !deleteBusy && setDeleteTarget(null)}
+          footer={
+            <>
+              <button style={btnGhost} disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>Hủy</button>
+              <button
+                style={{ ...btnPrimary, background: "var(--danger, #B3261E)", opacity: deleteBusy || !isDeleteConfirmed(deleteConfirmText) ? 0.5 : 1 }}
+                disabled={deleteBusy || !isDeleteConfirmed(deleteConfirmText)}
+                onClick={submitDelete}
+              >
+                {deleteBusy ? "Đang xóa..." : "Xóa khách hàng"}
+              </button>
+            </>
+          }
+        >
+          {deleteError && <div style={errorBox}>{deleteError}</div>}
+          <p style={{ fontSize: 13, color: "var(--text)", marginTop: 0 }}>
+            Xóa khách hàng và điểm nếu khách không còn ở chi nhánh khác; hóa đơn cũ được giữ. Thao tác này không thể hoàn tác.
+          </p>
+          <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", display: "block", marginBottom: 6 }}>
+            Gõ <b>{DELETE_CUSTOMER_CONFIRM}</b> để xác nhận
+          </label>
+          <input
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            autoFocus
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
+          />
+        </ModalShell>
+      )}
 
       {showCustomerForm && specificStore && (
         <CustomerFormDialog

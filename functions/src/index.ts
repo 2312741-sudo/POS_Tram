@@ -706,3 +706,6 @@ export const pullPooledPoints = onCall({ region: FUNCTION_REGION }, async (reque
   }
   return { success: true, pulled: 0, othersPoints: 0, alreadyApplied: true, deprecated: true };
 });
+
+// Xóa khách hàng (Chủ quán/Quản lý) — xem deleteCustomer.ts, deleteCustomerLogic.ts
+export { deleteCustomer } from "./deleteCustomer";
