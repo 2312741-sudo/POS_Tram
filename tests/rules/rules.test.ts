@@ -1175,4 +1175,26 @@ describe("POS Trạm - Security Rules: ca cũ không có staffUid (RA1)", () => 
     await assertSucceeds(db("sh_staff_a").ref("stores/TRAM01/cash_shifts/ra_legacy").update({ status: "CLOSED", closedAt: 9 }));
     await assertFails(db("cashier_uid").ref("stores/TRAM01/cash_shifts/ra_legacy").update({ status: "CLOSED", closedAt: 10 }));
   });
+
+  it("PB1. Hóa đơn đã thanh toán: nhân viên không đổi được số tiền/trạng thái, vẫn ghi lại được khi tiền giữ nguyên", async () => {
+    await env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      const paid = { id: "pb1", status: "PAID", finalAmount: 100000, subTotal: 110000, totalAmount: 100000, totalDiscount: 10000, discountAmount: 0, vatAmount: 0, paymentMethod: "CASH", closedAt: 1000 };
+      await d.ref("stores/TRAM01/bills/pb1").set(paid);
+      await d.ref("stores/TRAM01/history/pb1").set(paid);
+    });
+    const staff = db("cashier_uid");
+    // đổi số tiền / giảm giá / phương thức / trạng thái -> bị chặn (cả bills lẫn history)
+    for (const [field, value] of [["finalAmount", 1], ["totalAmount", 1], ["subTotal", 5], ["totalDiscount", 99999], ["paymentMethod", "CARD"], ["status", "REFUNDED"]] as const) {
+      await assertFails(staff.ref(`stores/TRAM01/bills/pb1/${field}`).set(value));
+      await assertFails(staff.ref(`stores/TRAM01/history/pb1/${field}`).set(value));
+    }
+    // ghi lại giá trị y hệt (đồng bộ lại/thử lại) hoặc thêm trường phụ -> được
+    await assertSucceeds(staff.ref("stores/TRAM01/bills/pb1/finalAmount").set(100000));
+    await assertSucceeds(staff.ref("stores/TRAM01/bills/pb1").update({ customerId: "C1", customerName: "Khách", printedAt: 2000 }));
+    // chủ quán được sửa
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/bills/pb1/finalAmount").set(95000));
+    // tạo mới hóa đơn đã thanh toán (luồng thanh toán) vẫn được
+    await assertSucceeds(staff.ref("stores/TRAM01/bills/pb2").set({ id: "pb2", status: "PAID", finalAmount: 20000, subTotal: 20000, totalAmount: 20000, paymentMethod: "CASH", closedAt: 3000 }));
+  });
 });

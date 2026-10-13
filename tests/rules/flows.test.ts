@@ -325,15 +325,8 @@ const FLOWS: Flow[] = [
   {
     id: "F09",
     title: "Sửa hóa đơn ĐÃ thanh toán (bills/p1 PAID -> PAID, đổi finalAmount)",
-    doc: "PERMISSIONS_AUDIT §3 (NV không sửa hóa đơn đã thanh toán); EDIT_BILL: QL/Chủ",
-    exp: ex(true, true, false, false),
-    mm: {
-      staff: {
-        actual: true,
-        kind: "ĐÃ BIẾT (RULES_AUDIT §6)",
-        note: "Nhân viên sửa được bill PAID bằng ghi PAID->PAID (rules chỉ chặn chuyển sang CANCELLED).",
-      },
-    },
+    doc: "Hóa đơn đã thanh toán chỉ Chủ hoặc người có CANCEL_BILL được sửa số tiền (đã siết bằng .validate trên bills/history)",
+    exp: ex(true, false, false, false, { cp: true }),
     run: (d) => d.ref(`${STORE}/bills/p1`).update({ finalAmount: 90000 }),
   },
 
