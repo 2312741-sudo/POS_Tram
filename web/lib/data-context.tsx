@@ -8,6 +8,7 @@ import { httpsCallable } from "firebase/functions";
 import { buildCreateStorePayload, type CreateStorePayload } from "./create-store-payload";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
+import { recordShiftSale } from "./cash-shift-run";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
 import { errorMessage } from "./errors";
@@ -1561,6 +1562,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(historyBill, billId), ...prev]);
 
+        // Doanh số vào ca/két đang mở của người thanh toán (không có ca mở thì bỏ qua; không làm hỏng thanh toán)
+        if (actingUser?.uid) {
+          void recordShiftSale(db, targetStoreCode, { uid: actingUser.uid, username: actingUser.username }, paymentMethod, finalAmount);
+        }
+
         return { success: true, billId, billCode, customerId: customerId || undefined };
       } catch (e) {
         console.error("checkoutAndFreeTable error:", e);
@@ -1581,7 +1587,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi khi thanh toán trả bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems, actingUser]
   );
 
   const cancelActiveTable = useCallback(

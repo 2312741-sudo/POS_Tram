@@ -1220,3 +1220,33 @@ describe("POS Trạm - Security Rules: ca cũ không có staffUid (RA1)", () => 
     await assertFails(db("cashier_uid").ref(`${waiter}/roleId`).set("owner"));
   });
 });
+
+describe("POS Trạm - Security Rules: ca/két mở & chốt trên Web (CS)", () => {
+  it("CS1. Nhân viên mở / chốt ca của CHÍNH mình bằng multi-path update; không đụng ca người khác; ca đã chốt thì khóa", async () => {
+    const now = Date.now();
+    const S = "stores/TRAM01/cash_shifts/SHIFT_web_1";
+    const open = {
+      id: "SHIFT_web_1", shiftCode: "CA-1", storeCode: "TRAM01", staffUid: "cashier_uid", staffUsername: "thungan", staffFullName: "Thu Ngân",
+      openedAt: now, initialCash: 100000, totalCashSales: 0, totalQrSales: 0, totalCardSales: 0, cashIn: 0, cashOut: 0, status: "OPEN", notes: "",
+    };
+    const log = (a: string) => ({ timestamp: now, action: a, username: "thungan" });
+    const cashier = db("cashier_uid");
+    // mở ca mang staffUid của người khác → từ chối
+    await assertFails(cashier.ref("stores/TRAM01/cash_shifts/SHIFT_fake").set({ ...open, id: "SHIFT_fake", staffUid: "manager_uid" }));
+    await assertSucceeds(cashier.ref().update({ [S]: open, [`stores/TRAM01/audit_logs/log_${now}_o`]: log("OPEN_SHIFT") }));
+    // cộng doanh số khi đang mở
+    await assertSucceeds(cashier.ref(S).update({ totalCashSales: 50000 }));
+    // người khác không sửa được ca này
+    await assertFails(db("waiter_uid").ref(S).update({ totalCashSales: 1 }));
+    // chốt ca: chỉ các trường chốt
+    await assertSucceeds(
+      cashier.ref().update({
+        [`${S}/status`]: "CLOSED", [`${S}/closedAt`]: now + 1, [`${S}/actualCash`]: 150000, [`${S}/difference`]: 0, [`${S}/notes`]: "ok",
+        [`stores/TRAM01/audit_logs/log_${now}_c`]: log("CLOSE_SHIFT"),
+      })
+    );
+    // đã chốt → nhân viên không sửa lại được; Quản lý vẫn xử lý được
+    await assertFails(cashier.ref(S).update({ actualCash: 999999 }));
+    await assertSucceeds(db("manager_uid").ref(S).update({ notes: "quản lý ghi chú" }));
+  });
+});

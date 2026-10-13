@@ -204,7 +204,7 @@ export function isWebAdminRole(roleId: string, isRootOwner?: boolean): boolean {
 export function homePathFor(user: User | null): string {
   if (!user) return "/login";
   if (canAccessRoute(user, "/dashboard")) return "/dashboard";
-  for (const p of ["/dashboard/tables", "/dashboard/kitchen", "/dashboard/orders"]) {
+  for (const p of ["/dashboard/tables", "/dashboard/kitchen", "/dashboard/orders", "/dashboard/my-shift"]) {
     if (canAccessRoute(user, p)) return p;
   }
   return "/dashboard";
@@ -257,6 +257,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   }
   if (pathname.startsWith("/dashboard/tables")) {
     return hasPermission(user, "OPEN_TABLE");
+  }
+  if (pathname.startsWith("/dashboard/my-shift")) {
+    return hasPermission(user, "MANAGE_CASH_SHIFT");
   }
   if (pathname.startsWith("/dashboard/kitchen")) {
     return hasPermission(user, "VIEW_KITCHEN");
