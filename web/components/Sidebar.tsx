@@ -27,6 +27,7 @@ import {
   ListChecks,
   History,
   ChefHat,
+  Flame,
   StickyNote,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ const navItems = [
   { href: "/dashboard/product-sales", label: "Hàng hoá Bán ra", icon: ShoppingCart },
   { href: "/dashboard/stores", label: "Hệ thống Chi nhánh", icon: Store },
   { href: "/dashboard/tables", label: "Sơ đồ Phòng/Bàn", icon: LayoutGrid },
+  { href: "/dashboard/kitchen", label: "Màn hình Bếp", icon: Flame },
   { href: "/dashboard/orders", label: "Giao dịch / Hóa đơn", icon: ShoppingBag },
   { href: "/dashboard/revenue", label: "Báo cáo Doanh thu", icon: TrendingUp },
   { href: "/dashboard/products", label: "Thực đơn & Sản phẩm", icon: Package },

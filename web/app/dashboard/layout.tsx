@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth, canAccessRoute } from "@/lib/auth";
+import { useAuth, canAccessRoute, homePathFor } from "@/lib/auth";
 import Sidebar from "@/components/Sidebar";
 import { DashboardDataProvider, useDashboardData } from "@/lib/data-context";
 import { Store, Settings, Menu, Moon, Sun } from "lucide-react";
@@ -203,6 +203,14 @@ export default function DashboardLayout({
     }
   }, [user, loading, router]);
 
+  // Phục vụ / Thu ngân / Bếp không có Tổng quan → chuyển sang trang đầu tiên được phép (Sơ đồ bàn / Bếp)
+  useEffect(() => {
+    if (!loading && user && pathname === "/dashboard" && !canAccessRoute(user, "/dashboard")) {
+      const home = homePathFor(user);
+      if (home !== "/dashboard") router.replace(home);
+    }
+  }, [user, loading, pathname, router]);
+
   if (loading) {
     return (
       <div
@@ -222,8 +230,8 @@ export default function DashboardLayout({
   if (!user) return null;
 
   // Chặn truy cập thẳng bằng đường dẫn: trang không thuộc quyền của tài khoản → thông báo, không hiển thị nội dung.
-  // Trang chủ /dashboard luôn mở (là nơi đáp sau đăng nhập).
-  const routeAllowed = pathname === "/dashboard" || canAccessRoute(user, pathname);
+  // Tổng quan (/dashboard) chỉ cho Chủ / Quản lý; vai trò khác được chuyển sang trang đầu tiên của họ (xem useEffect trên).
+  const routeAllowed = canAccessRoute(user, pathname);
 
   return (
     <DashboardDataProvider>

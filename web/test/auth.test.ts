@@ -5,6 +5,7 @@ import {
   generateEmail,
   hasPermission,
   canAccessRoute,
+  homePathFor,
   User,
 } from "../lib/auth";
 
@@ -161,6 +162,25 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
     customPermissions,
     isActive: true,
     storeCode: "TRAM01",
+  });
+
+  it("Phục vụ / Thu ngân / Bếp: không vào Tổng quan, vào đúng trang vận hành và được chuyển hướng", () => {
+    const waiter = createMockUser("ROLE_WAITER");
+    const cashier = createMockUser("ROLE_CASHIER");
+    const kitchen = createMockUser("ROLE_KITCHEN");
+    for (const u of [waiter, cashier, kitchen]) {
+      expect(canAccessRoute(u, "/dashboard")).toBe(false);
+      expect(canAccessRoute(u, "/dashboard/users")).toBe(false);
+      expect(canAccessRoute(u, "/dashboard/revenue")).toBe(false);
+    }
+    expect(canAccessRoute(waiter, "/dashboard/tables")).toBe(true);
+    expect(canAccessRoute(cashier, "/dashboard/orders")).toBe(true);
+    expect(canAccessRoute(kitchen, "/dashboard/kitchen")).toBe(true);
+    expect(canAccessRoute(kitchen, "/dashboard/tables")).toBe(false);
+    expect(canAccessRoute(waiter, "/dashboard/kitchen")).toBe(true); // Phục vụ được xem màn hình Bếp (VIEW_KITCHEN)
+    expect(homePathFor(waiter)).toBe("/dashboard/tables");
+    expect(homePathFor(kitchen)).toBe("/dashboard/kitchen");
+    expect(homePathFor(createMockUser("ROLE_MANAGER_1"))).toBe("/dashboard");
   });
 
   it("Chủ quán có thể truy cập mọi trang", () => {

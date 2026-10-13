@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { db, auth, functions } from "./firebase";
 import {
-  chamCongNotAdminMessage,
   mapChamCongError,
   parseChamCongSignInResponse,
   type ChamCongMethod,
@@ -201,6 +200,16 @@ export function isWebAdminRole(roleId: string, isRootOwner?: boolean): boolean {
   return r === ROLE_OWNER || r === ROLE_MANAGER;
 }
 
+/** Trang đáp sau đăng nhập: Chủ / Quản lý → Tổng quan; vai trò khác → trang đầu tiên được phép */
+export function homePathFor(user: User | null): string {
+  if (!user) return "/login";
+  if (canAccessRoute(user, "/dashboard")) return "/dashboard";
+  for (const p of ["/dashboard/tables", "/dashboard/kitchen", "/dashboard/orders"]) {
+    if (canAccessRoute(user, p)) return p;
+  }
+  return "/dashboard";
+}
+
 export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (!user) return false;
   if (user.isRootOwner) return true;
@@ -248,6 +257,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   }
   if (pathname.startsWith("/dashboard/tables")) {
     return hasPermission(user, "OPEN_TABLE");
+  }
+  if (pathname.startsWith("/dashboard/kitchen")) {
+    return hasPermission(user, "VIEW_KITCHEN");
   }
   if (pathname.startsWith("/dashboard/orders")) {
     return hasPermission(user, "CREATE_BILL");
@@ -469,17 +481,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // 7. Kiểm tra quyền truy cập Web Quản trị
-      if (!isWebAdminRole(userProfile.roleId, userProfile.isRootOwner)) {
-        await signOut(auth);
-        return {
-          success: false,
-          error:
-            opts.via === "chamcong"
-              ? chamCongNotAdminMessage(userProfile.roleId, opts.isNewAccount)
-              : `Tài khoản của bạn (${userProfile.roleId}) không có quyền đăng nhập Web Quản trị. Chỉ dành cho Chủ quán hoặc Quản lý.`,
-        };
-      }
+      // 7. Mọi vai trò đang hoạt động đều đăng nhập được Web; trang nào xem được do canAccessRoute quyết định
+      //    (Phục vụ / Thu ngân: Sơ đồ bàn & Giao dịch; Bếp: Màn hình Bếp — xem homePathFor).
 
       // 8. Cập nhật lastLoginAt và ghi Audit Log
       const nowMs = Date.now();
