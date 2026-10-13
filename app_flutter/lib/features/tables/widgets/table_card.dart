@@ -120,15 +120,17 @@ class TableCard extends StatelessWidget {
                     children: [
                       // Tên bàn + nhãn trạng thái
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Text(
                               table.name,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.beVietnamPro(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                height: 1.2,
+                                fontWeight: FontWeight.w700,
                                 color: inUse ? style.ink : tc.textPrimary,
                               ),
                             ),
