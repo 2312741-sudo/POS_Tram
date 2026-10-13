@@ -452,13 +452,11 @@ export const staffSignIn = onCall(
       // tìm hồ sơ theo tên đăng nhập trong quán đang đăng nhập rồi dùng email thật của tài khoản đó.
       let resolved: string | null = null;
       try {
-        const q = await db
-          .ref(`stores/${cleanStoreCode}/users`)
-          .orderByChild("username")
-          .equalTo(cleanUser)
-          .limitToFirst(1)
-          .get();
-        const found = q.exists() ? Object.keys(q.val() as Record<string, unknown>)[0] : null;
+        // Không dùng orderByChild (RTDB chưa khai báo .indexOn cho username) — quán chỉ có vài chục tài khoản
+        const all = (await db.ref(`stores/${cleanStoreCode}/users`).get()).val() as Record<string, UserProfile> | null;
+        const found =
+          Object.entries(all || {}).find(([, u]) => u && u.username && normalizeUsername(u.username) === cleanUser)?.[0] ??
+          null;
         if (found) resolved = (await auth.getUser(found)).email ?? null;
       } catch {
         resolved = null;
