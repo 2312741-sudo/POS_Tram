@@ -26,6 +26,7 @@ import {
   type DeletedItemEntry,
 } from "./item-deletion";
 import { buildWebOrderUpdates, type OrderActor } from "./web-order";
+import { buildCategoryOrderUpdates, sortCategories } from "./category-order";
 import { computeBillAmounts, DEFAULT_REDEEM_VND } from "./loyalty-checkout";
 import { insufficientBalance, redeemLoyaltyPoints, refundLoyaltyPoints } from "./loyalty-client";
 import { normalizeTiers, parseSharedLoyalty, type LoyaltyTier, type SharedLoyaltyConfig } from "./loyalty";
@@ -228,6 +229,8 @@ export interface CategoryItem {
   allowedToppingIds?: string[];
   noteGroupIds?: string[];
   toppingGroupIds?: string[];
+  /** Thứ tự hiển thị (nhỏ đứng trước); đồng bộ với app */
+  order?: number;
 }
 
 export interface UserItem {
@@ -395,6 +398,7 @@ interface DashboardContextType {
     allowedToppingIds?: string[],
     groupIds?: { noteGroupIds?: string[] | null; toppingGroupIds?: string[] | null }
   ) => Promise<{ success: boolean; error?: string }>;
+  saveCategoryOrder: (orderedNames: string[], storeCode?: string) => Promise<{ success: boolean; error?: string }>;
   deleteCategory: (
     categoryName: string,
     storeCode?: string
@@ -458,6 +462,7 @@ const DashboardContext = createContext<DashboardContextType>({
   saveProduct: async () => ({ success: false }),
   deleteProduct: async () => ({ success: false }),
   saveCategory: async () => ({ success: false }),
+  saveCategoryOrder: async () => ({ success: false }),
   deleteCategory: async () => ({ success: false }),
   saveUser: async () => ({ success: false }),
   deleteUser: async () => ({ success: false }),
@@ -798,10 +803,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             allowedToppingIds: typeof c === "object" && c !== null && Array.isArray(c.allowedToppingIds) ? c.allowedToppingIds : [],
             noteGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.noteGroupIds) : undefined,
             toppingGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.toppingGroupIds) : undefined,
+            order: typeof c === "object" && c !== null && typeof c.order === "number" ? c.order : undefined,
             storeCode: code,
           });
         });
-        catsMap[code] = cList;
+        catsMap[code] = sortCategories(cList);
       }
 
       if (val.users) {
@@ -1163,9 +1169,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           map.set(c.name, c);
         }
       });
-      return Array.from(map.values());
+      return sortCategories(Array.from(map.values()));
     }
-    return allCategories.filter((c) => c.storeCode === currentStoreCode);
+    return sortCategories(allCategories.filter((c) => c.storeCode === currentStoreCode));
   }, [allCategories, currentStoreCode]);
 
   // Compute users across all stores and scoped to currentStoreCode
@@ -2006,7 +2012,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             const oldSnap = await get(ref(db, `stores/${code}/categories/${oldCategoryName}`)).catch(() => null);
             const oldVal = oldSnap && oldSnap.exists() ? oldSnap.val() : null;
             if (oldVal && typeof oldVal === "object") {
-              for (const f of ["allowedToppingIds", "noteGroupIds", "toppingGroupIds"]) if (oldVal[f] != null) carried[f] = oldVal[f];
+              for (const f of ["allowedToppingIds", "noteGroupIds", "toppingGroupIds", "order"]) if (oldVal[f] != null) carried[f] = oldVal[f];
             }
             await remove(ref(db, `stores/${code}/categories/${oldCategoryName}`)).catch(() => {});
 
@@ -2033,6 +2039,26 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       }
     },
     [stores, allProducts, currentStoreCode]
+  );
+
+  /** Lưu thứ tự danh mục (đồng bộ app): ghi `order` cho từng danh mục; "ALL" áp dụng cho mọi chi nhánh có danh mục đó */
+  const saveCategoryOrder = useCallback(
+    async (orderedNames: string[], storeCode?: string) => {
+      try {
+        const targets = !storeCode || storeCode === "ALL" ? stores.map((s) => s.storeCode) : [storeCode];
+        const updates: Record<string, number> = {};
+        for (const code of targets) {
+          const existing = new Set((rawCategoriesMap[code] || []).map((c) => c.name));
+          Object.assign(updates, buildCategoryOrderUpdates(code, orderedNames, existing));
+        }
+        if (Object.keys(updates).length === 0) return { success: true };
+        await update(ref(db), updates);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: errorMessage(e) || "Lỗi lưu thứ tự danh mục" };
+      }
+    },
+    [stores, rawCategoriesMap]
   );
 
   const deleteCategory = useCallback(
@@ -2341,6 +2367,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       saveProduct,
       deleteProduct,
       saveCategory,
+      saveCategoryOrder,
       deleteCategory,
       saveUser,
       deleteUser,
@@ -2384,6 +2411,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       saveProduct,
       deleteProduct,
       saveCategory,
+      saveCategoryOrder,
       deleteCategory,
       saveUser,
       deleteUser,

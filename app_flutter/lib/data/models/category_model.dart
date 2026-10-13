@@ -8,11 +8,15 @@ class CategoryModel {
   final List<String>? noteGroupIds;
   final List<String>? toppingGroupIds;
 
+  /// Thứ tự hiển thị (nhỏ đứng trước), đồng bộ với web; null = chưa sắp xếp
+  final int? order;
+
   CategoryModel({
     required this.name,
     this.allowedToppingIds = const [],
     this.noteGroupIds,
     this.toppingGroupIds,
+    this.order,
   });
 
   factory CategoryModel.fromMap(dynamic val, [String? key]) {
@@ -29,6 +33,7 @@ class CategoryModel {
         allowedToppingIds: toppings,
         noteGroupIds: parseGroupIds(map['noteGroupIds']),
         toppingGroupIds: parseGroupIds(map['toppingGroupIds']),
+        order: map['order'] is num ? (map['order'] as num).toInt() : null,
       );
     } else if (val is String) {
       return CategoryModel(name: val);
@@ -41,6 +46,7 @@ class CategoryModel {
     if (allowedToppingIds.isNotEmpty) 'allowedToppingIds': allowedToppingIds,
     if (noteGroupIds != null) 'noteGroupIds': encodeGroupIds(noteGroupIds),
     if (toppingGroupIds != null) 'toppingGroupIds': encodeGroupIds(toppingGroupIds),
+    if (order != null) 'order': order,
   };
 
   CategoryModel copyWith({
@@ -48,6 +54,7 @@ class CategoryModel {
     List<String>? allowedToppingIds,
     List<String>? noteGroupIds,
     List<String>? toppingGroupIds,
+    int? order,
     bool clearNoteGroupIds = false,
     bool clearToppingGroupIds = false,
   }) => CategoryModel(
@@ -55,5 +62,15 @@ class CategoryModel {
     allowedToppingIds: allowedToppingIds ?? this.allowedToppingIds,
     noteGroupIds: clearNoteGroupIds ? null : (noteGroupIds ?? this.noteGroupIds),
     toppingGroupIds: clearToppingGroupIds ? null : (toppingGroupIds ?? this.toppingGroupIds),
+    order: order ?? this.order,
   );
+}
+
+/// Thứ tự danh mục: có `order` trước (nhỏ → lớn), chưa có sau, rồi theo tên (khớp web/lib/category-order.ts)
+int compareCategories(CategoryModel a, CategoryModel b) {
+  final oa = a.order, ob = b.order;
+  if (oa != null && ob != null && oa != ob) return oa.compareTo(ob);
+  if (oa != null && ob == null) return -1;
+  if (oa == null && ob != null) return 1;
+  return a.name.compareTo(b.name);
 }

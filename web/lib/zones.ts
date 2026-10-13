@@ -236,3 +236,66 @@ export function buildZoneAuditUpdates(args: {
     },
   };
 }
+
+// ---- Ghim & sắp xếp khu vực (hợp đồng chung với POS: zones/{khu} = { name, pinned?, order? }) ----
+// Bản Dart song song: app_flutter/lib/data/models/zone_model.dart (sortZoneNames).
+
+export interface ZoneMeta {
+  name: string;
+  pinned: boolean;
+  order: number | null;
+}
+
+/** Đọc zones/{khu} thô thành danh sách ZoneMeta (giữ cờ ghim + thứ tự) */
+export function parseZoneMeta(val: unknown): ZoneMeta[] {
+  if (!val || typeof val !== "object") return [];
+  const out: ZoneMeta[] = [];
+  for (const [key, raw] of Object.entries(val as Record<string, unknown>)) {
+    const o = raw && typeof raw === "object" ? (raw as { name?: unknown; pinned?: unknown; order?: unknown }) : {};
+    const name = String(o.name ?? key).trim();
+    if (!name) continue;
+    out.push({ name, pinned: o.pinned === true, order: typeof o.order === "number" ? o.order : null });
+  }
+  return out;
+}
+
+/** Sắp xếp tên khu: ghim trước, rồi theo thứ tự đã đặt, rồi theo bảng chữ cái; khu chưa khai báo xếp cuối */
+export function sortZoneNames(names: Iterable<string>, meta: ZoneMeta[]): string[] {
+  const byName = new Map(meta.map((m) => [m.name.trim(), m]));
+  const rank = (n: string) => {
+    const m = byName.get(n);
+    return m ? (m.pinned ? 0 : 1) : 2;
+  };
+  return [...new Set(names)].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    const oa = byName.get(a)?.order ?? null;
+    const ob = byName.get(b)?.order ?? null;
+    if (oa !== null && ob !== null && oa !== ob) return oa - ob;
+    if (oa !== null && ob === null) return -1;
+    if (oa === null && ob !== null) return 1;
+    return a.localeCompare(b, "vi");
+  });
+}
+
+/** Ghim / bỏ ghim khu: chỉ ghi cờ pinned (không đụng bàn) */
+export function buildZonePinUpdates(storeCode: string, zone: string, pinned: boolean): Record<string, unknown> {
+  const z = zone.trim();
+  return {
+    [`stores/${storeCode}/zones/${z}/name`]: z,
+    [`stores/${storeCode}/zones/${z}/pinned`]: pinned ? true : null,
+  };
+}
+
+/** Lưu thứ tự khu theo danh sách tên đã sắp xếp (khu ghim luôn nằm trước khu thường) */
+export function buildZoneOrderUpdates(storeCode: string, orderedNames: string[], pinned: Set<string>): Record<string, unknown> {
+  const ordered = [...orderedNames.filter((n) => pinned.has(n)), ...orderedNames.filter((n) => !pinned.has(n))];
+  const updates: Record<string, unknown> = {};
+  ordered.forEach((n, i) => {
+    const z = n.trim();
+    updates[`stores/${storeCode}/zones/${z}/name`] = z;
+    updates[`stores/${storeCode}/zones/${z}/order`] = i;
+  });
+  return updates;
+}

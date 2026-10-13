@@ -282,6 +282,13 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                         final item = _categories.removeAt(oldIndex);
                         _categories.insert(newIndex, item);
                       });
+                      // Lưu lên máy chủ để web và các máy khác thấy cùng thứ tự
+                      _fb.setCategoryOrder(_categories.map((c) => c.name).toList(), storeCode: _selectedStoreCode).catchError((Object e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Không lưu được thứ tự danh mục: $e'), backgroundColor: Colors.red),
+                        );
+                      });
                     },
                     itemBuilder: (_, i) => Container(
                       key: ValueKey(_categories[i].name),

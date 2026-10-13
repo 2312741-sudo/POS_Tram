@@ -1030,7 +1030,7 @@ class OrderRepository {
     return ref.onValue.map<List<CategoryModel>>((event) {
       if (event.snapshot.exists && event.snapshot.value != null) {
         return _parseList<CategoryModel>(event.snapshot.value, (k, v) => CategoryModel.fromMap(v, k.toString()))
-          ..sort((a, b) => a.name.compareTo(b.name));
+          ..sort(compareCategories);
       }
       return <CategoryModel>[];
     }).handleError((_) => <CategoryModel>[]);
@@ -1042,12 +1042,23 @@ class OrderRepository {
       final snap = await ref.get().timeout(const Duration(seconds: 3));
       if (snap.exists && snap.value != null) {
         return _parseList<CategoryModel>(snap.value, (k, v) => CategoryModel.fromMap(v, k.toString()))
-          ..sort((a, b) => a.name.compareTo(b.name));
+          ..sort(compareCategories);
       }
       return <CategoryModel>[];
     } catch (_) {
       return <CategoryModel>[];
     }
+  }
+
+  /// Lưu thứ tự danh mục (một lần ghi); chỉ ghi `order`, không đụng các trường khác
+  Future<void> setCategoryOrder(List<String> orderedNames, {String? storeCode}) async {
+    final ref = getCategoriesRef(storeCode);
+    final updates = <String, Object?>{};
+    for (var i = 0; i < orderedNames.length; i++) {
+      updates['${orderedNames[i]}/name'] = orderedNames[i];
+      updates['${orderedNames[i]}/order'] = i;
+    }
+    await ref.update(updates);
   }
 
   Future<void> saveCategory(CategoryModel category, {String? storeCode}) async {

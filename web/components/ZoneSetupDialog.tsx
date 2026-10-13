@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { LayoutGrid, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, LayoutGrid, Pencil, Pin, PinOff, Plus, Trash2 } from "lucide-react";
 import { onValue, ref, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import ModalShell, { btnGhost, btnPrimary, errorBox, fieldInput, fieldLabel } from "./ModalShell";
@@ -8,12 +8,17 @@ import { errorMessage } from "@/lib/errors";
 import {
   buildZoneAuditUpdates,
   buildZoneDeleteUpdates,
+  buildZoneOrderUpdates,
+  buildZonePinUpdates,
   isTableInUse,
   mergeZoneNames,
+  parseZoneMeta,
   parseZones,
   planAddTables,
   planZoneCreate,
   planZoneRename,
+  sortZoneNames,
+  type ZoneMeta,
   type ZoneAuditActor,
   type ZonePlan,
   type ZoneTableRecord,
@@ -31,6 +36,7 @@ type RowEdit = { zone: string; mode: "rename" | "tables"; value: string; count: 
 /** Thiết lập khu vực: thêm khu (kèm tạo nhanh N bàn), đổi tên khu, thêm bàn vào khu, xóa khu trống — Chủ quán / Quản lý */
 export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
   const [declared, setDeclared] = useState<string[]>([]);
+  const [meta, setMeta] = useState<ZoneMeta[]>([]);
   const [tables, setTables] = useState<ZoneTableRecord[]>([]);
   const [name, setName] = useState("");
   const [count, setCount] = useState("5");
@@ -44,7 +50,10 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
     if (storeCode === "ALL") return;
     const offZones = onValue(
       ref(db, `stores/${storeCode}/zones`),
-      (snap) => setDeclared(parseZones(snap.val())),
+      (snap) => {
+        setDeclared(parseZones(snap.val()));
+        setMeta(parseZoneMeta(snap.val()));
+      },
       () => setError("Không đọc được danh sách khu vực")
     );
     const offTables = onValue(
@@ -66,9 +75,35 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
   }, [storeCode]);
 
   const zones = useMemo(
-    () => mergeZoneNames(declared, tables.map((t) => String(t.value.zone ?? ""))),
-    [declared, tables]
+    () => sortZoneNames(mergeZoneNames(declared, tables.map((t) => String(t.value.zone ?? ""))), meta),
+    [declared, tables, meta]
   );
+  const pinnedSet = useMemo(() => new Set(meta.filter((m) => m.pinned).map((m) => m.name)), [meta]);
+
+  /** Ghim / sắp xếp: ghi trực tiếp (không cần nhật ký), đồng bộ ngay với app */
+  const writeOnly = async (updates: Record<string, unknown>, fallback: string) => {
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      await update(ref(db), updates);
+    } catch (e) {
+      setError(`${fallback}: ${errorMessage(e, "lỗi không xác định")}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const togglePin = (z: string) => writeOnly(buildZonePinUpdates(storeCode, z, !pinnedSet.has(z)), "Không ghim được khu vực");
+  const move = (z: string, delta: -1 | 1) => {
+    const i = zones.indexOf(z);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= zones.length) return;
+    // Không cho đổi chỗ khu ghim với khu thường
+    if (pinnedSet.has(zones[i]) !== pinnedSet.has(zones[j])) return;
+    const next = [...zones];
+    [next[i], next[j]] = [next[j], next[i]];
+    return writeOnly(buildZoneOrderUpdates(storeCode, next, pinnedSet), "Không lưu được thứ tự khu vực");
+  };
   const countIn = (z: string) => tables.filter((t) => String(t.value.zone ?? "") === z).length;
   const busyIn = (z: string) => tables.some((t) => String(t.value.zone ?? "") === z && isTableInUse(t.value));
 
@@ -212,7 +247,7 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
 
       <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
         {zones.length === 0 && <div style={{ fontSize: 13, color: "var(--subtext)" }}>Chưa có khu vực nào.</div>}
-        {zones.map((z) => {
+        {zones.map((z, zi) => {
           const n = countIn(z);
           const isEditing = edit?.zone === z;
           const hasBusy = busyIn(z);
@@ -220,11 +255,26 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
             <div key={z} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div>
-                  <strong>{z}</strong>
+                  <strong>{pinnedSet.has(z) ? "📌 " : ""}{z}</strong>
                   <span style={{ marginLeft: 8, fontSize: 12, color: "var(--subtext)" }}>{n} bàn</span>
                   {hasBusy && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--danger, #B3261E)" }}>đang có bàn dùng</span>}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
+                  <button type="button" aria-label={pinnedSet.has(z) ? `Bỏ ghim khu ${z}` : `Ghim khu ${z}`}
+                    title={pinnedSet.has(z) ? "Bỏ ghim" : "Ghim lên đầu"} disabled={busy} style={iconBtn(busy)}
+                    onClick={() => togglePin(z)}>
+                    {pinnedSet.has(z) ? <PinOff size={16} /> : <Pin size={16} />}
+                  </button>
+                  <button type="button" aria-label={`Đưa khu ${z} lên`} title="Đưa lên"
+                    disabled={busy || zi === 0 || pinnedSet.has(zones[zi - 1]) !== pinnedSet.has(z)}
+                    style={iconBtn(busy || zi === 0 || pinnedSet.has(zones[zi - 1]) !== pinnedSet.has(z))} onClick={() => move(z, -1)}>
+                    <ArrowUp size={16} />
+                  </button>
+                  <button type="button" aria-label={`Đưa khu ${z} xuống`} title="Đưa xuống"
+                    disabled={busy || zi === zones.length - 1 || pinnedSet.has(zones[zi + 1]) !== pinnedSet.has(z)}
+                    style={iconBtn(busy || zi === zones.length - 1 || pinnedSet.has(zones[zi + 1]) !== pinnedSet.has(z))} onClick={() => move(z, 1)}>
+                    <ArrowDown size={16} />
+                  </button>
                   <button type="button" aria-label={`Đổi tên khu ${z}`} title={hasBusy ? "Còn bàn đang dùng — không đổi tên" : "Đổi tên khu"}
                     disabled={busy || hasBusy} style={iconBtn(busy || hasBusy)}
                     onClick={() => setEdit({ zone: z, mode: "rename", value: z, count: "5", prefix: "Bàn" })}>

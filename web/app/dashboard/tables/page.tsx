@@ -1,10 +1,10 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense, useState, useMemo, useCallback, type CSSProperties } from "react";
+import { Suspense, useState, useMemo, useCallback, useEffect, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { ref, update } from "firebase/database";
+import { onValue, ref, update } from "firebase/database";
 import {
   Search,
   Plus,
@@ -104,6 +104,7 @@ import { applyLineRemoval, buildDeletionEntry, deletionDetails, type DeletedItem
 import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinDialog";
 import TableTransferDialog from "@/components/TableTransferDialog";
 import ZoneSetupDialog from "@/components/ZoneSetupDialog";
+import { parseZoneMeta, sortZoneNames, type ZoneMeta } from "@/lib/zones";
 import WebOrderDialog from "@/components/WebOrderDialog";
 import { useItemCatalog } from "@/lib/note-catalog";
 import { canAdjustPoints as canManageLayout, canEditPointConfig, canReadCustomers } from "@/lib/customers";
@@ -182,11 +183,23 @@ function TablesPageContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
   
+  // Ghim / thứ tự khu (stores/{code}/zones) — đồng bộ với app; "ALL" (nhiều chi nhánh) thì xếp theo tên
+  const [zoneMeta, setZoneMeta] = useState<ZoneMeta[]>([]);
+  useEffect(() => {
+    setZoneMeta([]);
+    if (!currentStoreCode || currentStoreCode === "ALL") return;
+    const off = onValue(
+      ref(db, `stores/${currentStoreCode}/zones`),
+      (snap) => setZoneMeta(parseZoneMeta(snap.val())),
+      () => setZoneMeta([])
+    );
+    return () => off();
+  }, [currentStoreCode]);
+
   const zones = useMemo(() => {
     const unique = Array.from(new Set(tables.map((t) => t.zone).filter(Boolean))) as string[];
-    unique.sort();
-    return unique;
-  }, [tables]);
+    return sortZoneNames(unique, zoneMeta);
+  }, [tables, zoneMeta]);
   
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -1433,7 +1446,7 @@ function TablesPageContent() {
                             animation: "pulse 1.5s infinite",
                           }}
                         />
-                        <span style={{ fontSize: "18px", fontWeight: "800", letterSpacing: "0.02em" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "700", lineHeight: 1.25, wordBreak: "break-word" }}>
                           {t.name}
                         </span>
                       </div>
@@ -1635,7 +1648,7 @@ function TablesPageContent() {
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <Bookmark size={18} color="#FFFFFF" />
-                        <span style={{ fontSize: "18px", fontWeight: "800", letterSpacing: "0.02em" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "700", lineHeight: 1.25, wordBreak: "break-word" }}>
                           {t.name}
                         </span>
                       </div>
@@ -1782,7 +1795,7 @@ function TablesPageContent() {
                             background: "var(--success)",
                           }}
                         />
-                        <span style={{ fontSize: "18px", fontWeight: "800", color: "var(--text)" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "700", lineHeight: 1.25, wordBreak: "break-word", color: "var(--text)" }}>
                           {t.name}
                         </span>
                       </div>

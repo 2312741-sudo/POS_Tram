@@ -19,14 +19,14 @@ import {
   UtensilsCrossed,
   FileText,
   Sparkles,
-  Copy,
-} from "lucide-react";
+  Copy, ArrowUp, ArrowDown } from "lucide-react";
 import { ref, onValue, set, remove } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
 import { useAuth, hasPermission } from "@/lib/auth";
 import { canCopyMenu } from "@/lib/menu-copy";
+import { moveName } from "@/lib/category-order";
 import { isProductAvailable, soldOutNote } from "@/lib/product-availability";
 import { writeSoldOut } from "@/lib/product-availability-run";
 import CopyMenuDialog from "./copy-menu-dialog";
@@ -91,6 +91,7 @@ export default function ProductsPage() {
     products,
     allProducts,
     categories,
+    saveCategoryOrder,
     allCategories,
     stores,
     currentStoreCode,
@@ -209,6 +210,17 @@ export default function ProductsPage() {
 
     return { counts, sampleItems };
   }, [products]);
+
+  const [orderError, setOrderError] = useState("");
+  /** Đổi chỗ danh mục (thứ tự lưu lên máy chủ và đồng bộ với app). Chỉ khi không đang tìm kiếm. */
+  const moveCategory = async (name: string, delta: -1 | 1) => {
+    const names = categories.map((c) => c.name);
+    const next = moveName(names, names.indexOf(name), delta);
+    if (!next) return;
+    setOrderError("");
+    const res = await saveCategoryOrder(next, currentStoreCode);
+    if (!res.success) setOrderError(res.error || "Không lưu được thứ tự danh mục");
+  };
 
   // Filtered categories for Tab 2
   const filteredCategories = useMemo(() => {
@@ -1198,6 +1210,7 @@ export default function ProductsPage() {
             </div>
           </div>
 
+          {orderError && <div style={{ color: "#EF4444", fontSize: 13, marginBottom: 8 }}>{orderError}</div>}
           {/* Categories Table */}
           <div className="table-wrapper">
             <table>
@@ -1318,6 +1331,28 @@ export default function ProductsPage() {
                         </td>
                         <td>
                           <div style={{ display: "flex", gap: "6px" }}>
+                            {!categorySearch && (
+                              <>
+                                <button
+                                  onClick={() => moveCategory(c.name, -1)}
+                                  disabled={i === 0}
+                                  title="Đưa lên"
+                                  aria-label={`Đưa danh mục ${c.name} lên`}
+                                  style={{ padding: "6px", borderRadius: "8px", background: "var(--surface-muted)", border: "1px solid var(--border)", color: "var(--subtext)", cursor: i === 0 ? "not-allowed" : "pointer", opacity: i === 0 ? 0.4 : 1 }}
+                                >
+                                  <ArrowUp size={15} />
+                                </button>
+                                <button
+                                  onClick={() => moveCategory(c.name, 1)}
+                                  disabled={i === filteredCategories.length - 1}
+                                  title="Đưa xuống"
+                                  aria-label={`Đưa danh mục ${c.name} xuống`}
+                                  style={{ padding: "6px", borderRadius: "8px", background: "var(--surface-muted)", border: "1px solid var(--border)", color: "var(--subtext)", cursor: i === filteredCategories.length - 1 ? "not-allowed" : "pointer", opacity: i === filteredCategories.length - 1 ? 0.4 : 1 }}
+                                >
+                                  <ArrowDown size={15} />
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => {
                                 setFilterCategory(c.name);
