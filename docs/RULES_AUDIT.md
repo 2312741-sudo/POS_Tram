@@ -95,3 +95,13 @@ Các việc còn lại từ phiên trước:
 ## 9. Thứ tự triển khai
 1. Deploy rules trước (`firebase deploy --only database --project tramapp-36f53`): chỉ mở thêm một trường hợp hẹp (F1), không cần đổi app.
 2. Sau đó mới phát hành app; không có phụ thuộc giữa hai bước.
+
+## 9. Đã siết sau ma trận (2026-10-13)
+
+| Luồng | Trước | Sau |
+|---|---|---|
+| F09 — sửa số tiền hóa đơn đã thanh toán | Nhân viên sửa được (PAID→PAID) | `.validate` trên `bills`/`history`: bản ghi đã đóng chỉ ghi lại khi trạng thái và các trường tiền giữ nguyên; Chủ hoặc người có `CANCEL_BILL` vẫn sửa được. Test PB1. |
+| F39 — Quản lý đổi vai trò / tạo / xóa hồ sơ nhân viên | Quản lý ghi được `users/{uid}` của mọi người không phải Chủ | Quản lý chỉ ghi hồ sơ người khác khi **Chủ cấp riêng `MANAGE_USERS`** trong `customPermissions` (cùng cơ chế `CANCEL_BILL`); vẫn tự sửa hồ sơ mình (không đổi vai trò), không bao giờ đụng Chủ quán. Test MU1. |
+
+Việc tạo tài khoản, đặt lại mật khẩu, khóa/mở khóa luôn qua Cloud Function (Admin SDK) nên không bị ảnh hưởng.
+Chưa siết: bếp ghi bàn/hóa đơn đang mở; nhân viên đánh dấu xong phiếu bếp (F04) — chờ Chủ quyết định nghiệp vụ.

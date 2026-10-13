@@ -231,8 +231,8 @@ describe("POS Trạm - Security Rules: tấn công leo thang quyền", () => {
     await assertFails(
       manager.ref("stores/TRAM01/users/new_owner").set({ username: "x", fullName: "X", roleId: "ROLE_OWNER", isActive: true })
     );
-    // Quản lý vẫn quản lý được nhân viên thường và tự sửa thông tin không nhạy cảm
-    await assertSucceeds(manager.ref("stores/TRAM01/users/waiter_uid/roleId").set("cashier"));
+    // Quản lý mặc định KHÔNG sửa được hồ sơ nhân viên khác (cần Chủ cấp MANAGE_USERS, xem MU1); vẫn tự sửa thông tin không nhạy cảm
+    await assertFails(manager.ref("stores/TRAM01/users/waiter_uid/roleId").set("cashier"));
     await assertSucceeds(manager.ref("stores/TRAM01/users/manager_uid/fullName").set("Quản Lý Mới"));
   });
 
@@ -1144,8 +1144,8 @@ describe("POS Trạm - Security Rules: Quản lý không hủy/xóa hóa đơn, 
     await assertFails(db("manager_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL"]));
     await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/users/mgr_cp2_uid/customPermissions").set(["EXPORT_CODES", "CANCEL_BILL"]));
     await assertFails(db("mgr_cp2_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL"]));
-    // Quản lý vẫn cấp được quyền thường cho Nhân viên (không thuộc nhóm bảo vệ)
-    await assertSucceeds(db("manager_uid").ref(path).set(["VIEW_REPORTS"]));
+    // Quản lý mặc định không cấp quyền cho nhân viên khác (cần MANAGE_USERS do Chủ cấp)
+    await assertFails(db("manager_uid").ref(path).set(["VIEW_REPORTS"]));
     // Chủ quán cấp được cho một Quản lý cụ thể
     await assertSucceeds(db("owner_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["CANCEL_BILL", "VIEW_AUDIT_LOGS"]));
     // ...và quyền có hiệu lực ngay trên rules
@@ -1196,5 +1196,27 @@ describe("POS Trạm - Security Rules: ca cũ không có staffUid (RA1)", () => 
     await assertSucceeds(db("owner_uid").ref("stores/TRAM01/bills/pb1/finalAmount").set(95000));
     // tạo mới hóa đơn đã thanh toán (luồng thanh toán) vẫn được
     await assertSucceeds(staff.ref("stores/TRAM01/bills/pb2").set({ id: "pb2", status: "PAID", finalAmount: 20000, subTotal: 20000, totalAmount: 20000, paymentMethod: "CASH", closedAt: 3000 }));
+  });
+
+  it("MU1. Quản lý chỉ ghi hồ sơ nhân viên khác khi Chủ cấp MANAGE_USERS; Chủ quán và nhân viên bình thường không đổi", async () => {
+    const waiter = "stores/TRAM01/users/waiter_uid";
+    const manager = db("manager_uid");
+    // mặc định: không đổi vai trò, không tạo, không xóa nhân viên
+    await assertFails(manager.ref(`${waiter}/roleId`).set("cashier"));
+    await assertFails(manager.ref("stores/TRAM01/users/new_staff").set({ username: "moi", fullName: "Mới", roleId: "ROLE_STAFF", isActive: true }));
+    await assertFails(manager.ref(waiter).remove());
+    // Chủ cấp MANAGE_USERS cho quản lý cụ thể -> có hiệu lực ngay
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").set(["MANAGE_USERS"]));
+    await assertSucceeds(manager.ref(`${waiter}/fullName`).set("Phục Vụ Đổi Tên"));
+    await assertSucceeds(manager.ref(`${waiter}/roleId`).set("cashier"));
+    // ...nhưng vẫn không đụng được Chủ quán, không tạo/nâng ai thành Chủ quán
+    await assertFails(manager.ref("stores/TRAM01/users/owner_uid/fullName").set("Bị sửa"));
+    await assertFails(manager.ref(`${waiter}/roleId`).set("owner"));
+    // Chủ gỡ quyền thì mất ngay
+    await assertSucceeds(db("owner_uid").ref("stores/TRAM01/users/manager_uid/customPermissions").remove());
+    await assertFails(manager.ref(`${waiter}/roleId`).set("cashier"));
+    // Chủ quán luôn quản lý được nhân viên; nhân viên chỉ tự ghi lastLoginAt
+    await assertSucceeds(db("owner_uid").ref(`${waiter}/roleId`).set("ROLE_STAFF"));
+    await assertFails(db("cashier_uid").ref(`${waiter}/roleId`).set("owner"));
   });
 });

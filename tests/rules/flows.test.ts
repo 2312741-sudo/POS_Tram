@@ -595,20 +595,8 @@ const FLOWS: Flow[] = [
   {
     id: "F39",
     title: "Đổi vai trò nhân viên khác (users/m_staff/roleId -> ROLE_KITCHEN)",
-    doc: "ROLE_RULES §3: QL không quản lý nhân sự (MANAGE_USERS chỉ Chủ)",
+    doc: "ROLE_RULES §3: QL không quản lý nhân sự mặc định (MANAGE_USERS do Chủ cấp riêng; rules đã siết)",
     exp: ex(true, false, false, false),
-    mm: {
-      manager: {
-        actual: true,
-        kind: "ĐÃ BIẾT (RULES_AUDIT §6)",
-        note: "Quản lý (không phải Chủ) ghi được users/{uid} của nhân viên: đổi roleId, tạo, xóa tài khoản. ROLE_RULES: QL không có quản lý nhân sự mặc định.",
-      },
-      manager_cp: {
-        actual: true,
-        kind: "ĐÃ BIẾT (RULES_AUDIT §6)",
-        note: "Như QL thường (cùng nhánh rules users).",
-      },
-    },
     run: (d) => d.ref(`${STORE}/users/${UID.staff}/roleId`).set("ROLE_KITCHEN"),
   },
   {
