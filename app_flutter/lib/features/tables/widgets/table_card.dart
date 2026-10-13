@@ -230,6 +230,16 @@ class TableCard extends StatelessWidget {
       }
     }
 
+    final note = (table.note ?? '').trim();
+    if (note.isNotEmpty) {
+      lines.add(Text(
+        '📝 $note',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),
+      ));
+    }
+
     // Cuộn ẩn (không cho kéo) thay vì tràn khi cỡ chữ hệ thống lớn
     return SingleChildScrollView(
       physics: const NeverScrollableScrollPhysics(),
@@ -289,6 +299,7 @@ class TableCard extends StatelessWidget {
           _menuItem('MERGE', Icons.call_merge, 'Ghép vào bàn khác', tc.warning),
           _menuItem('CANCEL_BILL', Icons.cancel_outlined, 'Hủy hóa đơn', tc.danger, danger: true),
         ],
+        _menuItem('NOTE', Icons.edit_note, (table.note ?? '').trim().isEmpty ? 'Ghi chú bàn' : 'Sửa ghi chú bàn', tc.textPrimary),
         _menuItem('QR', Icons.qr_code, 'Xem mã QR', tc.textPrimary),
       ],
     );

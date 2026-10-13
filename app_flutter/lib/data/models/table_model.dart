@@ -46,6 +46,10 @@ class TableModel {
   String? customerName;
   String? customerPhone;
 
+  /// Ghi chú bàn của lượt khách hiện tại (VD: "Khách VIP", "Cần ghế trẻ em"); xóa khi dọn bàn.
+  /// Hợp đồng chung với web: field `note` trên node tables/{key}.
+  String? note;
+
   TableModel({
     required this.name,
     required this.zone,
@@ -69,6 +73,7 @@ class TableModel {
     this.customerId,
     this.customerName,
     this.customerPhone,
+    this.note,
   }) : _currentOrderJson = currentOrderJson;
 
   /// Giỏ món hiện tại (JSON). Gán giá trị mới mà NỘI DUNG TÍNH TIỀN thay đổi (khác
@@ -237,10 +242,12 @@ class TableModel {
       customerId: nz(map['customerId']),
       customerName: nz(map['customerName']),
       customerPhone: nz(map['customerPhone']),
+      note: nz(map['note']),
     );
   }
 
   Map<String, dynamic> toMap() => {
+    if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
     'name': name,
     'zone': zone,
     'inUse': inUse,
@@ -337,6 +344,7 @@ class TableModel {
     mergedIntoTable = null;
     actionLogsJson = null;
     deletedItemsJson = null;
+    note = null;
     clearPrePrint();
     clearCustomer();
   }

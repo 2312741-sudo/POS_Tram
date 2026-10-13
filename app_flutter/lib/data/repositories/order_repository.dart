@@ -198,6 +198,7 @@ class OrderRepository {
     dst.customerId = src.customerId;
     dst.customerName = src.customerName;
     dst.customerPhone = src.customerPhone;
+    dst.note = src.note;
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
@@ -1402,6 +1403,22 @@ class OrderRepository {
           actor: actor);
     }
     return plan;
+  }
+
+  /// Ghim / bỏ ghim khu (chỉ ghi cờ pinned, không đụng tên khu và bàn)
+  Future<void> setZonePinned(String zone, bool pinned) async {
+    await zonesRef.child(zone.trim()).update({'name': zone.trim(), 'pinned': pinned ? true : null});
+  }
+
+  /// Lưu thứ tự khu theo danh sách tên đã sắp xếp (một lần ghi)
+  Future<void> setZoneOrder(List<String> orderedNames) async {
+    final updates = <String, Object?>{};
+    for (var i = 0; i < orderedNames.length; i++) {
+      final z = orderedNames[i].trim();
+      updates['$z/name'] = z;
+      updates['$z/order'] = i;
+    }
+    await zonesRef.update(updates);
   }
 
   Future<ZonePlan> deleteZone({required String zone, required ZoneAuditActor actor}) async {

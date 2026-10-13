@@ -142,7 +142,7 @@ export function planAddTables(args: {
   const names = nextTableNames(args.prefix, args.count, taken);
   const base = `stores/${args.storeCode}`;
   const existing = new Set(args.tables.map((t) => t.key));
-  const updates: Record<string, unknown> = { [`${base}/zones/${zone}`]: { name: zone } };
+  const updates: Record<string, unknown> = { [`${base}/zones/${zone}/name`]: zone };
   for (const name of names) {
     const key = `${zone}_${name}`;
     if (existing.has(key)) return { error: `Bàn "${name}" đã tồn tại trong khu "${zone}"` };

@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../data/models/zone_model.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/domain/zone_plan.dart';
 import '../../core/services/auth_service.dart';
@@ -53,7 +54,34 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
       final n = t.zone.trim();
       if (n.isNotEmpty) names.add(n);
     }
-    return names.toList()..sort();
+    return sortZoneNames(names, _zones);
+  }
+
+  bool _isPinned(String zone) => _zones.any((z) => z.name.trim() == zone && z.pinned);
+
+  Future<void> _togglePin(String zone, bool pin) async {
+    try {
+      await _fb.setZonePinned(zone, pin);
+    } catch (e) {
+      _snack('Không ghim được khu: $e', error: true);
+    }
+  }
+
+  /// Kéo thả: khu ghim luôn nằm trên khu thường, nên không cho kéo qua ranh giới ghim
+  Future<void> _reorder(List<String> zones, int oldI, int newI) async {
+    if (newI > oldI) newI -= 1;
+    final moved = zones[oldI];
+    final next = [...zones]..removeAt(oldI);
+    next.insert(newI, moved);
+    final pinnedFirst = [
+      ...next.where(_isPinned),
+      ...next.where((z) => !_isPinned(z)),
+    ];
+    try {
+      await _fb.setZoneOrder(pinnedFirst);
+    } catch (e) {
+      _snack('Không lưu được thứ tự: $e', error: true);
+    }
   }
 
   int _countIn(String zone) => _tables.where((t) => t.zone == zone).length;
@@ -286,28 +314,30 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                 label: const Text('Thêm khu vực'),
               ),
             )
-          : ListView.separated(
+          : ReorderableListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: zones.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              buildDefaultDragHandles: false,
+              onReorder: (oldI, newI) => _reorder(zones, oldI, newI),
               itemBuilder: (_, i) {
                 final zone = zones[i];
+                final pinned = _isPinned(zone);
                 final n = _countIn(zone);
                 final busy = _busyIn(zone);
                 return Container(
+                  key: ValueKey('zone_$zone'),
+                  margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: context.tc.card,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: context.tc.border),
                   ),
                   child: ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary.withAlpha(26),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.location_on_outlined, color: AppColors.secondary, size: 18),
+                    leading: IconButton(
+                      tooltip: pinned ? 'Bỏ ghim khu' : 'Ghim khu lên đầu',
+                      icon: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                          color: pinned ? context.tc.primary : context.tc.textHint, size: 22),
+                      onPressed: _busy ? null : () => _togglePin(zone, !pinned),
                     ),
                     title: Text(zone, style: GoogleFonts.beVietnamPro(
                         color: context.tc.textPrimary, fontWeight: FontWeight.w600)),
@@ -332,6 +362,13 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                           tooltip: n > 0 ? 'Khu còn bàn — không thể xóa' : 'Xóa khu',
                           icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                           onPressed: _busy || n > 0 ? null : () => _deleteZone(zone),
+                        ),
+                        ReorderableDragStartListener(
+                          index: i,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Icon(Icons.drag_handle, color: context.tc.textHint, size: 22),
+                          ),
                         ),
                       ],
                     ),

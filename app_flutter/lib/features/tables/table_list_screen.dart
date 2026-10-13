@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
+import '../../data/models/zone_model.dart';
 import '../../data/services/firebase_service.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 import '../auth/change_password_dialog.dart';
@@ -50,6 +51,21 @@ class _TableListScreenState extends State<TableListScreen> {
       _tablesStream = _fb.tablesStream();
     }
     return _tablesStream!;
+  }
+
+  // Thứ tự / ghim khu (node zones), nạp lại khi đổi chi nhánh
+  String? _zoneMetaStore;
+  StreamSubscription<List<ZoneModel>>? _zoneMetaSub;
+  List<ZoneModel> _zoneMeta = [];
+
+  void _setupZoneMetaListener(String storeCode) {
+    if (_zoneMetaStore == storeCode && _zoneMetaSub != null) return;
+    _zoneMetaStore = storeCode;
+    _zoneMetaSub?.cancel();
+    _zoneMeta = [];
+    _zoneMetaSub = _fb.zonesStream().listen((z) {
+      if (mounted) setState(() => _zoneMeta = z);
+    }, onError: (_) {});
   }
 
   void _setupReadyOrdersListener(String storeCode) {
@@ -142,6 +158,7 @@ class _TableListScreenState extends State<TableListScreen> {
 
   @override
   void dispose() {
+    _zoneMetaSub?.cancel();
     _readyOrdersSub?.cancel();
     super.dispose();
   }
@@ -286,6 +303,7 @@ class _TableListScreenState extends State<TableListScreen> {
       listenable: _auth,
       builder: (context, _) {
         _setupReadyOrdersListener(_auth.currentStoreCode);
+        _setupZoneMetaListener(_auth.currentStoreCode);
         return Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,
@@ -433,7 +451,7 @@ class _TableListScreenState extends State<TableListScreen> {
             return const LoadingState(message: 'Đang tải sơ đồ bàn...');
           }
           final allTables = snapshot.data!;
-          final zones = ['Tất cả', ...allTables.map((t) => t.zone).toSet()];
+          final zones = ['Tất cả', ...sortZoneNames(allTables.map((t) => t.zone), _zoneMeta)];
           if (!zones.contains(_selectedZone)) {
             _selectedZone = 'Tất cả';
           }
@@ -445,7 +463,13 @@ class _TableListScreenState extends State<TableListScreen> {
 
           // Filter by zone
           var list = _selectedZone == 'Tất cả'
-              ? allTables
+              ? ([for (var i = 0; i < allTables.length; i++) (i, allTables[i])]
+                  ..sort((a, b) {
+                    final c = zones.indexOf(a.$2.zone).compareTo(zones.indexOf(b.$2.zone));
+                    return c != 0 ? c : a.$1.compareTo(b.$1);
+                  }))
+                  .map((e) => e.$2)
+                  .toList()
               : allTables.where((t) => t.zone == _selectedZone).toList();
 
           // Filter by status
@@ -694,7 +718,9 @@ class _TableListScreenState extends State<TableListScreen> {
     }
     if (!mounted) return;
 
-    if (val == 'QR') {
+    if (val == 'NOTE') {
+      _showTableNoteDialog(table);
+    } else if (val == 'QR') {
       context.push('/qr-code', extra: {'tableName': table.name, 'tableZone': table.zone});
     } else if (val == 'RESERVE') {
       _showReserveTableDialog(table);
@@ -704,6 +730,36 @@ class _TableListScreenState extends State<TableListScreen> {
       _showMergeTableDialog(table, allTables);
     } else if (val == 'CANCEL_BILL') {
       _confirmCancelTableBill(table);
+    }
+  }
+
+  Future<void> _showTableNoteDialog(TableModel table) async {
+    final ctrl = TextEditingController(text: table.note ?? '');
+    final sm = ScaffoldMessenger.of(context);
+    final saved = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Ghi chú ${table.name}'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 80,
+          maxLines: 2,
+          decoration: const InputDecoration(hintText: 'VD: Khách VIP, cần ghế trẻ em...'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+          if ((table.note ?? '').isNotEmpty)
+            TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Xóa ghi chú')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Lưu')),
+        ],
+      ),
+    );
+    if (saved == null) return;
+    try {
+      await _fb.tablesRef.child(table.firebaseKey).child('note').set(saved.isEmpty ? null : saved);
+    } catch (e) {
+      sm.showSnackBar(SnackBar(content: Text('Không lưu được ghi chú: $e'), backgroundColor: Colors.red));
     }
   }
 

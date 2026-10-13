@@ -126,7 +126,7 @@ ZonePlan planAddTables({
   final taken = _tablesOfZone(tables, zone).map(_nameOf).toList();
   final names = nextTableNames(prefix, count, taken);
   final keys = tables.map((t) => t.key).toSet();
-  final updates = <String, dynamic>{'zones/$zone': {'name': zone}};
+  final updates = <String, dynamic>{'zones/$zone/name': zone};
   for (final n in names) {
     final key = '${zone}_$n';
     if (keys.contains(key)) return ZonePlan.fail('Bàn "$n" đã tồn tại trong khu "$zone"');
