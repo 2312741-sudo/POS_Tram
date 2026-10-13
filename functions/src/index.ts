@@ -439,16 +439,32 @@ export const staffSignIn = onCall(
     }
 
     const INVALID_MSG = "Sai tài khoản hoặc mật khẩu.";
-    const email = buildSyntheticEmail(cleanUser, cleanStoreCode);
+    let email = buildSyntheticEmail(cleanUser, cleanStoreCode);
 
     // 1. Tài khoản không tồn tại -> trả lỗi chung, KHÔNG ghi bộ đếm
     try {
       await auth.getUserByEmail(email);
     } catch (e: unknown) {
-      if ((e as { code?: string })?.code === "auth/user-not-found") {
-        throw new HttpsError("unauthenticated", INVALID_MSG);
+      if ((e as { code?: string })?.code !== "auth/user-not-found") {
+        throw new HttpsError("internal", "Không thể kiểm tra tài khoản. Vui lòng thử lại sau.");
       }
-      throw new HttpsError("internal", "Không thể kiểm tra tài khoản. Vui lòng thử lại sau.");
+      // Chủ nhiều chi nhánh dùng MỘT tài khoản Auth (email theo chi nhánh đầu tiên) nhưng có hồ sơ ở nhiều quán:
+      // tìm hồ sơ theo tên đăng nhập trong quán đang đăng nhập rồi dùng email thật của tài khoản đó.
+      let resolved: string | null = null;
+      try {
+        const q = await db
+          .ref(`stores/${cleanStoreCode}/users`)
+          .orderByChild("username")
+          .equalTo(cleanUser)
+          .limitToFirst(1)
+          .get();
+        const found = q.exists() ? Object.keys(q.val() as Record<string, unknown>)[0] : null;
+        if (found) resolved = (await auth.getUser(found)).email ?? null;
+      } catch {
+        resolved = null;
+      }
+      if (!resolved) throw new HttpsError("unauthenticated", INVALID_MSG);
+      email = resolved;
     }
 
     // 2. Giữ chỗ 1 lượt thử bằng transaction (an toàn khi gửi song song)
