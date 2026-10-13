@@ -143,7 +143,8 @@ async function writeLedger(memberKey: string, opId: string, entry: AnyMap, store
 }
 
 /** Chạy 1 thao tác điểm bằng transaction trên loyalty_members/{key} và ghi sổ cái (chỉ tạo mới). */
-async function runOp(
+/** Xuất cho test trên emulator (src/runOp.emulator.test.ts) */
+export async function runOp(
   target: Target,
   req: OpRequest,
   extra: { billId?: string; billCode?: string; staff: string; note?: string }
@@ -152,13 +153,18 @@ async function runOp(
   const canCreate = req.type === "earn" || req.type === "adjust" || req.type === "opening";
   const request: OpRequest = { ...req, name: req.name ?? target.name, phone: req.phone ?? target.phone };
   let last: OpResult | undefined;
+  // Admin SDK chạy callback lần đầu với cache rỗng (cur === null). Nếu thao tác tính ra "không đổi"/"không đủ điểm"
+  // trên số dư 0 giả và trả undefined thì giao dịch bị hủy mà KHÔNG được thử lại với dữ liệu thật
+  // (lỗi: đặt lại số dư về 0 báo "không đổi", trừ bớt báo "không đủ điểm"). Đọc trước số liệu thật làm hạt giống.
+  const seed: unknown = (await ref.get()).val();
   const tx = await ref.transaction((cur: unknown) => {
-    if (cur === null && !canCreate) {
-      // Cache rỗng ở lần chạy đầu (hoặc thật sự chưa có): ghi null để SDK chạy lại với dữ liệu thật
+    const effective = cur === null ? seed : cur;
+    if (effective === null && !canCreate) {
+      // Thật sự chưa có bản ghi: ghi null để SDK chạy lại với dữ liệu thật
       last = undefined;
       return null;
     }
-    const curMap = cur && typeof cur === "object" ? (cur as AnyMap) : null;
+    const curMap = effective && typeof effective === "object" ? (effective as AnyMap) : null;
     const r = applyOp(readMember(curMap), request);
     last = r;
     if (r.status !== "applied" || !r.member) return undefined;
