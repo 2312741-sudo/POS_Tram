@@ -88,7 +88,9 @@ describe("thêm bàn vào khu (planAddTables)", () => {
     const tables = [T("A", "Bàn 01"), T("A", "Bàn 02"), T("B", "Bàn 03")];
     const r = planAddTables({ storeCode: "T1", zoneName: "A", prefix: "Bàn", count: 2, declaredZones: ["A", "B"], tables });
     if ("error" in r) throw new Error(r.error);
-    expect(Object.keys(r.updates).sort()).toEqual(["stores/T1/tables/A_Bàn 03", "stores/T1/tables/A_Bàn 04", "stores/T1/zones/A"]);
+    // Chỉ ghi zones/A/name (không ghi cả nút khu) để thêm bàn không xóa ghim / thứ tự khu đã đặt
+    expect(Object.keys(r.updates).sort()).toEqual(["stores/T1/tables/A_Bàn 03", "stores/T1/tables/A_Bàn 04", "stores/T1/zones/A/name"]);
+    expect(r.updates["stores/T1/zones/A/name"]).toBe("A");
     expect(r.updates["stores/T1/tables/A_Bàn 03"]).toEqual({ name: "Bàn 03", zone: "A", inUse: false, currentOrderJson: "" });
   });
 
