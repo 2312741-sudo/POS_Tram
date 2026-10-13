@@ -258,6 +258,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (pathname.startsWith("/dashboard/tables")) {
     return hasPermission(user, "OPEN_TABLE");
   }
+  if (pathname.startsWith("/dashboard/my-orders")) {
+    return true; // Đơn do CHÍNH tài khoản lập: mọi vai trò xem được (dữ liệu đã lọc theo tài khoản)
+  }
   if (pathname.startsWith("/dashboard/my-shift")) {
     return hasPermission(user, "MANAGE_CASH_SHIFT");
   }

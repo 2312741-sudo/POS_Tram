@@ -249,3 +249,12 @@ describe("mapStaffSignInError — hiển thị nguyên nhân thật khi máy ch�
     expect(mapStaffSignInError({ code: "functions/unauthenticated" })).toBe("Sai tài khoản hoặc mật khẩu.");
   });
 });
+
+describe("Đơn của tôi (/dashboard/my-orders) mở cho mọi vai trò", () => {
+  it("mọi vai trò vào được, trang chỉ hiển thị đơn của chính tài khoản", () => {
+    for (const role of ["ROLE_STAFF", "ROLE_KITCHEN", "ROLE_MANAGER", "ROLE_OWNER"]) {
+      const u = { id: "1", uid: "1", username: "a", fullName: "a", roleId: role, role, isRootOwner: false, isActive: true, storeCode: "TRAM01" } as User;
+      expect(canAccessRoute(u, "/dashboard/my-orders")).toBe(true);
+    }
+  });
+});

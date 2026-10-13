@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense, useState, useMemo, useCallback, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
@@ -1091,6 +1092,12 @@ function TablesPageContent() {
               <KeyRound size={16} />
               PIN duyệt
             </button>
+          )}
+          {orderMode && (
+            <Link href="/dashboard/my-orders" className="btn-secondary" title="Lịch sử các đơn do tài khoản của bạn lập">
+              <Receipt size={16} />
+              Đơn của tôi
+            </Link>
           )}
           {canOrderOnWeb && (
             <button
