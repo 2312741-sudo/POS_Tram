@@ -59,12 +59,10 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
         setState(() => _stores = list);
       }
     } catch (_) {}
-    _fb.storesStream().listen((list) {
-      if (mounted && list.isNotEmpty) setState(() => _stores = list);
-    });
   }
 
   void _showStoreSwitcherDialog() {
+    _loadStores();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(

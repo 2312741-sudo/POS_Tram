@@ -188,15 +188,32 @@ class ReportRepository {
   }
 
   Future<List<StoreInfoModel>> getAllStores() async {
+    final fallback = [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
     try {
-      final snap = await storeInfoRef.get().timeout(const Duration(seconds: 2));
-      if (!snap.exists || snap.value == null) {
-        return [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (uid.isEmpty) return fallback;
+      // Các cửa hàng tài khoản này thuộc về (userIndex do máy chủ ghi, chỉ đọc được của chính mình)
+      final idx = await _root.child('userIndex').child(uid).get().timeout(const Duration(seconds: 5));
+      final codes = <String>[];
+      if (idx.exists && idx.value is Map) {
+        (idx.value as Map).forEach((k, v) {
+          if (v == true) codes.add(k.toString().toUpperCase());
+        });
       }
-      final sInfo = Map<dynamic, dynamic>.from(snap.value as Map);
-      return [StoreInfoModel.fromMap(sInfo, _currentStoreCode)];
+      if (!codes.contains(_currentStoreCode)) codes.add(_currentStoreCode);
+      codes.sort();
+      final result = await Future.wait(codes.map((code) async {
+        try {
+          final snap = await _root.child('stores').child(code).child('storeInfo').get().timeout(const Duration(seconds: 5));
+          if (snap.exists && snap.value is Map) {
+            return StoreInfoModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), code);
+          }
+        } catch (_) {}
+        return StoreInfoModel(storeCode: code, storeName: 'POS Trạm - $code');
+      }));
+      return result;
     } catch (_) {
-      return [StoreInfoModel(storeCode: _currentStoreCode, storeName: 'POS Trạm - $_currentStoreCode')];
+      return fallback;
     }
   }
 
