@@ -5,6 +5,7 @@ import {
   generateEmail,
   hasPermission,
   canAccessRoute,
+  mapStaffSignInError,
   homePathFor,
   User,
 } from "../lib/auth";
@@ -223,5 +224,23 @@ describe("Bảo vệ truy cập đường dẫn Web Admin (canAccessRoute)", () 
     expect(canAccessRoute(staff, "/dashboard/audit")).toBe(false);
     expect(canAccessRoute(staff, "/dashboard/inventory")).toBe(false);
     expect(canAccessRoute(staff, "/dashboard/revenue")).toBe(false);
+  });
+});
+
+describe("mapStaffSignInError — hiển thị nguyên nhân thật khi máy chủ lỗi", () => {
+  it("giữ thông báo tiếng Việt của máy chủ và kèm mã lỗi", () => {
+    const msg = mapStaffSignInError({ code: "functions/internal", message: "Máy chủ chưa đủ quyền cấp phiên đăng nhập (Service Account Token Creator)." });
+    expect(msg).toContain("Service Account Token Creator");
+    expect(msg).toContain("mã lỗi: internal");
+  });
+
+  it("thông báo chung chung 'internal' thì dùng câu mặc định kèm mã lỗi", () => {
+    expect(mapStaffSignInError({ code: "functions/internal", message: "internal" })).toContain("Không thể đăng nhập");
+    expect(mapStaffSignInError({ code: "functions/internal", message: "internal" })).toContain("mã lỗi: internal");
+  });
+
+  it("hàm chưa triển khai và các mã đã biết", () => {
+    expect(mapStaffSignInError({ code: "functions/not-found", message: "NOT_FOUND" })).toContain("chưa triển khai");
+    expect(mapStaffSignInError({ code: "functions/unauthenticated" })).toBe("Sai tài khoản hoặc mật khẩu.");
   });
 });

@@ -292,8 +292,15 @@ export function mapStaffSignInError(err: unknown): string {
     case "unavailable":
     case "deadline-exceeded":
       return "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.";
-    default:
-      return "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin hoặc thử lại sau.";
+    case "not-found":
+      return "Máy chủ đăng nhập chưa sẵn sàng (chưa triển khai hàm staffSignIn). Vui lòng báo Quản trị hệ thống.";
+    default: {
+      // Lỗi máy chủ (internal...) thường kèm thông báo tiếng Việt cụ thể (thiếu quyền cấp phiên, lỗi xác thực...) — hiển thị để dễ xử lý
+      const msg = (e?.message || "").trim();
+      const hasServerText = msg.length > 8 && /[^\x00-\x7F]/.test(msg) && !/^internal$/i.test(msg);
+      const base = hasServerText ? msg : "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin hoặc thử lại sau.";
+      return code ? `${base} (mã lỗi: ${code})` : base;
+    }
   }
 }
 
