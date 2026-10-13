@@ -17,6 +17,7 @@ import 'campaign_service.dart';
 import '../../core/domain/order_integrity.dart' show StockRetryPlanner;
 import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
+import '../../core/domain/zone_plan.dart';
 
 export '../repositories/seed_data.dart';
 export '../repositories/auth_repository.dart';
@@ -439,9 +440,17 @@ class FirebaseService {
 
   Stream<List<ZoneModel>> zonesStream() => _orderRepo.zonesStream();
 
-  Future<void> saveZone(ZoneModel zone) => _orderRepo.saveZone(zone);
+  Future<ZonePlan> createZone({required String name, required String prefix, required int count, required ZoneAuditActor actor}) =>
+      _orderRepo.createZone(name: name, prefix: prefix, count: count, actor: actor);
 
-  Future<void> deleteZone(ZoneModel zone) => _orderRepo.deleteZone(zone);
+  Future<ZonePlan> renameZone({required String oldName, required String newName, required ZoneAuditActor actor}) =>
+      _orderRepo.renameZone(oldName: oldName, newName: newName, actor: actor);
+
+  Future<ZonePlan> addTablesToZone({required String zone, required String prefix, required int count, required ZoneAuditActor actor}) =>
+      _orderRepo.addTablesToZone(zone: zone, prefix: prefix, count: count, actor: actor);
+
+  Future<ZonePlan> deleteZone({required String zone, required ZoneAuditActor actor}) =>
+      _orderRepo.deleteZone(zone: zone, actor: actor);
 
   Stream<List<KitchenOrderModel>> kitchenOrdersStream() => _orderRepo.kitchenOrdersStream();
 

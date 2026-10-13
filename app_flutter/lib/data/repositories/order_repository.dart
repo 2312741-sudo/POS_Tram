@@ -6,6 +6,7 @@ import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
 import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
+import '../../core/domain/zone_plan.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
@@ -1274,12 +1275,147 @@ class OrderRepository {
     }).handleError((_) => SeedData.defaultZones);
   }
 
-  Future<void> saveZone(ZoneModel zone) async {
-    await zonesRef.child(zone.name).set(zone.toMap());
+  // ---- Thiết lập khu vực: lập kế hoạch ở core/domain/zone_plan.dart, ghi MỘT update kèm nhật ký ----
+
+  /// Bàn thô (giữ mọi trường) của chi nhánh hiện tại
+  Future<List<ZoneTableRecord>> _rawTableRecords() async {
+    final raw = (await tablesRef.get()).value;
+    if (raw is! Map) return <ZoneTableRecord>[];
+    return [
+      for (final e in raw.entries)
+        if (e.value is Map) ZoneTableRecord(e.key.toString(), Map<String, dynamic>.from(e.value as Map)),
+    ];
   }
 
-  Future<void> deleteZone(ZoneModel zone) async {
-    await zonesRef.child(zone.name).remove();
+  /// Khu đã khai báo (node zones) gộp với khu đang có bàn
+  Future<List<String>> _declaredZoneNames(List<ZoneTableRecord> tables) async {
+    final raw = (await zonesRef.get()).value;
+    final names = <String>{};
+    if (raw is Map) {
+      for (final e in raw.entries) {
+        final v = e.value;
+        final n = (v is Map ? (v['name'] ?? e.key) : e.key).toString().trim();
+        if (n.isNotEmpty) names.add(n);
+      }
+    }
+    for (final t in tables) {
+      final z = (t.value['zone'] ?? '').toString().trim();
+      if (z.isNotEmpty) names.add(z);
+    }
+    return names.toList();
+  }
+
+  /// Ghi kế hoạch + một bản ghi nhật ký trong cùng một update (chi nhánh = node cha của zones)
+  Future<void> _applyZonePlan(
+    ZonePlan plan, {
+    required String action,
+    required String targetType,
+    required String targetId,
+    required String details,
+    required ZoneAuditActor actor,
+  }) async {
+    final store = zonesRef.parent ?? _root.child('stores').child(_currentStoreCode);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await store.update({
+      ...plan.updates,
+      'audit_logs/log_${now}_zone_${now % 99991}': zoneAuditEntry(
+        action: action,
+        targetType: targetType,
+        targetId: targetId,
+        details: details,
+        actor: actor,
+        storeCode: _currentStoreCode,
+        now: now,
+      ),
+    });
+  }
+
+  Future<ZonePlan> createZone({
+    required String name,
+    required String prefix,
+    required int count,
+    required ZoneAuditActor actor,
+  }) async {
+    final tables = await _rawTableRecords();
+    final plan = planZoneCreate(
+      zoneName: name,
+      prefix: prefix,
+      count: count,
+      declaredZones: await _declaredZoneNames(tables),
+      tables: tables,
+    );
+    if (plan.isOk) {
+      final zone = name.trim();
+      await _applyZonePlan(plan,
+          action: 'ZONE_SAVE',
+          targetType: 'ZONE',
+          targetId: zone,
+          details: 'Thêm khu vực "$zone" kèm ${plan.affected} bàn qua App',
+          actor: actor);
+    }
+    return plan;
+  }
+
+  Future<ZonePlan> renameZone({
+    required String oldName,
+    required String newName,
+    required ZoneAuditActor actor,
+  }) async {
+    final tables = await _rawTableRecords();
+    final plan = planZoneRename(
+      oldName: oldName,
+      newName: newName,
+      declaredZones: await _declaredZoneNames(tables),
+      tables: tables,
+    );
+    if (plan.isOk) {
+      await _applyZonePlan(plan,
+          action: 'ZONE_RENAME',
+          targetType: 'ZONE',
+          targetId: oldName.trim(),
+          details: 'Đổi tên khu vực "${oldName.trim()}" thành "${newName.trim()}" qua App',
+          actor: actor);
+    }
+    return plan;
+  }
+
+  Future<ZonePlan> addTablesToZone({
+    required String zone,
+    required String prefix,
+    required int count,
+    required ZoneAuditActor actor,
+  }) async {
+    final tables = await _rawTableRecords();
+    final plan = planAddTables(
+      zoneName: zone,
+      prefix: prefix,
+      count: count,
+      declaredZones: await _declaredZoneNames(tables),
+      tables: tables,
+    );
+    if (plan.isOk) {
+      await _applyZonePlan(plan,
+          action: 'TABLE_ADD',
+          targetType: 'TABLE',
+          targetId: zone.trim(),
+          details: 'Thêm ${plan.affected} bàn vào khu vực "${zone.trim()}" qua App',
+          actor: actor);
+    }
+    return plan;
+  }
+
+  Future<ZonePlan> deleteZone({required String zone, required ZoneAuditActor actor}) async {
+    final tables = await _rawTableRecords();
+    final plan = planZoneDelete(zoneName: zone, tables: tables);
+    if (plan.isOk) {
+      await _applyZonePlan(plan,
+          action: 'ZONE_DELETE',
+          targetType: 'ZONE',
+          targetId: zone.trim(),
+          details: 'Xóa khu vực "${zone.trim()}" qua App',
+          actor: actor);
+    }
+    return plan;
   }
 
   // ==================== KITCHEN ORDERS & ONLINE ORDERS ====================

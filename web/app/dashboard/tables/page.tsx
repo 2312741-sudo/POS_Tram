@@ -1060,8 +1060,7 @@ export default function TablesPage() {
             <button
               className="btn-secondary"
               onClick={() => setShowZoneSetup(true)}
-              disabled={currentStoreCode === "ALL"}
-              title={currentStoreCode === "ALL" ? "Chọn 1 chi nhánh cụ thể để thiết lập khu vực" : "Thêm / xóa khu vực bàn"}
+              title="Thêm, đổi tên, xóa khu vực và thêm bàn theo khu (chi nhánh đang chọn)"
             >
               <Settings2 size={16} />
               Thiết lập khu vực
@@ -2608,10 +2607,9 @@ export default function TablesPage() {
         />
       )}
 
-      {showZoneSetup && currentStoreCode !== "ALL" && (
+      {showZoneSetup && (
         <ZoneSetupDialog
           storeCode={currentStoreCode}
-          tables={tables.filter((t) => (t.storeCode || currentStoreCode) === currentStoreCode)}
           actor={{ username: user?.username || "admin_web", fullName: user?.fullName, role: user?.roleId || user?.role }}
           onClose={() => setShowZoneSetup(false)}
         />

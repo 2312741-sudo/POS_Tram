@@ -1509,6 +1509,12 @@ class _TableListScreenState extends State<TableListScreen> {
               title: const Text('Nhân viên và phân quyền'),
               onTap: () => _navigateTo('/user-management'),
             ),
+          if (_auth.isRootOwner || _auth.can(AppPermissions.manageTables))
+            ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: const Text('Khu vực & bàn'),
+              onTap: () => _navigateTo('/zone-management'),
+            ),
           if (_auth.isRootOwner || _auth.can(AppPermissions.manageMenu) || _auth.can(AppPermissions.editMenu))
             ListTile(
               leading: const Icon(Icons.menu_book_outlined),
