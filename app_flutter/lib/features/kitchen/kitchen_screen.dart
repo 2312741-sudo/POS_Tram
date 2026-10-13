@@ -167,6 +167,9 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 icon: const Icon(Icons.no_meals_outlined, size: 18),
                 label: const Text('Hết món'),
                 style: OutlinedButton.styleFrom(
+                  // Theme nút mặc định có minimumSize rộng vô hạn → trong Row làm tiêu đề bị ép còn 1 chữ/dòng
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   foregroundColor: Colors.white,
                   side: const BorderSide(color: AppColors.kitchenCardBorder),
                 ),

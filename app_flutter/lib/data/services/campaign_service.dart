@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../../data/models/campaign_models.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/domain/order_integrity.dart';
@@ -55,11 +56,19 @@ class CampaignService {
   Future<List<CampaignModel>> getCampaigns() async {
     final snapshot = await _storeRef.child('campaigns').get();
     if (snapshot.value == null) return [];
-    final Map<dynamic, dynamic> map = snapshot.value as Map<dynamic, dynamic>;
-    final list = map.values
-        .map((e) => CampaignModel.fromMap(Map<String, dynamic>.from(e)))
-        .toList();
-    
+    final Object? raw = snapshot.value;
+    if (raw is! Map) return [];
+    // Một CTKM lỗi dữ liệu (vd. ghi từ Web) không được làm mất cả danh sách
+    final list = <CampaignModel>[];
+    for (final e in raw.values) {
+      if (e is! Map) continue;
+      try {
+        list.add(CampaignModel.fromMap(Map<String, dynamic>.from(e)));
+      } catch (err) {
+        debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
+      }
+    }
+
     list.sort((a, b) {
       int cmp = a.priority.compareTo(b.priority);
       if (cmp != 0) return cmp;

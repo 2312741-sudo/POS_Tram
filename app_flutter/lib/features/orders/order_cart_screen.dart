@@ -169,7 +169,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   Future<void> _loadStoreAndPromotions() async {
     try {
       final info = await _fb.getStoreInfo();
-      final promos = await _fb.getPromotions();
+      // Lỗi tải KM cũ không được chặn việc hiển thị các CTKM mới (và ngược lại)
+      List<PromotionModel> promos = const [];
+      try {
+        promos = await _fb.getPromotions();
+      } catch (e) {
+        debugPrint('Error loading promotions into cart: $e');
+      }
 
       // Chương trình KM mới (CampaignModel) được tính bằng Pricing Engine, không qua PromotionModel cũ.
       // Chương trình chuyển đổi từ KM cũ (legacyPromotionId trùng KM cũ đang có) vẫn đi đường cũ.
@@ -2023,10 +2029,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   // ==================== PROMOTIONS & DISCOUNT DIALOG ====================
   Future<void> _showDiscountDialog() async {
+    // Tải lại CTKM mỗi lần mở để thấy ngay chương trình vừa tạo / sửa trên Web
+    await _loadStoreAndPromotions();
+    if (!mounted) return;
     final voucherCtrl = TextEditingController();
     final manualValueCtrl = TextEditingController();
     String manualType = 'PERCENT';
     VoucherCheckResult? voucherResult;
+    // Chọn CTKM / nhập giảm giá chỉ có hiệu lực khi bấm "Xác nhận"; đóng hộp thoại bằng cách khác → hoàn lại
+    final originalDiscounts = List<BillDiscountModel>.from(_appliedDiscounts);
+    bool confirmed = false;
 
     await showDialog(
       context: context,
@@ -2198,6 +2210,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     // Available list of promos
                     Text('Chương trình khuyến mãi khả dụng:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
+                    if (!_allPromotions.any((p) => p.isActive && p.code.isEmpty) &&
+                        !_campaigns.any((c) => !c.hasCodes && c.isEligibleAt(nowMs)))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Chưa có chương trình khuyến mãi nào đang chạy cho chi nhánh này (hoặc ngoài khung ngày/giờ áp dụng). '
+                          'Chương trình có phát hành mã thì nhập mã Voucher ở trên.',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
+                        ),
+                      ),
                     ..._allPromotions.where((p) => p.isActive && p.code.isEmpty).map((p) {
                       final isSelected = _appliedDiscounts.any((d) => d.promoId == p.id);
                       final isValid = p.isValid(_subTotal);
@@ -2288,7 +2310,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     // Manual Discount
                     if (_auth.can(AppPermissions.manualDiscount)) ...[
                       const Divider(height: 24),
-                      Text('Giảm giá thủ công (Bớt tiền):', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.accent)),
+                      Text('Giảm giá thủ công:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.accent)),
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -2310,24 +2332,6 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             ],
                             onChanged: (v) => setDlgState(() => manualType = v!),
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget), backgroundColor: AppColors.accent),
-                            onPressed: () {
-                              final val = int.tryParse(manualValueCtrl.text.trim()) ?? 0;
-                              if (val <= 0) return;
-                              final amt = manualType == 'PERCENT' ? (_subTotal * val / 100).round() : val;
-                              setDlgState(() {
-                                if (!allowStack) _appliedDiscounts.clear();
-                                _appliedDiscounts.add(BillDiscountModel(
-                                  description: 'Bớt tiền thủ công (${manualType == "PERCENT" ? "$val%" : FormatUtils.vnd(val)})',
-                                  amount: amt,
-                                ));
-                              });
-                              manualValueCtrl.clear();
-                            },
-                            child: const Text('Bớt Tiền'),
-                          ),
                         ],
                       ),
                     ],
@@ -2336,13 +2340,48 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Xong')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(96, AppSpacing.minTapTarget),
+                  backgroundColor: context.tc.primary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  // Giảm giá thủ công (nếu có nhập) được áp dụng cùng lúc với các CTKM đã chọn
+                  final manualText = manualValueCtrl.text.trim();
+                  if (manualText.isNotEmpty && _auth.can(AppPermissions.manualDiscount)) {
+                    final val = int.tryParse(manualText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                    if (val <= 0 || (manualType == 'PERCENT' && val > 100)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(manualType == 'PERCENT' ? 'Giảm % phải từ 1 đến 100' : 'Số tiền giảm không hợp lệ')),
+                      );
+                      return;
+                    }
+                    final raw = manualType == 'PERCENT' ? (_subTotal * val / 100).round() : val;
+                    final amt = raw > _subTotal ? _subTotal : raw;
+                    if (!allowStack) _appliedDiscounts.clear();
+                    _appliedDiscounts.add(BillDiscountModel(
+                      description: 'Giảm giá thủ công (${manualType == "PERCENT" ? "$val%" : FormatUtils.vnd(val)})',
+                      amount: amt,
+                    ));
+                  }
+                  confirmed = true;
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Xác nhận'),
+              ),
             ],
           );
         },
       ),
     );
-    setState(() {});
+    if (!confirmed) {
+      _appliedDiscounts
+        ..clear()
+        ..addAll(originalDiscounts);
+    }
+    if (mounted) setState(() {});
   }
 
   // ==================== PAYMENT BOTTOM SHEET ====================
