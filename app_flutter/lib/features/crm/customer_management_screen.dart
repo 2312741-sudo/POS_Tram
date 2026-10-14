@@ -197,6 +197,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     final storePhone = _storeInfo?.phone ?? '0987654321';
     final now = DateTime.now();
 
+    final sm = ScaffoldMessenger.of(context);
+    try {
     await ReportExportService.exportToExcel(
       reportCode: 'CRM_KHACHHANG',
       reportTitle: 'DANH SÁCH KHÁCH HÀNG CRM & TÍCH ĐIỂM KMT',
@@ -210,6 +212,9 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       rows: rows,
       totalRow: totalRow,
     );
+    } catch (e) {
+      sm.showSnackBar(SnackBar(content: Text('Lỗi xuất Excel: $e'), backgroundColor: Colors.red));
+    }
   }
 
   Future<void> _showConfigPointRateDialog() async {

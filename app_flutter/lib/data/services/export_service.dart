@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/app_models.dart';
 import '../../core/reports/bill_report_rows.dart';
+import '../../core/utils/share_utils.dart';
 
 class ExportService {
   static String sanitizeFileName(String input) {
@@ -192,7 +193,7 @@ class ExportService {
       if (fileBytes != null) {
         final file = File(filePath);
         await file.writeAsBytes(fileBytes);
-        await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo $reportType - $storeName');
+        await shareFilesSafe([XFile(filePath)], text: 'Báo cáo $reportType - $storeName');
         return filePath;
       }
       return null;

@@ -134,6 +134,22 @@ class _KitchenScreenState extends State<KitchenScreen> {
       ),
       child: Row(
         children: [
+          // Tài khoản không phải Bếp (chủ / quản lý / nhân viên) vào xem màn bếp thì có nút quay về
+          if (!AuthService().isKitchen)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: IconButton(
+                tooltip: 'Quay về',
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/tables');
+                  }
+                },
+              ),
+            ),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(

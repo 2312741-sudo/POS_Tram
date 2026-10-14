@@ -11,6 +11,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
+import '../../../core/utils/share_utils.dart';
 
 enum RevenueTabType { day, week, month, year }
 
@@ -222,7 +223,7 @@ class _RevenueTabState extends State<RevenueTab> {
       bills: _filteredBills,
     );
     if (path != null) {
-      await Share.shareXFiles([XFile(path)], text: 'Báo cáo doanh thu $tabName - $storeName');
+      await shareFilesSafe([XFile(path)], text: 'Báo cáo doanh thu $tabName - $storeName');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Xuất báo cáo thất bại!')),

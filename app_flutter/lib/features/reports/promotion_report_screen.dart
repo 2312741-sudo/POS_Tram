@@ -14,6 +14,51 @@ class PromotionReportScreen extends StatefulWidget {
 class _PromotionReportScreenState extends State<PromotionReportScreen> {
   final CampaignService _campaignService = CampaignService();
 
+  // Giữ nguyên luồng/tương lai giữa các lần build. Trước đây mỗi lần build lại tạo luồng + Future mới
+  // nên màn hình cứ quay "đang tải" (nhất là khi có nhiều chương trình hoặc mạng chậm), lỗi đọc dữ liệu cũng
+  // không được báo (chỉ quay mãi).
+  late Stream<List<CampaignModel>> _campaigns = _campaignService.campaignsStream();
+  String _countersKey = '';
+  Future<List<CampaignCountersModel?>>? _countersFuture;
+
+  Future<List<CampaignCountersModel?>> _countersFor(List<CampaignModel> active) {
+    final key = active.map((c) => c.campaignId).join('|');
+    if (_countersFuture == null || key != _countersKey) {
+      _countersKey = key;
+      _countersFuture = Future.wait(active.map((c) => _campaignService
+          .campaignCountersStream(c.campaignId)
+          .first
+          .timeout(const Duration(seconds: 8))
+          .then<CampaignCountersModel?>((v) => v)
+          .catchError((Object _) => null)));
+    }
+    return _countersFuture!;
+  }
+
+  void _reload() {
+    setState(() {
+      _campaigns = _campaignService.campaignsStream();
+      _countersFuture = null;
+      _countersKey = '';
+    });
+  }
+
+  Widget _errorView(Object? error) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 40, color: context.tc.danger),
+              const SizedBox(height: 12),
+              Text('Không tải được dữ liệu khuyến mãi\n$error', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh), label: const Text('Thử lại')),
+            ],
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,10 +67,12 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
         backgroundColor: context.tc.primary,
         title: const Text('Hiệu suất Khuyến mãi', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [IconButton(tooltip: 'Tải lại', icon: const Icon(Icons.refresh), onPressed: _reload)],
       ),
       body: StreamBuilder<List<CampaignModel>>(
-        stream: _campaignService.campaignsStream(),
+        stream: _campaigns,
         builder: (context, campaignsSnapshot) {
+          if (campaignsSnapshot.hasError) return _errorView(campaignsSnapshot.error);
           if (!campaignsSnapshot.hasData) return const Center(child: CircularProgressIndicator());
           
           final allCampaigns = campaignsSnapshot.data ?? [];
@@ -33,8 +80,9 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
           final activeCampaigns = allCampaigns.where((c) => c.schedule.absoluteEnd == null || c.schedule.absoluteEnd! > now).toList();
 
           return FutureBuilder<List<CampaignCountersModel?>>(
-            future: Future.wait(activeCampaigns.map((c) => _campaignService.campaignCountersStream(c.campaignId).first)),
+            future: _countersFor(activeCampaigns),
             builder: (context, countersSnapshot) {
+              if (countersSnapshot.hasError) return _errorView(countersSnapshot.error);
               if (!countersSnapshot.hasData) return const Center(child: CircularProgressIndicator());
               
               final countersList = countersSnapshot.data ?? [];

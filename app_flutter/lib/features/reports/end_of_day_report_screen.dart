@@ -16,6 +16,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'reports_hub_screen.dart';
+import '../../core/utils/share_utils.dart';
 
 class EndOfDayReportScreen extends StatefulWidget {
   const EndOfDayReportScreen({super.key});
@@ -702,7 +703,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       if (fileBytes != null) {
         final file = File(filePath);
         await file.writeAsBytes(fileBytes);
-        await Share.shareXFiles(
+        await shareFilesSafe(
           [XFile(filePath)],
           text: 'Báo cáo hàng hóa bán ra - $currentStoreName (${_selectedStaff == 'ALL' ? 'Tất cả NV' : _selectedStaff})',
         );

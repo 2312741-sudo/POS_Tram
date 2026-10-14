@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../permissions/app_permissions.dart';
 import 'report_date_utils.dart';
+import '../../core/utils/share_utils.dart';
 
 /// Người dùng không có quyền xuất file (EXPORT_REPORTS / EXPORT_DATA).
 class ExportPermissionException implements Exception {
@@ -80,9 +81,8 @@ class ReportExportService {
     }
     final file = File('${tempDir.path}/$fileName');
     await file.writeAsBytes(bytes, flush: true);
-    try {
-      await Share.shareXFiles([XFile(file.path)], text: fileName);
-    } catch (_) {}
+    // Lỗi mở hộp chia sẻ được ném lên để màn hình báo cho người dùng (trước đây bị nuốt nên nút "không phản hồi")
+    await shareFilesSafe([XFile(file.path)], text: fileName);
     return file.path;
   }
 

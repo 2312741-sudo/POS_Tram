@@ -38,11 +38,18 @@ class CampaignService {
   Stream<List<CampaignModel>> campaignsStream() {
     return _storeRef.child('campaigns').onValue.map((event) {
       if (event.snapshot.value == null) return [];
-      final Map<dynamic, dynamic> map = event.snapshot.value as Map<dynamic, dynamic>;
-      final list = map.values
-          .map((e) => CampaignModel.fromMap(Map<String, dynamic>.from(e)))
-          .toList();
-      
+      final raw = event.snapshot.value;
+      final Iterable<dynamic> values = raw is Map ? raw.values : (raw is List ? raw : const []);
+      final list = <CampaignModel>[];
+      for (final e in values) {
+        if (e is! Map) continue;
+        try {
+          list.add(CampaignModel.fromMap(Map<String, dynamic>.from(e)));
+        } catch (_) {
+          // Bỏ qua một chương trình dữ liệu hỏng, không để cả báo cáo bị treo
+        }
+      }
+
       list.sort((a, b) {
         int cmp = a.priority.compareTo(b.priority);
         if (cmp != 0) return cmp;

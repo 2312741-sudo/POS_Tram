@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../data/models/inventory_models.dart';
+import '../../core/utils/share_utils.dart';
 
 class ParsedInventoryItem {
   final int index;
@@ -208,7 +209,7 @@ class InventoryExcelService {
       final file = File(filePath);
       await file.writeAsBytes(fileBytes);
 
-      await Share.shareXFiles(
+      await shareFilesSafe(
         [XFile(filePath)],
         text: 'File mẫu nhập hàng hóa kho (Excel)',
       );
@@ -285,7 +286,7 @@ class InventoryExcelService {
       final file = File(filePath);
       await file.writeAsBytes(fileBytes);
 
-      await Share.shareXFiles(
+      await shareFilesSafe(
         [XFile(filePath)],
         text: 'Danh sách hàng hóa kho - $storeName ($storeCode)',
       );

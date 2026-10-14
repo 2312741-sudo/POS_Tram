@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
+import '../../../core/utils/share_utils.dart';
 
 class BillDetailSheet extends StatelessWidget {
   final BillModel bill;
@@ -348,7 +349,7 @@ class BillDetailSheet extends StatelessWidget {
                         bills: [bill],
                       );
                       if (path != null) {
-                        await Share.shareXFiles([XFile(path)], text: 'Hóa đơn ${bill.billCode} - $storeName');
+                        await shareFilesSafe([XFile(path)], text: 'Hóa đơn ${bill.billCode} - $storeName');
                       }
                     },
                   ),

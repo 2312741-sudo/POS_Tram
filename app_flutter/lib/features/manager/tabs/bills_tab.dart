@@ -10,6 +10,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
+import '../../../core/utils/share_utils.dart';
 
 class BillsTab extends StatefulWidget {
   const BillsTab({super.key});
@@ -207,7 +208,7 @@ class _BillsTabState extends State<BillsTab> {
       bills: bills,
     );
     if (path != null) {
-      await Share.shareXFiles([XFile(path)], text: 'Báo cáo danh sách hóa đơn - $storeName');
+      await shareFilesSafe([XFile(path)], text: 'Báo cáo danh sách hóa đơn - $storeName');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Xuất báo cáo thất bại!')),

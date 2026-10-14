@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../core/domain/shift_scope.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
@@ -10,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../core/utils/share_utils.dart';
 
 class CashShiftsScreen extends StatefulWidget {
   const CashShiftsScreen({super.key});
@@ -595,7 +595,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.share_outlined, size: 18),
                     label: const Text('Chia Sẻ Phiếu'),
-                    onPressed: () {
+                    onPressed: () async {
                       final text = '''
 ================================
 ${storeName.toUpperCase()}
@@ -617,7 +617,15 @@ ${_canViewDifference ? "CHÊNH LỆCH: ${FormatUtils.vnd(shift.difference ?? 0)}
 Ghi chú: ${shift.notes}
 ================================
 ''';
-                      Share.share(text, subject: 'Phiếu bàn giao ca ${shift.shiftCode}');
+                      try {
+                        await shareTextSafe(text, subject: 'Phiếu bàn giao ca ${shift.shiftCode}', context: context);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Không mở được hộp chia sẻ: $e'), backgroundColor: AppColors.danger),
+                          );
+                        }
+                      }
                     },
                   ),
                 ),
