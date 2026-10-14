@@ -763,122 +763,127 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         createdAt: info.createdAt || Date.now(),
       });
 
-      if (info.defaultVatRate === 8 || info.defaultVatRate === "8") {
-        update(ref(db, `stores/${code}/storeInfo`), { defaultVatRate: 0 }).catch(() => {});
-      }
+      // Một chi nhánh có dữ liệu lạ KHÔNG được làm hỏng cả danh sách chi nhánh / các chi nhánh khác
+      try {
+        if (info.defaultVatRate === 8 || info.defaultVatRate === "8") {
+          update(ref(db, `stores/${code}/storeInfo`), { defaultVatRate: 0 }).catch(() => {});
+        }
 
-      if (val.cash_shifts) {
-        const sList: CashShiftItem[] = [];
-        Object.entries(val.cash_shifts).forEach(([id, s]: [string, RtdbNode]) => {
-          sList.push({
-            ...s,
-            id,
-            storeCode: s.storeCode || code,
+        if (val.cash_shifts) {
+          const sList: CashShiftItem[] = [];
+          Object.entries(val.cash_shifts).forEach(([id, s]: [string, RtdbNode]) => {
+            sList.push({
+              ...s,
+              id,
+              storeCode: s.storeCode || code,
+            });
           });
-        });
-        shiftsMap[code] = sList;
-      }
+          shiftsMap[code] = sList;
+        }
 
-      if (val.products) {
-        const pList: ProductItem[] = [];
-        Object.entries(val.products).forEach(([id, p]: [string, RtdbNode]) => {
-          pList.push({
-            ...p,
-            id,
-            price: Number(p.price || 0),
-            costPrice: p.costPrice != null ? Number(p.costPrice) : 0,
-            storeCode: code,
-            storeName: info.storeName || code,
+        if (val.products) {
+          const pList: ProductItem[] = [];
+          Object.entries(val.products).forEach(([id, p]: [string, RtdbNode]) => {
+            pList.push({
+              ...p,
+              id,
+              price: Number(p.price || 0),
+              costPrice: p.costPrice != null ? Number(p.costPrice) : 0,
+              storeCode: code,
+              storeName: info.storeName || code,
+            });
           });
-        });
-        prodsMap[code] = pList;
-      }
+          prodsMap[code] = pList;
+        }
 
-      if (val.categories) {
-        const cList: CategoryItem[] = [];
-        Object.entries(val.categories).forEach(([id, c]: [string, RtdbNode]) => {
-          cList.push({
-            id,
-            name: typeof c === "string" ? c : (c.name || id),
-            allowedToppingIds: typeof c === "object" && c !== null && Array.isArray(c.allowedToppingIds) ? c.allowedToppingIds : [],
-            noteGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.noteGroupIds) : undefined,
-            toppingGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.toppingGroupIds) : undefined,
-            order: typeof c === "object" && c !== null && typeof c.order === "number" ? c.order : undefined,
-            storeCode: code,
+        if (val.categories) {
+          const cList: CategoryItem[] = [];
+          Object.entries(val.categories).forEach(([id, c]: [string, RtdbNode]) => {
+            cList.push({
+              id,
+              name: typeof c === "string" ? c : (c.name || id),
+              allowedToppingIds: typeof c === "object" && c !== null && Array.isArray(c.allowedToppingIds) ? c.allowedToppingIds : [],
+              noteGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.noteGroupIds) : undefined,
+              toppingGroupIds: typeof c === "object" && c !== null ? parseGroupIds(c.toppingGroupIds) : undefined,
+              order: typeof c === "object" && c !== null && typeof c.order === "number" ? c.order : undefined,
+              storeCode: code,
+            });
           });
-        });
-        catsMap[code] = sortCategories(cList);
-      }
+          catsMap[code] = sortCategories(cList);
+        }
 
-      if (val.users) {
-        const uList: UserItem[] = [];
-        Object.entries(val.users).forEach(([id, u]: [string, RtdbNode]) => {
-          const uName = u.username || id;
-          uList.push({
-            ...u,
-            id: uName,
-            // Mã tài khoản thật (khóa nút / trường uid) — `id` ở trên chỉ là tên đăng nhập để hiển thị
-            uid: resolveStaffUid(id, u),
-            nodeKey: id,
-            username: uName,
-            fullName: u.fullName || u.name || uName,
-            role: u.roleId || u.role || "ROLE_STAFF",
-            roleId: u.roleId || u.role || "ROLE_STAFF",
-            phone: u.phone || "",
-            password: u.password || "",
-            isActive: u.isActive !== false,
-            isRootOwner: u.isRootOwner === true || (u.roleId || u.role || "").toUpperCase().includes("OWNER"),
-            storeCode: u.storeCode || code,
-            storeName: info.storeName || code,
+        if (val.users) {
+          const uList: UserItem[] = [];
+          Object.entries(val.users).forEach(([id, u]: [string, RtdbNode]) => {
+            const uName = u.username || id;
+            uList.push({
+              ...u,
+              id: uName,
+              // Mã tài khoản thật (khóa nút / trường uid) — `id` ở trên chỉ là tên đăng nhập để hiển thị
+              uid: resolveStaffUid(id, u),
+              nodeKey: id,
+              username: uName,
+              fullName: u.fullName || u.name || uName,
+              role: u.roleId || u.role || "ROLE_STAFF",
+              roleId: u.roleId || u.role || "ROLE_STAFF",
+              phone: u.phone || "",
+              password: u.password || "",
+              isActive: u.isActive !== false,
+              isRootOwner: u.isRootOwner === true || (u.roleId || u.role || "").toUpperCase().includes("OWNER"),
+              storeCode: u.storeCode || code,
+              storeName: info.storeName || code,
+            });
           });
-        });
-        usersMap[code] = uList;
-      }
+          usersMap[code] = uList;
+        }
 
-      if (val.tables) {
-        const tArr: TableItem[] = [];
-        Object.entries(val.tables).forEach(([id, v]: [string, RtdbNode]) => {
-          tArr.push({
-            ...v,
-            id,
-            storeCode: code,
-            storeName: info.storeName || code,
-            inUse: Boolean(v.inUse),
+        if (val.tables) {
+          const tArr: TableItem[] = [];
+          Object.entries(val.tables).forEach(([id, v]: [string, RtdbNode]) => {
+            tArr.push({
+              ...v,
+              id,
+              storeCode: code,
+              storeName: info.storeName || code,
+              inUse: Boolean(v.inUse),
+            });
           });
-        });
-        branchTablesMap[code] = tArr;
-      }
+          branchTablesMap[code] = tArr;
+        }
 
-      // Đọc cả history (bản chốt, có thể chỉ tóm tắt) lẫn bills (bản đầy đủ từ Flutter) rồi gộp theo id
-      if (val.history || val.bills) {
-        mergeHistoryAndBills(val.history, val.bills).forEach(([id, v]) => {
-          const sanitized = sanitizeHistoryOrder(v, id);
-          sanitized.storeCode = sanitized.storeCode || code;
-          sanitized.storeName = sanitized.storeName || info.storeName || code;
-          historyList.push(sanitized);
-        });
-      }
-
-      if (val.audit_logs) {
-        Object.entries(val.audit_logs).forEach(([id, v]: [string, RtdbNode]) => {
-          logsList.push({
-            ...v,
-            id,
-            storeCode: v.storeCode || code,
-            storeName: v.storeName || info.storeName || code,
+        // Đọc cả history (bản chốt, có thể chỉ tóm tắt) lẫn bills (bản đầy đủ từ Flutter) rồi gộp theo id
+        if (val.history || val.bills) {
+          mergeHistoryAndBills(val.history, val.bills).forEach(([id, v]) => {
+            const sanitized = sanitizeHistoryOrder(v, id);
+            sanitized.storeCode = sanitized.storeCode || code;
+            sanitized.storeName = sanitized.storeName || info.storeName || code;
+            historyList.push(sanitized);
           });
-        });
-      }
+        }
 
-      if (val.online_orders) {
-        Object.entries(val.online_orders).forEach(([id, v]: [string, RtdbNode]) => {
-          onlineList.push({
-            ...v,
-            id,
-            storeCode: v.storeCode || code,
-            storeName: v.storeName || info.storeName || code,
+        if (val.audit_logs) {
+          Object.entries(val.audit_logs).forEach(([id, v]: [string, RtdbNode]) => {
+            logsList.push({
+              ...v,
+              id,
+              storeCode: v.storeCode || code,
+              storeName: v.storeName || info.storeName || code,
+            });
           });
-        });
+        }
+
+        if (val.online_orders) {
+          Object.entries(val.online_orders).forEach(([id, v]: [string, RtdbNode]) => {
+            onlineList.push({
+              ...v,
+              id,
+              storeCode: v.storeCode || code,
+              storeName: v.storeName || info.storeName || code,
+            });
+          });
+        }
+      } catch (err) {
+        console.warn(`[data-context] Bỏ qua dữ liệu lỗi của chi nhánh ${code}:`, err);
       }
     });
 
@@ -1044,6 +1049,27 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           const userIndexStores = indexSnap.exists() ? Object.keys(indexSnap.val() || {}) : [];
           const candidateStores = userIndexStores.length > 0 ? userIndexStores : ["TRAM01"];
           updateStoreSubscriptions(candidateStores);
+          // Chi nhánh được cấp quyền luôn có mặt trong danh sách chọn, kể cả khi dữ liệu còn đang tải (tên thật được cập nhật sau)
+          setStores((prev) => {
+            const have = new Set(prev.map((x) => x.storeCode));
+            const missing = candidateStores.filter((c) => !have.has(c));
+            if (missing.length === 0) return prev;
+            const extra: StoreItem[] = missing.map((c) => ({
+              id: c,
+              storeCode: c,
+              storeName: `POS Trạm (${c})`,
+              address: "",
+              phone: "",
+              bankId: "MB",
+              bankAccount: "",
+              accountName: "",
+              defaultVatRate: 0,
+              allowStackPromotions: true,
+              allowStaffViewShiftDifference: true,
+              active: true,
+            }));
+            return [...prev, ...extra].sort((a, b) => a.storeCode.localeCompare(b.storeCode));
+          });
         },
         (error) => {
           if (!isMounted) return;
