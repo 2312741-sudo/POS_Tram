@@ -45,8 +45,9 @@ class CampaignService {
         if (e is! Map) continue;
         try {
           list.add(CampaignModel.fromMap(Map<String, dynamic>.from(e)));
-        } catch (_) {
+        } catch (err) {
           // Bỏ qua một chương trình dữ liệu hỏng, không để cả báo cáo bị treo
+          debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
         }
       }
 

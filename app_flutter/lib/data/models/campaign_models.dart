@@ -634,7 +634,10 @@ class CampaignModel {
     };
   }
 
-  factory CampaignModel.fromMap(Map<String, dynamic> map) {
+  factory CampaignModel.fromMap(Map<String, dynamic> raw) {
+    // RTDB trả Map<Object?, Object?> ở các cấp lồng (schedule, tiers...): ép sang Map<String, dynamic>
+    // toàn bộ, nếu không CampaignSchedule/CampaignTier.fromMap ném TypeError và CTKM bị bỏ qua âm thầm.
+    final map = _deepStringMap(raw);
     return CampaignModel(
       campaignId: map['campaignId'] ?? '',
       programCode: map['programCode'] ?? '',
@@ -1310,3 +1313,12 @@ class PriceQuoteModel {
     );
   }
 }
+
+
+dynamic _deepValue(dynamic v) {
+  if (v is Map) return _deepStringMap(v);
+  if (v is List) return v.map(_deepValue).toList();
+  return v;
+}
+
+Map<String, dynamic> _deepStringMap(Map m) => {for (final e in m.entries) e.key.toString(): _deepValue(e.value)};
