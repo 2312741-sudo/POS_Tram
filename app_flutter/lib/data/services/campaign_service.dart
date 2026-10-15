@@ -34,31 +34,11 @@ class CampaignService {
 
   // ==================== CAMPAIGNS CRUD ====================
 
-  /// Đọc một CTKM; thiếu campaignId thì lấy khóa node (tránh thẻ trống không thao tác được)
-  CampaignModel _parseCampaign(Map e, String key) {
-    final c = CampaignModel.fromMap(Map<String, dynamic>.from(e));
-    return c.campaignId.isEmpty ? c.copyWith(campaignId: key) : c;
-  }
-
   /// Stream danh sách khuyến mãi, sắp xếp theo độ ưu tiên
   Stream<List<CampaignModel>> campaignsStream() {
     return _storeRef.child('campaigns').onValue.map((event) {
       if (event.snapshot.value == null) return [];
-      final raw = event.snapshot.value;
-      final Iterable<MapEntry<dynamic, dynamic>> entries = raw is Map
-          ? raw.entries
-          : (raw is List ? raw.asMap().entries : const <MapEntry<dynamic, dynamic>>[]);
-      final list = <CampaignModel>[];
-      for (final en in entries) {
-        final e = en.value;
-        if (e is! Map) continue;
-        try {
-          list.add(_parseCampaign(e, en.key.toString()));
-        } catch (err) {
-          // Bỏ qua một chương trình dữ liệu hỏng, không để cả báo cáo bị treo
-          debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
-        }
-      }
+      final list = parseCampaignNodes(event.snapshot.value);
 
       list.sort((a, b) {
         int cmp = a.priority.compareTo(b.priority);
@@ -73,19 +53,7 @@ class CampaignService {
   Future<List<CampaignModel>> getCampaigns() async {
     final snapshot = await _storeRef.child('campaigns').get();
     if (snapshot.value == null) return [];
-    final Object? raw = snapshot.value;
-    if (raw is! Map) return [];
-    // Một CTKM lỗi dữ liệu (vd. ghi từ Web) không được làm mất cả danh sách
-    final list = <CampaignModel>[];
-    for (final en in raw.entries) {
-      final e = en.value;
-      if (e is! Map) continue;
-      try {
-        list.add(_parseCampaign(e, en.key.toString()));
-      } catch (err) {
-        debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
-      }
-    }
+    final list = parseCampaignNodes(snapshot.value);
 
     list.sort((a, b) {
       int cmp = a.priority.compareTo(b.priority);
@@ -97,6 +65,7 @@ class CampaignService {
 
   /// Lấy thông tin 1 khuyến mãi theo ID
   Future<CampaignModel?> getCampaign(String campaignId) async {
+    _requireCampaignId(campaignId);
     final snapshot = await _storeRef.child('campaigns/$campaignId').get();
     if (snapshot.value == null) return null;
     return CampaignModel.fromMap(Map<String, dynamic>.from(snapshot.value as Map<dynamic, dynamic>));
@@ -104,7 +73,13 @@ class CampaignService {
 
   /// Tạo hoặc cập nhật khuyến mãi
   Future<void> saveCampaign(CampaignModel campaign) async {
+    // Id rỗng làm đường dẫn thành `campaigns/` => ghi ĐÈ cả nhánh khuyến mãi của cửa hàng
+    _requireCampaignId(campaign.campaignId);
     await _storeRef.child('campaigns/${campaign.campaignId}').set(campaign.toMap());
+  }
+
+  static void _requireCampaignId(String id) {
+    if (!isValidCampaignId(id)) throw ArgumentError('Mã chương trình khuyến mãi không hợp lệ: "$id"');
   }
 
   /// Xóa mềm khuyến mãi (chỉ set active = false, không xóa hẳn)
@@ -736,4 +711,38 @@ class PromotionUsageReservation {
     required this.billId,
     this.storeCode,
   });
+}
+
+
+/// Id hợp lệ để làm khóa node: không rỗng, không có ký tự đường dẫn / khóa cấm của RTDB
+bool isValidCampaignId(String id) => id.trim().isNotEmpty && !RegExp(r'[./#$\[\]]').hasMatch(id);
+
+/// Đọc nhánh stores/{cửa hàng}/campaigns: chỉ lấy node con là chương trình thật (Map có `campaignType`),
+/// lấy khóa node làm id nếu thiếu trường campaignId. Bỏ qua node rác / dữ liệu hỏng thay vì làm lỗi cả danh sách
+/// (trước đây dữ liệu rác tạo ra các dòng khuyến mãi trống không tên).
+List<CampaignModel> parseCampaignNodes(Object? raw) {
+  final Iterable<MapEntry<dynamic, dynamic>> entries;
+  if (raw is Map) {
+    entries = raw.entries;
+  } else if (raw is List) {
+    entries = raw.asMap().entries;
+  } else {
+    return <CampaignModel>[];
+  }
+
+  final out = <CampaignModel>[];
+  for (final en in entries) {
+    final value = en.value;
+    if (value is! Map || !value.containsKey('campaignType')) continue;
+    try {
+      final map = Map<String, dynamic>.from(value);
+      final id = (map['campaignId'] ?? '').toString();
+      if (id.trim().isEmpty) map['campaignId'] = en.key.toString();
+      final model = CampaignModel.fromMap(map);
+      if (isValidCampaignId(model.campaignId)) out.add(model);
+    } catch (_) {
+      // bỏ qua một chương trình hỏng
+    }
+  }
+  return out;
 }
