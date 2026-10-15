@@ -280,13 +280,10 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                   child: StreamBuilder<CampaignCountersModel?>(
                     stream: _campaignService.campaignCountersStream(campaign.campaignId),
                     builder: (context, snapshot) {
+                      // Chưa có bộ đếm (chương trình chưa dùng lần nào) vẫn hiện 0 để thẻ không bị trống
                       final counters = snapshot.data;
-                      if (counters == null) {
-                        return const SizedBox.shrink();
-                      }
-                      
-                      final spent = counters.spentMoney;
-                      final uses = counters.committedUseCount;
+                      final spent = counters?.spentMoney ?? 0;
+                      final uses = counters?.committedUseCount ?? 0;
                       
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,7 +316,7 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
                   children: [
                     Switch(
                       value: campaign.active,
-                      activeThumbColor: context.tc.primary,
+                      // Màu nút gạt lấy từ theme (nút trắng trên nền chủ đạo); đặt activeThumbColor=primary làm nút trùng màu nền
                       onChanged: (val) async {
                         try {
                           await _campaignService.toggleCampaignActive(campaign.campaignId, val);

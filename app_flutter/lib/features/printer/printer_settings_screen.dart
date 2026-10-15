@@ -394,7 +394,6 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
               ),
               value: _btService.autoReconnectEnabled,
-              activeThumbColor: context.tc.primary,
               onChanged: (val) => _btService.setAutoReconnect(val),
             ),
           ],
