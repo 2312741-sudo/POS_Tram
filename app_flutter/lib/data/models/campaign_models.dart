@@ -645,14 +645,14 @@ class CampaignModel {
       description: map['description'] ?? '',
       campaignType: map['campaignType'] ?? CampaignType.billDiscount.toMap(),
       schedule: CampaignSchedule.fromMap(map['schedule'] ?? {}),
-      branchIds: List<String>.from(map['branchIds'] ?? []),
-      includedCustomerIds: List<String>.from(map['includedCustomerIds'] ?? []),
-      excludedCustomerIds: List<String>.from(map['excludedCustomerIds'] ?? []),
-      includedItemIds: List<String>.from(map['includedItemIds'] ?? []),
-      includedGroupIds: List<String>.from(map['includedGroupIds'] ?? []),
-      excludedItemIds: List<String>.from(map['excludedItemIds'] ?? []),
-      tiers: List<CampaignTier>.from((map['tiers'] ?? []).map((e) => CampaignTier.fromMap(e))),
-      buyConditions: List<CampaignBuyCondition>.from((map['buyConditions'] ?? []).map((e) => CampaignBuyCondition.fromMap(e))),
+      branchIds: _asList(map['branchIds']).map((e) => e.toString()).toList(),
+      includedCustomerIds: _asList(map['includedCustomerIds']).map((e) => e.toString()).toList(),
+      excludedCustomerIds: _asList(map['excludedCustomerIds']).map((e) => e.toString()).toList(),
+      includedItemIds: _asList(map['includedItemIds']).map((e) => e.toString()).toList(),
+      includedGroupIds: _asList(map['includedGroupIds']).map((e) => e.toString()).toList(),
+      excludedItemIds: _asList(map['excludedItemIds']).map((e) => e.toString()).toList(),
+      tiers: _asList(map['tiers']).whereType<Map<String, dynamic>>().map(CampaignTier.fromMap).toList(),
+      buyConditions: _asList(map['buyConditions']).whereType<Map<String, dynamic>>().map(CampaignBuyCondition.fromMap).toList(),
       budgetMoney: map['budgetMoney']?.toInt(),
       maxUses: map['maxUses']?.toInt(),
       maxUsesPerCustomer: map['maxUsesPerCustomer']?.toInt(),
@@ -1322,3 +1322,6 @@ dynamic _deepValue(dynamic v) {
 }
 
 Map<String, dynamic> _deepStringMap(Map m) => {for (final e in m.entries) e.key.toString(): _deepValue(e.value)};
+
+/// RTDB có thể trả mảng dạng List hoặc Map (khi thiếu chỉ số): chấp nhận cả hai
+List<dynamic> _asList(dynamic v) => v is List ? v.where((e) => e != null).toList() : (v is Map ? v.values.toList() : const []);

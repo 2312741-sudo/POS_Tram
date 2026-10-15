@@ -34,17 +34,26 @@ class CampaignService {
 
   // ==================== CAMPAIGNS CRUD ====================
 
+  /// Đọc một CTKM; thiếu campaignId thì lấy khóa node (tránh thẻ trống không thao tác được)
+  CampaignModel _parseCampaign(Map e, String key) {
+    final c = CampaignModel.fromMap(Map<String, dynamic>.from(e));
+    return c.campaignId.isEmpty ? c.copyWith(campaignId: key) : c;
+  }
+
   /// Stream danh sách khuyến mãi, sắp xếp theo độ ưu tiên
   Stream<List<CampaignModel>> campaignsStream() {
     return _storeRef.child('campaigns').onValue.map((event) {
       if (event.snapshot.value == null) return [];
       final raw = event.snapshot.value;
-      final Iterable<dynamic> values = raw is Map ? raw.values : (raw is List ? raw : const []);
+      final Iterable<MapEntry<dynamic, dynamic>> entries = raw is Map
+          ? raw.entries
+          : (raw is List ? raw.asMap().entries : const <MapEntry<dynamic, dynamic>>[]);
       final list = <CampaignModel>[];
-      for (final e in values) {
+      for (final en in entries) {
+        final e = en.value;
         if (e is! Map) continue;
         try {
-          list.add(CampaignModel.fromMap(Map<String, dynamic>.from(e)));
+          list.add(_parseCampaign(e, en.key.toString()));
         } catch (err) {
           // Bỏ qua một chương trình dữ liệu hỏng, không để cả báo cáo bị treo
           debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
@@ -68,10 +77,11 @@ class CampaignService {
     if (raw is! Map) return [];
     // Một CTKM lỗi dữ liệu (vd. ghi từ Web) không được làm mất cả danh sách
     final list = <CampaignModel>[];
-    for (final e in raw.values) {
+    for (final en in raw.entries) {
+      final e = en.value;
       if (e is! Map) continue;
       try {
-        list.add(CampaignModel.fromMap(Map<String, dynamic>.from(e)));
+        list.add(_parseCampaign(e, en.key.toString()));
       } catch (err) {
         debugPrint('Bỏ qua CTKM lỗi dữ liệu: $err');
       }
@@ -99,20 +109,14 @@ class CampaignService {
 
   /// Xóa mềm khuyến mãi (chỉ set active = false, không xóa hẳn)
   Future<void> deleteCampaign(String campaignId) async {
-    final campaign = await getCampaign(campaignId);
-    if (campaign != null) {
-      final updated = campaign.copyWith(active: false);
-      await saveCampaign(updated);
-    }
+    // Chỉ ghi trường active (không ghi đè cả node bằng dữ liệu đã đọc lại)
+    await _storeRef.child('campaigns/$campaignId').update({'active': false, 'updatedAt': DateTime.now().millisecondsSinceEpoch});
   }
 
   /// Bật/Tắt khuyến mãi
   Future<void> toggleCampaignActive(String campaignId, bool active) async {
-    final campaign = await getCampaign(campaignId);
-    if (campaign != null) {
-      final updated = campaign.copyWith(active: active);
-      await saveCampaign(updated);
-    }
+    // Chỉ ghi trường active: không ghi đè cả node (tránh mất dữ liệu nếu đọc thiếu trường)
+    await _storeRef.child('campaigns/$campaignId').update({'active': active, 'updatedAt': DateTime.now().millisecondsSinceEpoch});
   }
 
   /// Tạo ID campaign mới
