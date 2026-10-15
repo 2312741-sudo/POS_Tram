@@ -299,3 +299,47 @@ export function buildZoneOrderUpdates(storeCode: string, orderedNames: string[],
   });
   return updates;
 }
+
+/** Xóa một bàn (mọi node cùng khu + tên, kể cả khóa cũ/trùng). Từ chối khi bàn đang dùng / còn giỏ món. */
+export function planDeleteTable(args: {
+  storeCode: string;
+  zoneName: string;
+  tableName: string;
+  tables: ZoneTableRecord[];
+}): ZonePlan {
+  const zone = args.zoneName.trim();
+  const name = args.tableName.trim();
+  const nodes = args.tables.filter(
+    (t) => String(t.value.zone ?? "").trim() === zone && tableDisplayName(t).trim() === name,
+  );
+  if (nodes.length === 0) return { error: `Bàn "${name}" không tồn tại trong khu "${zone}"` };
+  if (nodes.some((t) => isTableInUse(t.value))) {
+    return { error: `Bàn "${name}" đang dùng hoặc còn món — hãy thanh toán / dọn bàn trước khi xóa` };
+  }
+  const updates: Record<string, unknown> = {};
+  for (const t of nodes) updates[`stores/${args.storeCode}/tables/${t.key}`] = null;
+  return { updates, affected: 1 };
+}
+
+/** Dọn bàn trùng: node cùng khu + tên chỉ giữ 1 (ưu tiên node đang dùng, rồi khóa chuẩn khu_tên). affected = số node thừa bị xóa. */
+export function planDedupeTables(args: { storeCode: string; tables: ZoneTableRecord[] }): ZonePlan {
+  const groups = new Map<string, ZoneTableRecord[]>();
+  for (const t of args.tables) {
+    const k = `${String(t.value.zone ?? "").trim()}\u0000${tableDisplayName(t).trim()}`;
+    groups.set(k, [...(groups.get(k) ?? []), t]);
+  }
+  const updates: Record<string, unknown> = {};
+  for (const nodes of groups.values()) {
+    if (nodes.length < 2) continue;
+    const canonical = `${String(nodes[0].value.zone ?? "").trim()}_${tableDisplayName(nodes[0]).trim()}`;
+    const rank = (r: ZoneTableRecord) => (isTableInUse(r.value) ? 0 : 2) + (r.key === canonical ? 0 : 1);
+    const sorted = [...nodes].sort((a, b) => rank(a) - rank(b));
+    for (const extra of sorted.slice(1)) {
+      if (isTableInUse(extra.value)) continue;
+      updates[`stores/${args.storeCode}/tables/${extra.key}`] = null;
+    }
+  }
+  const affected = Object.keys(updates).length;
+  if (affected === 0) return { error: "Không có bàn trùng để dọn" };
+  return { updates, affected };
+}

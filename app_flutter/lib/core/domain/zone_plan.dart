@@ -181,6 +181,49 @@ ZonePlan planZoneDelete({required String zoneName, required List<ZoneTableRecord
   return ZonePlan.ok({'zones/$zone': null});
 }
 
+/// Xóa một bàn (mọi node cùng khu + tên, kể cả khóa cũ/trùng). Từ chối khi bàn đang dùng / còn giỏ món.
+ZonePlan planDeleteTable({
+  required String zoneName,
+  required String tableName,
+  required List<ZoneTableRecord> tables,
+}) {
+  final zone = zoneName.trim();
+  final name = tableName.trim();
+  final nodes = tables.where((t) => _zoneOf(t).trim() == zone && _nameOf(t).trim() == name).toList();
+  if (nodes.isEmpty) return ZonePlan.fail('Bàn "$name" không tồn tại trong khu "$zone"');
+  if (nodes.any((t) => isTableInUse(t.value))) {
+    return ZonePlan.fail('Bàn "$name" đang dùng hoặc còn món — hãy thanh toán / dọn bàn trước khi xóa');
+  }
+  return ZonePlan.ok({for (final t in nodes) 'tables/${t.key}': null}, affected: 1);
+}
+
+/// Dọn bàn trùng: các node cùng khu + tên chỉ giữ 1 (ưu tiên node đang dùng, rồi khóa chuẩn `{khu}_{tên}`).
+/// `affected` = số node thừa bị xóa.
+ZonePlan planDedupeTables(List<ZoneTableRecord> tables) {
+  final groups = <String, List<ZoneTableRecord>>{};
+  for (final t in tables) {
+    groups.putIfAbsent('${_zoneOf(t).trim()}\u0000${_nameOf(t).trim()}', () => []).add(t);
+  }
+  final updates = <String, dynamic>{};
+  groups.forEach((gk, nodes) {
+    if (nodes.length < 2) return;
+    final zone = _zoneOf(nodes.first).trim();
+    final name = _nameOf(nodes.first).trim();
+    final canonical = '${zone}_$name';
+    nodes.sort((a, b) {
+      int rank(ZoneTableRecord r) => (isTableInUse(r.value) ? 0 : 2) + (r.key == canonical ? 0 : 1);
+      return rank(a).compareTo(rank(b));
+    });
+    for (final extra in nodes.skip(1)) {
+      // Không bao giờ xóa node đang dùng
+      if (isTableInUse(extra.value)) continue;
+      updates['tables/${extra.key}'] = null;
+    }
+  });
+  if (updates.isEmpty) return ZonePlan.fail('Không có bàn trùng để dọn');
+  return ZonePlan.ok(updates, affected: updates.length);
+}
+
 /// Nội dung một bản ghi nhật ký thao tác khu/bàn (khớp rules audit_logs: khóa mới, có timestamp)
 Map<String, dynamic> zoneAuditEntry({
   required String action,

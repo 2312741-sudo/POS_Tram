@@ -161,7 +161,14 @@ class OrderRepository {
           event.snapshot.value,
           (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
         );
-        return list..sort(compareTables);
+        // Cùng khu + tên (khóa cũ/trùng) chỉ hiện một bàn — ưu tiên bàn đang dùng
+        final byName = <String, TableModel>{};
+        for (final t in list) {
+          final k = '${t.zone.trim()}\u0000${t.name.trim()}';
+          final cur = byName[k];
+          if (cur == null || (!cur.inUse && t.inUse)) byName[k] = t;
+        }
+        return byName.values.toList()..sort(compareTables);
       }
       return <TableModel>[];
     });
@@ -1441,6 +1448,38 @@ class OrderRepository {
           targetType: 'ZONE',
           targetId: zone.trim(),
           details: 'Xóa khu vực "${zone.trim()}" qua App',
+          actor: actor);
+    }
+    return plan;
+  }
+
+  Future<ZonePlan> deleteTableByName({
+    required String zone,
+    required String tableName,
+    required ZoneAuditActor actor,
+  }) async {
+    final tables = await _rawTableRecords();
+    final plan = planDeleteTable(zoneName: zone, tableName: tableName, tables: tables);
+    if (plan.isOk) {
+      await _applyZonePlan(plan,
+          action: 'TABLE_DELETE',
+          targetType: 'TABLE',
+          targetId: '${zone.trim()}_${tableName.trim()}',
+          details: 'Xóa bàn "${tableName.trim()}" khỏi khu vực "${zone.trim()}" qua App',
+          actor: actor);
+    }
+    return plan;
+  }
+
+  Future<ZonePlan> dedupeTables({required ZoneAuditActor actor}) async {
+    final tables = await _rawTableRecords();
+    final plan = planDedupeTables(tables);
+    if (plan.isOk) {
+      await _applyZonePlan(plan,
+          action: 'TABLE_DEDUPE',
+          targetType: 'TABLE',
+          targetId: 'all',
+          details: 'Dọn ${plan.affected} bàn trùng qua App',
           actor: actor);
     }
     return plan;

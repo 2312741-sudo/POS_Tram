@@ -455,6 +455,15 @@ class FirebaseService {
   Future<ZonePlan> deleteZone({required String zone, required ZoneAuditActor actor}) =>
       _orderRepo.deleteZone(zone: zone, actor: actor);
 
+  Future<ZonePlan> deleteTableByName({
+    required String zone,
+    required String tableName,
+    required ZoneAuditActor actor,
+  }) =>
+      _orderRepo.deleteTableByName(zone: zone, tableName: tableName, actor: actor);
+
+  Future<ZonePlan> dedupeTables({required ZoneAuditActor actor}) => _orderRepo.dedupeTables(actor: actor);
+
   Stream<List<KitchenOrderModel>> kitchenOrdersStream() => _orderRepo.kitchenOrdersStream();
 
   Stream<List<KitchenOrderModel>> readyToServeKitchenOrdersStream({Duration maxAge = const Duration(hours: 2)}) =>

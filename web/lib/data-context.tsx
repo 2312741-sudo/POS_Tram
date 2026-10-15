@@ -1094,11 +1094,17 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
   const allTables = useMemo(() => {
     const map = new Map<string, TableItem>();
     const tram01Tables = rawTables["TRAM01"] || [];
-    tram01Tables.forEach((t) => map.set(`TRAM01_${t.name}`, { ...t, storeCode: "TRAM01" }));
+    // Khóa gộp gồm cả khu: hai khu khác nhau có thể cùng tên bàn (vd. "Grab"); cùng khu + tên thì chỉ giữ một (ưu tiên bàn đang dùng)
+    const put = (sCode: string, t: TableItem) => {
+      const k = `${sCode}_${t.zone || ""}_${t.name}`;
+      const cur = map.get(k);
+      if (!cur || (!cur.inUse && t.inUse)) map.set(k, { ...t, storeCode: sCode });
+    };
+    tram01Tables.forEach((t) => put("TRAM01", t));
 
     Object.entries(rawTables).forEach(([sCode, tList]) => {
       if (sCode !== "TRAM01") {
-        tList.forEach((t) => map.set(`${sCode}_${t.name}`, { ...t, storeCode: sCode }));
+        tList.forEach((t) => put(sCode, t));
       }
     });
 

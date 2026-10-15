@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planAddTables, planZoneCreate, planZoneRename, validateTablePrefix, validateTableCount, isTableInUse, buildZoneAuditUpdates } from "../lib/zones";
+import { planAddTables, planZoneCreate, planZoneRename, validateTablePrefix, validateTableCount, isTableInUse, buildZoneAuditUpdates, planDeleteTable, planDedupeTables } from "../lib/zones";
 import { buildZoneCreateUpdates, buildZoneDeleteUpdates, mergeZoneNames, nextTableNames, parseZones, validateZoneName } from "../lib/zones";
 
 describe("khu vực bàn", () => {
@@ -143,5 +143,24 @@ describe("nhật ký thao tác khu", () => {
     const u = buildZoneAuditUpdates({ storeCode: "T1", action: "ZONE_RENAME", targetType: "ZONE", targetId: "A", details: "x", actor: { username: "boss" }, now: 1000, suffix: 7 });
     const e = u["stores/T1/audit_logs/log_1000_zone_7"] as Record<string, unknown>;
     expect(e).toMatchObject({ timestamp: 1000, username: "boss", userFullName: "boss", action: "ZONE_RENAME", targetType: "ZONE", storeCode: "T1" });
+  });
+});
+
+describe("xóa bàn / dọn bàn trùng", () => {
+  const rec = (key: string, name: string, zone: string, extra: Record<string, unknown> = {}) => ({ key, value: { name, zone, inUse: false, currentOrderJson: "", ...extra } });
+  it("xóa bàn xóa mọi node cùng khu + tên", () => {
+    const r = planDeleteTable({ storeCode: "T1", zoneName: "A", tableName: "Grab", tables: [rec("A_Grab", "Grab", "A"), rec("Grab", "Grab", "A"), rec("B_Grab", "Grab", "B")] });
+    expect(r).toEqual({ updates: { "stores/T1/tables/A_Grab": null, "stores/T1/tables/Grab": null }, affected: 1 });
+  });
+  it("từ chối xóa bàn đang dùng hoặc không tồn tại", () => {
+    expect("error" in planDeleteTable({ storeCode: "T1", zoneName: "A", tableName: "Grab", tables: [rec("A_Grab", "Grab", "A", { inUse: true })] })).toBe(true);
+    expect("error" in planDeleteTable({ storeCode: "T1", zoneName: "A", tableName: "X", tables: [] })).toBe(true);
+  });
+  it("dọn trùng giữ khóa chuẩn, ưu tiên bàn đang dùng", () => {
+    const r = planDedupeTables({ storeCode: "T1", tables: [rec("Grab", "Grab", "A"), rec("A_Grab", "Grab", "A"), rec("B_Grab", "Grab", "B")] });
+    expect(r).toEqual({ updates: { "stores/T1/tables/Grab": null }, affected: 1 });
+    const busy = planDedupeTables({ storeCode: "T1", tables: [rec("Grab", "Grab", "A", { inUse: true }), rec("A_Grab", "Grab", "A")] });
+    expect(busy).toEqual({ updates: { "stores/T1/tables/A_Grab": null }, affected: 1 });
+    expect("error" in planDedupeTables({ storeCode: "T1", tables: [rec("A_Grab", "Grab", "A")] })).toBe(true);
   });
 });

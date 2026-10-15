@@ -292,6 +292,88 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
     }
   }
 
+  Future<void> _deleteTable(String zone, TableModel t) async {
+    if (t.inUse || t.currentOrderJson.isNotEmpty) {
+      _snack('Bàn "${t.name}" đang dùng hoặc còn món — hãy thanh toán / dọn bàn trước', error: true);
+      return;
+    }
+    final confirm = await showConfirmDialog(
+      context,
+      title: 'Xóa bàn',
+      message: 'Xóa bàn "${t.name}" khỏi khu "$zone"?',
+      confirmText: 'Xóa',
+      isDanger: true,
+    );
+    if (confirm == true) {
+      await _run(() => _fb.deleteTableByName(zone: zone, tableName: t.name, actor: _actor), okMessage: 'Đã xóa bàn');
+    }
+  }
+
+  Future<void> _dedupe() async {
+    final confirm = await showConfirmDialog(
+      context,
+      title: 'Dọn bàn trùng',
+      message: 'Gộp các bàn trùng khu + tên (chỉ giữ 1 bàn mỗi tên, không xóa bàn đang dùng)?',
+      confirmText: 'Dọn',
+    );
+    if (confirm == true) {
+      await _run(() => _fb.dedupeTables(actor: _actor), okMessage: 'Đã dọn bàn trùng');
+    }
+  }
+
+  /// Danh sách bàn của một khu, có nút xóa từng bàn
+  void _showTables(String zone) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.tc.surface,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        final list = _tables.where((t) => t.zone == zone).toList();
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Bàn trong "$zone" (${list.length})',
+                    style: GoogleFonts.beVietnamPro(
+                        color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+              Flexible(
+                child: list.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text('Khu chưa có bàn', style: TextStyle(color: context.tc.textSecondary)))
+                    : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final t in list)
+                            ListTile(
+                              title: Text(t.name, style: TextStyle(color: context.tc.textPrimary)),
+                              subtitle: (t.inUse || t.currentOrderJson.isNotEmpty)
+                                  ? Text('Đang dùng', style: TextStyle(color: context.tc.textSecondary, fontSize: 12))
+                                  : null,
+                              trailing: IconButton(
+                                tooltip: 'Xóa bàn',
+                                icon: Icon(Icons.delete_outline, color: context.tc.danger),
+                                onPressed: _busy
+                                    ? null
+                                    : () async {
+                                        await _deleteTable(zone, t);
+                                        if (ctx.mounted) setSheet(() {});
+                                      },
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ]),
+          ),
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final zones = _zoneNames;
@@ -302,6 +384,13 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
         foregroundColor: context.tc.textPrimary, // nền sáng => icon/chữ tối (tránh trắng trên nền kem)
         title: Text('Quản lý khu vực', style: GoogleFonts.beVietnamPro(
           color: context.tc.textPrimary, fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            tooltip: 'Dọn bàn trùng',
+            icon: const Icon(Icons.cleaning_services_outlined),
+            onPressed: _busy ? null : _dedupe,
+          ),
+        ],
       ),
       body: zones.isEmpty
           ? EmptyState(
@@ -352,6 +441,11 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                           tooltip: busy ? 'Còn bàn đang dùng — không đổi tên' : 'Đổi tên khu',
                           icon: Icon(Icons.edit_outlined, color: context.tc.primary, size: 20),
                           onPressed: _busy || busy ? null : () => _showRenameDialog(zone),
+                        ),
+                        IconButton(
+                          tooltip: 'Xem / xóa bàn',
+                          icon: Icon(Icons.table_restaurant_outlined, color: context.tc.primary, size: 20),
+                          onPressed: _busy ? null : () => _showTables(zone),
                         ),
                         IconButton(
                           tooltip: 'Thêm bàn vào khu',
