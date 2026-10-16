@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/format_utils.dart';
 import '../../core/utils/share_utils.dart';
+import '../../data/models/user_model.dart';
 import '../auth/delete_account_dialog.dart';
 
 /// Màn hình Thông tin ứng dụng POS Trạm (About App Screen)
@@ -210,10 +212,16 @@ class AboutAppScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSessionCard(BuildContext context, dynamic user, String storeCode) {
-    final fullName = user?.fullName as String? ?? user?.username as String? ?? 'Khách';
-    final username = user?.username as String? ?? '—';
-    final role = user?.role as String? ?? 'Nhân viên';
+  Widget _buildSessionCard(BuildContext context, UserModel? user, String storeCode) {
+    final fullName = (user?.fullName.isNotEmpty == true)
+        ? user!.fullName
+        : (user?.username.isNotEmpty == true)
+            ? user!.username
+            : 'Khách';
+    final username = (user?.username.isNotEmpty == true)
+        ? user!.username
+        : '—';
+    final role = user != null ? FormatUtils.roleLabel(user.roleId) : 'Nhân viên';
 
     return Card(
       elevation: 0.8,

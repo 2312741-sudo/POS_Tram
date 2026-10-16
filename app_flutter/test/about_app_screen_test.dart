@@ -1,7 +1,8 @@
-// test/about_app_screen_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tram_flutter/core/services/auth_service.dart';
 import 'package:tram_flutter/core/theme/app_theme.dart';
+import 'package:tram_flutter/data/models/user_model.dart';
 import 'package:tram_flutter/features/about/about_app_screen.dart';
 
 void main() {
@@ -70,6 +71,30 @@ void main() {
 
       // Copyright
       expect(find.textContaining('© 2026 Nguyễn Thanh Tâm'), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('hiển thị đúng phiên làm việc khi người dùng đã đăng nhập với UserModel', (tester) async {
+      final auth = AuthService();
+      final mockUser = UserModel(
+        uid: 'user_123',
+        username: 'thanhtam',
+        fullName: 'Nguyễn Thanh Tâm',
+        roleId: 'ROLE_OWNER',
+        isRootOwner: true,
+      );
+      auth.setCurrentUserForTesting(mockUser, 'TRAM_TEST');
+
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pump();
+
+      // Kiểm tra tên hiển thị, tên đăng nhập, vai trò đã được format tiếng Việt chuẩn
+      expect(find.text('Nguyễn Thanh Tâm'), findsOneWidget);
+      expect(find.text('thanhtam'), findsOneWidget);
+      expect(find.text('Chủ cửa hàng'), findsOneWidget);
+      expect(find.text('TRAM_TEST'), findsOneWidget);
+
+      // Dọn dẹp sau test
+      auth.setCurrentUserForTesting(null, '');
     });
   });
 }

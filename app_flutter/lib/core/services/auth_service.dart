@@ -66,6 +66,12 @@ class AuthService extends ChangeNotifier {
     _functionsMock = mock;
   }
 
+  @visibleForTesting
+  void setCurrentUserForTesting(UserModel? user, [String storeCode = '']) {
+    _currentUser = user;
+    _currentStoreCode = storeCode;
+  }
+
   // Không mặc định cứng mã cửa hàng: được gán khi đăng nhập / tự đăng nhập / đổi chi nhánh
   String _currentStoreCode = '';
   String get currentStoreCode => _currentStoreCode;
