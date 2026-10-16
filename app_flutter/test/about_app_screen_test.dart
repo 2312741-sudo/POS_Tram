@@ -60,7 +60,7 @@ void main() {
       expect(find.text('Xóa'), findsOneWidget);
     });
 
-    testWidgets('hiển thị danh sách tính năng và bản quyền © 2026 POS Trạm', (tester) async {
+    testWidgets('hiển thị danh sách tính năng và bản quyền © 2026 Nguyễn Thanh Tâm', (tester) async {
       await tester.pumpWidget(buildTestWidget());
       await tester.pump();
 
@@ -69,7 +69,7 @@ void main() {
       expect(find.text('Thanh toán động VietQR Napas247 chính xác 100%'), findsOneWidget);
 
       // Copyright
-      expect(find.textContaining('© 2026 POS Trạm'), findsOneWidget);
+      expect(find.textContaining('© 2026 Nguyễn Thanh Tâm'), findsAtLeastNWidgets(1));
     });
   });
 }

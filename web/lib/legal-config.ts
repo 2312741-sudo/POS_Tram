@@ -5,6 +5,8 @@
  */
 export const LEGAL = {
   appName: "POS Trạm",
+  author: "Nguyễn Thanh Tâm",
+  copyright: "© 2026 Nguyễn Thanh Tâm",
   effectiveDate: "12/10/2026",
   host: "pos-tram.vercel.app",
   hotline: "0865.062.205",

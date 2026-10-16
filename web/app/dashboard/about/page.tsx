@@ -322,7 +322,7 @@ export default function DashboardAboutPage() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ color: "var(--subtext)" }}>Bản quyền phát hành:</span>
-              <span style={{ fontWeight: "600", color: "var(--text)" }}>© 2026 {LEGAL.appName}</span>
+              <span style={{ fontWeight: "700", color: "var(--text)" }}>{LEGAL.copyright}</span>
             </div>
           </div>
         </div>

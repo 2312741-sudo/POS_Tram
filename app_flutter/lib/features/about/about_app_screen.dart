@@ -22,6 +22,8 @@ class AboutAppScreen extends StatelessWidget {
   static const String websiteUrl = 'https://pos-tram.vercel.app';
   static const String privacyUrl = 'https://pos-tram.vercel.app/privacy';
   static const String privacyChoicesUrl = 'https://pos-tram.vercel.app/privacy-choices';
+  static const String copyrightOwner = 'Nguyễn Thanh Tâm';
+  static const String copyright = '© 2026 Nguyễn Thanh Tâm';
 
   static Future<void> open(BuildContext context) {
     return Navigator.of(context).push(
@@ -107,7 +109,7 @@ class AboutAppScreen extends StatelessWidget {
             // Footer Copyright
             Center(
               child: Text(
-                '© 2026 POS Trạm (pos-tram.vercel.app)\nBảo lưu mọi quyền',
+                '$copyright • POS Trạm\nBảo lưu mọi quyền',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
@@ -284,6 +286,8 @@ class AboutAppScreen extends StatelessWidget {
             _buildInfoRow(context, 'Apple Team Identifier', teamId, isMonospace: true),
             const Divider(height: 18),
             _buildInfoRow(context, 'Đồng bộ dữ liệu', 'Firebase Realtime (Trực tuyến)'),
+            const Divider(height: 18),
+            _buildInfoRow(context, 'Bản quyền phát hành', copyright, isHighlight: true),
           ],
         ),
       ),

@@ -109,7 +109,7 @@ export default function PublicAboutPage() {
             </span>
             <span style={{ fontSize: 13, color: "var(--subtext)" }}>•</span>
             <span style={{ fontSize: 13, color: "var(--subtext)" }}>
-              Bản quyền: <strong>© 2026 {LEGAL.appName}</strong>
+              Bản quyền: <strong>{LEGAL.copyright}</strong>
             </span>
           </div>
 
@@ -303,6 +303,13 @@ export default function PublicAboutPage() {
               <div style={{ color: "var(--subtext)", marginBottom: 4 }}>Apple Developer Team:</div>
               <div style={{ fontWeight: 600, fontFamily: "monospace", color: "var(--text)", fontSize: 13 }}>
                 W97CS7VC54
+              </div>
+            </div>
+
+            <div style={{ padding: "12px 16px", background: "var(--surface-muted)", borderRadius: "var(--radius-md)" }}>
+              <div style={{ color: "var(--subtext)", marginBottom: 4 }}>Bản quyền phát hành:</div>
+              <div style={{ fontWeight: 700, color: "var(--text)", fontSize: 13 }}>
+                {LEGAL.copyright}
               </div>
             </div>
           </div>
