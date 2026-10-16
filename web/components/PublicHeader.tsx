@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Coffee, HelpCircle, ShieldCheck, Sparkles, LogIn, Store } from "lucide-react";
+import { Coffee, HelpCircle, ShieldCheck, Sparkles, LogIn, Store, Info } from "lucide-react";
 
 export function PublicHeader() {
   const pathname = usePathname();
 
   const navItems = [
     { href: "/marketing", label: "Giới thiệu & Tính năng", icon: Sparkles },
+    { href: "/about", label: "Thông tin ứng dụng", icon: Info },
     { href: "/support", label: "Hỗ trợ khách hàng", icon: HelpCircle },
     { href: "/privacy", label: "Quyền riêng tư", icon: ShieldCheck },
   ];

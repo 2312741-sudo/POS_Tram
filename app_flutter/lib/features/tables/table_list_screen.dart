@@ -1646,6 +1646,15 @@ class _TableListScreenState extends State<TableListScreen> {
             },
           ),
           ListTile(
+            leading: Icon(Icons.info_outline, color: context.tc.primary),
+            title: const Text('Thông Tin Ứng Dụng'),
+            subtitle: const Text('Phiên bản 1.0.1 (Build 2), hỗ trợ kỹ thuật & pháp lý'),
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/about-app');
+            },
+          ),
+          ListTile(
             leading: Icon(Icons.no_accounts_outlined, color: context.tc.danger),
             title: Text('Xóa tài khoản của tôi', style: TextStyle(color: context.tc.danger)),
             onTap: () {

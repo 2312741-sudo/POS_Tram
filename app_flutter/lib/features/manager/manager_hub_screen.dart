@@ -303,6 +303,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     showSetApprovalPinDialog(context);
                   } else if (val == 'THEME') {
                     showThemeModeDialog(context);
+                  } else if (val == 'ABOUT_APP') {
+                    context.push('/about-app');
                   } else if (val == 'DELETE_ACCOUNT') {
                     await DeleteAccountDialog.start(context);
                   } else if (val == 'LOGOUT') {
@@ -385,6 +387,16 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                         Icon(Icons.palette_outlined, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Giao diện (Sáng/Tối)'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'ABOUT_APP',
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: context.tc.primary),
+                        const SizedBox(width: 8),
+                        const Text('Thông tin ứng dụng'),
                       ],
                     ),
                   ),

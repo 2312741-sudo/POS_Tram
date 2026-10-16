@@ -35,6 +35,7 @@ import '../../features/reports/promotion_report_screen.dart';
 import '../../features/reports/reports_hub_screen.dart';
 import '../../features/printer/printer_settings_screen.dart';
 import '../../features/crm/customer_management_screen.dart';
+import '../../features/about/about_app_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -168,6 +169,10 @@ class AppRouter {
       GoRoute(
         path: '/reports-hub',
         builder: (context, state) => const ReportsHubScreen(),
+      ),
+      GoRoute(
+        path: '/about-app',
+        builder: (context, state) => const AboutAppScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
