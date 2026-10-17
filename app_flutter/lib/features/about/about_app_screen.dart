@@ -138,27 +138,40 @@ class AboutAppScreen extends StatelessWidget {
           children: [
             // Logo / Icon
             Container(
-              width: 72,
-              height: 72,
+              width: 76,
+              height: 76,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [context.tc.primary, context.tc.primaryDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: context.tc.primary.withValues(alpha: 0.28),
+                    color: Colors.black.withValues(alpha: 0.12),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.coffee_rounded,
-                size: 38,
-                color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: 76,
+                  height: 76,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Image.asset(
+                    'assets/images/logo.jpg',
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: context.tc.primary,
+                      child: const Icon(
+                        Icons.restaurant_menu,
+                        size: 38,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 14),
