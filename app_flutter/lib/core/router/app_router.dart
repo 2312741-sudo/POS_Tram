@@ -36,12 +36,15 @@ import '../../features/reports/reports_hub_screen.dart';
 import '../../features/printer/printer_settings_screen.dart';
 import '../../features/crm/customer_management_screen.dart';
 import '../../features/about/about_app_screen.dart';
+import '../../features/splash/splash_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
     redirect: (context, state) {
       final auth = AuthService();
+      final isSplash = state.uri.path == '/splash';
+      if (isSplash) return null;
       final isLoggingIn = state.uri.path == '/login';
       if (!auth.isLoggedIn && !isLoggingIn) return '/login';
       if (auth.isLoggedIn && isLoggingIn) {
@@ -58,6 +61,7 @@ class AppRouter {
       return null;
     },
     routes: [
+      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(
         path: '/manager-hub',
