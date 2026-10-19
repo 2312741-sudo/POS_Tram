@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/domain/customer_search.dart';
 import '../../../data/models/app_models.dart';
@@ -12,7 +13,12 @@ class CustomerPickerSheet extends StatefulWidget {
 
   /// Tra theo SĐT đầy đủ khi không có trong danh sách chi nhánh (khách ở chi nhánh khác / Firestore)
   final Future<CustomerCandidate?> Function(String phone) lookupByPhone;
-  final Future<KmtCustomerModel> Function(String name, String phone) createCustomer;
+  final Future<KmtCustomerModel> Function(
+    String name,
+    String phone, {
+    String gender,
+    String birthday,
+  }) createCustomer;
   final List<LoyaltyTier> tiers;
   final bool showFullPhone;
 
@@ -94,23 +100,159 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
     final q = _ctrl.text.trim();
     final nameCtrl = TextEditingController(text: RegExp(r'[0-9]').hasMatch(q) ? '' : q);
     final phoneCtrl = TextEditingController(text: digitsOf(q).length >= 3 ? digitsOf(q) : '');
+    final bdayCtrl = TextEditingController();
+    String gender = 'Khác';
+    DateTime? birthday;
+    String? formError;
+
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Thêm khách mới (0 điểm)'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Họ và tên *', prefixIcon: Icon(Icons.person))),
-          const SizedBox(height: 8),
-          TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Số điện thoại *', prefixIcon: Icon(Icons.phone))),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Lưu & chọn')),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Thêm khách mới (0 điểm)'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (formError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            formError!,
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Họ và tên *',
+                    prefixIcon: Icon(Icons.person),
+                    isDense: true,
+                  ),
+                  onChanged: (_) {
+                    if (formError != null) setDialogState(() => formError = null);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Số điện thoại *',
+                    prefixIcon: Icon(Icons.phone),
+                    isDense: true,
+                  ),
+                  onChanged: (_) {
+                    if (formError != null) setDialogState(() => formError = null);
+                  },
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Giới tính',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
+                      ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
+                      ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                    ],
+                    selected: {gender},
+                    onSelectionChanged: (set) => setDialogState(() => gender = set.first),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: bdayCtrl,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: 'Ngày sinh',
+                    hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
+                    prefixIcon: const Icon(Icons.cake_outlined),
+                    isDense: true,
+                    suffixIcon: birthday != null
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              setDialogState(() {
+                                birthday = null;
+                                bdayCtrl.clear();
+                              });
+                            },
+                          )
+                        : const Icon(Icons.calendar_today, size: 18),
+                  ),
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final initial = birthday ?? DateTime(2000, 1, 1);
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: initial.isAfter(now) ? now : initial,
+                      firstDate: DateTime(1920),
+                      lastDate: now,
+                      helpText: 'CHỌN NGÀY SINH KHÁCH HÀNG',
+                    );
+                    if (picked != null) {
+                      setDialogState(() {
+                        birthday = picked;
+                        bdayCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                final phone = phoneCtrl.text.trim();
+                if (name.isEmpty) {
+                  setDialogState(() => formError = 'Vui lòng nhập họ và tên');
+                  return;
+                }
+                if (digitsOf(phone).length < 9) {
+                  setDialogState(() => formError = 'Số điện thoại phải có ít nhất 9 chữ số');
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Lưu & chọn'),
+            ),
+          ],
+        ),
       ),
     );
+
     if (ok != true || nameCtrl.text.trim().isEmpty || digitsOf(phoneCtrl.text).length < 9) return;
-    final m = await widget.createCustomer(nameCtrl.text.trim(), phoneCtrl.text.trim());
+    final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
+    final m = await widget.createCustomer(
+      nameCtrl.text.trim(),
+      phoneCtrl.text.trim(),
+      gender: gender,
+      birthday: bdayStr,
+    );
     if (mounted) Navigator.pop(context, m);
   }
 

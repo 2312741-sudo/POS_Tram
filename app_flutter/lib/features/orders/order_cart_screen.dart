@@ -1110,8 +1110,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             totalPoints: m.found ? m.totalPoints : (c?.totalPoints ?? 0),
           );
         },
-        createCustomer: (name, phone) async {
-          final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: name, phone: phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+        createCustomer: (name, phone, {gender = 'Khác', birthday = ''}) async {
+          final c = KmtCustomerModel(
+            id: 'CUST_${DateTime.now().millisecondsSinceEpoch}',
+            fullName: name,
+            phone: phone,
+            gender: gender,
+            birthday: birthday,
+            currentPoints: 0,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          );
           await _fb.saveCustomer(c); // 0 điểm; nếu SĐT đã có điểm chung, máy chủ gắn vào bản ghi đó
           return c;
         },
@@ -1120,9 +1128,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (picked == null || !mounted) return;
     if (picked.id.isEmpty) {
       // Khách chỉ có ở chi nhánh khác: tạo hồ sơ tại chi nhánh này (điểm lấy từ bản ghi dùng chung)
-      final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: picked.fullName, phone: picked.phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+      final c = KmtCustomerModel(
+        id: 'CUST_${DateTime.now().millisecondsSinceEpoch}',
+        fullName: picked.fullName,
+        phone: picked.phone,
+        gender: picked.gender,
+        birthday: picked.birthday,
+        currentPoints: 0,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      );
       await _fb.saveCustomer(c);
-      await _setCustomer(KmtCustomerModel(id: c.id, fullName: c.fullName, phone: c.phone, currentPoints: picked.currentPoints, totalPoints: picked.totalPoints, createdAt: c.createdAt));
+      await _setCustomer(KmtCustomerModel(
+        id: c.id,
+        fullName: c.fullName,
+        phone: c.phone,
+        gender: c.gender,
+        birthday: c.birthday,
+        currentPoints: picked.currentPoints,
+        totalPoints: picked.totalPoints,
+        createdAt: c.createdAt,
+      ));
       return;
     }
     // Điểm DÙNG CHUNG toàn chuỗi (gồm điểm tích ở chi nhánh khác) lấy từ máy chủ

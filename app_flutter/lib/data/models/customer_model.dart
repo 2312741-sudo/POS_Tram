@@ -142,6 +142,31 @@ class KmtCustomerModel {
     'ngay_cap_nhat': DateTime.now().millisecondsSinceEpoch,
   };
 
+  KmtCustomerModel copyWith({
+    String? id,
+    String? code,
+    String? name,
+    String? fullName,
+    String? phone,
+    String? gender,
+    String? birthday,
+    int? currentPoints,
+    int? totalPoints,
+    int? createdAt,
+  }) {
+    return KmtCustomerModel(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? fullName ?? this.name,
+      phone: phone ?? this.phone,
+      gender: gender ?? this.gender,
+      birthday: birthday ?? this.birthday,
+      currentPoints: currentPoints ?? this.currentPoints,
+      totalPoints: totalPoints ?? this.totalPoints,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   /// Hạng thành viên theo mốc mặc định (chưa cấu hình). Nên dùng [tierName] với mốc của cửa hàng.
   String get memberTier => tierName(LoyaltyTier.defaults);
 }
