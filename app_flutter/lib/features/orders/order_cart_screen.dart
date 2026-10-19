@@ -2791,14 +2791,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               );
                               _buildCurrentBillAsync(status: 'OPEN', method: paymentMethod).then((bill) {
                                 _markTablePrePrinted();
-                                final bytes = ReceiptPrinter.buildBillReceiptBytes(
+                                ReceiptPrinter.printBill(
                                   store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
                                   bill: bill,
                                   isPrePrint: true,
-                                );
-                                ReceiptPrinter.printViaLan(
-                                  printerIp: _storeInfo?.billPrinterIp ?? '',
-                                  data: bytes,
                                 ).catchError((_) => false);
                               }).catchError((_) {});
                             },
@@ -2899,18 +2895,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     // 2. Tích/đổi điểm khách: đã xử lý trong closeAndPayBill (transaction, idempotent theo hóa đơn)
 
-    // 3. In hóa đơn ra máy in nhiệt LAN (nếu bật in bill và có cấu hình IP máy in)
+    // 3. In hóa đơn ra máy in nhiệt (LAN hoặc Bluetooth)
     if (shouldPrint) {
       final store = _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm');
-      if (store.billPrinterIp.isNotEmpty) {
-        try {
-          final bytes = ReceiptPrinter.buildBillReceiptBytes(store: store, bill: bill, isPrePrint: false);
-          ReceiptPrinter.printViaLan(
-            printerIp: store.billPrinterIp,
-            data: bytes,
-          ).catchError((_) => false);
-        } catch (_) {}
-      }
+      ReceiptPrinter.printBill(
+        store: store,
+        bill: bill,
+        isPrePrint: false,
+      ).catchError((_) => false);
     }
 
     // 4. Nhật ký kiểm toán hệ thống
@@ -3377,14 +3369,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
     _buildCurrentBillAsync(status: 'PRE_PRINT', method: 'PRE_PRINT').then((bill) {
       _markTablePrePrinted();
-      final bytes = ReceiptPrinter.buildBillReceiptBytes(
+      ReceiptPrinter.printBill(
         store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
         bill: bill,
         isPrePrint: true,
-      );
-      ReceiptPrinter.printViaLan(
-        printerIp: _storeInfo?.billPrinterIp ?? '',
-        data: bytes,
       ).catchError((_) => false);
     }).catchError((_) {});
   }

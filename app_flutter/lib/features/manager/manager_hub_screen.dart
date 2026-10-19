@@ -301,6 +301,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     );
                   } else if (val == 'APPROVAL_PIN') {
                     showSetApprovalPinDialog(context);
+                  } else if (val == 'PRINTER') {
+                    context.push('/printer-settings');
                   } else if (val == 'THEME') {
                     showThemeModeDialog(context);
                   } else if (val == 'ABOUT_APP') {
@@ -313,6 +315,16 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                   }
                 },
                 itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: 'PRINTER',
+                    child: Row(
+                      children: [
+                        Icon(Icons.print_outlined, size: 18, color: context.tc.primary),
+                        const SizedBox(width: 8),
+                        const Text('Cài đặt máy in (LAN & Bluetooth)'),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'REPORTS',
                     child: Row(

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/app_models.dart';
 import 'printer_types.dart';
 import 'esc_pos_raster_helper.dart';
@@ -522,14 +523,41 @@ class ReceiptPrinter {
     return await EscPosRasterHelper.renderLinesToRasterBytes(lines: lines, paperSize: paperSize);
   }
 
+  static const String keyLocalBillPrinterIp = 'tram_pos_lan_bill_printer_ip';
+  static const String keyLocalKitchenPrinterIp = 'tram_pos_lan_kitchen_printer_ip';
+  static const String keyLocalPrinterType = 'tram_pos_printer_type';
+
+  /// Kiểm tra kết nối tới máy in mạng LAN qua TCP socket (port 9100)
+  static Future<bool> testLanConnection({
+    required String printerIp,
+    int port = 9100,
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    final ip = printerIp.trim();
+    if (ip.isEmpty) return false;
+    try {
+      final socket = await Socket.connect(ip, port, timeout: timeout);
+      await socket.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Gửi lệnh in trực tiếp qua cổng mạng LAN TCP Port 9100
   static Future<bool> printViaLan({
     required String printerIp,
     required Uint8List data,
     int port = 9100,
-    Duration timeout = const Duration(milliseconds: 1200),
+    Duration timeout = const Duration(milliseconds: 1500),
   }) async {
-    final ip = printerIp.trim();
+    var ip = printerIp.trim();
+    if (ip.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        ip = prefs.getString(keyLocalBillPrinterIp)?.trim() ?? '';
+      } catch (_) {}
+    }
     if (ip.isEmpty) return false;
     try {
       final socket = await Socket.connect(ip, port, timeout: timeout);
@@ -577,9 +605,19 @@ class ReceiptPrinter {
       );
     }
 
+    String printerType = store.printerType;
+    String billIp = store.billPrinterIp;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localType = prefs.getString(keyLocalPrinterType);
+      if (localType != null && localType.isNotEmpty) printerType = localType;
+      final localIp = prefs.getString(keyLocalBillPrinterIp);
+      if (localIp != null && localIp.isNotEmpty) billIp = localIp;
+    } catch (_) {}
+
     // Nếu cấu hình máy in là LAN và có IP
-    if (store.printerType == 'LAN' && store.billPrinterIp.isNotEmpty) {
-      final ok = await printViaLan(printerIp: store.billPrinterIp, data: bytes);
+    if (printerType == 'LAN' && billIp.isNotEmpty) {
+      final ok = await printViaLan(printerIp: billIp, data: bytes);
       if (ok) return true;
     }
 
@@ -609,8 +647,18 @@ class ReceiptPrinter {
       removeAccents: bt.encoding == PrinterTextEncoding.vietnameseAscii,
     );
 
-    if (store != null && store.printerType == 'LAN' && store.kitchenPrinterIp.isNotEmpty) {
-      final ok = await printViaLan(printerIp: store.kitchenPrinterIp, data: bytes);
+    String printerType = store?.printerType ?? 'LAN';
+    String kitchenIp = store?.kitchenPrinterIp ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localType = prefs.getString(keyLocalPrinterType);
+      if (localType != null && localType.isNotEmpty) printerType = localType;
+      final localIp = prefs.getString(keyLocalKitchenPrinterIp);
+      if (localIp != null && localIp.isNotEmpty) kitchenIp = localIp;
+    } catch (_) {}
+
+    if (printerType == 'LAN' && kitchenIp.isNotEmpty) {
+      final ok = await printViaLan(printerIp: kitchenIp, data: bytes);
       if (ok) return true;
     }
 

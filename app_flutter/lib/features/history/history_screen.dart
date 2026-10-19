@@ -454,8 +454,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   }
 
                   final store = await _fb.getStoreInfo();
-                  final bytes = ReceiptPrinter.buildBillReceiptBytes(store: store, bill: bill, isPrePrint: false);
-                  await ReceiptPrinter.printViaLan(printerIp: store.billPrinterIp, data: bytes);
+                  await ReceiptPrinter.printBill(store: store, bill: bill, isPrePrint: false);
 
                   // Audit log for reprint
                   await _fb.logAction(AuditLogModel(
