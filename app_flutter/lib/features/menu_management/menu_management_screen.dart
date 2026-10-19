@@ -698,27 +698,15 @@ class _ProductItem extends StatelessWidget {
                         )),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Hàng 1: Tên món hiển thị đầy đủ, không bị mã món chèn ép
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (product.code.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                          margin: const EdgeInsets.only(right: 6),
-                          decoration: BoxDecoration(
-                            color: context.tc.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            product.code,
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.primary),
-                          ),
-                        ),
-                      ],
                       Expanded(
                         child: Text(
                           product.name,
@@ -728,6 +716,8 @@ class _ProductItem extends StatelessWidget {
                             fontSize: 14,
                             decoration: product.isAvailable ? null : TextDecoration.lineThrough,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (product.isTopping) ...[
@@ -748,29 +738,46 @@ class _ProductItem extends StatelessWidget {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: context.bg(Colors.red.shade100), borderRadius: BorderRadius.circular(4)),
-                          child: Text('Tạm ngưng', style: GoogleFonts.beVietnamPro(color: context.ink(Colors.red.shade800), fontSize: 10, fontWeight: FontWeight.bold)),
+                          decoration: BoxDecoration(
+                            color: context.bg(Colors.red.shade100),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Tạm ngưng',
+                            style: GoogleFonts.beVietnamPro(
+                              color: context.ink(Colors.red.shade800),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Row(
+
+                  // Hàng 2: Mã món & Phân loại dạng tag tự co giãn
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(FormatUtils.currency(product.price), style: GoogleFonts.beVietnamPro(
-                        color: context.tc.primary, fontWeight: FontWeight.w700, fontSize: 14,
-                      )),
-                      const SizedBox(width: 8),
-                      Text('• ${product.unit}', style: GoogleFonts.beVietnamPro(
-                        color: context.tc.textSecondary, fontSize: 12,
-                      )),
-                      if (product.costPrice != null && product.costPrice! > 0) ...[
-                        const SizedBox(width: 8),
-                        Text('• Vốn: ${FormatUtils.currency(product.costPrice!)}', style: GoogleFonts.beVietnamPro(
-                          color: context.tc.textSecondary, fontSize: 11,
-                        )),
-                      ],
-                      const SizedBox(width: 8),
+                      if (product.code.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: context.tc.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            product.code,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: context.tc.primary,
+                            ),
+                          ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -778,19 +785,62 @@ class _ProductItem extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: context.tc.border),
                         ),
-                        child: Text(product.category, style: GoogleFonts.beVietnamPro(
-                          color: context.tc.textSecondary, fontSize: 10,
-                        )),
+                        child: Text(
+                          product.category,
+                          style: GoogleFonts.beVietnamPro(
+                            color: context.tc.textSecondary,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+
+                  // Hàng 3: Giá bán, Đơn vị tính và Giá vốn
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        FormatUtils.currency(product.price),
+                        style: GoogleFonts.beVietnamPro(
+                          color: context.tc.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        '• ${product.unit}',
+                        style: GoogleFonts.beVietnamPro(
+                          color: context.tc.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (product.costPrice != null && product.costPrice! > 0)
+                        Text(
+                          '• Vốn: ${FormatUtils.currency(product.costPrice!)}',
+                          style: GoogleFonts.beVietnamPro(
+                            color: context.tc.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
                     ],
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 4),
+
+            // Các nút thao tác nhỏ gọn, không lấn chiếm diện tích văn bản
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onToggleAvailability,
                   icon: Icon(
                     product.isAvailable ? Icons.check_circle_outline : Icons.pause_circle_outline,
@@ -800,11 +850,17 @@ class _ProductItem extends StatelessWidget {
                   tooltip: product.isAvailable ? 'Đang bán (Bấm để tạm ngưng)' : 'Tạm ngưng (Bấm để mở bán)',
                 ),
                 IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onEdit,
                   icon: Icon(Icons.edit_outlined, color: context.tc.textSecondary, size: 20),
                   tooltip: 'Sửa món',
                 ),
                 IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onDelete,
                   icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
                   tooltip: 'Xóa khỏi chi nhánh',
