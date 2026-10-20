@@ -244,9 +244,58 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   // ==================== CART ACTIONS ====================
   Future<void> _incrementItem(int index) async {
     if (!await _ensureShiftOpen() || !mounted) return;
-    setState(() {
-      _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity + 1);
-    });
+    final item = _cart[index];
+    if (item.isSentKitchen || item.hasDiscount) {
+      // Dòng này đã gửi bếp hoặc đã có giảm giá món: không cộng dồn trực tiếp vào dòng này
+      // (vì phần tăng thêm chưa gửi bếp và không tự động được hưởng giảm giá).
+      // Tìm xem đã có dòng mới chưa gửi bếp & không giảm giá cùng loại món này chưa:
+      final existingNewIdx = _cart.indexWhere((i) =>
+          !i.isSentKitchen &&
+          !i.hasDiscount &&
+          i.productId == item.productId &&
+          i.name == item.name &&
+          i.selectedSize == item.selectedSize &&
+          i.selectedSugar == item.selectedSugar &&
+          i.selectedIce == item.selectedIce &&
+          i.selectedToppings.join(',') == item.selectedToppings.join(',') &&
+          i.note == item.note);
+      if (existingNewIdx >= 0) {
+        setState(() {
+          _cart[existingNewIdx] = _cart[existingNewIdx].copyWith(
+            quantity: _cart[existingNewIdx].quantity + 1,
+          );
+        });
+      } else {
+        final staffUser = _auth.currentUser?.username ?? 'staff';
+        final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+        final newItem = OrderItemModel(
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          selectedSize: item.selectedSize,
+          sizeExtraPrice: item.sizeExtraPrice,
+          selectedSugar: item.selectedSugar,
+          selectedIce: item.selectedIce,
+          selectedToppings: List.from(item.selectedToppings),
+          toppingPrice: item.toppingPrice,
+          note: item.note,
+          orderedBy: staffUser,
+          orderedByName: staffName,
+          orderedAt: DateTime.now().millisecondsSinceEpoch,
+          isSentKitchen: false,
+        );
+        setState(() {
+          _cart.add(newItem);
+        });
+      }
+    } else {
+      setState(() {
+        _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity + 1);
+      });
+    }
+    widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+    await _fb.saveTable(widget.table).catchError((_) {});
     _recalculateDiscounts();
   }
 
