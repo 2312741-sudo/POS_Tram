@@ -161,13 +161,15 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_campaignType == CampaignType.orderValueItemBenefit &&
-        (_tiers.isEmpty || _tiers.any((t) => t.rewardItemIds.isEmpty))) {
+        (_tiers.isEmpty || _tiers.any((t) => t.rewardItemIds.isEmpty && t.rewardGroupIds.isEmpty))) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Vui lòng thêm ít nhất 1 mức ưu đãi và chọn món được tặng/giảm')));
       return;
     }
     if (_campaignType == CampaignType.buyXGetY &&
-        (_buyConditions.isEmpty || _buyConditions.any((c) => c.buyItemIds.isEmpty || c.rewardItemIds.isEmpty))) {
+        (_buyConditions.isEmpty ||
+            _buyConditions.any((c) =>
+                (c.buyItemIds.isEmpty && c.buyGroupIds.isEmpty) || (c.rewardItemIds.isEmpty && c.rewardGroupIds.isEmpty)))) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Vui lòng thêm điều kiện: chọn món mua (X) và món được tặng/giảm (Y)')));
       return;
@@ -315,6 +317,52 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         );
       },
     );
+  }
+
+  /// Hộp chọn nhiều nhóm món (tên nhóm = groupId của món), cập nhật trực tiếp [selected]
+  Future<void> _pickGroups(String title, List<String> selected, VoidCallback onChanged) {
+    return showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 400,
+            height: 400,
+            child: _allCategories.isEmpty
+                ? const Center(child: Text('Chưa có nhóm món'))
+                : ListView(
+                    children: [
+                      for (final cat in _allCategories)
+                        CheckboxListTile(
+                          title: Text(cat.name),
+                          value: selected.contains(cat.name),
+                          onChanged: (val) {
+                            setDlgState(() {
+                              if (val == true) {
+                                if (!selected.contains(cat.name)) selected.add(cat.name);
+                              } else {
+                                selected.remove(cat.name);
+                              }
+                            });
+                            onChanged();
+                          },
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Xong'))],
+        ),
+      ),
+    );
+  }
+
+  String _groupNames(List<String> groups) => groups.isEmpty ? '' : 'Nhóm: ${groups.join(', ')}';
+
+  /// Tên món + nhóm món để hiển thị gọn
+  String _itemsAndGroups(List<String> ids, List<String> groups) {
+    if (ids.isEmpty && groups.isEmpty) return '(chưa chọn)';
+    return [if (groups.isNotEmpty) _groupNames(groups), if (ids.isNotEmpty) _productNames(ids)].join(' • ');
   }
 
   void _showProductSelector() => _pickProducts('Chọn món hàng áp dụng', _includedItemIds, () => setState(() {}));
@@ -1022,7 +1070,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.card_giftcard),
           title: Text('Đơn hàng từ ${FormatUtils.vnd(t.threshold)}'),
-          subtitle: Text('${_benefitText(t.benefitMode, t.value)} tối đa $qty món: ${_productNames(t.rewardItemIds)}'),
+          subtitle: Text('${_benefitText(t.benefitMode, t.value)} tối đa $qty món: ${_itemsAndGroups(t.rewardItemIds, t.rewardGroupIds)}'),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editTier(e.key)),
             IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => setState(() => _tiers.removeAt(e.key))),
@@ -1030,7 +1078,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         );
       }),
       TextButton.icon(onPressed: () => _editTier(null), icon: const Icon(Icons.add), label: const Text('Thêm mức ưu đãi')),
-      Text('Món được tặng/giảm phải có trong hóa đơn (nhân viên thêm món vào đơn). Đơn đạt nhiều mức sẽ lấy mức cao nhất.',
+      Text('Khi đơn đạt mức, nhân viên chọn khuyến mãi ở màn hình bán hàng và app tự thêm món được tặng/giảm vào đơn. Đơn đạt nhiều mức sẽ lấy mức cao nhất.',
           style: TextStyle(fontSize: 12, color: context.tc.textHint)),
     ]);
   }
@@ -1042,6 +1090,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     final valueCtrl = TextEditingController(text: old != null ? _valueToInput(old.benefitMode, old.value) : '');
     final qtyCtrl = TextEditingController(text: '${old != null && old.maxRewardQty > 0 ? old.maxRewardQty : 1}');
     final rewardIds = List<String>.from(old?.rewardItemIds ?? const []);
+    final rewardGroups = List<String>.from(old?.rewardGroupIds ?? const []);
 
     final saved = await showDialog<bool>(
       context: context,
@@ -1068,6 +1117,13 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Nhóm món được tặng/giảm'),
+                  subtitle: Text(rewardGroups.isEmpty ? '(chưa chọn)' : rewardGroups.join(', ')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickGroups('Chọn nhóm món được tặng/giảm', rewardGroups, () => setDlg(() {})),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Món được tặng/giảm'),
                   subtitle: Text(_productNames(rewardIds)),
                   trailing: const Icon(Icons.chevron_right),
@@ -1080,8 +1136,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             ElevatedButton(
               onPressed: () {
-                if (rewardIds.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn món được tặng/giảm')));
+                if (rewardIds.isEmpty && rewardGroups.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn món hoặc nhóm món được tặng/giảm')));
                   return;
                 }
                 Navigator.pop(ctx, true);
@@ -1102,6 +1158,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       maxDiscountMoney: 0,
       maxRewardQty: (int.tryParse(qtyCtrl.text.trim()) ?? 1).clamp(1, 999),
       rewardItemIds: rewardIds,
+      rewardGroupIds: rewardGroups,
       sortOrder: (index ?? _tiers.length) + 1,
     );
     setState(() {
@@ -1122,8 +1179,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.shopping_basket_outlined),
-          title: Text('Mua ${c.requiredBuyQty}: ${_productNames(c.buyItemIds)}'),
-          subtitle: Text('${_benefitText(c.benefitMode, c.value)} ${c.rewardQty}: ${_productNames(c.rewardItemIds)}'
+          title: Text('Mua ${c.requiredBuyQty}: ${_itemsAndGroups(c.buyItemIds, c.buyGroupIds)}'),
+          subtitle: Text('${_benefitText(c.benefitMode, c.value)} ${c.rewardQty}: ${_itemsAndGroups(c.rewardItemIds, c.rewardGroupIds)}'
               '${c.multiplyByBundle ? "\n(Nhân theo số món X bán ra)" : ""}'),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editCondition(e.key)),
@@ -1132,14 +1189,16 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         );
       }),
       TextButton.icon(onPressed: () => _editCondition(null), icon: const Icon(Icons.add), label: const Text('Thêm điều kiện')),
-      Text('Món Y phải có trong hóa đơn; ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
+      Text('Có thể chọn cả nhóm món để tránh sót món lẻ. Món Y được tự thêm vào đơn khi áp dụng; ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
     ]);
   }
 
   Future<void> _editCondition(int? index) async {
     final old = index != null ? _buyConditions[index] : null;
     final buyIds = List<String>.from(old?.buyItemIds ?? const []);
+    final buyGroups = List<String>.from(old?.buyGroupIds ?? const []);
     final rewardIds = List<String>.from(old?.rewardItemIds ?? const []);
+    final rewardGroups = List<String>.from(old?.rewardGroupIds ?? const []);
     final buyQtyCtrl = TextEditingController(text: '${old != null && old.requiredBuyQty > 0 ? old.requiredBuyQty : 1}');
     final rewardQtyCtrl = TextEditingController(text: '${old != null && old.rewardQty > 0 ? old.rewardQty : 1}');
     // Điều kiện cũ có thể lưu PERCENT/0 mặc định -> hiển thị là Tặng
@@ -1158,6 +1217,13 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Nhóm món mua (X)'),
+                  subtitle: Text(buyGroups.isEmpty ? '(chưa chọn)' : buyGroups.join(', ')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickGroups('Chọn nhóm món mua (X)', buyGroups, () => setDlg(() {})),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Hàng mua (X)'),
                   subtitle: Text(_productNames(buyIds)),
                   trailing: const Icon(Icons.chevron_right),
@@ -1169,6 +1235,13 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   decoration: const InputDecoration(labelText: 'Số lượng X cần mua', border: OutlineInputBorder()),
                 ),
                 const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Nhóm món được tặng/giảm (Y)'),
+                  subtitle: Text(rewardGroups.isEmpty ? '(chưa chọn)' : rewardGroups.join(', ')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _pickGroups('Chọn nhóm món được tặng/giảm (Y)', rewardGroups, () => setDlg(() {})),
+                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Hàng được tặng/giảm giá (Y)'),
@@ -1199,8 +1272,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             ElevatedButton(
               onPressed: () {
-                if (buyIds.isEmpty || rewardIds.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn hàng mua (X) và hàng tặng/giảm (Y)')));
+                if ((buyIds.isEmpty && buyGroups.isEmpty) || (rewardIds.isEmpty && rewardGroups.isEmpty)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn món hoặc nhóm món mua (X) và tặng/giảm (Y)')));
                   return;
                 }
                 Navigator.pop(ctx, true);
@@ -1215,8 +1288,10 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     final cond = CampaignBuyCondition(
       conditionId: old?.conditionId ?? 'BC_${DateTime.now().millisecondsSinceEpoch}',
       buyItemIds: buyIds,
+      buyGroupIds: buyGroups,
       requiredBuyQty: (int.tryParse(buyQtyCtrl.text.trim()) ?? 1).clamp(1, 999),
       rewardItemIds: rewardIds,
+      rewardGroupIds: rewardGroups,
       rewardQty: (int.tryParse(rewardQtyCtrl.text.trim()) ?? 1).clamp(1, 999),
       benefitMode: _modeKey(mode),
       value: _valueFromInput(mode, valueCtrl.text),

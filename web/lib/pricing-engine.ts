@@ -21,14 +21,20 @@ export interface CampaignTier {
   maxDiscountMoney: number;
   maxRewardQty: number;
   rewardItemIds: string[];
+  /** Nhóm món thưởng (mọi món thuộc nhóm đều là món thưởng) */
+  rewardGroupIds?: string[];
   sortOrder: number;
 }
 
 export interface CampaignBuyCondition {
   conditionId: string;
   buyItemIds: string[];
+  /** Nhóm món mua X */
+  buyGroupIds?: string[];
   requiredBuyQty: number;
   rewardItemIds: string[];
+  /** Nhóm món thưởng Y */
+  rewardGroupIds?: string[];
   rewardQty: number;
   benefitMode: string;
   value: number;
@@ -94,7 +100,8 @@ export function parseTier(raw: Record<string, unknown>): CampaignTier {
   if (!mode) {
     const bType = String(raw.benefitType ?? "").toUpperCase();
     if (bType === "DISCOUNT_PERCENT" || bType === "PERCENT") mode = "PERCENT";
-    else if (bType === "DISCOUNT_AMOUNT" || bType === "AMOUNT" || bType === "FIXED_PRICE") mode = "FIXED";
+    else if (bType === "DISCOUNT_AMOUNT" || bType === "AMOUNT") mode = "FIXED";
+    else if (bType === "FIXED_PRICE") mode = "FIXEDPRICE";
     else mode = "PERCENT";
   }
   let cond = raw.conditionBasis != null ? String(raw.conditionBasis) : "";
@@ -108,6 +115,7 @@ export function parseTier(raw: Record<string, unknown>): CampaignTier {
     maxDiscountMoney: toInt(raw.maxDiscountMoney ?? raw.maxBenefitValue ?? 0),
     maxRewardQty: toInt(raw.maxRewardQty ?? 0),
     rewardItemIds: strList(raw.rewardItemIds),
+    rewardGroupIds: strList(raw.rewardGroupIds),
     sortOrder: toInt(raw.sortOrder ?? raw.tierIndex ?? 0),
   };
 }
@@ -116,8 +124,10 @@ export function parseBuyCondition(raw: Record<string, unknown>): CampaignBuyCond
   return {
     conditionId: raw.conditionId != null ? String(raw.conditionId) : "",
     buyItemIds: strList(raw.buyItemIds),
+    buyGroupIds: strList(raw.buyGroupIds),
     requiredBuyQty: toInt(raw.requiredBuyQty),
     rewardItemIds: strList(raw.rewardItemIds),
+    rewardGroupIds: strList(raw.rewardGroupIds),
     rewardQty: toInt(raw.rewardQty),
     benefitMode: raw.benefitMode != null ? String(raw.benefitMode) : "PERCENT",
     value: toInt(raw.value),
@@ -440,17 +450,21 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       for (const cond of campaign.buyConditions) {
         const buyIds = new Set(cond.buyItemIds);
         const rewardIds = new Set(cond.rewardItemIds);
+        const buyGroups = new Set(cond.buyGroupIds ?? []);
+        const rewardGroups = new Set(cond.rewardGroupIds ?? []);
+        const isBuy = (l: PricingLine) => buyIds.has(l.itemId) || (l.groupId != null && buyGroups.has(l.groupId));
+        const isReward = (l: PricingLine) => rewardIds.has(l.itemId) || (l.groupId != null && rewardGroups.has(l.groupId));
         const buyQty = cond.requiredBuyQty;
         const rewardQty = cond.rewardQty;
-        if (buyIds.size === 0 || rewardIds.size === 0 || buyQty <= 0 || rewardQty <= 0) {
+        if ((buyIds.size === 0 && buyGroups.size === 0) || (rewardIds.size === 0 && rewardGroups.size === 0) || buyQty <= 0 || rewardQty <= 0) {
           addReason(campaign, "INVALID_CONFIG", "Điều kiện Mua X tặng/giảm Y chưa cấu hình đủ");
           continue;
         }
         let xo = 0, yo = 0, bo = 0; // chỉ X, chỉ Y, vừa X vừa Y
         for (const l of input.lines) {
           if (l.isGift || campaign.excludedItemIds.includes(l.itemId)) continue;
-          const isX = buyIds.has(l.itemId);
-          const isY = rewardIds.has(l.itemId);
+          const isX = isBuy(l);
+          const isY = isReward(l);
           const a = Math.max(0, l.quantity - (rewardedUnits[l.lineId] ?? 0));
           if (isX && isY) bo += a;
           else if (isX) xo += a;
@@ -480,7 +494,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
           addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", `Đủ điều kiện: thêm ${bestB * rewardQty} món Y vào đơn để được hưởng ưu đãi`);
           continue;
         }
-        const candidates = input.lines.filter((l) => !l.isGift && rewardIds.has(l.itemId) && !campaign.excludedItemIds.includes(l.itemId));
+        const candidates = input.lines.filter((l) => !l.isGift && isReward(l) && !campaign.excludedItemIds.includes(l.itemId));
         campaignDiscount += distributeReward({
           candidates,
           units: bestReward,
@@ -488,7 +502,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
           value: cond.value,
           campaignId: campaign.campaignId,
           tierId: cond.conditionId,
-          isBoth: (l) => buyIds.has(l.itemId),
+          isBoth: isBuy,
           maxFromBoth: bestBothAllowed,
         });
       }
@@ -513,12 +527,15 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         continue;
       }
       const rewardIds = new Set(tier.rewardItemIds);
-      if (rewardIds.size === 0) {
+      const rewardGroups = new Set(tier.rewardGroupIds ?? []);
+      if (rewardIds.size === 0 && rewardGroups.size === 0) {
         addReason(campaign, "INVALID_CONFIG", "Chưa chọn món được tặng/giảm");
         continue;
       }
       const units = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1;
-      const candidates = input.lines.filter((l) => !l.isGift && rewardIds.has(l.itemId) && !campaign.excludedItemIds.includes(l.itemId));
+      const candidates = input.lines.filter(
+        (l) => !l.isGift && (rewardIds.has(l.itemId) || (l.groupId != null && rewardGroups.has(l.groupId))) && !campaign.excludedItemIds.includes(l.itemId),
+      );
       if (candidates.length === 0) {
         addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", "Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng");
         continue;
@@ -533,21 +550,22 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     } else if (isType(type, "ITEMPRICERULE")) {
       if (campaign.tiers.length > 0) {
         const tier = campaign.tiers[0];
-        const fixedPrice = tier.benefitMode === "FIXEDPRICE" ? tier.value : null;
+        // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
         let applied = false;
         for (const line of input.lines) {
           if (!inScope(campaign, line)) continue;
-          if (fixedPrice != null && line.unitPrice > fixedPrice) {
-            const remaining = Math.max(0, lineFinal[line.lineId] ?? 0);
-            const discount = Math.min((line.unitPrice - fixedPrice) * line.quantity, remaining);
-            if (discount <= 0) continue;
-            lineDisc[line.lineId] = (lineDisc[line.lineId] ?? 0) + discount;
-            lineFinal[line.lineId] = remaining - discount;
-            totalDiscount += discount;
-            applied = true;
-          }
+          const perUnit = unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
+          if (perUnit <= 0) continue;
+          const remaining = Math.max(0, lineFinal[line.lineId] ?? 0);
+          const discount = Math.min(perUnit * line.quantity, remaining);
+          if (discount <= 0) continue;
+          lineDisc[line.lineId] = (lineDisc[line.lineId] ?? 0) + discount;
+          lineFinal[line.lineId] = remaining - discount;
+          totalDiscount += discount;
+          applied = true;
         }
         if (applied) markApplied(campaign.campaignId);
+        else if (!input.lines.some((l) => inScope(campaign, l))) addReason(campaign, "ITEM_NOT_IN_BILL", "Thêm món thuộc chương trình vào đơn để áp dụng");
       }
     }
   }

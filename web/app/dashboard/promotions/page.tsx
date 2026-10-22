@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Plus, Tag, Ticket } from "lucide-react";
 import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
-import { useDashboardData, type ProductItem } from "@/lib/data-context";
+import { useDashboardData, type ProductItem, type CategoryItem } from "@/lib/data-context";
 import { errorMessage } from "@/lib/errors";
 import {
   CAMPAIGN_TYPE_LABELS, REWARD_BENEFIT_LABELS, buildBenefitFields, campaignToForm, describeCampaignBenefit,
@@ -905,12 +905,21 @@ export default function PromotionsPage() {
                       placeholder="VD: 200000"
                     />
                   </div>
-                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} title="Món được tặng/giảm giá" />
+                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} categories={categories} title="Món được tặng/giảm giá" />
                 </div>
               )}
               {campaignForm.campaignType === "BUYXGETY" && (
                 <div className="grid-stack-sm" style={benefitBox}>
                   <div style={{ gridColumn: "1 / -1" }}>
+                    <GroupMultiPicker
+                      label={`📁 Nhóm món mua X (${campaignForm.buyGroupIds.length}) — mọi món trong nhóm đều tính là X`}
+                      color="#1e40af"
+                      categories={categories}
+                      selected={campaignForm.buyGroupIds}
+                      onChange={(ids) => setCampaignForm(prev => ({ ...prev, buyGroupIds: ids }))}
+                      emptyText="Chưa chọn nhóm X"
+                    />
+                    <div style={{ height: "10px" }} />
                     <ItemMultiPicker
                       label={`🛒 Món mua X (${campaignForm.buyItemIds.length}) *`}
                       color="#1e40af"
@@ -922,7 +931,7 @@ export default function PromotionsPage() {
                   </div>
                   <FormField label="Số lượng X cần mua *" value={campaignForm.buyQty} onChange={(v) => setCampaignForm({ ...campaignForm, buyQty: v })} type="number" placeholder="VD: 2" />
                   <div />
-                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} title="Món Y được tặng/giảm giá" />
+                  <RewardEditor form={campaignForm} setForm={setCampaignForm} products={products} categories={categories} title="Món Y được tặng/giảm giá" />
                   <label style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
                     <input type="checkbox" checked={campaignForm.multiplyByBundle}
                       onChange={(e) => setCampaignForm({ ...campaignForm, multiplyByBundle: e.target.checked })}
@@ -1328,16 +1337,67 @@ function ItemMultiPicker({ label, color, products, selected, onChange, emptyText
   );
 }
 
+/** Chọn nhiều nhóm hàng (tên nhóm = groupId của món) */
+function GroupMultiPicker({ label, color, categories, selected, onChange, emptyText }: {
+  label: string;
+  color: string;
+  categories: CategoryItem[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  emptyText: string;
+}) {
+  return (
+    <div style={{ background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+      <label style={{ ...labelStyle, color }}>{label}</label>
+      <select
+        style={{ ...inputStyle, marginBottom: "8px" }}
+        value=""
+        onChange={(e) => {
+          if (e.target.value && !selected.includes(e.target.value)) onChange([...selected, e.target.value]);
+        }}
+      >
+        <option value="">-- Bấm để thêm nhóm hàng --</option>
+        {categories.filter((c) => !selected.includes(c.name)).map((c) => (
+          <option key={c.id || c.name} value={c.name}>{c.name}</option>
+        ))}
+      </select>
+      {selected.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {selected.map((g) => (
+            <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--info-bg)", color, borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
+              📁 {g}
+              <button type="button" onClick={() => onChange(selected.filter((x) => x !== g))}
+                style={{ border: "none", background: "none", cursor: "pointer", color, fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: "12px", color: "var(--muted)", fontStyle: "italic" }}>{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
 /** Món thưởng Y + số lượng + hình thức (tặng / giảm % / giảm tiền) — dùng cho GTĐ và Mua X. */
-function RewardEditor({ form, setForm, products, title }: {
+function RewardEditor({ form, setForm, products, categories, title }: {
   form: CampaignFormState;
   setForm: React.Dispatch<React.SetStateAction<CampaignFormState>>;
   products: ProductItem[];
+  categories: CategoryItem[];
   title: string;
 }) {
   return (
     <>
       <div style={{ gridColumn: "1 / -1" }}>
+        <GroupMultiPicker
+          label={`📁 Nhóm món được tặng/giảm (${form.rewardGroupIds.length}) — chọn nhóm để tránh thiếu món`}
+          color="#b45309"
+          categories={categories}
+          selected={form.rewardGroupIds}
+          onChange={(ids) => setForm(prev => ({ ...prev, rewardGroupIds: ids }))}
+          emptyText="Chưa chọn nhóm"
+        />
+        <div style={{ height: "10px" }} />
         <ItemMultiPicker
           label={`🎁 ${title} (${form.rewardItemIds.length}) *`}
           color="#b45309"

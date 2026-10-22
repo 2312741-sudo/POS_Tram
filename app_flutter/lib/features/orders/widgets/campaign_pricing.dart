@@ -40,6 +40,61 @@ class CartCampaignPricing {
     );
   }
 
+  /// Chương trình đủ điều kiện nhưng món thưởng chưa có trong đơn?
+  static bool needsRewardItems(PriceQuoteModel quote, CampaignModel campaign) =>
+      quote.reasons.any((r) => r.campaignId == campaign.campaignId && r.reasonCode == 'REWARD_ITEM_NOT_IN_BILL');
+
+  /// Kế hoạch tự thêm món thưởng: số phần cần thêm + các món có thể chọn (theo món và theo nhóm món).
+  /// Trả null nếu chưa đủ điều kiện hoặc không có món thưởng nào trong thực đơn.
+  static ({int units, List<ProductModel> candidates})? rewardPlan(
+    CampaignModel c, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+  }) {
+    final lns = lines(cart, products);
+    bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) =>
+        ids.contains(l.itemId) || (l.groupId != null && groups.contains(l.groupId));
+
+    List<ProductModel> pick(Set<String> ids, Set<String> groups) => products
+        .where((p) =>
+            !p.isTopping &&
+            p.isAvailable &&
+            !c.excludedItemIds.contains(p.id.toString()) &&
+            (ids.contains(p.id.toString()) || groups.contains(p.category)))
+        .toList();
+
+    final type = c.campaignType.toUpperCase().replaceAll('_', '');
+    if (type == 'BUYXGETY') {
+      for (final cond in c.buyConditions) {
+        final buyIds = cond.buyItemIds.toSet(), buyGroups = cond.buyGroupIds.toSet();
+        final rewardIds = cond.rewardItemIds.toSet(), rewardGroups = cond.rewardGroupIds.toSet();
+        if (cond.requiredBuyQty <= 0 || cond.rewardQty <= 0) continue;
+        final x = lns.where((l) => !l.isGift && matches(l, buyIds, buyGroups)).fold<int>(0, (s, l) => s + l.quantity);
+        final bundles = cond.multiplyByBundle ? x ~/ cond.requiredBuyQty : (x >= cond.requiredBuyQty ? 1 : 0);
+        if (bundles <= 0) continue;
+        final cands = pick(rewardIds, rewardGroups);
+        if (cands.isNotEmpty) return (units: bundles * cond.rewardQty, candidates: cands);
+      }
+      return null;
+    }
+    if (type == 'ORDERVALUEITEMBENEFIT') {
+      final inScopeAll = c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty;
+      int base = 0;
+      for (final l in lns) {
+        if (l.isGift || c.excludedItemIds.contains(l.itemId)) continue;
+        final inScope = inScopeAll || c.includedItemIds.contains(l.itemId) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
+        if (inScope) base += l.unitPrice * l.quantity - l.manualLineDiscount;
+      }
+      final tiers = List<CampaignTier>.from(c.tiers)..sort((a, b) => b.threshold.compareTo(a.threshold));
+      final tier = tiers.where((t) => base >= t.threshold).firstOrNull;
+      if (tier == null) return null;
+      final cands = pick(tier.rewardItemIds.toSet(), tier.rewardGroupIds.toSet());
+      if (cands.isEmpty) return null;
+      return (units: tier.maxRewardQty > 0 ? tier.maxRewardQty : 1, candidates: cands);
+    }
+    return null;
+  }
+
   /// Lý do chưa áp dụng (nếu có) của chương trình trong [quote]
   static String? reason(PriceQuoteModel quote, CampaignModel campaign) =>
       quote.reasons.where((r) => r.campaignId == campaign.campaignId).map((r) => r.reasonMessage).firstOrNull;

@@ -428,3 +428,46 @@ describe("in phiếu có khuyến mãi", () => {
     expect(bill).not.toContain("Không tiền");
   });
 });
+
+describe("nhóm món & đồng giá/đồng giảm (bổ sung)", () => {
+  const g = (id: string, item: string, group: string, qty: number, price: number): PricingLine => ({ ...line(id, item, qty, price), groupId: group });
+
+  it("Mua X tặng Y theo NHÓM món: món bất kỳ trong nhóm đều tính", () => {
+    const c = camp({
+      campaignType: "BUYXGETY",
+      buyConditions: [{ ...bxgy({ x: [], y: [], buy: 2, get: 1 }), buyGroupIds: ["Cà phê"], rewardGroupIds: ["Trà"] }],
+    });
+    // 1 cà phê A + 1 cà phê B = đủ 2 món X từ nhóm; tặng 1 trà rẻ nhất
+    const r = q(c, [g("1", "CF_A", "Cà phê", 1, 30000), g("2", "CF_B", "Cà phê", 1, 35000), g("3", "TRA1", "Trà", 1, 25000), g("4", "TRA2", "Trà", 1, 40000)]);
+    expect(r.totalPromotionDiscount).toBe(25000);
+    // Thiếu X
+    expect(q(c, [g("1", "CF_A", "Cà phê", 1, 30000), g("3", "TRA1", "Trà", 1, 25000)]).totalPromotionDiscount).toBe(0);
+  });
+
+  it("Mua X cấu hình toàn nhóm nhưng không chọn gì → INVALID_CONFIG", () => {
+    const c = camp({ campaignType: "BUYXGETY", buyConditions: [{ ...bxgy({ x: [], y: [] }) }] });
+    expect(q(c, [line("1", "A", 1, 1000)]).reasons[0].reasonCode).toBe("INVALID_CONFIG");
+  });
+
+  it("Giảm/tặng món theo giá trị đơn: nhóm món thưởng", () => {
+    const c = camp({
+      campaignType: "ORDERVALUEITEMBENEFIT",
+      tiers: [{ ...tier({ threshold: 100000, mode: "FREEITEM", value: 10000, maxQty: 1, reward: [] }), rewardGroupIds: ["Trà"] }],
+    });
+    const r = q(c, [line("1", "A", 1, 120000), g("2", "TRA1", "Trà", 1, 25000)]);
+    expect(r.totalPromotionDiscount).toBe(25000);
+  });
+
+  it("Đồng giá: báo lý do khi đơn chưa có món thuộc chương trình", () => {
+    const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "FIXEDPRICE", value: 14000 })] });
+    const r = q(c, [line("1", "A", 1, 30000)]);
+    expect(r.totalPromotionDiscount).toBe(0);
+    expect(r.reasons[0].reasonCode).toBe("ITEM_NOT_IN_BILL");
+    expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(36000);
+  });
+
+  it("Đồng giảm (PERCENT) cho món thuộc chương trình", () => {
+    const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "PERCENT", value: 5000 })] });
+    expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(32000);
+  });
+});

@@ -771,6 +771,54 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
   }
 
+  /// Tự thêm món được tặng/giảm vào đơn khi đơn đã đủ điều kiện nhưng món thưởng chưa có.
+  /// Một món thưởng → thêm luôn; nhiều món → hỏi chọn. Trả true khi đã thêm.
+  Future<bool> _addRewardItems(CampaignModel c) async {
+    final plan = CartCampaignPricing.rewardPlan(c, cart: _cart, products: _products);
+    if (plan == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Chương trình chưa cấu hình món được tặng/giảm hoặc món đã hết.')));
+      }
+      return false;
+    }
+    ProductModel? chosen = plan.candidates.length == 1 ? plan.candidates.first : null;
+    if (chosen == null && mounted) {
+      chosen = await showDialog<ProductModel>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: Text('Chọn món được tặng/giảm (${plan.units} phần)', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold)),
+          children: [
+            for (final p in plan.candidates)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, p),
+                child: Text('${p.name} • ${FormatUtils.vnd(p.price)}', style: GoogleFonts.beVietnamPro(fontSize: 14)),
+              ),
+          ],
+        ),
+      );
+    }
+    final picked = chosen;
+    if (picked == null) return false;
+    final staffUser = _auth.currentUser?.username ?? 'staff';
+    final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+    setState(() {
+      _cart.add(OrderItemModel(
+        productId: picked.id,
+        name: picked.name,
+        price: picked.price,
+        quantity: plan.units,
+        orderedBy: staffUser,
+        orderedByName: staffName,
+        orderedAt: DateTime.now().millisecondsSinceEpoch,
+        isSentKitchen: false,
+      ));
+    });
+    widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+    await _fb.saveTable(widget.table).catchError((_) {});
+    return true;
+  }
+
   /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại
   PriceQuoteModel _quoteCampaign(CampaignModel c) => CartCampaignPricing.quote(
         c,
@@ -2344,17 +2392,33 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       final q = _quoteCampaign(c);
                       final amt = q.totalPromotionDiscount;
                       final reason = CartCampaignPricing.reason(q, c);
+                      // Đủ điều kiện nhưng chưa có món thưởng trong đơn → cho bấm để tự thêm món
+                      final canAutoAdd = amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
                       return CheckboxListTile(
                         value: isSelected,
-                        enabled: amt > 0 || isSelected,
+                        enabled: amt > 0 || isSelected || canAutoAdd,
                         title: Text(c.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
                         subtitle: Text(
                           '${c.typeDisplay} • ${describeCampaignBenefit(c)}'
-                          '${amt > 0 ? " → -${FormatUtils.vnd(amt)}" : (reason != null ? " • $reason" : "")}',
+                          '${amt > 0 ? " → -${FormatUtils.vnd(amt)}" : (canAutoAdd ? " • Đơn đủ điều kiện — bấm để tự thêm món được tặng/giảm" : (reason != null ? " • $reason" : ""))}',
                           style: GoogleFonts.beVietnamPro(fontSize: 11),
                         ),
                         onChanged: (val) async {
                           if (val == true) {
+                            var applyAmt = amt;
+                            if (canAutoAdd) {
+                              final added = await _addRewardItems(c);
+                              if (!added) return;
+                              applyAmt = _quoteCampaign(c).totalPromotionDiscount;
+                              if (applyAmt <= 0) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Đã thêm món nhưng chưa tính được ưu đãi.')));
+                                }
+                                setDlgState(() {});
+                                return;
+                              }
+                            }
                             String? staffNote;
                             if (c.requireStaffNote) {
                               staffNote = await _promptStaffNote(context);
@@ -2370,7 +2434,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
                               _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
-                              _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, staffNote: staffNote));
+                              _appliedDiscounts.add(CartCampaignPricing.discount(c, applyAmt, staffNote: staffNote));
                             });
                           } else {
                             setDlgState(() {
