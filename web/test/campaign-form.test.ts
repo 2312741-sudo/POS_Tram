@@ -96,7 +96,7 @@ describe("BUYXGETY", () => {
     const out = buildBenefitFields(f, { buyConditions: [{ conditionId: "C9" }] });
     expect(out.tiers).toEqual([]);
     expect(out.buyConditions).toEqual([{
-      conditionId: "C9", buyItemIds: ["X"], requiredBuyQty: 2, rewardItemIds: ["Y"], rewardQty: 1,
+      conditionId: "C9", buyItemIds: ["X"], buyGroupIds: [], requiredBuyQty: 2, rewardItemIds: ["Y"], rewardGroupIds: [], rewardQty: 1,
       benefitMode: "FIXED", value: 10000, multiplyByBundle: false,
     }]);
     const back = campaignToForm({ campaignType: "BUYXGETY", buyConditions: out.buyConditions });
