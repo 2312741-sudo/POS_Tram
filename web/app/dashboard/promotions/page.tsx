@@ -62,6 +62,8 @@ interface CampaignItem {
   hasCodes: boolean;
   autoApply: boolean;
   requireStaffNote?: boolean;
+  birthdayOnly?: boolean;
+  blockPoints?: boolean;
   stackingMode: string;
   priority: number;
   createdAt: number;
@@ -145,6 +147,7 @@ export default function PromotionsPage() {
           active: v.active ?? false, schedule: v.schedule || {}, branchIds: v.branchIds || [],
           includedItemIds: v.includedItemIds || [], includedGroupIds: v.includedGroupIds || [],
           requireStaffNote: v.requireStaffNote ?? false,
+          birthdayOnly: v.birthdayOnly === true, blockPoints: v.blockPoints === true,
           tiers: v.tiers || [], buyConditions: v.buyConditions || [], budgetMoney: v.budgetMoney || 0,
           maxUses: v.maxUses || 0, maxUsesPerCustomer: v.maxUsesPerCustomer || 0, hasCodes: v.hasCodes ?? false,
           autoApply: v.autoApply ?? false, stackingMode: normalizeStackingMode(v.stackingMode), priority: v.priority || 0,
@@ -360,6 +363,8 @@ export default function PromotionsPage() {
         hasCodes: campaignForm.hasCodes,
         autoApply: campaignForm.autoApply,
         requireStaffNote: campaignForm.requireStaffNote,
+        birthdayOnly: campaignForm.birthdayOnly,
+        blockPoints: campaignForm.blockPoints,
         stackingMode: normalizeStackingMode(campaignForm.stackingMode),
         priority: Number(campaignForm.priority) || 0,
         createdAt: editingCampaign?.createdAt || now,
@@ -628,6 +633,12 @@ export default function PromotionsPage() {
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                                 {cam.requireStaffNote && (
                                   <span style={badgeStyle("#d97706")}>📝 Ghi chú NV</span>
+                                )}
+                                {cam.birthdayOnly && (
+                                  <span style={badgeStyle("#db2777")}>🎂 Sinh nhật khách</span>
+                                )}
+                                {cam.blockPoints && (
+                                  <span style={badgeStyle("#7c3aed")}>🚫 Không tích điểm</span>
                                 )}
                                 {cam.includedItemIds && cam.includedItemIds.length > 0 && (
                                   <span style={badgeStyle("#2563eb")}>📦 {cam.includedItemIds.length} món</span>
@@ -1200,6 +1211,32 @@ export default function PromotionsPage() {
             </div>
             <FormField label="Ngân sách (VND)" value={campaignForm.budgetMoney} onChange={(v) => setCampaignForm({ ...campaignForm, budgetMoney: v })} type="number" />
             <FormField label="Giới hạn lượt dùng" value={campaignForm.maxUses} onChange={(v) => setCampaignForm({ ...campaignForm, maxUses: v })} type="number" />
+
+            {/* 4b. Sinh nhật khách & khóa tích điểm */}
+            <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px 14px", marginTop: "4px", display: "grid", gap: "10px" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                <input type="checkbox" checked={campaignForm.birthdayOnly}
+                  onChange={(e) => setCampaignForm({ ...campaignForm, birthdayOnly: e.target.checked })}
+                  style={{ marginTop: "3px", width: "16px", height: "16px" }} />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🎂 Chỉ áp dụng đúng ngày sinh nhật khách</div>
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                    Tại app POS: gắn khách có ngày sinh trùng hôm nay thì tự áp dụng; khách khác (hoặc đơn chưa gắn khách) không dùng được.
+                  </div>
+                </div>
+              </label>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                <input type="checkbox" checked={campaignForm.blockPoints}
+                  onChange={(e) => setCampaignForm({ ...campaignForm, blockPoints: e.target.checked })}
+                  style={{ marginTop: "3px", width: "16px", height: "16px" }} />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🚫 Khóa tích điểm</div>
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                    Đơn dùng chương trình này không được tích điểm (vẫn gắn được thông tin khách vào đơn).
+                  </div>
+                </div>
+              </label>
+            </div>
 
             {/* 5. Bắt buộc nhân viên nhập ghi chú (Mục 2 của Module 1) */}
             <div style={{ gridColumn: "1 / -1", background: "var(--warning-bg)", border: "1px solid #fef08a", borderRadius: "8px", padding: "12px 14px", marginTop: "4px" }}>

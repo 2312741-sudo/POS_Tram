@@ -70,6 +70,10 @@ export interface Campaign {
   hasCodes: boolean;
   autoApply: boolean;
   requireStaffNote: boolean;
+  /** Chỉ áp dụng đúng ngày sinh nhật khách (cần gắn khách có ngày sinh) */
+  birthdayOnly?: boolean;
+  /** Đơn dùng chương trình này không được tích điểm */
+  blockPoints?: boolean;
   /** "ENABLED" | "DISABLED" (đã chuẩn hóa, "STACKABLE" cũ = ENABLED) */
   stackingMode: "ENABLED" | "DISABLED";
   priority: number;
@@ -168,6 +172,8 @@ export function parseCampaign(id: string, raw: Record<string, unknown> | null | 
     hasCodes: Boolean(r.hasCodes),
     autoApply: Boolean(r.autoApply),
     requireStaffNote: Boolean(r.requireStaffNote),
+    birthdayOnly: r.birthdayOnly === true,
+    blockPoints: r.blockPoints === true,
     stackingMode: normalizeStackingMode(r.stackingMode != null ? String(r.stackingMode) : null),
     priority: toInt(r.priority),
     active: Boolean(r.active),
@@ -192,6 +198,26 @@ function slotContains(slot: { startTime: string; endTime: string }, hour: number
 }
 
 /** Khớp CampaignModel.isEligibleAt (không xét cờ active) */
+/** Hôm nay (giờ Việt Nam, UTC+7) có phải sinh nhật không. Chấp nhận yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy. Khớp isBirthdayToday (Dart). */
+export function isBirthdayToday(birthday: string | null | undefined, nowMs: number): boolean {
+  const s = (birthday ?? "").trim();
+  if (!s) return false;
+  let month: number | undefined;
+  let day: number | undefined;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  const vn = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(s);
+  if (iso) {
+    month = Number(iso[2]);
+    day = Number(iso[3]);
+  } else if (vn) {
+    day = Number(vn[1]);
+    month = Number(vn[2]);
+  }
+  if (month === undefined || day === undefined) return false;
+  const now = new Date(nowMs + 7 * 3600_000);
+  return now.getUTCMonth() + 1 === month && now.getUTCDate() === day;
+}
+
 export function isEligibleAt(c: Campaign, ts: number): boolean {
   const s = c.schedule;
   if (s.absoluteStart != null && ts < s.absoluteStart) return false;
@@ -235,6 +261,8 @@ export interface PricingLine {
 
 export interface PricingInput {
   branchId: string;
+  /** Ngày sinh khách gắn vào đơn (yyyy-MM-dd hoặc dd/MM/yyyy) */
+  customerBirthday?: string | null;
   guestCount?: number | null;
   nowMs: number;
   lines: PricingLine[];
@@ -432,6 +460,15 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     }
     if (!isEligibleForBranch(campaign, input.branchId)) {
       addReason(campaign, "BRANCH_NOT_SUPPORTED", "Không áp dụng tại chi nhánh này");
+      continue;
+    }
+    if (campaign.birthdayOnly && !isBirthdayToday(input.customerBirthday, input.nowMs)) {
+      const has = !!(input.customerBirthday ?? "").trim();
+      addReason(
+        campaign,
+        has ? "NOT_BIRTHDAY" : "BIRTHDAY_CUSTOMER_REQUIRED",
+        has ? "Hôm nay không phải sinh nhật của khách" : "Gắn khách hàng có ngày sinh để áp dụng (chỉ đúng ngày sinh nhật)"
+      );
       continue;
     }
     const type = campaign.campaignType;
@@ -693,9 +730,9 @@ export function linesFromOrder(
 export function quoteCampaign(
   campaign: Campaign,
   lines: PricingLine[],
-  ctx: { branchId: string; guestCount?: number | null; nowMs: number }
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null }
 ): PriceQuote {
-  return calculatePrice({ branchId: ctx.branchId, guestCount: ctx.guestCount, nowMs: ctx.nowMs, lines }, [campaign]);
+  return calculatePrice({ branchId: ctx.branchId, guestCount: ctx.guestCount, nowMs: ctx.nowMs, customerBirthday: ctx.customerBirthday, lines }, [campaign]);
 }
 
 export function quoteReason(quote: PriceQuote, campaign: Campaign): string | undefined {
@@ -742,7 +779,7 @@ export function recalculateDiscounts(
   applied: AppliedDiscount[],
   campaignsById: Record<string, Campaign>,
   lines: PricingLine[],
-  ctx: { branchId: string; guestCount?: number | null; nowMs: number }
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null }
 ): { discounts: AppliedDiscount[]; dropped: string[] } {
   const out: AppliedDiscount[] = [];
   const dropped: string[] = [];

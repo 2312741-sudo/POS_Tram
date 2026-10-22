@@ -76,6 +76,37 @@ export function computeEarnPoints(finalAmount: number, earnRatePercent: number, 
   return p > 0 ? p : 0;
 }
 
+/**
+ * Hóa đơn có dùng chương trình khuyến mãi KHÓA TÍCH ĐIỂM (campaigns/{id}.blockPoints === true) không.
+ * [campaignFlags]: map campaignId → blockPoints đọc từ RTDB. Mã không có trong map = không khóa.
+ */
+export function billBlocksPoints(discounts: unknown, campaignFlags: Record<string, boolean>): boolean {
+  const list: unknown[] = Array.isArray(discounts)
+    ? discounts
+    : discounts && typeof discounts === "object"
+      ? Object.values(discounts as Record<string, unknown>)
+      : [];
+  return list.some((d) => {
+    const id = d && typeof d === "object" ? (d as { campaignId?: unknown }).campaignId : undefined;
+    return typeof id === "string" && campaignFlags[id] === true;
+  });
+}
+
+/** Mã chương trình khuyến mãi xuất hiện trong bill.discounts */
+export function discountCampaignIds(discounts: unknown): string[] {
+  const list: unknown[] = Array.isArray(discounts)
+    ? discounts
+    : discounts && typeof discounts === "object"
+      ? Object.values(discounts as Record<string, unknown>)
+      : [];
+  const ids = new Set<string>();
+  for (const d of list) {
+    const id = d && typeof d === "object" ? (d as { campaignId?: unknown }).campaignId : undefined;
+    if (typeof id === "string" && id.trim()) ids.add(id.trim());
+  }
+  return [...ids];
+}
+
 export interface LoyaltyRates {
   earnRate: number;
   redeemRate: number;

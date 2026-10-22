@@ -23,8 +23,10 @@ import { isManagerRole, isOwnerRole, canCallerImportCustomer, type UserProfile }
 import { AnyMap, isValidCustomerKey, isValidStoreCode, readCurrentPoints, readTotalPoints } from "./customerSync";
 import {
   applyOp,
+  billBlocksPoints,
   billOpId,
   buildLedgerEntry,
+  discountCampaignIds,
   buildLedgerHistory,
   computeEarnPoints,
   isLocalMemberKey,
@@ -242,6 +244,19 @@ export const applyLoyaltyEarn = onCall({ region: REGION }, async (request) => {
   if (bill.status !== "PAID") throw new HttpsError("failed-precondition", "Chỉ tích điểm cho hóa đơn đã thanh toán.");
   const customerId = typeof bill.customerId === "string" ? bill.customerId.trim() : "";
   if (!customerId) return { success: true, status: "applied", applied: 0, skipped: "no-customer" };
+  // Khuyến mãi khóa tích điểm (vd. KM sinh nhật): đơn vẫn gắn khách nhưng không cộng điểm
+  const campaignIds = discountCampaignIds(bill.discounts);
+  if (campaignIds.length > 0) {
+    const flags: Record<string, boolean> = {};
+    await Promise.all(
+      campaignIds.map(async (id) => {
+        flags[id] = (await db.ref(`stores/${ctx.store}/campaigns/${id}/blockPoints`).get()).val() === true;
+      })
+    );
+    if (billBlocksPoints(bill.discounts, flags)) {
+      return { success: true, status: "applied", applied: 0, skipped: "campaign-blocks-points" };
+    }
+  }
   const [cfgSnap, infoSnap] = await Promise.all([db.ref("loyalty_config").get(), db.ref(`stores/${ctx.store}/storeInfo`).get()]);
   const rates = resolveRates(cfgSnap.val() as AnyMap | null, infoSnap.val() as AnyMap | null);
   const finalAmount = typeof bill.finalAmount === "number" ? bill.finalAmount : 0;

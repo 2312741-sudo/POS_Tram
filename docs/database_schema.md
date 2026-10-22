@@ -188,3 +188,14 @@ Mỗi quán hoặc chi nhánh hoạt động độc lập dưới nút gốc:
 - Ca/két: một tài khoản chỉ có 1 ca mở tại MỘT thời điểm trên toàn hệ thống — mở ca mới phải chốt ca đang mở ở cửa hàng khác (Web: buildOpenShift; POS: _assertNoOpenShiftElsewhere).
 - Web: vai trò khác Chủ quán chỉ làm ở cửa hàng đã đăng nhập; muốn làm ở cửa hàng khác thì đăng nhập lại với mã cửa hàng đó để nhận đúng vai trò.
 
+
+## 2.11 Cờ chương trình khuyến mãi: sinh nhật & khóa tích điểm
+
+Hai cờ tùy chọn trên `stores/{store}/campaigns/{campaignId}` (mọi loại chương trình):
+
+| Trường | Ý nghĩa |
+|---|---|
+| `birthdayOnly: true` | Chỉ áp dụng khi đơn gắn khách có ngày sinh (`customers/*/birthday`, `yyyy-MM-dd` hoặc `dd/MM/yyyy`) trùng **hôm nay theo giờ Việt Nam**. Không gắn khách / sai ngày → không áp (lý do `BIRTHDAY_CUSTOMER_REQUIRED` / `NOT_BIRTHDAY`). App POS tự áp dụng khi chọn khách. |
+| `blockPoints: true` | Hóa đơn có dùng chương trình này **không được tích điểm** (vẫn gắn khách). Máy chủ `applyLoyaltyEarn` đọc cờ từ `campaigns/{id}/blockPoints` theo `bill.discounts[].campaignId` và bỏ qua tích điểm (`skipped: "campaign-blocks-points"`). App hiển thị "Đơn dùng khuyến mãi không tích điểm". |
+
+Hợp đồng song song: `CampaignModel` (Dart), `Campaign`/`parseCampaign` (`web/lib/pricing-engine.ts`), `isBirthdayToday` (cả hai), `billBlocksPoints` (`functions/src/sharedLoyalty.ts`).

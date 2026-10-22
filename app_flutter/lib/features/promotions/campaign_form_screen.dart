@@ -44,6 +44,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   bool _autoApply = true;
   bool _hasCodes = false;
   bool _requireStaffNote = false;
+  bool _birthdayOnly = false;
+  bool _blockPoints = false;
   bool _stackingMode = false;
   bool _active = true;
 
@@ -87,6 +89,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _autoApply = widget.campaign!.autoApply;
       _hasCodes = widget.campaign!.hasCodes;
       _requireStaffNote = widget.campaign!.requireStaffNote;
+      _birthdayOnly = widget.campaign!.birthdayOnly;
+      _blockPoints = widget.campaign!.blockPoints;
       _stackingMode = widget.campaign!.isStackable;
       _active = widget.campaign!.active;
       _tiers = List.from(widget.campaign!.tiers);
@@ -242,6 +246,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         hasCodes: _hasCodes,
         autoApply: _hasCodes ? false : _autoApply,
         requireStaffNote: _requireStaffNote,
+        birthdayOnly: _birthdayOnly,
+        blockPoints: _blockPoints,
         stackingMode: _stackingMode ? 'ENABLED' : 'DISABLED',
         priority: int.tryParse(_priorityController.text) ?? 1,
         active: _active,
@@ -844,6 +850,21 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 subtitle: const Text('Nhân viên phải nhập lý do/ghi chú khi áp dụng mã'),
                 value: _requireStaffNote,
                 onChanged: (val) => setState(() => _requireStaffNote = val),
+              ),
+              SwitchListTile(
+                title: const Text('Chỉ áp dụng đúng ngày sinh nhật khách'),
+                subtitle: const Text('Gắn khách có ngày sinh trùng hôm nay thì tự áp dụng; khách khác không dùng được'),
+                value: _birthdayOnly,
+                onChanged: (val) => setState(() {
+                  _birthdayOnly = val;
+                  if (val) _hasCodes = false;
+                }),
+              ),
+              SwitchListTile(
+                title: const Text('Khóa tích điểm'),
+                subtitle: const Text('Đơn dùng chương trình này không được tích điểm (vẫn gắn được thông tin khách)'),
+                value: _blockPoints,
+                onChanged: (val) => setState(() => _blockPoints = val),
               ),
               SwitchListTile(
                 title: const Text('Có phát hành mã (Voucher)'),

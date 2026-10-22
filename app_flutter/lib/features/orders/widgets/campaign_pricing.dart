@@ -25,11 +25,13 @@ class CartCampaignPricing {
     required List<ProductModel> products,
     required String branchId,
     int? guestCount,
+    String? customerBirthday,
     int? nowMs,
   }) {
     return calculatePrice(
       input: PricingInput(
         branchId: branchId,
+        customerBirthday: customerBirthday,
         guestCount: guestCount,
         serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
         lines: lines(cart, products),
@@ -130,6 +132,7 @@ class CartCampaignPricing {
     required List<ProductModel> products,
     required String branchId,
     int? guestCount,
+    String? customerBirthday,
   }) {
     final out = <BillDiscountModel>[];
     final dropped = <String>[];
@@ -139,7 +142,7 @@ class CartCampaignPricing {
         out.add(d);
         continue;
       }
-      final q = quote(c, cart: cart, products: products, branchId: branchId, guestCount: guestCount);
+      final q = quote(c, cart: cart, products: products, branchId: branchId, guestCount: guestCount, customerBirthday: customerBirthday);
       final amt = q.totalPromotionDiscount;
       if (amt > 0) {
         out.add(d.copyWith(amount: amt));

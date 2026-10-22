@@ -6,6 +6,8 @@ import '../../data/models/order_item_model.dart';
 class PricingInput {
   final String branchId;
   final String? customerId;
+  /// Ngày sinh khách đã gắn vào đơn (yyyy-MM-dd hoặc dd/MM/yyyy); rỗng/null = chưa có khách / chưa có ngày sinh
+  final String? customerBirthday;
   final int? guestCount;
   final int serverNowMs;
   final List<PricingLineItem> lines;
@@ -16,6 +18,7 @@ class PricingInput {
   PricingInput({
     required this.branchId,
     this.customerId,
+    this.customerBirthday,
     this.guestCount,
     required this.serverNowMs,
     required this.lines,
@@ -78,6 +81,25 @@ class PricingLineItem {
 }
 
 // ==================== HELPERS ====================
+
+/// Hôm nay (giờ Việt Nam, UTC+7) có phải sinh nhật không. Chấp nhận yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy.
+bool isBirthdayToday(String? birthday, int nowMs) {
+  final s = (birthday ?? '').trim();
+  if (s.isEmpty) return false;
+  int? month, day;
+  final iso = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(s);
+  final vn = RegExp(r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})').firstMatch(s);
+  if (iso != null) {
+    month = int.parse(iso.group(2)!);
+    day = int.parse(iso.group(3)!);
+  } else if (vn != null) {
+    day = int.parse(vn.group(1)!);
+    month = int.parse(vn.group(2)!);
+  }
+  if (month == null || day == null) return false;
+  final now = DateTime.fromMillisecondsSinceEpoch(nowMs, isUtc: true).add(const Duration(hours: 7));
+  return now.month == month && now.day == day;
+}
 
 bool _isType(String type, String compact) => type.toUpperCase().replaceAll('_', '') == compact;
 
@@ -250,6 +272,12 @@ PriceQuoteModel calculatePrice({
     }
     if (!campaign.isEligibleForBranch(input.branchId)) {
       addReason(campaign, 'BRANCH_NOT_SUPPORTED', 'Không áp dụng tại chi nhánh này');
+      continue;
+    }
+    if (campaign.birthdayOnly && !isBirthdayToday(input.customerBirthday, input.serverNowMs)) {
+      final has = (input.customerBirthday ?? '').trim().isNotEmpty;
+      addReason(campaign, has ? 'NOT_BIRTHDAY' : 'BIRTHDAY_CUSTOMER_REQUIRED',
+          has ? 'Hôm nay không phải sinh nhật của khách' : 'Gắn khách hàng có ngày sinh để áp dụng (chỉ đúng ngày sinh nhật)');
       continue;
     }
     final type = campaign.campaignType;

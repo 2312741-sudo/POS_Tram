@@ -6,6 +6,7 @@ import {
   buildAppliedDiscount,
   calculatePrice,
   evaluateVoucher,
+  isBirthdayToday,
   linesFromOrder,
   listEligibleCampaigns,
   parseCampaign,
@@ -469,5 +470,34 @@ describe("nhóm món & đồng giá/đồng giảm (bổ sung)", () => {
   it("Đồng giảm (PERCENT) cho món thuộc chương trình", () => {
     const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "PERCENT", value: 5000 })] });
     expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(32000);
+  });
+});
+
+describe("KM sinh nhật khách (birthdayOnly)", () => {
+  const bd = camp({ campaignType: "BILLDISCOUNT", birthdayOnly: true, blockPoints: true, tiers: [tier({ mode: "PERCENT", value: 3000 })] });
+  const lines = [line("1", "A", 1, 100000)];
+  // nowMs: 2026-10-22 12:00 giờ VN
+  const now = Date.UTC(2026, 9, 22, 5, 0, 0);
+  const run = (birthday?: string) => calculatePrice({ branchId: "B", nowMs: now, lines, customerBirthday: birthday }, [bd]);
+
+  it("đúng ngày sinh → giảm 30% cả đơn", () => {
+    expect(run("1995-10-22").totalPromotionDiscount).toBe(30000);
+    expect(run("22/10/1988").totalPromotionDiscount).toBe(30000);
+  });
+  it("sai ngày hoặc chưa gắn khách → không áp, có lý do", () => {
+    const a = run("1995-10-23");
+    expect(a.totalPromotionDiscount).toBe(0);
+    expect(a.reasons[0].reasonCode).toBe("NOT_BIRTHDAY");
+    expect(run(undefined).reasons[0].reasonCode).toBe("BIRTHDAY_CUSTOMER_REQUIRED");
+  });
+  it("tính theo giờ Việt Nam (0h30 sáng VN vẫn là ngày mới)", () => {
+    const vnEarly = Date.UTC(2026, 9, 21, 17, 30, 0); // 22/10 00:30 VN
+    expect(isBirthdayToday("2000-10-22", vnEarly)).toBe(true);
+    expect(isBirthdayToday("2000-10-21", vnEarly)).toBe(false);
+  });
+  it("parseCampaign đọc birthdayOnly / blockPoints", () => {
+    const c = parseCampaign("X", { campaignType: "BILLDISCOUNT", birthdayOnly: true, blockPoints: true });
+    expect(c.birthdayOnly).toBe(true);
+    expect(c.blockPoints).toBe(true);
   });
 });

@@ -491,6 +491,8 @@ class CampaignModel {
   final bool hasCodes; // Có phát hành mã
   final bool autoApply; // Tự động áp dụng
   final bool requireStaffNote; // Bắt buộc nhân viên nhập ghi chú khi áp dụng mã
+  final bool birthdayOnly; // Chỉ áp dụng đúng ngày sinh nhật khách (cần gắn khách có ngày sinh)
+  final bool blockPoints; // Đơn dùng chương trình này không được tích điểm
 
   // Cộng dồn
   final String stackingMode; // DISABLED, ENABLED
@@ -528,6 +530,8 @@ class CampaignModel {
     required this.hasCodes,
     required this.autoApply,
     this.requireStaffNote = false,
+    this.birthdayOnly = false,
+    this.blockPoints = false,
     required this.stackingMode,
     required this.priority,
     required this.active,
@@ -641,6 +645,8 @@ class CampaignModel {
       'hasCodes': hasCodes,
       'autoApply': autoApply,
       'requireStaffNote': requireStaffNote,
+      'birthdayOnly': birthdayOnly,
+      'blockPoints': blockPoints,
       'stackingMode': stackingMode,
       'priority': priority,
       'active': active,
@@ -678,6 +684,8 @@ class CampaignModel {
       hasCodes: map['hasCodes'] ?? false,
       autoApply: map['autoApply'] ?? false,
       requireStaffNote: map['requireStaffNote'] ?? false,
+      birthdayOnly: map['birthdayOnly'] == true,
+      blockPoints: map['blockPoints'] == true,
       stackingMode: normalizeStackingMode(map['stackingMode']?.toString()),
       priority: map['priority']?.toInt() ?? 0,
       active: map['active'] ?? false,
@@ -711,6 +719,8 @@ class CampaignModel {
     bool? hasCodes,
     bool? autoApply,
     bool? requireStaffNote,
+    bool? birthdayOnly,
+    bool? blockPoints,
     String? stackingMode,
     int? priority,
     bool? active,
@@ -742,6 +752,8 @@ class CampaignModel {
       hasCodes: hasCodes ?? this.hasCodes,
       autoApply: autoApply ?? this.autoApply,
       requireStaffNote: requireStaffNote ?? this.requireStaffNote,
+      birthdayOnly: birthdayOnly ?? this.birthdayOnly,
+      blockPoints: blockPoints ?? this.blockPoints,
       stackingMode: stackingMode ?? this.stackingMode,
       priority: priority ?? this.priority,
       active: active ?? this.active,

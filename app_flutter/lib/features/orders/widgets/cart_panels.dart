@@ -121,9 +121,13 @@ class LoyaltyEarnPreview extends StatelessWidget {
   /// Chưa tra được số dư điểm (mất mạng…): không hiển thị "điểm → điểm" sai.
   final bool pointsUnknown;
 
+  /// Đơn đang dùng khuyến mãi khóa tích điểm
+  final bool pointsBlocked;
+
   const LoyaltyEarnPreview({
     super.key,
     this.pointsUnknown = false,
+    this.pointsBlocked = false,
     required this.customer,
     required this.pointsUsed,
     required this.earnPoints,
@@ -148,7 +152,9 @@ class LoyaltyEarnPreview extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Tích điểm: +$earnPoints điểm', style: style.copyWith(fontWeight: FontWeight.w800)),
-        if (earnPoints == 0)
+        if (pointsBlocked)
+          Text('Đơn dùng khuyến mãi không tích điểm — chỉ gắn thông tin khách vào đơn', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.warningInk, fontWeight: FontWeight.w600))
+        else if (earnPoints == 0)
           Text('Hóa đơn chưa đủ giá trị để có điểm (từ ${(redeemRate * 50 / earnRate).ceil()}đ được 1 điểm)', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
         if (pointsUnknown)
           Text('Điểm hiện có: chưa tải được • sẽ +$earnPoints điểm khi thanh toán', style: style)
@@ -172,11 +178,13 @@ class CartCustomerBar extends StatelessWidget {
   final VoidCallback? onConfigureRate;
   final int redeemRate;
   final bool pointsUnknown;
+  final bool pointsBlocked;
   final VoidCallback? onRetryPoints;
 
   const CartCustomerBar({
     super.key,
     this.pointsUnknown = false,
+    this.pointsBlocked = false,
     this.onRetryPoints,
     required this.customer,
     required this.pointsUsed,
@@ -249,7 +257,7 @@ class CartCustomerBar extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
                             ),
-                          LoyaltyEarnPreview(pointsUnknown: pointsUnknown, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
+                          LoyaltyEarnPreview(pointsUnknown: pointsUnknown, pointsBlocked: pointsBlocked, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
                         ],
                       ),
               ),

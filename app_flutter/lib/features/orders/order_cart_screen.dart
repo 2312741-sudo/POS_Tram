@@ -105,6 +105,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (_selectedCustomer != null) {
       _customerPointsUnknown = true;
       unawaited(_refreshCustomerPoints());
+      unawaited(_ensureCustomerBirthday().then((_) {
+        if (mounted) _autoApplyBirthdayCampaigns();
+      }));
     }
     _storeInfo = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _fb.currentStoreCode, storeName: 'POS Trạm');
     _loadStoreAndPromotions();
@@ -233,7 +236,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   /// Điểm sẽ được tích khi thanh toán: tính từ số tiền khách thực trả, theo cấu hình chuỗi/chi nhánh
   /// (máy chủ tính lại từ hóa đơn PAID - cùng công thức)
   double get _earnRate => _storeInfo?.pointEarnRate ?? 1.0;
-  int get _earnPreview => LoyaltyMath.pointsToAward(billAmount: _finalTotal, earnRatePercent: _earnRate, redeemRate: _pointRedeemRate);
+  int get _earnPreview => _pointsBlockedByPromo ? 0 : LoyaltyMath.pointsToAward(billAmount: _finalTotal, earnRatePercent: _earnRate, redeemRate: _pointRedeemRate);
 
   void _openLoyaltyConfig() {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CustomerManagementScreen()));
@@ -826,7 +829,49 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         products: _products,
         branchId: _fb.currentStoreCode,
         guestCount: _guestCount,
+        customerBirthday: _selectedCustomer?.birthday,
       );
+
+  /// Đơn đang dùng chương trình KM khóa tích điểm?
+  bool get _pointsBlockedByPromo => _appliedDiscounts.any((d) {
+        final c = d.campaignId == null ? null : _campaignById[d.campaignId];
+        return c != null && c.blockPoints;
+      });
+
+  /// Tự áp dụng các KM "chỉ đúng ngày sinh nhật" khi đơn đã gắn khách có ngày sinh trùng hôm nay.
+  void _autoApplyBirthdayCampaigns() {
+    final bday = _selectedCustomer?.birthday ?? '';
+    if (bday.trim().isEmpty) return;
+    final added = <String>[];
+    for (final c in _campaigns) {
+      if (!c.birthdayOnly || c.hasCodes || !c.isEligibleAt(DateTime.now().millisecondsSinceEpoch)) continue;
+      if (_appliedDiscounts.any((d) => d.campaignId == c.campaignId)) continue;
+      final amt = _quoteCampaign(c).totalPromotionDiscount;
+      if (amt <= 0) continue;
+      final allowStack = _storeInfo?.allowStackPromotions ?? true;
+      if (!allowStack) _appliedDiscounts.clear();
+      _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+      added.add(c.name);
+    }
+    if (added.isNotEmpty) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Sinh nhật khách: đã tự áp dụng ${added.join(", ")}'),
+        backgroundColor: AppColors.success,
+      ));
+    }
+  }
+
+  /// Hồ sơ khách khôi phục từ bàn có thể thiếu ngày sinh → tra lại theo SĐT rồi tính lại KM sinh nhật.
+  Future<void> _ensureCustomerBirthday() async {
+    final c = _selectedCustomer;
+    if (c == null || c.birthday.trim().isNotEmpty || c.phone.isEmpty) return;
+    try {
+      final full = await _fb.lookupCustomer(c.phone);
+      if (!mounted || !identical(_selectedCustomer, c) || full == null || full.birthday.trim().isEmpty) return;
+      setState(() => c.birthday = full.birthday);
+    } catch (_) {}
+  }
 
   void _recalculateDiscounts() {
     final List<BillDiscountModel> valid = [];
@@ -835,7 +880,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (d.campaignId != null && _campaignById.containsKey(d.campaignId)) {
         // Chương trình KM mới: tính lại bằng Pricing Engine
         final r = CartCampaignPricing.recalculate([d], _campaignById,
-            cart: _cart, products: _products, branchId: _fb.currentStoreCode, guestCount: _guestCount);
+            cart: _cart, products: _products, branchId: _fb.currentStoreCode, guestCount: _guestCount, customerBirthday: _selectedCustomer?.birthday);
         valid.addAll(r.discounts);
         dropped.addAll(r.dropped);
       } else if (d.promoId != null) {
@@ -1171,6 +1216,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       _customerPointsUnknown = false;
       _pointsUsed = 0;
     });
+    await _ensureCustomerBirthday();
+    if (!mounted) return;
+    _recalculateDiscounts();
+    _autoApplyBirthdayCampaigns();
     TableCustomerLogic.writeToTable(widget.table, c);
     try {
       await _fb.saveTable(widget.table);
@@ -2724,6 +2773,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       const SizedBox(height: 8),
                       LoyaltyEarnPreview(
                         pointsUnknown: _customerPointsUnknown,
+                        pointsBlocked: _pointsBlockedByPromo,
                         customer: _selectedCustomer!,
                         pointsUsed: _pointsUsed,
                         earnPoints: _earnPreview,
@@ -3386,6 +3436,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 );
 
                 final customerBar = CartCustomerBar(
+                  pointsBlocked: _pointsBlockedByPromo,
                   customer: _selectedCustomer,
                   pointsUsed: _pointsUsed,
                   earnPoints: _earnPreview,

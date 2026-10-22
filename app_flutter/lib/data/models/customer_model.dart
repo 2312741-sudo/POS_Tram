@@ -48,7 +48,7 @@ class KmtCustomerModel {
   final String name;
   final String phone;
   final String gender;
-  final String birthday;
+  String birthday; // có thể bổ sung sau khi tra lại hồ sơ khách
   int currentPoints; // Điểm tích lũy hiện tại
   int totalPoints;   // Tổng điểm lịch sử
   final int? createdAt;

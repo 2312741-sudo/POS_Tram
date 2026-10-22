@@ -153,3 +153,21 @@ describe("planMigration (gom theo SĐT)", () => {
     expect(plan.groups[0]).toMatchObject({ points: 11, totalPoints: 14, duplicate: true });
   });
 });
+
+
+import { billBlocksPoints, discountCampaignIds } from "./sharedLoyalty";
+
+describe("khuyến mãi khóa tích điểm", () => {
+  it("chỉ khóa khi có chương trình blockPoints=true trong bill.discounts", () => {
+    const discounts = [{ campaignId: "BD", amount: 30000 }, { promoId: "OLD", amount: 1000 }];
+    expect(billBlocksPoints(discounts, { BD: true })).toBe(true);
+    expect(billBlocksPoints(discounts, { BD: false })).toBe(false);
+    expect(billBlocksPoints(discounts, {})).toBe(false);
+    expect(billBlocksPoints(undefined, { BD: true })).toBe(false);
+  });
+  it("chấp nhận discounts dạng object (RTDB) và liệt kê mã chương trình", () => {
+    const d = { 0: { campaignId: "A" }, 1: { campaignId: "B" }, 2: { promoId: "x" } };
+    expect(discountCampaignIds(d).sort()).toEqual(["A", "B"]);
+    expect(billBlocksPoints(d, { B: true })).toBe(true);
+  });
+});
