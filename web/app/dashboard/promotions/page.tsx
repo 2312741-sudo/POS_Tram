@@ -1,4 +1,5 @@
 "use client";
+import { isEligibleAt, parseCampaign } from "@/lib/pricing-engine";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Plus, Tag, Ticket } from "lucide-react";
 import { ref, onValue, set, update, get } from "firebase/database";
@@ -200,43 +201,8 @@ export default function PromotionsPage() {
     if (end > 0 && now > end) return "Đã kết thúc";
     if (start > 0 && now < start) return "Sắp tới";
 
-    // Kiểm tra ngày trong tuần (1..7: 1 = T2, 7 = CN)
-    if (cam.schedule?.daysOfWeek && cam.schedule.daysOfWeek.length > 0) {
-      const d = new Date(now);
-      const day = d.getDay() === 0 ? 7 : d.getDay();
-      if (!cam.schedule.daysOfWeek.includes(day)) {
-        return "Ngoài khung giờ";
-      }
-    }
-
-    // Kiểm tra khung giờ Happy Hours
-    if (cam.schedule?.timeSlots && cam.schedule.timeSlots.length > 0) {
-      const d = new Date(now);
-      const curMinutes = d.getHours() * 60 + d.getMinutes();
-      let inSlot = false;
-      for (const slot of cam.schedule.timeSlots) {
-        if (!slot.startTime || !slot.endTime) continue;
-        const [sh, sm] = slot.startTime.split(":").map(Number);
-        const [eh, em] = slot.endTime.split(":").map(Number);
-        const startMin = (sh || 0) * 60 + (sm || 0);
-        const endMin = (eh || 0) * 60 + (em || 0);
-        if (startMin <= endMin) {
-          if (curMinutes >= startMin && curMinutes <= endMin) {
-            inSlot = true;
-            break;
-          }
-        } else {
-          // Ca qua đêm e.g. 22:00 -> 02:00
-          if (curMinutes >= startMin || curMinutes <= endMin) {
-            inSlot = true;
-            break;
-          }
-        }
-      }
-      if (!inSlot) {
-        return "Ngoài khung giờ";
-      }
-    }
+    // Ngày trong tuần + khung giờ Happy Hours: dùng đúng hàm của Pricing Engine (giờ Việt Nam)
+    if (!isEligibleAt(parseCampaign(cam.campaignId, cam as unknown as Record<string, unknown>), now)) return "Ngoài khung giờ";
 
     return "Đang chạy";
   }, [nowTs]);

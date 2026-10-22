@@ -341,7 +341,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       case ReportKind.promotions:
         return ['Mã CT / Voucher', 'Tên chương trình', 'Loại hình', 'Lượt áp dụng', 'Chi phí giảm giá'];
       case ReportKind.campaigns:
-        return ['Tên chương trình', 'Mã CT', 'Loại', 'Số hóa đơn', 'Tổng giảm giá', 'Doanh thu HĐ', 'Lượt dùng voucher'];
+        return ['Tên chương trình', 'Mã CT', 'Loại', 'Số hóa đơn', 'Tổng giảm giá', 'Doanh thu HĐ', 'Lượt dùng voucher', 'Điểm đã đổi'];
       case ReportKind.bills:
         return BillReportRows.summaryHeaders;
       case ReportKind.billItems:
@@ -492,6 +492,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           ReportExportService.formatCurrency(c.discountAmount),
           ReportExportService.formatCurrency(c.revenue),
           c.voucherCodesUsed,
+          c.pointsUsed,
         ]).toList();
 
       case ReportKind.bills:

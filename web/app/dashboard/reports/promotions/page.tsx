@@ -3,7 +3,7 @@ import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { BadgePercent, Calendar, ChevronDown, ChevronRight, Download, Receipt, Store, Ticket, TrendingUp } from "lucide-react";
 import { useDashboardData } from "@/lib/data-context";
-import { formatVND, getBillTimestamp, getUTC7Date } from "@/lib/reports";
+import { formatNumber, formatVND, getBillTimestamp, getUTC7Date } from "@/lib/reports";
 import { calculateCampaignReport } from "@/lib/promotion-report";
 import { exportCampaignReportExcel, type ReportStoreInfo } from "@/lib/export";
 
@@ -103,6 +103,7 @@ export default function PromotionReportPage() {
     { label: "Hóa đơn có khuyến mãi", value: `${report.billCount} đơn`, icon: Receipt, color: "var(--primary)" },
     { label: "Doanh thu các hóa đơn này", value: formatVND(report.revenue), icon: TrendingUp, color: "var(--success)" },
     { label: "Lượt dùng voucher", value: `${report.vouchersUsed} lượt`, icon: Ticket, color: "var(--warning)" },
+    { label: "Điểm tích lũy đã đổi", value: `${formatNumber(report.pointsUsed)} điểm`, icon: BadgePercent, color: "var(--primary)" },
   ];
 
   return (
@@ -174,18 +175,19 @@ export default function PromotionReportPage() {
               <th style={{ textAlign: "right" }}>Tổng giảm</th>
               <th style={{ textAlign: "right" }}>Doanh thu HĐ</th>
               <th style={{ textAlign: "right" }}>Voucher đã dùng</th>
+              <th style={{ textAlign: "right" }}>Điểm đã đổi</th>
             </tr>
           </thead>
           <tbody>
             {!historyLoaded && historyData.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "40px" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: "40px" }}>
                   <div className="spinner" style={{ margin: "0 auto" }} />
                 </td>
               </tr>
             ) : report.campaigns.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
                   Không có hóa đơn nào áp dụng khuyến mãi trong khoảng thời gian này
                 </td>
               </tr>
@@ -216,10 +218,11 @@ export default function PromotionReportPage() {
                       <td style={{ textAlign: "right", fontWeight: 700, color: "var(--danger)" }}>{formatVND(c.totalDiscount)}</td>
                       <td style={{ textAlign: "right", fontWeight: 700, color: "var(--success)" }}>{formatVND(c.revenue)}</td>
                       <td style={{ textAlign: "right" }}>{c.vouchersUsed}</td>
+                      <td style={{ textAlign: "right" }}>{c.pointsUsed ? formatNumber(c.pointsUsed) : "—"}</td>
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={8} style={{ background: "var(--surface-muted)", padding: "12px 16px" }}>
+                        <td colSpan={9} style={{ background: "var(--surface-muted)", padding: "12px 16px" }}>
                           <table style={{ margin: 0 }}>
                             <thead>
                               <tr>
@@ -230,6 +233,7 @@ export default function PromotionReportPage() {
                                 <th style={{ textAlign: "right" }}>Giảm giá</th>
                                 <th style={{ textAlign: "right" }}>Tổng tiền HĐ</th>
                                 <th>Nhân viên</th>
+                                <th style={{ textAlign: "right" }}>Điểm đã đổi</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -242,6 +246,7 @@ export default function PromotionReportPage() {
                                   <td style={{ textAlign: "right", color: "var(--danger)", fontWeight: 700 }}>{formatVND(b.discount)}</td>
                                   <td style={{ textAlign: "right" }}>{formatVND(b.finalAmount)}</td>
                                   <td style={{ fontSize: "12px" }}>{b.staff || "—"}</td>
+                                  <td style={{ textAlign: "right" }}>{b.pointsUsed ? formatNumber(b.pointsUsed) : "—"}</td>
                                 </tr>
                               ))}
                             </tbody>

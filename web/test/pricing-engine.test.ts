@@ -233,7 +233,7 @@ describe("lịch & chi nhánh", () => {
 
   it("khung giờ qua đêm", () => {
     const c = camp({ campaignType: "BILLDISCOUNT", schedule: { timeSlots: [{ startTime: "22:00", endTime: "02:00" }], daysOfWeek: [] } });
-    const at = (h: number, m: number) => new Date(2026, 9, 12, h, m).getTime();
+    const at = (h: number, m: number) => Date.UTC(2026, 9, 12, h - 7, m); // giờ Việt Nam (UTC+7)
     expect(listEligibleCampaigns([c], "B", at(23, 0))).toHaveLength(1);
     expect(listEligibleCampaigns([c], "B", at(1, 0))).toHaveLength(1);
     expect(listEligibleCampaigns([c], "B", at(12, 0))).toHaveLength(0);

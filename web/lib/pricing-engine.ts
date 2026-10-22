@@ -222,13 +222,14 @@ export function isEligibleAt(c: Campaign, ts: number): boolean {
   const s = c.schedule;
   if (s.absoluteStart != null && ts < s.absoluteStart) return false;
   if (s.absoluteEnd != null && ts > s.absoluteEnd) return false;
-  const dt = new Date(ts);
+  // Lịch luôn tính theo giờ Việt Nam (UTC+7, schedule.timezone = Asia/Ho_Chi_Minh), không phụ thuộc múi giờ máy chạy
+  const dt = new Date(ts + 7 * 3600_000);
   if (s.daysOfWeek.length > 0) {
-    const weekday = dt.getDay() === 0 ? 7 : dt.getDay();
+    const weekday = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
     if (!s.daysOfWeek.includes(weekday)) return false;
   }
   if (s.timeSlots.length > 0) {
-    if (!s.timeSlots.some((slot) => slotContains(slot, dt.getHours(), dt.getMinutes()))) return false;
+    if (!s.timeSlots.some((slot) => slotContains(slot, dt.getUTCHours(), dt.getUTCMinutes()))) return false;
   }
   return true;
 }

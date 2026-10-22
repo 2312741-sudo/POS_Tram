@@ -903,18 +903,18 @@ export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: Repo
     [],
   ];
 
-  const summaryHeaders = ["Chương trình", "Mã chương trình", "Loại", "Số hóa đơn", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Mã voucher đã dùng"];
+  const summaryHeaders = ["Chương trình", "Mã chương trình", "Loại", "Số hóa đơn", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Mã voucher đã dùng", "Điểm đã đổi"];
   const summaryAoa = [
     ...head("Báo cáo khuyến mãi theo chương trình"),
     summaryHeaders,
-    ...data.campaigns.map((c) => [c.name, c.code || "—", c.typeLabel, c.billCount, c.totalDiscount, c.revenue, c.vouchersUsed, c.voucherCodes.join(", ")]),
-    ["TỔNG CỘNG", "—", "—", data.billCount, data.totalDiscount, data.revenue, data.vouchersUsed, ""],
+    ...data.campaigns.map((c) => [c.name, c.code || "—", c.typeLabel, c.billCount, c.totalDiscount, c.revenue, c.vouchersUsed, c.voucherCodes.join(", "), c.pointsUsed ?? 0]),
+    ["TỔNG CỘNG", "—", "—", data.billCount, data.totalDiscount, data.revenue, data.vouchersUsed, "", data.pointsUsed],
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(summaryAoa);
-  ws1["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 40 }];
+  ws1["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 40 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp chương trình");
 
-  const detailHeaders = ["Chương trình", "Mã chương trình", "Mã hóa đơn", "Thời gian", "Bàn", "Mã voucher", "Giảm giá (VNĐ)", "Tổng tiền HĐ (VNĐ)", "Nhân viên"];
+  const detailHeaders = ["Chương trình", "Mã chương trình", "Mã hóa đơn", "Thời gian", "Bàn", "Mã voucher", "Giảm giá (VNĐ)", "Tổng tiền HĐ (VNĐ)", "Nhân viên", "Điểm đã đổi"];
   const detailRows: (string | number)[][] = [];
   data.campaigns.forEach((c) =>
     c.bills.forEach((b) =>
@@ -928,11 +928,12 @@ export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: Repo
         b.discount,
         b.finalAmount,
         b.staff || "—",
+        b.pointsUsed ?? 0,
       ])
     )
   );
   const ws2 = XLSX.utils.aoa_to_sheet([...head("Chi tiết hóa đơn áp dụng khuyến mãi"), detailHeaders, ...detailRows]);
-  ws2["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
+  ws2["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết hóa đơn");
 
   downloadWorkbook(wb, formatReportFileName("BC_KHUYENMAI_CT", storeInfo?.storeCode, range?.start, range?.end, "xlsx"));

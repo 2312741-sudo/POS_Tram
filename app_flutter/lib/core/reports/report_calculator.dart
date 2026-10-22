@@ -822,6 +822,26 @@ class ReportCalculator {
       }
     }
 
+    // Đổi điểm tích lũy: một dòng riêng trong báo cáo khuyến mãi (từ bill.pointsDiscount / pointsUsed)
+    final pointsBills = <CampaignBillRef>[];
+    int pointsDiscountTotal = 0, pointsUsedTotal = 0, pointsRevenue = 0;
+    for (final b in paidBills) {
+      if (b.pointsDiscount <= 0 && b.pointsUsed <= 0) continue;
+      pointsDiscountTotal += b.pointsDiscount;
+      pointsUsedTotal += b.pointsUsed;
+      pointsRevenue += b.finalAmount;
+      pointsBills.add(CampaignBillRef(
+        billId: b.id,
+        billCode: b.billCode,
+        time: b.closedAt ?? b.createdAt,
+        tableName: b.tableName,
+        voucherCode: '',
+        discount: b.pointsDiscount,
+        billFinalAmount: b.finalAmount,
+        pointsUsed: b.pointsUsed,
+      ));
+    }
+
     final list = map.values
         .map((a) => CampaignReportItem(
               key: a.key,
@@ -836,6 +856,21 @@ class ReportCalculator {
               bills: (a.bills..sort((x, y) => y.time.compareTo(x.time))),
             ))
         .toList();
+    if (pointsBills.isNotEmpty) {
+      list.add(CampaignReportItem(
+        key: 'points:redeem',
+        campaignId: '',
+        name: 'Đổi điểm tích lũy',
+        code: 'DOI_DIEM',
+        type: 'POINTS',
+        billCount: pointsBills.length,
+        discountAmount: pointsDiscountTotal,
+        revenue: pointsRevenue,
+        voucherCodesUsed: 0,
+        bills: pointsBills..sort((x, y) => y.time.compareTo(x.time)),
+        pointsUsed: pointsUsedTotal,
+      ));
+    }
     list.sort((x, y) {
       final c = y.discountAmount.compareTo(x.discountAmount);
       return c != 0 ? c : x.name.compareTo(y.name);

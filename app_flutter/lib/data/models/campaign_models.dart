@@ -591,7 +591,8 @@ class CampaignModel {
       return false;
     }
 
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
+    // Lịch luôn tính theo giờ Việt Nam (UTC+7), không phụ thuộc múi giờ của máy
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: true).add(const Duration(hours: 7));
 
     // Ngày trong tuần: 1..7 với 1 = Thứ 2, 7 = Chủ Nhật
     if (schedule.daysOfWeek.isNotEmpty) {

@@ -18,6 +18,8 @@ export interface CampaignBillRow {
   finalAmount: number;
   staff: string;
   storeCode?: string;
+  /** Số điểm tích lũy khách đã đổi trên hóa đơn này (chỉ dòng "Đổi điểm tích lũy") */
+  pointsUsed?: number;
 }
 
 export interface CampaignSummary {
@@ -35,6 +37,8 @@ export interface CampaignSummary {
   vouchersUsed: number;
   voucherCodes: string[];
   bills: CampaignBillRow[];
+  /** Tổng điểm khách đã đổi (chỉ dòng "Đổi điểm tích lũy") */
+  pointsUsed?: number;
 }
 
 export interface CampaignReport {
@@ -44,7 +48,12 @@ export interface CampaignReport {
   billCount: number;
   revenue: number;
   vouchersUsed: number;
+  /** Tổng điểm tích lũy khách đã đổi trong kỳ */
+  pointsUsed: number;
 }
+
+/** Khóa dòng "Đổi điểm tích lũy" trong báo cáo khuyến mãi */
+export const POINTS_ROW_KEY = "points:redeem";
 
 const str = (v: unknown) => (v == null ? "" : String(v).trim());
 
@@ -53,6 +62,7 @@ export const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
   ORDERVALUEITEMBENEFIT: "Tặng / giảm món theo giá trị đơn",
   BUYXGETY: "Mua X tặng Y",
   ITEMPRICERULE: "Đồng giá / đồng giảm",
+  POINTS: "Đổi điểm tích lũy",
 };
 
 export function campaignTypeLabel(type: string): string {
@@ -164,6 +174,35 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     promoBills.set(b.id, finalAmount);
   }
 
+  // Đổi điểm tích lũy: coi là một "chương trình" riêng trong báo cáo khuyến mãi (từ bill.pointsDiscount / pointsUsed)
+  let pointsUsedTotal = 0;
+  for (const b of deduplicateBills(bills)) {
+    if (String(b.status || "PAID").toUpperCase() !== "PAID") continue;
+    const pDisc = Math.max(0, Number(b.pointsDiscount) || 0);
+    const pUsed = Math.max(0, Math.trunc(Number(b.pointsUsed) || 0));
+    if (pDisc <= 0 && pUsed <= 0) continue;
+    const finalAmount = Number(b.finalAmount != null ? b.finalAmount : b.totalAmount || 0) || 0;
+    let c = map.get(POINTS_ROW_KEY);
+    if (!c) {
+      c = {
+        key: POINTS_ROW_KEY, campaignId: "", name: "Đổi điểm tích lũy", code: "DOI_DIEM", type: "POINTS", typeLabel: campaignTypeLabel("POINTS"),
+        billCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
+      };
+      map.set(POINTS_ROW_KEY, c);
+    }
+    c.totalDiscount += pDisc;
+    c.pointsUsed = (c.pointsUsed ?? 0) + pUsed;
+    c.billCount += 1;
+    c.revenue += finalAmount;
+    pointsUsedTotal += pUsed;
+    totalDiscount += pDisc;
+    c._bills.set(b.id, {
+      billId: b.id, billCode: b.billCode || b.orderCode || b.id, timestamp: getBillTimestamp(b), tableName: b.tableName || "",
+      voucherCode: "", discount: pDisc, finalAmount, staff: b.cashierName || b.staffFullName || b.staffUsername || "", storeCode: b.storeCode, pointsUsed: pUsed,
+    });
+    promoBills.set(b.id, finalAmount);
+  }
+
   const campaigns: CampaignSummary[] = Array.from(map.values())
     .map((c) => {
       const { _bills, _codes, ...rest } = c;
@@ -181,5 +220,6 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     billCount: promoBills.size,
     revenue: Array.from(promoBills.values()).reduce((s, v) => s + v, 0),
     vouchersUsed,
+    pointsUsed: pointsUsedTotal,
   };
 }

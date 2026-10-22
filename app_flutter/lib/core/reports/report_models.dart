@@ -858,6 +858,9 @@ class CampaignBillRef {
   final int discount;
   final int billFinalAmount;
 
+  /// Điểm tích lũy khách đã đổi trên hóa đơn (chỉ dòng "Đổi điểm tích lũy")
+  final int pointsUsed;
+
   const CampaignBillRef({
     required this.billId,
     required this.billCode,
@@ -866,6 +869,7 @@ class CampaignBillRef {
     required this.voucherCode,
     required this.discount,
     required this.billFinalAmount,
+    this.pointsUsed = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -876,6 +880,7 @@ class CampaignBillRef {
     'voucherCode': voucherCode,
     'discount': discount,
     'billFinalAmount': billFinalAmount,
+    'pointsUsed': pointsUsed,
   };
 }
 
@@ -891,6 +896,9 @@ class CampaignReportItem {
   final int voucherCodesUsed;
   final List<CampaignBillRef> bills;
 
+  /// Tổng điểm tích lũy khách đã đổi (chỉ dòng "Đổi điểm tích lũy")
+  final int pointsUsed;
+
   const CampaignReportItem({
     required this.key,
     required this.campaignId,
@@ -902,6 +910,7 @@ class CampaignReportItem {
     required this.revenue,
     required this.voucherCodesUsed,
     required this.bills,
+    this.pointsUsed = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -914,6 +923,7 @@ class CampaignReportItem {
     'discountAmount': discountAmount,
     'revenue': revenue,
     'voucherCodesUsed': voucherCodesUsed,
+    'pointsUsed': pointsUsed,
     'bills': bills.map((e) => e.toMap()).toList(),
   };
 }
