@@ -31,6 +31,7 @@ import {
   Wallet,
   ClipboardList,
   StickyNote,
+  Info,
 } from "lucide-react";
 
 const navItems = [
@@ -57,6 +58,7 @@ const navItems = [
   { href: "/dashboard/audit", label: "Nhật ký Kiểm soát", icon: Shield },
   { href: "/dashboard/analytics", label: "Phân tích Kinh doanh", icon: BarChart3 },
   { href: "/dashboard/action-codes", label: "Bộ mã hành động", icon: ListChecks },
+  { href: "/dashboard/about", label: "Thông tin ứng dụng", icon: Info },
 ];
 
 type SidebarProps = {

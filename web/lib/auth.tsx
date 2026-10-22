@@ -272,6 +272,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     // Chủ / Quản lý có VIEW_ALL_BILLS_HISTORY; Chủ quán có thể cấp riêng cho từng tài khoản.
     return hasPermission(user, "VIEW_ALL_BILLS_HISTORY");
   }
+  if (pathname.startsWith("/dashboard/about")) {
+    return true; // Mọi người dùng đăng nhập đều xem được Thông tin ứng dụng
+  }
 
   return isWebAdminRole(user.roleId || user.role, user.isRootOwner);
 }

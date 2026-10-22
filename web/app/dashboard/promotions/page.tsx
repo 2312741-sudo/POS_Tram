@@ -137,6 +137,8 @@ export default function PromotionsPage() {
       const cams: CampaignItem[] = [];
       snap.forEach((child) => {
         const v = child.val();
+        // Chỉ lấy chương trình thật (object có campaignType); bỏ node rác / trường lẻ làm hiện dòng trống
+        if (!v || typeof v !== "object" || !("campaignType" in v)) return;
         cams.push({
           campaignId: child.key!, programCode: v.programCode || "", name: v.name || "",
           description: v.description || "", campaignType: v.campaignType || "BILLDISCOUNT",

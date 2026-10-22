@@ -57,7 +57,10 @@ export function usePromotions(args: {
       (snap) => {
         const list: Campaign[] = [];
         snap.forEach((child) => {
-          list.push(parseCampaign(child.key as string, child.val()));
+          const v = child.val();
+          // Bỏ node rác (trường lẻ / không phải chương trình) để không sinh khuyến mãi trống
+          if (!v || typeof v !== "object" || !("campaignType" in v)) return;
+          list.push(parseCampaign(child.key as string, v));
         });
         setLoaded({ store: storeCode, list });
       },

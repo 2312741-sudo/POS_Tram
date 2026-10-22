@@ -180,8 +180,9 @@ export function PublicFooter() {
         }}
       >
         <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <span>© {currentYear} {LEGAL.appName} ({LEGAL.host}). Bảo lưu mọi quyền.</span>
+          <span>© {currentYear} {LEGAL.author} • {LEGAL.appName} ({LEGAL.host}). Bảo lưu mọi quyền.</span>
           <div style={{ display: "flex", gap: 16 }}>
+            <Link href="/about" style={{ color: "var(--muted)", textDecoration: "none" }}>Thông tin</Link>
             <Link href="/support" style={{ color: "var(--muted)", textDecoration: "none" }}>Hỗ trợ</Link>
             <Link href="/marketing" style={{ color: "var(--muted)", textDecoration: "none" }}>Giới thiệu</Link>
             <Link href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Bảo mật</Link>

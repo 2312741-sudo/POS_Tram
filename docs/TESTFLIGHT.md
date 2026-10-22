@@ -1,6 +1,6 @@
 # Hướng dẫn đưa POS Trạm lên TestFlight
 
-> Phiên bản đầu tiên: **1.0.0 (build 1)** — bundle `com.tramapp.tramFlutter` — team `W97CS7VC54`.
+> Phiên bản hiện tại: **1.0.1 (build 2)** — bundle `com.tramapp.tramFlutter` — team `W97CS7VC54`.
 > Bộ thông tin dưới đây dùng để dán vào App Store Connect (các form này phải do chủ tài khoản Apple tự điền).
 
 ## 1. Thông tin ứng dụng (App Information)
@@ -93,7 +93,7 @@ flutter build ipa --release --export-method app-store
 
 Tải lên (dùng tài khoản Apple đang đăng nhập trong Xcode, không cần khóa API) bằng `xcodebuild -exportArchive` với `destination = upload`, hoặc kéo file `.ipa` vào ứng dụng **Transporter**.
 
-**Mỗi lần tải lên phải tăng số build** (`version: 1.0.0+2` trong `pubspec.yaml`, số sau dấu `+`). Apple từ chối build trùng số.
+**Mỗi lần tải lên phải tăng số build** (`version: 1.0.1+2` trong `pubspec.yaml`, số sau dấu `+`). Apple từ chối build trùng số.
 
 ## 7. Việc cần làm trên Apple Developer / App Store Connect
 

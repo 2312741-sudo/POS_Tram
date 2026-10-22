@@ -38,8 +38,294 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     _loadData();
   }
 
+  /// Quyền quản lý khách hàng (Thêm / Sửa thông tin)
+  bool get _canManageCustomer => _auth.isOwner || _auth.isManager || _auth.can(AppPermissions.manageCustomers);
+
   /// Chỉ Chủ quán / Quản lý có quyền quản lý khách hàng mới được xóa khách
   bool get _canDeleteCustomer => (_auth.isOwner || _auth.isManager) && _auth.can(AppPermissions.manageCustomers);
+
+  DateTime? _parseBirthday(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(t)) {
+      return DateTime.tryParse(t);
+    }
+    if (RegExp(r'^\d{1,2}/\d{1,2}/\d{4}$').hasMatch(t)) {
+      final parts = t.split('/');
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return DateTime.tryParse(t);
+  }
+
+  String _formatBirthday(String raw) {
+    final d = _parseBirthday(raw);
+    if (d != null) {
+      return DateFormat('dd/MM/yyyy').format(d);
+    }
+    return raw.trim();
+  }
+
+  Future<void> _showAddOrEditCustomerDialog({KmtCustomerModel? customer}) async {
+    final isEditing = customer != null;
+    final nameCtrl = TextEditingController(text: customer?.fullName ?? '');
+    final phoneCtrl = TextEditingController(text: customer?.phone ?? '');
+    String gender = (customer?.gender.isNotEmpty ?? false) ? customer!.gender : 'Khác';
+    if (!['Nam', 'Nữ', 'Khác'].contains(gender)) {
+      gender = 'Khác';
+    }
+
+    DateTime? birthday = customer != null ? _parseBirthday(customer.birthday) : null;
+    final bdayCtrl = TextEditingController(
+      text: birthday != null ? DateFormat('dd/MM/yyyy').format(birthday) : '',
+    );
+    String? formError;
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(
+                isEditing ? Icons.edit_outlined : Icons.person_add_outlined,
+                color: context.tc.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isEditing ? 'Chỉnh Sửa Khách Hàng' : 'Thêm Khách Hàng Mới',
+                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (formError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              formError!,
+                              style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (isEditing) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: context.tc.cardElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.tc.borderLight),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Mã: ${customer.code}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary)),
+                          Text('${customer.currentPoints} pt (${customer.tierName(_tiers)})', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800))),
+                        ],
+                      ),
+                    ),
+                  ],
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Họ và tên *',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) {
+                      if (formError != null) setDialogState(() => formError = null);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Số điện thoại *',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) {
+                      if (formError != null) setDialogState(() => formError = null);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Giới tính',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
+                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
+                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                      ],
+                      selected: {gender},
+                      onSelectionChanged: (set) => setDialogState(() => gender = set.first),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: bdayCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Ngày sinh',
+                      hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
+                      prefixIcon: const Icon(Icons.cake_outlined),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: birthday != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                setDialogState(() {
+                                  birthday = null;
+                                  bdayCtrl.clear();
+                                });
+                              },
+                            )
+                          : const Icon(Icons.calendar_today, size: 18),
+                    ),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final initial = birthday ?? DateTime(2000, 1, 1);
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: initial.isAfter(now) ? now : initial,
+                        firstDate: DateTime(1920),
+                        lastDate: now,
+                        helpText: 'CHỌN NGÀY SINH KHÁCH HÀNG',
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          birthday = picked;
+                          bdayCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
+              onPressed: isSaving ? null : () async {
+                final name = nameCtrl.text.trim();
+                final phone = phoneCtrl.text.trim();
+                final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+                if (name.isEmpty) {
+                  setDialogState(() => formError = 'Vui lòng nhập họ và tên khách hàng');
+                  return;
+                }
+                if (digits.length < 9) {
+                  setDialogState(() => formError = 'Số điện thoại phải có ít nhất 9 chữ số');
+                  return;
+                }
+
+                // Check duplicate phone
+                final duplicate = _customers.where((c) {
+                  if (isEditing && c.id == customer.id) return false;
+                  return c.phone.replaceAll(RegExp(r'[^0-9]'), '') == digits;
+                }).firstOrNull;
+
+                if (duplicate != null) {
+                  setDialogState(() => formError = 'Số điện thoại này đã thuộc về khách "${duplicate.fullName}"');
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+                final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
+
+                try {
+                  if (isEditing) {
+                    final updated = customer.copyWith(
+                      name: name,
+                      phone: phone,
+                      gender: gender,
+                      birthday: bdayStr,
+                    );
+                    await _fb.saveCustomer(updated);
+                  } else {
+                    final id = 'CUST_${DateTime.now().millisecondsSinceEpoch}';
+                    final newCustomer = KmtCustomerModel(
+                      id: id,
+                      code: id,
+                      fullName: name,
+                      phone: phone,
+                      gender: gender,
+                      birthday: bdayStr,
+                      currentPoints: 0,
+                      totalPoints: 0,
+                      createdAt: DateTime.now().millisecondsSinceEpoch,
+                    );
+                    await _fb.saveCustomer(newCustomer);
+                  }
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isEditing ? 'Đã cập nhật thông tin khách hàng!' : 'Đã thêm khách hàng mới thành công!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                    await _loadData();
+                  }
+                } catch (e) {
+                  setDialogState(() {
+                    isSaving = false;
+                    formError = 'Lỗi lưu thông tin: $e';
+                  });
+                }
+              },
+              child: isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(isEditing ? 'Lưu thay đổi' : 'Thêm khách hàng'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _confirmDeleteCustomer(KmtCustomerModel c) async {
     final ctrl = TextEditingController();
@@ -81,6 +367,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     ctrl.dispose();
     if (confirmed != true || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    final dangerColor = context.tc.danger;
     try {
       final removedMember = await CustomerDeleteService().deleteCustomer(
         storeCode: _auth.currentStoreCode,
@@ -89,7 +376,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       messenger.showSnackBar(SnackBar(content: Text(deleteCustomerSuccessMessage(removedMember: removedMember))));
       if (mounted) await _loadData();
     } on CustomerDeleteException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message), backgroundColor: context.tc.danger));
+      messenger.showSnackBar(SnackBar(content: Text(e.message), backgroundColor: dangerColor));
     }
   }
 
@@ -147,6 +434,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       'Mã Khách Hàng',
       'Họ Và Tên',
       'Số Điện Thoại',
+      'Giới Tính',
+      'Ngày Sinh',
       'Điểm Tích Lũy (KMT)',
       'Giá Trị Quy Đổi (VNĐ)',
       'Hạng Thành Viên',
@@ -173,6 +462,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
         c.code,
         c.fullName,
         c.phone,
+        c.gender,
+        _formatBirthday(c.birthday),
         pts,
         val,
         c.tierName(_tiers),
@@ -182,6 +473,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
 
     final totalRow = [
       'TỔNG CỘNG',
+      '—',
+      '—',
       '—',
       '—',
       '—',
@@ -287,13 +580,15 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
               );
 
               await _fb.saveStoreInfo(updatedInfo);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+              }
               if (mounted) {
                 setState(() {
                   _storeInfo = updatedInfo;
                   _pointRedeemRate = newRedeem;
                   _pointEarnRate = newEarn;
                 });
-                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Đã cập nhật cấu hình tỷ lệ đổi điểm thành công!'),
@@ -323,6 +618,12 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (_canManageCustomer)
+            IconButton(
+              icon: const Icon(Icons.person_add_outlined),
+              tooltip: 'Thêm khách hàng mới',
+              onPressed: () => _showAddOrEditCustomerDialog(),
+            ),
           if (_auth.isOwner || _auth.can(AppPermissions.manageLoyalty))
             IconButton(
               icon: const Icon(Icons.settings_outlined),
@@ -342,6 +643,15 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           ),
         ],
       ),
+      floatingActionButton: _canManageCustomer
+          ? FloatingActionButton.extended(
+              backgroundColor: context.tc.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.person_add),
+              label: Text('Thêm khách hàng', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+              onPressed: () => _showAddOrEditCustomerDialog(),
+            )
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -455,94 +765,137 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(color: isVip ? Colors.amber.shade300 : context.tc.borderLight),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 22,
-                                      backgroundColor: isVip ? context.bg(Colors.amber.shade100) : context.tc.primaryLight.withValues(alpha: 0.4),
-                                      child: Text(
-                                        c.fullName.isNotEmpty ? c.fullName.substring(0, 1).toUpperCase() : 'K',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: isVip ? context.ink(Colors.amber.shade900) : context.tc.primaryDark,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: _canManageCustomer ? () => _showAddOrEditCustomerDialog(customer: c) : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 22,
+                                        backgroundColor: isVip ? context.bg(Colors.amber.shade100) : context.tc.primaryLight.withValues(alpha: 0.4),
+                                        child: Text(
+                                          c.fullName.isNotEmpty ? c.fullName.substring(0, 1).toUpperCase() : 'K',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: isVip ? context.ink(Colors.amber.shade900) : context.tc.primaryDark,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  c.fullName,
-                                                  style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: isVip ? context.bg(Colors.amber.shade50) : context.tc.cardElevated,
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: isVip ? Colors.amber.shade400 : context.tc.border),
-                                                ),
-                                                child: Text(
-                                                  tierLabel,
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isVip ? context.ink(Colors.amber.shade900) : context.tc.textSecondary,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    c.fullName,
+                                                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
                                                   ),
                                                 ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: isVip ? context.bg(Colors.amber.shade50) : context.tc.cardElevated,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: isVip ? Colors.amber.shade400 : context.tc.border),
+                                                  ),
+                                                  child: Text(
+                                                    tierLabel,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isVip ? context.ink(Colors.amber.shade900) : context.tc.textSecondary,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.phone, size: 12, color: context.tc.textHint),
+                                                const SizedBox(width: 4),
+                                                Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                                                const SizedBox(width: 10),
+                                                Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+                                              ],
+                                            ),
+                                            if (c.gender.isNotEmpty || c.birthday.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
+                                                  if (c.gender.isNotEmpty) ...[
+                                                    Icon(
+                                                      c.gender == 'Nam'
+                                                          ? Icons.male
+                                                          : (c.gender == 'Nữ' ? Icons.female : Icons.person_outline),
+                                                      size: 13,
+                                                      color: c.gender == 'Nam'
+                                                          ? Colors.blue.shade700
+                                                          : (c.gender == 'Nữ' ? Colors.pink.shade700 : context.tc.textHint),
+                                                    ),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      c.gender,
+                                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                                    ),
+                                                  ],
+                                                  if (c.gender.isNotEmpty && c.birthday.isNotEmpty)
+                                                    Text(' • ', style: TextStyle(color: context.tc.textHint, fontSize: 11)),
+                                                  if (c.birthday.isNotEmpty) ...[
+                                                    Icon(Icons.cake_outlined, size: 12, color: context.ink(Colors.orange.shade700)),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      _formatBirthday(c.birthday),
+                                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                                    ),
+                                                  ],
+                                                ],
                                               ),
                                             ],
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '${FormatUtils.number(pts)} pt',
+                                            style: GoogleFonts.beVietnamPro(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: context.ink(Colors.blue.shade800),
+                                            ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(Icons.phone, size: 12, color: context.tc.textHint),
-                                              const SizedBox(width: 4),
-                                              Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                                              const SizedBox(width: 10),
-                                              Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
-                                            ],
+                                          Text(
+                                            '= ${FormatUtils.vnd(val)}',
+                                            style: GoogleFonts.beVietnamPro(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: context.tc.success,
+                                            ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          '${FormatUtils.number(pts)} pt',
-                                          style: GoogleFonts.beVietnamPro(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: context.ink(Colors.blue.shade800),
-                                          ),
+                                      if (_canManageCustomer)
+                                        IconButton(
+                                          tooltip: 'Chỉnh sửa thông tin',
+                                          icon: Icon(Icons.edit_outlined, size: 20, color: context.tc.primary),
+                                          onPressed: () => _showAddOrEditCustomerDialog(customer: c),
                                         ),
-                                        Text(
-                                          '= ${FormatUtils.vnd(val)}',
-                                          style: GoogleFonts.beVietnamPro(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: context.tc.success,
-                                          ),
+                                      if (_canDeleteCustomer)
+                                        IconButton(
+                                          tooltip: 'Xóa khách hàng',
+                                          icon: Icon(Icons.delete_outline, size: 20, color: context.tc.danger),
+                                          onPressed: () => _confirmDeleteCustomer(c),
                                         ),
-                                      ],
-                                    ),
-                                    if (_canDeleteCustomer)
-                                      IconButton(
-                                        tooltip: 'Xóa khách hàng',
-                                        icon: Icon(Icons.delete_outline, color: context.tc.danger),
-                                        onPressed: () => _confirmDeleteCustomer(c),
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             );

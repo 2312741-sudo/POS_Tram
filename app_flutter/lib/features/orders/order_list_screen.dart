@@ -186,10 +186,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
     setState(() {
       final idx = _cart.indexWhere((p) =>
+          !p.isSentKitchen &&
+          !p.hasDiscount &&
           p.productId == product.id &&
           p.name == product.name &&
           p.selectedSize.isEmpty &&
-          p.selectedToppings.isEmpty);
+          p.selectedToppings.isEmpty &&
+          p.note.isEmpty);
       if (idx >= 0) {
         _cart[idx] = _cart[idx].copyWith(
           quantity: _cart[idx].quantity + 1,
@@ -206,6 +209,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
           orderedBy: staffUser,
           orderedByName: staffName,
           orderedAt: now,
+          isSentKitchen: false,
         ));
       }
     });
@@ -213,12 +217,30 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   void _removeFromCart(ProductModel product) {
     setState(() {
-      final idx = _cart.lastIndexWhere((p) => p.productId == product.id && p.name == product.name);
+      final idx = _cart.lastIndexWhere((p) =>
+          !p.isSentKitchen &&
+          !p.hasDiscount &&
+          p.productId == product.id &&
+          p.name == product.name);
       if (idx >= 0) {
         if (_cart[idx].quantity > 1) {
           _cart[idx] = _cart[idx].copyWith(quantity: _cart[idx].quantity - 1);
         } else {
           _cart.removeAt(idx);
+        }
+      } else {
+        final hasSentOrDiscounted = _cart.any((p) =>
+            p.productId == product.id &&
+            p.name == product.name &&
+            (p.isSentKitchen || p.hasDiscount));
+        if (hasSentOrDiscounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Món đã được gửi bếp hoặc có giảm giá, vui lòng vào giỏ hàng để thao tác.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
       }
     });
@@ -642,6 +664,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
                             setState(() {
                               final existingIdx = _cart.indexWhere((i) =>
+                                  !i.isSentKitchen &&
+                                  !i.hasDiscount &&
                                   i.productId == newItem.productId &&
                                   i.name == newItem.name &&
                                   i.selectedSize == newItem.selectedSize &&

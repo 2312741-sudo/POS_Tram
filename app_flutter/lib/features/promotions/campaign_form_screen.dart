@@ -796,7 +796,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 subtitle: const Text('Nhân viên phải nhập lý do/ghi chú khi áp dụng mã'),
                 value: _requireStaffNote,
                 onChanged: (val) => setState(() => _requireStaffNote = val),
-                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Có phát hành mã (Voucher)'),
@@ -806,7 +805,6 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   _hasCodes = val;
                   if (val) _autoApply = false;
                 }),
-                activeThumbColor: context.tc.primary,
               ),
               if (_hasCodes) _buildCodesEditor(),
               SwitchListTile(
@@ -814,21 +812,18 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 subtitle: Text(_hasCodes ? 'Không áp dụng khi chương trình dùng mã' : 'Tự động tính giảm giá cho bill hợp lệ'),
                 value: _hasCodes ? false : _autoApply,
                 onChanged: _hasCodes ? null : (val) => setState(() => _autoApply = val),
-                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Cho phép cộng dồn'),
                 subtitle: const Text('Được áp dụng chung với KM khác'),
                 value: _stackingMode,
                 onChanged: (val) => setState(() => _stackingMode = val),
-                activeThumbColor: context.tc.primary,
               ),
               SwitchListTile(
                 title: const Text('Kích hoạt chương trình'),
                 subtitle: const Text('Bật để chương trình hoạt động ngay'),
                 value: _active,
                 onChanged: (val) => setState(() => _active = val),
-                activeThumbColor: context.tc.primary,
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'printer_types.dart';
 import 'bluetooth_printer_service.dart';
+import 'receipt_printer.dart';
 
 /// Dịch vụ Hàng đợi in lại (Print Queue Service)
 /// Đảm bảo khi in gặp sự cố (mất kết nối, hết giấy, kẹt lệnh), phiếu không bao giờ bị mất,
@@ -79,12 +80,39 @@ class PrintQueueService extends ChangeNotifier {
     return await _executeJob(job);
   }
 
-  /// Thực thi gửi lệnh in ra máy in Bluetooth
+  /// Thực thi gửi lệnh in ra máy in (LAN hoặc Bluetooth)
   Future<bool> _executeJob(PrintJob job) async {
     job.status = PrintJobStatus.printing;
     notifyListeners();
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final printerType = prefs.getString('tram_pos_printer_type') ?? 'LAN';
+
+      if (printerType == 'LAN') {
+        final ip = (job.type == 'KITCHEN')
+            ? (prefs.getString('tram_pos_lan_kitchen_printer_ip')?.trim() ?? '')
+            : (prefs.getString('tram_pos_lan_bill_printer_ip')?.trim() ?? '');
+
+        if (ip.isNotEmpty) {
+          final ok = await ReceiptPrinter.printViaLan(printerIp: ip, data: job.bytes);
+          if (ok) {
+            job.status = PrintJobStatus.success;
+            job.errorMessage = null;
+            await _saveToStorage();
+            notifyListeners();
+            return true;
+          } else {
+            job.status = PrintJobStatus.failed;
+            job.retryCount++;
+            job.errorMessage = 'Không kết nối được máy in LAN ($ip:9100)';
+            await _saveToStorage();
+            notifyListeners();
+            return false;
+          }
+        }
+      }
+
       final bt = BluetoothPrinterService.instance;
       final success = await bt.printBytes(job.bytes);
 
@@ -136,9 +164,8 @@ class PrintQueueService extends ChangeNotifier {
       if (ok) {
         successCount++;
       } else {
-        // Nếu in tiếp tục lỗi do mất kết nối, dừng lại tránh spam
-        final isConnected = await BluetoothPrinterService.instance.isConnected();
-        if (!isConnected) break;
+        // Dừng lại nếu tiếp tục lỗi
+        break;
       }
     }
 
@@ -157,6 +184,13 @@ class PrintQueueService extends ChangeNotifier {
   /// Dọn dẹp các phiếu đã in thành công
   Future<void> clearCompletedJobs() async {
     _jobs.removeWhere((j) => j.status == PrintJobStatus.success);
+    await _saveToStorage();
+    notifyListeners();
+  }
+
+  /// Xóa toàn bộ các phiếu đang bị lỗi trong hàng đợi
+  Future<void> clearFailedJobs() async {
+    _jobs.removeWhere((j) => j.status == PrintJobStatus.failed);
     await _saveToStorage();
     notifyListeners();
   }

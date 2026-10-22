@@ -244,9 +244,58 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   // ==================== CART ACTIONS ====================
   Future<void> _incrementItem(int index) async {
     if (!await _ensureShiftOpen() || !mounted) return;
-    setState(() {
-      _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity + 1);
-    });
+    final item = _cart[index];
+    if (item.isSentKitchen || item.hasDiscount) {
+      // Dòng này đã gửi bếp hoặc đã có giảm giá món: không cộng dồn trực tiếp vào dòng này
+      // (vì phần tăng thêm chưa gửi bếp và không tự động được hưởng giảm giá).
+      // Tìm xem đã có dòng mới chưa gửi bếp & không giảm giá cùng loại món này chưa:
+      final existingNewIdx = _cart.indexWhere((i) =>
+          !i.isSentKitchen &&
+          !i.hasDiscount &&
+          i.productId == item.productId &&
+          i.name == item.name &&
+          i.selectedSize == item.selectedSize &&
+          i.selectedSugar == item.selectedSugar &&
+          i.selectedIce == item.selectedIce &&
+          i.selectedToppings.join(',') == item.selectedToppings.join(',') &&
+          i.note == item.note);
+      if (existingNewIdx >= 0) {
+        setState(() {
+          _cart[existingNewIdx] = _cart[existingNewIdx].copyWith(
+            quantity: _cart[existingNewIdx].quantity + 1,
+          );
+        });
+      } else {
+        final staffUser = _auth.currentUser?.username ?? 'staff';
+        final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+        final newItem = OrderItemModel(
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          selectedSize: item.selectedSize,
+          sizeExtraPrice: item.sizeExtraPrice,
+          selectedSugar: item.selectedSugar,
+          selectedIce: item.selectedIce,
+          selectedToppings: List.from(item.selectedToppings),
+          toppingPrice: item.toppingPrice,
+          note: item.note,
+          orderedBy: staffUser,
+          orderedByName: staffName,
+          orderedAt: DateTime.now().millisecondsSinceEpoch,
+          isSentKitchen: false,
+        );
+        setState(() {
+          _cart.add(newItem);
+        });
+      }
+    } else {
+      setState(() {
+        _cart[index] = _cart[index].copyWith(quantity: _cart[index].quantity + 1);
+      });
+    }
+    widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+    await _fb.saveTable(widget.table).catchError((_) {});
     _recalculateDiscounts();
   }
 
@@ -1110,8 +1159,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             totalPoints: m.found ? m.totalPoints : (c?.totalPoints ?? 0),
           );
         },
-        createCustomer: (name, phone) async {
-          final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: name, phone: phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+        createCustomer: (name, phone, {gender = 'Khác', birthday = ''}) async {
+          final c = KmtCustomerModel(
+            id: 'CUST_${DateTime.now().millisecondsSinceEpoch}',
+            fullName: name,
+            phone: phone,
+            gender: gender,
+            birthday: birthday,
+            currentPoints: 0,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          );
           await _fb.saveCustomer(c); // 0 điểm; nếu SĐT đã có điểm chung, máy chủ gắn vào bản ghi đó
           return c;
         },
@@ -1120,9 +1177,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (picked == null || !mounted) return;
     if (picked.id.isEmpty) {
       // Khách chỉ có ở chi nhánh khác: tạo hồ sơ tại chi nhánh này (điểm lấy từ bản ghi dùng chung)
-      final c = KmtCustomerModel(id: 'CUST_${DateTime.now().millisecondsSinceEpoch}', fullName: picked.fullName, phone: picked.phone, currentPoints: 0, createdAt: DateTime.now().millisecondsSinceEpoch);
+      final c = KmtCustomerModel(
+        id: 'CUST_${DateTime.now().millisecondsSinceEpoch}',
+        fullName: picked.fullName,
+        phone: picked.phone,
+        gender: picked.gender,
+        birthday: picked.birthday,
+        currentPoints: 0,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      );
       await _fb.saveCustomer(c);
-      await _setCustomer(KmtCustomerModel(id: c.id, fullName: c.fullName, phone: c.phone, currentPoints: picked.currentPoints, totalPoints: picked.totalPoints, createdAt: c.createdAt));
+      await _setCustomer(KmtCustomerModel(
+        id: c.id,
+        fullName: c.fullName,
+        phone: c.phone,
+        gender: c.gender,
+        birthday: c.birthday,
+        currentPoints: picked.currentPoints,
+        totalPoints: picked.totalPoints,
+        createdAt: c.createdAt,
+      ));
       return;
     }
     // Điểm DÙNG CHUNG toàn chuỗi (gồm điểm tích ở chi nhánh khác) lấy từ máy chủ
@@ -2791,14 +2865,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               );
                               _buildCurrentBillAsync(status: 'OPEN', method: paymentMethod).then((bill) {
                                 _markTablePrePrinted();
-                                final bytes = ReceiptPrinter.buildBillReceiptBytes(
+                                ReceiptPrinter.printBill(
                                   store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
                                   bill: bill,
                                   isPrePrint: true,
-                                );
-                                ReceiptPrinter.printViaLan(
-                                  printerIp: _storeInfo?.billPrinterIp ?? '',
-                                  data: bytes,
                                 ).catchError((_) => false);
                               }).catchError((_) {});
                             },
@@ -2899,18 +2969,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     // 2. Tích/đổi điểm khách: đã xử lý trong closeAndPayBill (transaction, idempotent theo hóa đơn)
 
-    // 3. In hóa đơn ra máy in nhiệt LAN (nếu bật in bill và có cấu hình IP máy in)
+    // 3. In hóa đơn ra máy in nhiệt (LAN hoặc Bluetooth)
     if (shouldPrint) {
       final store = _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm');
-      if (store.billPrinterIp.isNotEmpty) {
-        try {
-          final bytes = ReceiptPrinter.buildBillReceiptBytes(store: store, bill: bill, isPrePrint: false);
-          ReceiptPrinter.printViaLan(
-            printerIp: store.billPrinterIp,
-            data: bytes,
-          ).catchError((_) => false);
-        } catch (_) {}
-      }
+      ReceiptPrinter.printBill(
+        store: store,
+        bill: bill,
+        isPrePrint: false,
+      ).catchError((_) => false);
     }
 
     // 4. Nhật ký kiểm toán hệ thống
@@ -3377,14 +3443,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
     _buildCurrentBillAsync(status: 'PRE_PRINT', method: 'PRE_PRINT').then((bill) {
       _markTablePrePrinted();
-      final bytes = ReceiptPrinter.buildBillReceiptBytes(
+      ReceiptPrinter.printBill(
         store: _storeInfo ?? StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm'),
         bill: bill,
         isPrePrint: true,
-      );
-      ReceiptPrinter.printViaLan(
-        printerIp: _storeInfo?.billPrinterIp ?? '',
-        data: bytes,
       ).catchError((_) => false);
     }).catchError((_) {});
   }

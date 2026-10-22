@@ -258,3 +258,13 @@ describe("Đơn của tôi (/dashboard/my-orders) mở cho mọi vai trò", () =
     }
   });
 });
+
+describe("Thông tin ứng dụng (/dashboard/about) mở cho mọi vai trò", () => {
+  it("mọi vai trò đăng nhập đều xem được trang thông tin ứng dụng", () => {
+    for (const role of ["ROLE_STAFF", "ROLE_KITCHEN", "ROLE_MANAGER", "ROLE_OWNER", "waiter", "cashier"]) {
+      const u = { id: "1", uid: "1", username: "a", fullName: "a", roleId: role, role, isRootOwner: false, isActive: true, storeCode: "TRAM01" } as User;
+      expect(canAccessRoute(u, "/dashboard/about")).toBe(true);
+    }
+  });
+});
+
