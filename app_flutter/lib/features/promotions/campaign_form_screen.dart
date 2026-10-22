@@ -1210,7 +1210,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         );
       }),
       TextButton.icon(onPressed: () => _editCondition(null), icon: const Icon(Icons.add), label: const Text('Thêm điều kiện')),
-      Text('Có thể chọn cả nhóm món để tránh sót món lẻ. Món Y được tự thêm vào đơn khi áp dụng; ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
+      Text('Có thể chọn cả nhóm món để tránh sót món lẻ. Món Y do nhân viên tự gọi (app không tự thêm); mỗi món X ghép với một món Y có trong đơn, ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
     ]);
   }
 

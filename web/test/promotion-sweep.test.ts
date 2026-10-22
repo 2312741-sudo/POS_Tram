@@ -144,3 +144,21 @@ describe("Báo cáo khuyến mãi có dòng Đổi điểm tích lũy", () => {
     expect(r.pointsUsed).toBe(0);
   });
 });
+
+describe("Combo nước + bánh: mỗi món độc lập, không tự thêm", () => {
+  const c = parseCampaign("H", { campaignType: "BUYXGETY", active: true, buyConditions: [{ conditionId: "C", buyItemIds: [], buyGroupIds: ["NƯỚC"], requiredBuyQty: 1, rewardItemIds: ["BANH"], rewardQty: 1, benefitMode: "FIXED", value: 10000, multiplyByBundle: true }] } as never);
+  const run = (lines: PricingLine[]) => calculatePrice({ branchId: "B", nowMs: 1000, lines }, [c]);
+  const nuoc = (qty: number) => line("1", "TRA", qty, 45000, "NƯỚC");
+  const banh = (qty: number) => line("2", "BANH", qty, 30000, "BÁNH");
+  it("giảm đúng theo số bánh thực tế trong đơn (không tự thêm bánh)", () => {
+    expect(run([nuoc(1), banh(1)]).totalPromotionDiscount).toBe(10000);
+    expect(run([nuoc(2), banh(1)]).totalPromotionDiscount).toBe(10000);
+    expect(run([nuoc(2), banh(2)]).totalPromotionDiscount).toBe(20000);
+    expect(run([nuoc(1), banh(2)]).totalPromotionDiscount).toBe(10000); // 1 nước chỉ ghép 1 bánh
+  });
+  it("chưa có bánh → không giảm; engine chỉ báo lý do, không thêm dòng mới", () => {
+    const r = run([nuoc(2)]);
+    expect(r.totalPromotionDiscount).toBe(0);
+    expect(r.lineBenefits).toHaveLength(1);
+  });
+});

@@ -42,8 +42,11 @@ class CartCampaignPricing {
     );
   }
 
-  /// Chương trình đủ điều kiện nhưng món thưởng chưa có trong đơn?
+  /// Chương trình "tặng/giảm món theo giá trị đơn" đủ điều kiện nhưng món thưởng chưa có trong đơn?
+  /// CHỈ loại này mới cho bấm để tự thêm món thưởng. "Mua X tặng/giảm Y" KHÔNG tự thêm món:
+  /// nhân viên tự gọi món Y, mỗi món X ghép với món Y thực tế có trong đơn.
   static bool needsRewardItems(PriceQuoteModel quote, CampaignModel campaign) =>
+      campaign.campaignType.toUpperCase().replaceAll('_', '') == 'ORDERVALUEITEMBENEFIT' &&
       quote.reasons.any((r) => r.campaignId == campaign.campaignId && r.reasonCode == 'REWARD_ITEM_NOT_IN_BILL');
 
   /// Kế hoạch tự thêm món thưởng: số phần cần thêm + các món có thể chọn (theo món và theo nhóm món).
