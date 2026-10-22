@@ -5,7 +5,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/app_models.dart';
 import '../../core/reports/bill_report_rows.dart';
+import '../../core/reports/report_calculator.dart';
 import '../../core/utils/share_utils.dart';
+import '../models/product_model.dart';
+import 'firebase_service.dart';
 
 class ExportService {
   static String sanitizeFileName(String input) {
@@ -88,10 +91,18 @@ class ExportService {
 
       // Xuất Sheet 2: Chi tiết món & người nhận order nếu có bills
       if (bills != null && bills.isNotEmpty) {
+        // Mã món hiện tại trong danh mục (hóa đơn cũ không lưu mã)
+        final productsMap = <int, ProductModel>{};
+        try {
+          for (final p in await FirebaseService().getProducts()) {
+            if (p.id > 0) productsMap[p.id] = p;
+          }
+        } catch (_) {}
         final itemSheet = excel['ChiTietMon'];
         itemSheet.appendRow([
           TextCellValue('Mã HĐ'),
           TextCellValue('Bàn'),
+          TextCellValue('Mã món'),
           TextCellValue('Tên món'),
           TextCellValue('Tùy chọn (Size/Đường/Đá/Topping)'),
           TextCellValue('Ghi chú'),
@@ -112,6 +123,7 @@ class ExportService {
             itemSheet.appendRow([
               TextCellValue(b.billCode),
               TextCellValue(b.tableName),
+              TextCellValue(ReportCalculator.resolveProductCode(item.productId, item.name, productsMap)),
               TextCellValue(item.name),
               TextCellValue(item.optionsSummary),
               TextCellValue(item.note),
@@ -127,7 +139,7 @@ class ExportService {
         }
 
         // Sheet: Món đã xóa (có lý do)
-        final deletedRows = bills.expand(BillReportRows.deletedRows).toList();
+        final deletedRows = bills.expand((b) => BillReportRows.deletedRows(b, productsMap: productsMap)).toList();
         if (deletedRows.isNotEmpty) {
           final delSheet = excel['MonXoa'];
           delSheet.appendRow(BillReportRows.deletedHeaders.map((h) => TextCellValue(h)).toList());

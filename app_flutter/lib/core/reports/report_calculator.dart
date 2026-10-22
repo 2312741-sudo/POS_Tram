@@ -53,6 +53,18 @@ class ReportCalculator {
     return null;
   }
 
+  /// Mã món (SKU) hiện tại trong danh mục: tra theo id rồi theo tên (danh mục nạp lại có thể đổi id).
+  /// Không có thì trả rỗng (không lấy tên món làm mã).
+  static String resolveProductCode(int productId, String name, Map<int, ProductModel>? productsMap) {
+    if (productsMap == null) return '';
+    final byId = productsMap[productId];
+    if (byId != null && byId.code.trim().isNotEmpty) return byId.code.trim();
+    for (final p in productsMap.values) {
+      if (p.name == name && p.code.trim().isNotEmpty) return p.code.trim();
+    }
+    return '';
+  }
+
   /// Tính giá vốn của 1 dòng món (Line Cost Price)
   static int getLineCostPrice(
     OrderItemModel item, {
@@ -393,7 +405,7 @@ class ReportCalculator {
       for (final it in b.items) {
         final p = findProduct(it, productsMap);
         final prodId = (p != null && p.id > 0) ? p.id : it.productId;
-        final prodCode = (p != null && p.code.isNotEmpty) ? p.code : (it.name);
+        final prodCode = resolveProductCode(it.productId, it.name, productsMap);
         final prodName = (p != null && p.name.isNotEmpty) ? p.name : it.name;
         final category = (p != null && p.category.isNotEmpty) ? p.category : 'Khác';
         final unit = (p != null && p.unit.isNotEmpty) ? p.unit : 'Ly';

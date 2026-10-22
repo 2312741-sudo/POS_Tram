@@ -699,6 +699,7 @@ export default function ProductSalesReportPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)", background: "var(--surface-muted)" }}>
+                  <th style={{ padding: "10px 12px" }}>Mã món</th>
                   <th style={{ padding: "10px 12px" }}>Tên món ăn / Đồ uống</th>
                   <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
                   <th style={{ padding: "10px 12px", textAlign: "right" }}>Số lượng bán</th>
@@ -713,13 +714,14 @@ export default function ProductSalesReportPage() {
               <tbody>
                 {grossProfitReport.items.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
+                    <td colSpan={10} style={{ textAlign: "center", padding: "36px", color: "var(--muted)" }}>
                       Không có dữ liệu lợi nhuận trong khoảng thời gian đã chọn
                     </td>
                   </tr>
                 ) : (
                   grossProfitReport.items.map((it, idx) => (
                     <tr key={String(it.productId) + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                      <td style={{ padding: "10px 12px", color: "var(--subtext)", fontFamily: "monospace" }}>{it.productCode || "—"}</td>
                       <td style={{ padding: "10px 12px", fontWeight: "700", color: "var(--text)" }}>{it.productName}</td>
                       <td style={{ padding: "10px 12px", color: "var(--subtext)" }}>{it.category}</td>
                       <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "600" }}>{it.quantity}</td>
@@ -743,6 +745,7 @@ export default function ProductSalesReportPage() {
                 <tfoot>
                   <tr style={{ background: "var(--bg)", fontWeight: "800", borderTop: "2px solid var(--primary)" }}>
                     <td style={{ padding: "12px", color: "var(--primary)" }}>TỔNG CỘNG</td>
+                    <td style={{ padding: "12px" }}>—</td>
                     <td style={{ padding: "12px" }}>—</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>{formatNumber(grossProfitReport.summary.totalQuantity)}</td>
                     <td style={{ padding: "12px", textAlign: "right" }}>—</td>

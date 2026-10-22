@@ -1,3 +1,4 @@
+import { resolveProductCode, type CodeLine, type ProductCodeMap } from "./product-code";
 import * as XLSX from "xlsx";
 import { guardExport } from "./export-guard";
 import { format } from "date-fns";
@@ -851,12 +852,13 @@ export function exportCancellationReport(data: CancellationReportResult, storeIn
 }
 
 // 9b. BÁO CÁO XÓA MÓN (lý do bắt buộc)
-export function exportDeletionReport(data: DeletionReport, storeInfo?: ReportStoreInfo, dateText?: string) {
-  const headers = ["Thời gian", "Bàn", "Mã đơn", "Tên món", "Số lượng", "Giá trị xóa (VNĐ)", "Lý do", "Đã gửi bếp", "Nhân viên"];
+export function exportDeletionReport(data: DeletionReport, storeInfo?: ReportStoreInfo, dateText?: string, productsMap?: ProductCodeMap) {
+  const headers = ["Thời gian", "Bàn", "Mã đơn", "Mã món", "Tên món", "Số lượng", "Giá trị xóa (VNĐ)", "Lý do", "Đã gửi bếp", "Nhân viên"];
   const rows: (string | number)[][] = data.rows.map((r) => [
     r.timestamp ? format(new Date(r.timestamp), "dd/MM/yyyy HH:mm") : "—",
     r.tableName || "—",
     r.billCode || "—",
+    resolveProductCode({ productId: r.productId, name: r.name }, productsMap) || "—",
     r.name,
     r.quantity,
     r.amount,
@@ -864,13 +866,13 @@ export function exportDeletionReport(data: DeletionReport, storeInfo?: ReportSto
     r.sentToKitchen ? "Có" : "Không",
     r.staffFullName || r.staffUsername || "—",
   ]);
-  rows.push(["TỔNG CỘNG", "—", "—", `${data.entries} lần xóa`, data.quantity, data.amount, "—", "—", "—"]);
+  rows.push(["TỔNG CỘNG", "—", "—", "—", `${data.entries} lần xóa`, data.quantity, data.amount, "—", "—", "—"]);
   rows.push([]);
-  rows.push(["TỔNG HỢP THEO LÝ DO", "", "", "Lý do", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
-  data.byReason.forEach((g) => rows.push(["", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
+  rows.push(["TỔNG HỢP THEO LÝ DO", "", "", "", "Lý do", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
+  data.byReason.forEach((g) => rows.push(["", "", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
   rows.push([]);
-  rows.push(["TỔNG HỢP THEO NHÂN VIÊN", "", "", "Nhân viên", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
-  data.byStaff.forEach((g) => rows.push(["", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
+  rows.push(["TỔNG HỢP THEO NHÂN VIÊN", "", "", "", "Nhân viên", "Số lượng", "Giá trị (VNĐ)", "Số lần", "", ""]);
+  data.byStaff.forEach((g) => rows.push(["", "", "", "", g.label, g.quantity, g.amount, g.count, "", ""]));
 
   const opts: ExportReportOptions = {
     reportCode: "BC_XOAMON",
@@ -1098,6 +1100,7 @@ export function exportShiftPromotionsExcel(
 // 11. BÁO CÁO LỢI NHUẬN GỘP & GIÁ VỐN
 export function exportGrossProfitReport(data: GrossProfitReportResult, storeInfo?: ReportStoreInfo, dateText?: string) {
   const headers = [
+    "Mã món",
     "Tên món ăn / Đồ uống",
     "Nhóm hàng",
     "Số lượng bán",
@@ -1110,6 +1113,7 @@ export function exportGrossProfitReport(data: GrossProfitReportResult, storeInfo
   ];
 
   const rows = data.items.map((it) => [
+    it.productCode || "—",
     it.productName,
     it.category || "—",
     it.quantity,
@@ -1123,6 +1127,7 @@ export function exportGrossProfitReport(data: GrossProfitReportResult, storeInfo
 
   const totalRow = [
     "TỔNG CỘNG",
+    "—",
     "—",
     data.summary.totalQuantity,
     "—",
@@ -1243,7 +1248,7 @@ export function exportRevenue(
   downloadWorkbook(wb, `${title}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }
 
-export function exportHistory(data: HistoryOrder[]) {
+export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap) {
   if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
 
@@ -1311,6 +1316,7 @@ export function exportHistory(data: HistoryOrder[]) {
           "Mã đặt món": orderCode,
           "Bàn": tableName,
           "Trạng thái": statusText,
+          "Mã món": resolveProductCode(it as unknown as CodeLine, productsMap),
           "Tên món": it.name || "",
           "Tùy chọn (Size/Đường/Đá)": it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn"),
           "Ghi chú": it.note || "",
@@ -1329,7 +1335,7 @@ export function exportHistory(data: HistoryOrder[]) {
   if (itemRows.length > 0) {
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
     wsItems["!cols"] = [
-      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
       { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
     ];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món & Người nhận");
@@ -1345,6 +1351,7 @@ export function exportHistory(data: HistoryOrder[]) {
         "Bàn": item.tableName || "",
         "Trạng thái HĐ": billStatusLabel(item.status),
         "Thời gian xóa": d.timestamp ? format(new Date(d.timestamp), "dd/MM/yyyy HH:mm", { locale: vi }) : "—",
+        "Mã món": resolveProductCode({ productId: d.productId, name: d.name }, productsMap),
         "Tên món": d.name,
         "Số lượng": d.quantity,
         "Đơn giá (VNĐ)": d.unitPrice,
@@ -1358,7 +1365,7 @@ export function exportHistory(data: HistoryOrder[]) {
   if (deletedRows.length > 0) {
     const wsDeleted = XLSX.utils.json_to_sheet(deletedRows);
     wsDeleted["!cols"] = [
-      { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 22 }
+      { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 26 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 22 }
     ];
     XLSX.utils.book_append_sheet(wb, wsDeleted, "Món đã xóa");
   }
@@ -1398,7 +1405,7 @@ export function exportHistory(data: HistoryOrder[]) {
   downloadWorkbook(wb, `LichSu_HoaDon_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }
 
-export function exportSingleBillExcel(order: HistoryOrder) {
+export function exportSingleBillExcel(order: HistoryOrder, productsMap?: ProductCodeMap) {
   if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
   const billCode = order.billCode || order.orderCode || order.id?.slice(0, 8) || "HD";
@@ -1434,6 +1441,7 @@ export function exportSingleBillExcel(order: HistoryOrder) {
       const qty = Number(it.quantity) || 1;
       return {
         "STT": idx + 1,
+        "Mã món": resolveProductCode(it as unknown as CodeLine, productsMap),
         "Tên món": it.name || "",
         "Tùy chọn": it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn"),
         "Ghi chú": it.note || "",
@@ -1444,7 +1452,7 @@ export function exportSingleBillExcel(order: HistoryOrder) {
       };
     });
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
-    wsItems["!cols"] = [{ wch: 6 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
+    wsItems["!cols"] = [{ wch: 6 }, { wch: 14 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món");
   }
 

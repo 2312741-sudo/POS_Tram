@@ -22,6 +22,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/product-code";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
 import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
@@ -35,7 +36,8 @@ import SampleDataDialog from "@/components/SampleDataDialog";
 const PAGE_SIZE = 20;
 
 export default function OrdersPage() {
-  const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder } = useDashboardData();
+  const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder, products } = useDashboardData();
+  const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
   const { user } = useAuth();
   // Hủy / xóa hóa đơn: chỉ Chủ quán hoặc tài khoản được cấp CANCEL_BILL (Quản lý mặc định KHÔNG có)
   const canCancelBill = hasPermission(user, "CANCEL_BILL");
@@ -182,11 +184,11 @@ export default function OrdersPage() {
   };
 
   const handleExportAll = () => {
-    exportHistory(filtered);
+    exportHistory(filtered, codeMap);
   };
 
   const handleExportSingle = (order: HistoryOrder) => {
-    exportSingleBillExcel(order);
+    exportSingleBillExcel(order, codeMap);
   };
 
   const handlePrint = (order: HistoryOrder) => {
@@ -816,7 +818,12 @@ export default function OrdersPage() {
                         return (
                           <tr key={idx}>
                             <td style={{ color: "var(--muted)" }}>{idx + 1}</td>
-                            <td style={{ fontWeight: "700", color: "var(--text)" }}>{it.name}</td>
+                            <td style={{ fontWeight: "700", color: "var(--text)" }}>
+                              {it.name}
+                              {resolveProductCode(it as unknown as CodeLine, codeMap) ? (
+                                <div style={{ fontSize: "11px", fontWeight: 400, color: "var(--muted)", fontFamily: "monospace" }}>{resolveProductCode(it as unknown as CodeLine, codeMap)}</div>
+                              ) : null}
+                            </td>
                             <td>
                               {it.optionsSummary ? (
                                 <span style={{ fontSize: "12px", color: "var(--subtext)" }}>{it.optionsSummary}</span>

@@ -27,6 +27,7 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
+import { buildProductCodeMap, resolveProductCode } from "@/lib/product-code";
 import { exportAuditLogs, exportCancellationReport, exportDeletionReport } from "@/lib/export";
 import { deletionReportFromAuditLogs } from "@/lib/item-deletion";
 import { useDashboardData, AuditLogItem } from "@/lib/data-context";
@@ -231,7 +232,8 @@ function getRoleName(role?: string): string {
 const PAGE_SIZE = 25;
 
 export default function AuditPage() {
-  const { auditLogs: logs, historyData, stores, currentStoreCode, loading: ctxLoading } = useDashboardData();
+  const { auditLogs: logs, historyData, stores, currentStoreCode, loading: ctxLoading, products } = useDashboardData();
+  const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
   const loading = ctxLoading && logs.length === 0;
 
   const [search, setSearch] = useState("");
@@ -396,7 +398,7 @@ export default function AuditPage() {
               <button
                 className="btn-primary"
                 style={{ background: "#107C41" }}
-                onClick={() => exportDeletionReport(deletionReport, targetStoreInfo).toExcel()}
+                onClick={() => exportDeletionReport(deletionReport, targetStoreInfo, undefined, codeMap).toExcel()}
               >
                 <Download size={16} /> Xuất Báo cáo Xóa món (Excel)
               </button>
@@ -649,6 +651,9 @@ export default function AuditPage() {
                         <td style={{ fontWeight: 600 }}>{r.tableName || "—"}</td>
                         <td>
                           {r.name}
+                          {resolveProductCode({ productId: r.productId, name: r.name }, codeMap) ? (
+                            <div style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "monospace" }}>{resolveProductCode({ productId: r.productId, name: r.name }, codeMap)}</div>
+                          ) : null}
                           {r.sentToKitchen ? <div style={{ fontSize: "11px", color: "var(--warning)" }}>Đã gửi bếp</div> : null}
                         </td>
                         <td style={{ textAlign: "right" }}>{r.quantity}</td>

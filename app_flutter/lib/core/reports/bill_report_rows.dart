@@ -6,6 +6,8 @@
 import 'package:intl/intl.dart';
 
 import '../../data/models/bill_model.dart';
+import '../../data/models/product_model.dart';
+import 'report_calculator.dart';
 
 class BillReportRows {
   static String statusLabel(String status) {
@@ -78,6 +80,7 @@ class BillReportRows {
     'Mã HĐ',
     'Trạng thái',
     'Bàn',
+    'Mã món',
     'Tên món',
     'Tùy chọn',
     'Số lượng',
@@ -87,11 +90,12 @@ class BillReportRows {
     'Thành tiền',
   ];
 
-  static List<List<dynamic>> itemRows(BillModel b) => b.items
+  static List<List<dynamic>> itemRows(BillModel b, {Map<int, ProductModel>? productsMap}) => b.items
       .map((i) => <dynamic>[
             b.billCode,
             statusLabel(b.status),
             b.tableName,
+            ReportCalculator.resolveProductCode(i.productId, i.name, productsMap),
             i.name,
             i.optionsSummary,
             i.quantity,
@@ -107,6 +111,7 @@ class BillReportRows {
     'Trạng thái',
     'Bàn',
     'Thời gian xóa',
+    'Mã món',
     'Tên món',
     'Số lượng',
     'Đơn giá',
@@ -116,12 +121,13 @@ class BillReportRows {
     'Đã gửi bếp',
   ];
 
-  static List<List<dynamic>> deletedRows(BillModel b) => b.deletedItems
+  static List<List<dynamic>> deletedRows(BillModel b, {Map<int, ProductModel>? productsMap}) => b.deletedItems
       .map((e) => <dynamic>[
             b.billCode,
             statusLabel(b.status),
             b.tableName,
             _time(e.timestamp),
+            ReportCalculator.resolveProductCode(e.productId, e.name, productsMap),
             e.name,
             e.quantity,
             e.unitPrice,

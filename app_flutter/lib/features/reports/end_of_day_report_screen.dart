@@ -33,6 +33,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   late TabController _tabController;
 
   List<BillModel> _bills = [];
+  // Mã món hiện tại trong danh mục (hóa đơn cũ không lưu mã)
+  Map<int, ProductModel> _productsMap = {};
   List<TableModel> _tables = [];
   List<CashShiftModel> _shifts = [];
   List<StoreInfoModel> _stores = [];
@@ -56,6 +58,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     _tabController = TabController(length: 4, vsync: this);
     _selectedStoreCode = _auth.currentStoreCode;
     _loadStores();
+    _loadProducts();
     _loadData();
   }
 
@@ -64,6 +67,18 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     _tabController.dispose();
     super.dispose();
   }
+
+  Future<void> _loadProducts() async {
+    try {
+      final prods = await _fb.getProducts();
+      if (!mounted) return;
+      setState(() {
+        _productsMap = {for (final p in prods) if (p.id > 0) p.id: p};
+      });
+    } catch (_) {}
+  }
+
+  String _codeOf(int productId, String name) => ReportCalculator.resolveProductCode(productId, name, _productsMap);
 
   Future<void> _loadStores() async {
     try {
@@ -335,6 +350,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         if (!productMap.containsKey(key)) {
           productMap[key] = {
             'name': key,
+            'code': _codeOf(item.productId, key),
             'productId': item.productId,
             'quantity': 0,
             'revenue': 0,
@@ -356,7 +372,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     // Filter by search query
     if (_productSearch.isNotEmpty) {
       final q = _productSearch.toLowerCase();
-      list = list.where((p) => (p['name'] as String).toLowerCase().contains(q)).toList();
+      list = list.where((p) => (p['name'] as String).toLowerCase().contains(q) || (p['code'] as String? ?? '').toLowerCase().contains(q)).toList();
     }
 
     // Sort
@@ -597,6 +613,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       final isAmt = _productViewMode == 'AMOUNT';
       sheet.appendRow([
         TextCellValue('Xếp hạng'),
+        TextCellValue('Mã món'),
         TextCellValue('Tên món ăn / Đồ uống'),
         TextCellValue('Nhân viên bán'),
         TextCellValue('Đơn giá (VNĐ)'),
@@ -629,6 +646,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
         sheet.appendRow([
           DoubleCellValue((i + 1).toDouble()),
+          TextCellValue(item['code'] as String? ?? ''),
           TextCellValue(item['name'] as String),
           TextCellValue(staffStr),
           DoubleCellValue((item['unitPrice'] as int).toDouble()),
@@ -646,6 +664,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         staffSheet.appendRow([]);
         staffSheet.appendRow([
           TextCellValue('Nhân viên'),
+          TextCellValue('Mã món'),
           TextCellValue('Tên món'),
           TextCellValue('Đơn giá (VNĐ)'),
           TextCellValue('Số lượng bán'),
@@ -669,6 +688,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             if (!pMap.containsKey(key)) {
               pMap[key] = {
                 'name': key,
+                'code': _codeOf(item.productId, key),
                 'unitPrice': item.unitPrice,
                 'quantity': 0,
                 'revenue': 0,
@@ -684,6 +704,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           for (final p in entry.value.values) {
             staffSheet.appendRow([
               TextCellValue(sName),
+              TextCellValue(p['code'] as String? ?? ''),
               TextCellValue(p['name'] as String),
               DoubleCellValue((p['unitPrice'] as int).toDouble()),
               DoubleCellValue((p['quantity'] as int).toDouble()),
@@ -1407,7 +1428,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   Expanded(
                     child: TextField(
                       decoration: InputDecoration(
-                        hintText: 'Tìm kiếm tên món...',
+                        hintText: 'Tìm theo tên hoặc mã món...',
                         prefixIcon: const Icon(Icons.search, size: 20),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         filled: true,
@@ -1719,7 +1740,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item['name'],
+                                  (item['code'] as String? ?? '').isEmpty ? item['name'] : '${item['code']} • ${item['name']}',
                                   style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                                 Text(
