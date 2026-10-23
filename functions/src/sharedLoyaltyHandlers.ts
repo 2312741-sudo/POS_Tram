@@ -36,6 +36,8 @@ import {
   resolveRates,
   sanitizeKey,
   MAX_POINTS_PER_OP,
+  TRAM_CHAIN_STORES,
+  isTramChainStore,
   type LoyaltyOpType,
   type Member,
   type OpRequest,
@@ -599,6 +601,18 @@ export const linkBranchCustomer = onValueWritten({ ref: "/stores/{storeCode}/cus
   if (!after) {
     // Xóa khách ở chi nhánh: chỉ gỡ liên kết, số điểm chung được giữ nguyên
     if (oldKey) await db.ref(`loyalty_members/${oldKey}/branches/${storeCode}/${customerId}`).remove().catch(() => undefined);
+    // Nếu là chi nhánh thuộc chuỗi 4 cửa hàng Trạm: đồng bộ xóa node khách trên các chi nhánh Trạm còn lại
+    if (isTramChainStore(storeCode)) {
+      const otherStores = TRAM_CHAIN_STORES.filter((s) => s !== storeCode);
+      const delUpdates: AnyMap = {};
+      for (const other of otherStores) {
+        delUpdates[`stores/${other}/customers/${customerId}`] = null;
+        if (oldKey) {
+          delUpdates[`loyalty_members/${oldKey}/branches/${other}/${customerId}`] = null;
+        }
+      }
+      if (Object.keys(delUpdates).length) await db.ref().update(delUpdates).catch(() => undefined);
+    }
     return;
   }
   const key = keyOf(after);
@@ -644,6 +658,33 @@ export const linkBranchCustomer = onValueWritten({ ref: "/stores/{storeCode}/cus
     const fm = readMember(fresh.val()) ?? m;
     const updates = planBranchCacheUpdates(fm, [{ storeCode, customerId, node: after }]);
     if (Object.keys(updates).length) await db.ref().update(updates);
+  }
+
+  // Nếu là cửa hàng thuộc chuỗi 4 chi nhánh Trạm: đồng bộ sang toàn bộ chi nhánh Trạm còn lại
+  if (isTramChainStore(storeCode)) {
+    const otherStores = TRAM_CHAIN_STORES.filter((s) => s !== storeCode);
+    const chainUpdates: AnyMap = {};
+    for (const other of otherStores) {
+      const otherSnap = await db.ref(`stores/${other}/customers/${customerId}`).get();
+      const existing = otherSnap.val() as AnyMap | null;
+      const needsSync =
+        !existing ||
+        existing.ho_ten !== after.ho_ten ||
+        existing.so_dien_thoai !== after.so_dien_thoai ||
+        existing.ngay_sinh !== after.ngay_sinh ||
+        existing.gioi_tinh !== after.gioi_tinh ||
+        existing.name !== after.name ||
+        existing.phone !== after.phone ||
+        existing.birthday !== after.birthday ||
+        existing.gender !== after.gender;
+      if (needsSync) {
+        chainUpdates[`stores/${other}/customers/${customerId}`] = after;
+        chainUpdates[`loyalty_members/${key}/branches/${other}/${customerId}`] = true;
+      }
+    }
+    if (Object.keys(chainUpdates).length) {
+      await db.ref().update(chainUpdates).catch(() => undefined);
+    }
   }
 });
 

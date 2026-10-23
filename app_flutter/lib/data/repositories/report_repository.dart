@@ -751,6 +751,30 @@ class ReportRepository {
           }
         }
       }
+
+      // 3. Nếu thuộc chuỗi 4 cửa hàng Trạm và chưa có ở chi nhánh này, tra cứu ở các chi nhánh Trạm khác
+      const tramChain = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+      if (tramChain.contains(_currentStoreCode)) {
+        for (final other in tramChain) {
+          if (other == _currentStoreCode) continue;
+          try {
+            final otherSnap = await _root.child('stores').child(other).child('customers').get().timeout(const Duration(seconds: 2));
+            if (otherSnap.exists && otherSnap.value != null) {
+              final map = Map<dynamic, dynamic>.from(otherSnap.value as Map);
+              for (final entry in map.entries) {
+                final c = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), entry.key.toString());
+                if (c.phone == clean ||
+                    (normalizedPhone.isNotEmpty && c.phone.replaceAll(RegExp(r'[^0-9]'), '') == normalizedPhone) ||
+                    c.code.toLowerCase() == clean.toLowerCase()) {
+                  // Tự động đồng bộ sang chi nhánh hiện tại để các lần tra cứu sau tức thì
+                  customersRef.child(c.id).set(c.toMap()).catchError((_) {});
+                  return c;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
       return null;
     } catch (_) {
       return null;
@@ -771,51 +795,69 @@ class ReportRepository {
   static const Set<String> _pointFields = {'diem_hien_tai', 'currentPoints', 'totalPoints'};
 
   /// Lưu thông tin khách vào RTDB stores/{storeCode}/customers (nguồn chuẩn).
-  /// - KHÔNG ghi Firestore: Cloud Function mirrorCustomerToFirestore đồng bộ sang kmt_customers.
+  /// Nếu thuộc chuỗi 4 cửa hàng Trạm (TRAM01-04), đồng bộ sang cả 4 chi nhánh.
   /// - KHÔNG đổi điểm: điểm chỉ thay đổi qua LoyaltyService (thao tác hóa đơn) hoặc Quản lý.
   /// - Khách mới có điểm (lấy từ Firestore) → nhập qua importCustomerToStore để giữ số dư thật.
   Future<void> saveCustomer(KmtCustomerModel customer) async {
     try {
-      final ref = customersRef.child(customer.id);
+      const tramChain = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+      final targetStores = tramChain.contains(_currentStoreCode) ? tramChain : [_currentStoreCode];
       final info = Map<String, dynamic>.from(customer.toMap())..removeWhere((k, _) => _pointFields.contains(k));
-      final snap = await ref.get().timeout(const Duration(seconds: 3));
-      if (snap.exists) {
-        await ref.update(info);
-        return;
+
+      for (final sCode in targetStores) {
+        try {
+          final ref = _root.child('stores').child(sCode).child('customers').child(customer.id);
+          final snap = await ref.get().timeout(const Duration(seconds: 2));
+          if (snap.exists) {
+            await ref.update(info);
+          } else {
+            if (customer.currentPoints == 0 && customer.totalPoints == 0) {
+              await ref.set(customer.toMap());
+            } else {
+              await CustomerImportService.importToStore(storeCode: sCode, customerId: customer.id);
+              await ref.update(info);
+            }
+          }
+        } catch (_) {}
       }
-      if (customer.currentPoints == 0 && customer.totalPoints == 0) {
-        await ref.set(customer.toMap());
-        return;
-      }
-      await CustomerImportService.importToStore(storeCode: _currentStoreCode, customerId: customer.id);
-      await ref.update(info);
     } catch (_) {}
   }
 
   /// Khách của chi nhánh (RTDB, điểm là bản sao số dư dùng chung) cho ô "Tìm khách" - nhẹ hơn [getAllCustomers].
+  /// Tự động dùng chung khách giữa 4 chi nhánh Trạm (TRAM01, TRAM02, TRAM03, TRAM04).
   Future<List<CustomerCandidate>> getBranchCandidates() async {
     try {
-      final snap = await customersRef.get().timeout(const Duration(seconds: 4));
-      if (snap.value is! Map) return [];
-      final out = <CustomerCandidate>[];
-      for (final e in Map<dynamic, dynamic>.from(snap.value as Map).entries) {
-        if (e.value is! Map) continue;
-        final m = Map<dynamic, dynamic>.from(e.value as Map);
-        final c = KmtCustomerModel.fromMap(m, e.key.toString());
-        int t(Object? v) => v is num ? v.toInt() : 0;
-        final last = [t(m['ngay_cap_nhat']), t(m['lastVisitAt']), c.createdAt ?? 0].reduce((a, b) => a > b ? a : b);
-        out.add(CustomerCandidate(
-          id: c.id,
-          name: c.fullName,
-          phone: c.phone,
-          points: c.currentPoints,
-          totalPoints: c.totalPoints,
-          lastVisitAt: last,
-          gender: c.gender,
-          birthday: c.birthday,
-        ));
+      const tramChain = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+      final targetStores = tramChain.contains(_currentStoreCode) ? tramChain : [_currentStoreCode];
+      final Map<String, CustomerCandidate> map = {};
+
+      for (final sCode in targetStores) {
+        try {
+          final snap = await _root.child('stores').child(sCode).child('customers').get().timeout(const Duration(seconds: 2));
+          if (snap.value is! Map) continue;
+          for (final e in Map<dynamic, dynamic>.from(snap.value as Map).entries) {
+            if (e.value is! Map) continue;
+            final m = Map<dynamic, dynamic>.from(e.value as Map);
+            final c = KmtCustomerModel.fromMap(m, e.key.toString());
+            final dedupKey = c.phone.isNotEmpty ? 'p_${c.phone}' : 'id_${c.id}';
+            if (!map.containsKey(dedupKey)) {
+              int t(Object? v) => v is num ? v.toInt() : 0;
+              final last = [t(m['ngay_cap_nhat']), t(m['lastVisitAt']), c.createdAt ?? 0].reduce((a, b) => a > b ? a : b);
+              map[dedupKey] = CustomerCandidate(
+                id: c.id,
+                name: c.fullName,
+                phone: c.phone,
+                points: c.currentPoints,
+                totalPoints: c.totalPoints,
+                lastVisitAt: last,
+                gender: c.gender,
+                birthday: c.birthday,
+              );
+            }
+          }
+        } catch (_) {}
       }
-      return out;
+      return map.values.toList();
     } catch (_) {
       return [];
     }
@@ -837,18 +879,22 @@ class ReportRepository {
       }
     } catch (_) {}
 
-    // 2. Đọc RTDB (ưu tiên hơn Firestore)
-    try {
-      final snap = await customersRef.get().timeout(const Duration(seconds: 3));
-      if (snap.exists && snap.value != null) {
-        final rawMap = Map<dynamic, dynamic>.from(snap.value as Map);
-        for (final entry in rawMap.entries) {
-          final id = entry.key.toString();
-          // RTDB là nguồn chuẩn của điểm → ghi đè bản Firestore (có thể trễ)
-          map[id] = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), id);
+    // 2. Đọc RTDB (ưu tiên hơn Firestore). Nếu thuộc chuỗi Trạm, gom từ cả 4 chi nhánh
+    const tramChain = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+    final targetStores = tramChain.contains(_currentStoreCode) ? tramChain : [_currentStoreCode];
+    for (final sCode in targetStores) {
+      try {
+        final snap = await _root.child('stores').child(sCode).child('customers').get().timeout(const Duration(seconds: 2));
+        if (snap.exists && snap.value != null) {
+          final rawMap = Map<dynamic, dynamic>.from(snap.value as Map);
+          for (final entry in rawMap.entries) {
+            final id = entry.key.toString();
+            // RTDB là nguồn chuẩn của điểm → ghi đè bản Firestore (có thể trễ)
+            map[id] = KmtCustomerModel.fromMap(Map<dynamic, dynamic>.from(entry.value), id);
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
     final list = map.values.toList();
     list.sort((a, b) => b.currentPoints.compareTo(a.currentPoints));

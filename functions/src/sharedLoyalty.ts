@@ -411,3 +411,10 @@ export function planMigration(customers: SourceCustomer[]): MigrationPlan {
     },
   };
 }
+
+/** Danh sách 4 chi nhánh chính thức dùng chung hệ thống khách hàng & tích điểm Trạm */
+export const TRAM_CHAIN_STORES = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"] as const;
+
+export function isTramChainStore(storeCode: string): boolean {
+  return (TRAM_CHAIN_STORES as readonly string[]).includes((storeCode || "").trim().toUpperCase());
+}

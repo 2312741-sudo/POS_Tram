@@ -19,6 +19,7 @@ import {
   isDeleteConfirmed,
   planDeleteCustomer,
 } from "./deleteCustomerLogic";
+import { TRAM_CHAIN_STORES, isTramChainStore } from "./sharedLoyalty";
 
 const FUNCTION_REGION = "asia-southeast1";
 const db = () => admin.database();
@@ -80,6 +81,16 @@ export const deleteCustomer = onCall({ region: FUNCTION_REGION }, async (request
       details: buildDeleteAuditDetails(customer.ho_ten ?? customer.name, customer.so_dien_thoai ?? customer.phone, plan.removedMember),
     },
   };
+  if (isTramChainStore(storeCode)) {
+    for (const other of TRAM_CHAIN_STORES) {
+      if (other !== storeCode) {
+        updates[`stores/${other}/customers/${customerId}`] = null;
+        if (memberKey) {
+          updates[`loyalty_members/${memberKey}/branches/${other}/${customerId}`] = null;
+        }
+      }
+    }
+  }
   await db().ref().update(updates);
 
   // Bản sao Firestore (best-effort): chỉ xóa khi bản sao đúng của chi nhánh này

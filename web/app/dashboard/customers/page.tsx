@@ -175,9 +175,19 @@ export default function CustomersPage() {
   // Phân tích dữ liệu thô theo cấu hình hạng của từng chi nhánh
   const customers = useMemo(() => {
     const list: StoreCustomer[] = [];
-    targetCodes.forEach((code) => list.push(...parseStoreCustomers(code, rawByStore[code], tiersByStore[code] || DEFAULT_LOYALTY_TIERS)));
+    const seen = new Set<string>();
+    targetCodes.forEach((code) => {
+      const branchCustomers = parseStoreCustomers(code, rawByStore[code], tiersByStore[code] || DEFAULT_LOYALTY_TIERS);
+      for (const c of branchCustomers) {
+        const key = currentStoreCode === "ALL" ? (c.soDienThoai ? `phone_${c.soDienThoai}` : `id_${c.id}`) : `${code}_${c.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(c);
+        }
+      }
+    });
     return list.sort((a, b) => b.diemHienTai - a.diemHienTai);
-  }, [rawByStore, targetCodes, tiersByStore]);
+  }, [rawByStore, targetCodes, tiersByStore, currentStoreCode]);
 
   const tierNames = useMemo(() => {
     const names: string[] = [];
@@ -289,15 +299,20 @@ export default function CustomersPage() {
   };
 
   const handleCreateCustomer = async (v: { name: string; phone: string; gender: string; birthday: string }) => {
-    if (!specificStore) return;
     setOpSaving(true);
     setOpError("");
     try {
       const now = Date.now();
       const id = `CUST_${now}`;
-      await update(ref(db), {
-        [`stores/${currentStoreCode}/customers/${id}`]: buildNewCustomerNode(id, v, now),
-        [`stores/${currentStoreCode}/audit_logs/log_${now}_cust`]: {
+      const TRAM_CHAIN = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
+      const targetStores = TRAM_CHAIN.includes(currentStoreCode) || currentStoreCode === "ALL"
+        ? TRAM_CHAIN
+        : [currentStoreCode];
+
+      const updates: Record<string, unknown> = {};
+      for (const st of targetStores) {
+        updates[`stores/${st}/customers/${id}`] = buildNewCustomerNode(id, v, now);
+        updates[`stores/${st}/audit_logs/log_${now}_cust`] = {
           timestamp: now,
           username: actor.username,
           userFullName: actor.fullName || actor.username,
@@ -305,12 +320,13 @@ export default function CustomersPage() {
           action: "CUSTOMER_CREATE",
           targetType: "CUSTOMER",
           targetId: id,
-          storeCode: currentStoreCode,
+          storeCode: st,
           details: `Tạo khách hàng ${v.name} (${v.phone}) qua Web Admin`,
-        },
-      });
+        };
+      }
+      await update(ref(db), updates);
       setShowCustomerForm(false);
-      flash(`Đã thêm khách hàng ${v.name}`);
+      flash(`Đã thêm khách hàng ${v.name} vào hệ thống`);
     } catch (e) {
       setOpError(errorMessage(e, "Không tạo được khách hàng"));
     } finally {
@@ -324,20 +340,25 @@ export default function CustomersPage() {
     setOpError("");
     try {
       const now = Date.now();
-      const st = editTarget.storeCode;
       const cid = editTarget.id;
-      await update(ref(db), {
-        [`stores/${st}/customers/${cid}/ho_ten`]: v.name,
-        [`stores/${st}/customers/${cid}/name`]: v.name,
-        [`stores/${st}/customers/${cid}/ho_ten_upper`]: v.name.toUpperCase(),
-        [`stores/${st}/customers/${cid}/so_dien_thoai`]: v.phone,
-        [`stores/${st}/customers/${cid}/phone`]: v.phone,
-        [`stores/${st}/customers/${cid}/gioi_tinh`]: v.gender,
-        [`stores/${st}/customers/${cid}/gender`]: v.gender,
-        [`stores/${st}/customers/${cid}/ngay_sinh`]: v.birthday,
-        [`stores/${st}/customers/${cid}/birthday`]: v.birthday,
-        [`stores/${st}/customers/${cid}/ngay_cap_nhat`]: now,
-        [`stores/${st}/audit_logs/log_${now}_cust`]: {
+      const TRAM_CHAIN = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
+      const targetStores = TRAM_CHAIN.includes(editTarget.storeCode)
+        ? TRAM_CHAIN
+        : [editTarget.storeCode];
+
+      const updates: Record<string, unknown> = {};
+      for (const st of targetStores) {
+        updates[`stores/${st}/customers/${cid}/ho_ten`] = v.name;
+        updates[`stores/${st}/customers/${cid}/name`] = v.name;
+        updates[`stores/${st}/customers/${cid}/ho_ten_upper`] = v.name.toUpperCase();
+        updates[`stores/${st}/customers/${cid}/so_dien_thoai`] = v.phone;
+        updates[`stores/${st}/customers/${cid}/phone`] = v.phone;
+        updates[`stores/${st}/customers/${cid}/gioi_tinh`] = v.gender;
+        updates[`stores/${st}/customers/${cid}/gender`] = v.gender;
+        updates[`stores/${st}/customers/${cid}/ngay_sinh`] = v.birthday;
+        updates[`stores/${st}/customers/${cid}/birthday`] = v.birthday;
+        updates[`stores/${st}/customers/${cid}/ngay_cap_nhat`] = now;
+        updates[`stores/${st}/audit_logs/log_${now}_cust`] = {
           timestamp: now,
           username: actor.username,
           userFullName: actor.fullName || actor.username,
@@ -347,8 +368,9 @@ export default function CustomersPage() {
           targetId: cid,
           storeCode: st,
           details: `Cập nhật thông tin khách hàng ${v.name} (${v.phone}) qua Web Admin`,
-        },
-      });
+        };
+      }
+      await update(ref(db), updates);
       setEditTarget(null);
       flash(`Đã cập nhật thông tin khách hàng ${v.name}`);
     } catch (e) {
@@ -503,12 +525,12 @@ export default function CustomersPage() {
                 setOpError("");
                 setShowCustomerForm(true);
               }}
-              disabled={!specificStore || !canRead || !canManageCustomers}
-              title={!canManageCustomers ? "Bạn không có quyền thêm khách hàng" : specificStore ? "Thêm khách hàng mới" : "Chọn 1 chi nhánh cụ thể để thêm khách"}
+              disabled={!canRead || !canManageCustomers}
+              title={!canManageCustomers ? "Bạn không có quyền thêm khách hàng" : "Thêm khách hàng vào hệ thống chuỗi"}
               style={{
                 display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--primary)", color: "#FFFFFF",
                 border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "600",
-                cursor: specificStore ? "pointer" : "not-allowed", opacity: specificStore ? 1 : 0.5,
+                cursor: canManageCustomers ? "pointer" : "not-allowed", opacity: canManageCustomers ? 1 : 0.5,
               }}
             >
               <UserPlus size={15} /> Thêm khách hàng
@@ -959,10 +981,10 @@ export default function CustomersPage() {
         </ModalShell>
       )}
 
-      {showCustomerForm && specificStore && (
+      {showCustomerForm && (
         <CustomerFormDialog
-          storeCode={currentStoreCode}
-          existing={customers.filter((c) => c.storeCode === currentStoreCode)}
+          storeCode={specificStore ? currentStoreCode : "TRAM01"}
+          existing={customers}
           saving={opSaving}
           error={opError}
           onCancel={() => setShowCustomerForm(false)}
