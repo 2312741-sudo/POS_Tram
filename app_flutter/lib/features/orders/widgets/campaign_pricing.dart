@@ -18,6 +18,68 @@ class CartCampaignPricing {
     ];
   }
 
+  /// Tính toán chi tiết số tiền giảm giá do khuyến mãi áp dụng trên từng dòng món trong giỏ hàng.
+  /// Trả về map: lineIndex -> danh sách các ưu đãi khuyến mãi áp dụng trên dòng đó.
+  static Map<int, List<({String campaignName, int discountAmount, int quantity, bool isGift})>>
+      computeLinePromotionDiscounts({
+    required List<OrderItemModel> cart,
+    required List<BillDiscountModel> appliedDiscounts,
+    required Map<String, CampaignModel> campaignsById,
+    required List<ProductModel> products,
+    required String branchId,
+    String? customerBirthday,
+    int? guestCount,
+  }) {
+    final result = <int, List<({String campaignName, int discountAmount, int quantity, bool isGift})>>{};
+    if (cart.isEmpty || appliedDiscounts.isEmpty) return result;
+
+    for (final d in appliedDiscounts) {
+      final c = d.campaignId != null ? campaignsById[d.campaignId] : null;
+      if (c == null) continue;
+
+      final q = quote(
+        c,
+        cart: cart,
+        products: products,
+        branchId: branchId,
+        guestCount: guestCount,
+        customerBirthday: customerBirthday,
+      );
+
+      final seenLines = <String>{};
+      for (final rb in q.rewardBenefits) {
+        if (rb.discountMoney <= 0) continue;
+        final idxStr = rb.lineId.replaceAll(RegExp(r'[^0-9]'), '');
+        final lineIdx = int.tryParse(idxStr);
+        if (lineIdx != null && lineIdx >= 0 && lineIdx < cart.length) {
+          seenLines.add(rb.lineId);
+          result.putIfAbsent(lineIdx, () => []).add((
+            campaignName: c.name,
+            discountAmount: rb.discountMoney,
+            quantity: rb.quantity > 0 ? rb.quantity : cart[lineIdx].quantity,
+            isGift: rb.isGift,
+          ));
+        }
+      }
+
+      for (final lb in q.lineBenefits) {
+        if (seenLines.contains(lb.lineId) || lb.discountMoney <= 0) continue;
+        final idxStr = lb.lineId.replaceAll(RegExp(r'[^0-9]'), '');
+        final lineIdx = int.tryParse(idxStr);
+        if (lineIdx != null && lineIdx >= 0 && lineIdx < cart.length) {
+          result.putIfAbsent(lineIdx, () => []).add((
+            campaignName: c.name,
+            discountAmount: lb.discountMoney,
+            quantity: cart[lineIdx].quantity,
+            isGift: lb.isGift,
+          ));
+        }
+      }
+    }
+
+    return result;
+  }
+
   /// Tính riêng 1 chương trình trên giỏ hàng hiện tại
   static PriceQuoteModel quote(
     CampaignModel campaign, {

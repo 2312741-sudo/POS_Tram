@@ -20,6 +20,9 @@ class CartItemCard extends StatelessWidget {
   /// Món đã báo hết hàng sau khi được thêm vào giỏ (chỉ cảnh báo, không xóa món).
   final bool soldOut;
 
+  /// Chi tiết giảm giá khuyến mãi (Combo, Mua X tặng Y, theo hóa đơn...) áp dụng trên dòng này
+  final List<({String campaignName, int discountAmount, int quantity, bool isGift})> promoDiscounts;
+
   /// Nội dung nhãn giảm giá của dòng món, gồm số phần được giảm
   /// (VD: "🏷️ Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
   static String discountLabel(OrderItemModel item) {
@@ -40,6 +43,7 @@ class CartItemCard extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     this.soldOut = false,
+    this.promoDiscounts = const [],
   });
 
   @override
@@ -176,7 +180,7 @@ class CartItemCard extends StatelessWidget {
               ),
             ],
 
-            // 4. Giảm giá món
+            // 4. Giảm giá món thủ công
             if (hasDiscount) ...[
               const SizedBox(height: 6),
               Padding(
@@ -201,6 +205,43 @@ class CartItemCard extends StatelessWidget {
               ),
             ],
 
+            // 4b. Giảm giá do chương trình khuyến mãi (Combo, Mua X tặng Y, ...)
+            if (promoDiscounts.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              for (final promo in promoDiscounts)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, bottom: 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFFDBA74)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.card_giftcard_rounded, size: 14, color: Color(0xFFC2410C)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            promo.isGift
+                                ? '🎁 Món tặng (100%): ${promo.campaignName}'
+                                : '🎁 Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              color: const Color(0xFFC2410C),
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+
             const SizedBox(height: 8),
 
             // 5. Giá tiền + thao tác (Ghi chú, Giảm giá) + Stepper
@@ -210,28 +251,47 @@ class CartItemCard extends StatelessWidget {
                 builder: (context, constraints) {
                   // Màn hình hẹp (≤ 360dp): nút thao tác chỉ hiện icon để không đè giá tiền
                   final compact = constraints.maxWidth < 380;
+                  final totalPromoDiscount = promoDiscounts.fold<int>(0, (s, p) => s + p.discountAmount);
+                  final hasAnyDiscount = hasDiscount || totalPromoDiscount > 0;
+                  final effectiveTotal = (item.itemTotal - totalPromoDiscount).clamp(0, item.lineGross);
+
                   return Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${FormatUtils.vnd(item.unitPrice)} × ${item.quantity}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, color: context.tc.textSecondary),
+                            Row(
+                              children: [
+                                Text(
+                                  '${FormatUtils.vnd(item.unitPrice)} × ${item.quantity}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12, color: context.tc.textSecondary),
+                                ),
+                                if (hasAnyDiscount) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    FormatUtils.vnd(item.lineGross),
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: context.tc.textSecondary,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                FormatUtils.vnd(item.itemTotal),
+                                FormatUtils.vnd(effectiveTotal),
                                 style: GoogleFonts.beVietnamPro(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
-                                    color: context.tc.primary),
+                                    color: hasAnyDiscount ? AppColors.success : context.tc.primary),
                               ),
                             ),
                           ],

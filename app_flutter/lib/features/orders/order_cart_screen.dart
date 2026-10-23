@@ -32,6 +32,7 @@ import 'widgets/combo_reward_picker_sheet.dart';
 import '../../core/domain/deleted_items.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 import 'widgets/cart_item_card.dart';
+import 'widgets/cart_tree_group_card.dart';
 import 'widgets/delete_reason_dialog.dart';
 import 'widgets/cart_panels.dart';
 import '../../core/domain/table_customer.dart';
@@ -65,6 +66,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   bool _isLoading = false;
   bool _isShiftOpen = false;
   bool _autoPrintBill = true;
+  // Chế độ hiển thị giỏ hàng: dạng cây phân cấp (mặc định) hay danh sách phẳng
+  bool _treeViewMode = true;
 
   // Products, Categories and Backend Note Presets for Toppings & Notes editing
   List<ProductModel> _products = [];
@@ -114,6 +117,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     _storeInfo = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _fb.currentStoreCode, storeName: 'POS Trạm');
     _loadStoreAndPromotions();
     _loadAutoPrintSetting();
+    _loadTreeViewSetting();
 
     final storeCode = _fb.currentStoreCode;
     _subscriptions.add(_fb.productsStream(storeCode: storeCode).listen((products) {
@@ -168,6 +172,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('auto_print_bill_on_checkout', value);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTreeViewSetting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _treeViewMode = prefs.getBool('cart_tree_view_mode') ?? true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _setTreeViewMode(bool mode) async {
+    setState(() => _treeViewMode = mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cart_tree_view_mode', mode);
     } catch (_) {}
   }
 
@@ -506,6 +529,48 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     if (confirmed == true) {
       await _removeItem(index, kitchenGatePassed: true);
+    }
+  }
+
+  Future<void> _confirmRemoveGroup(CartProductGroup group) async {
+    if (!await _ensureShiftOpen() || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_sweep_outlined, color: context.tc.danger, size: 24),
+            const SizedBox(width: 8),
+            Text('Xóa toàn bộ món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Bạn có chắc muốn xóa tất cả ${group.totalQuantity} phần của món "${group.productName}" (${group.branches.length} nhánh biến thể) khỏi bàn ${widget.table.name}?',
+          style: GoogleFonts.beVietnamPro(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xóa tất cả', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final sortedIndices = group.branches.map((b) => b.cartIndex).toList()..sort((a, b) => b.compareTo(a));
+    for (final idx in sortedIndices) {
+      if (idx < _cart.length) {
+        await _removeItem(idx, kitchenGatePassed: true);
+      }
     }
   }
 
@@ -3960,6 +4025,92 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
+  Widget _buildCartViewToggleHeader(int uniqueProductsCount) {
+    final totalQty = _cart.fold(0, (s, i) => s + i.quantity);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.tc.cardElevated,
+        border: Border(bottom: BorderSide(color: context.tc.borderLight)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shopping_bag_outlined, size: 15, color: context.tc.textSecondary),
+          const SizedBox(width: 6),
+          Text(
+            'Món đã chọn ($totalQty phần • $uniqueProductsCount món)',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.tc.textSecondary,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            height: 28,
+            decoration: BoxDecoration(
+              color: context.tc.card,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: context.tc.borderLight),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildViewModeButton(
+                  title: 'Nhánh',
+                  icon: Icons.account_tree_outlined,
+                  isSelected: _treeViewMode,
+                  onTap: () => _setTreeViewMode(true),
+                ),
+                Container(width: 1, height: 16, color: context.tc.borderLight),
+                _buildViewModeButton(
+                  title: 'Danh sách',
+                  icon: Icons.format_list_bulleted,
+                  isSelected: !_treeViewMode,
+                  onTap: () => _setTreeViewMode(false),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewModeButton({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final fg = isSelected ? context.tc.primaryDark : context.tc.textSecondary;
+    final bg = isSelected ? context.tc.primaryLight : Colors.transparent;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        color: bg,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: fg),
+            const SizedBox(width: 4),
+            Text(
+              title,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -4091,6 +4242,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   onClear: () => _setCustomer(null),
                 );
 
+                final linePromoDiscounts = CartCampaignPricing.computeLinePromotionDiscounts(
+                  cart: _cart,
+                  appliedDiscounts: _appliedDiscounts,
+                  campaignsById: _campaignById,
+                  products: _products,
+                  branchId: _fb.currentStoreCode,
+                  customerBirthday: _selectedCustomer?.birthday,
+                  guestCount: _guestCount,
+                );
+
+                final groups = buildCartProductGroups(
+                  cart: _cart,
+                  linePromoDiscounts: linePromoDiscounts,
+                  isSoldOutFn: _isCartItemSoldOut,
+                );
+
                 final cartList = _cart.isEmpty
                     ? EmptyState(
                         icon: Icons.receipt_long_outlined,
@@ -4105,20 +4272,36 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                        itemCount: _cart.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => CartItemCard(
-                          item: _cart[index],
-                          onRemove: () => _confirmRemoveItem(index),
-                          onEditNote: () => _showEditItemNoteAndToppingDialog(index),
-                          onDiscount: () => _showItemDiscountDialog(index),
-                          onIncrement: () => _incrementItem(index),
-                          onDecrement: () => _decrementItem(index),
-                          soldOut: _isCartItemSoldOut(_cart[index]),
-                        ),
-                      );
+                    : _treeViewMode
+                        ? ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                            itemCount: groups.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) => CartTreeGroupCard(
+                              group: groups[index],
+                              onRemove: _confirmRemoveItem,
+                              onEditNote: _showEditItemNoteAndToppingDialog,
+                              onDiscount: _showItemDiscountDialog,
+                              onIncrement: _incrementItem,
+                              onDecrement: _decrementItem,
+                              onRemoveGroup: _confirmRemoveGroup,
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                            itemCount: _cart.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) => CartItemCard(
+                              item: _cart[index],
+                              onRemove: () => _confirmRemoveItem(index),
+                              onEditNote: () => _showEditItemNoteAndToppingDialog(index),
+                              onDiscount: () => _showItemDiscountDialog(index),
+                              onIncrement: () => _incrementItem(index),
+                              onDecrement: () => _decrementItem(index),
+                              soldOut: _isCartItemSoldOut(_cart[index]),
+                              promoDiscounts: linePromoDiscounts[index] ?? const [],
+                            ),
+                          );
 
                 final leftColumn = Column(
                   children: [
@@ -4131,6 +4314,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       onIncrementGuests: () => _updateGuestCount(_guestCount + 1),
                       onAddItems: _goToAddItems,
                     ),
+                    if (_cart.isNotEmpty) _buildCartViewToggleHeader(groups.length),
                     Expanded(child: cartList),
                     if (!wide) customerBar,
                     if (!wide) summary,
