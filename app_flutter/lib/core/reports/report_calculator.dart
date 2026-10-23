@@ -255,7 +255,7 @@ class ReportCalculator {
     }
 
     for (final b in paidBills) {
-      final dt = ReportDateUtils.billDateTime(b);
+      final dt = ReportDateUtils.billClockTime(b); // giờ thực, không lùi theo ngày kinh doanh
       hourlyMap[dt.hour]?.add(b);
     }
 

@@ -27,6 +27,7 @@ interface StatCard {
 }
 
 import { businessDayStartFor } from "@/lib/business-day";
+import { nowMs } from "@/lib/kitchen";
 import { useDashboardData } from "@/lib/data-context";
 import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
 
@@ -65,7 +66,7 @@ export default function DashboardPage() {
 
   // Ngày kinh doanh: "hôm nay" bắt đầu từ giờ bắt đầu ngày của cửa hàng (Cài đặt cửa hàng)
   const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
-  const today = new Date(Date.now() - cutoffMs);
+  const today = new Date(nowMs() - cutoffMs);
   const todayStart = startOfDay(today).getTime();
   const todayEnd = endOfDay(today).getTime();
 

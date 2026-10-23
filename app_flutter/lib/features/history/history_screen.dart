@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../core/domain/business_day.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -23,7 +24,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   String _search = '';
   String? _staffFilter; // chủ/quản lý: lọc theo tài khoản thu tiền
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = BusinessDay.now();
   final String _selectedPaymentMethod = 'ALL';
   String _selectedStatus = 'ALL'; // 'ALL', 'PAID', 'CANCELLED'
 
@@ -110,7 +111,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             }
 
             // Date match
-            final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+            final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs); // ngày kinh doanh
             if (dt.year != _selectedDate.year || dt.month != _selectedDate.month || dt.day != _selectedDate.day) {
               return false;
             }

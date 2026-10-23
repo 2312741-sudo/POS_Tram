@@ -157,6 +157,8 @@ class FirebaseService {
   Future<StoreInfoModel> getStoreInfo() => _reportRepo.getStoreInfo();
 
   Future<void> saveStoreInfo(StoreInfoModel info) => _reportRepo.saveStoreInfo(info);
+  Future<void> saveStoreSettings(StoreInfoModel info, {required int businessDayStartMinute}) =>
+      _reportRepo.saveStoreSettings(info, businessDayStartMinute: businessDayStartMinute);
 
   Future<void> updateStoreShiftDifferenceSetting(bool allow, {String? storeCode}) =>
       _reportRepo.updateStoreShiftDifferenceSetting(allow, storeCode: storeCode);

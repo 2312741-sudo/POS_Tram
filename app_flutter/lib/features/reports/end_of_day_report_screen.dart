@@ -17,6 +17,7 @@ import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'reports_hub_screen.dart';
 import '../../core/utils/share_utils.dart';
+import '../../core/domain/business_day.dart';
 
 class EndOfDayReportScreen extends StatefulWidget {
   const EndOfDayReportScreen({super.key});
@@ -103,8 +104,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
   // Date range filter helper
   bool _isWithinRange(int timestamp) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final now = DateTime.now();
+    // Ngày kinh doanh: lùi mốc hóa đơn và "bây giờ" theo giờ bắt đầu ngày của cửa hàng
+    final dt = DateTime.fromMillisecondsSinceEpoch(BusinessDay.shiftMs(timestamp));
+    final now = BusinessDay.now();
     final today = DateTime(now.year, now.month, now.day);
 
     switch (_selectedDateRange) {

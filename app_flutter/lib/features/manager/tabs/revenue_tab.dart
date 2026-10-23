@@ -12,6 +12,7 @@ import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../../../core/utils/share_utils.dart';
+import '../../../core/domain/business_day.dart';
 
 enum RevenueTabType { day, week, month, year }
 
@@ -73,7 +74,7 @@ class _RevenueTabState extends State<RevenueTab> {
   int get _takeawayRevenue => _takeawayBills.fold(0, (s, b) => s + b.finalAmount);
 
   // Range calculation matching web logic
-  DateTime get _now => DateTime.now();
+  DateTime get _now => BusinessDay.now(); // ngày kinh doanh
 
   Map<String, dynamic> get _currentRange {
     final now = _now;
@@ -121,7 +122,7 @@ class _RevenueTabState extends State<RevenueTab> {
 
     return _bills.where((b) {
       if (b.status != 'PAID') return false;
-      final ts = b.reportTimeMs;
+      final ts = b.businessTimeMs; // ngày kinh doanh
       return ts >= startMs && ts <= endMs;
     }).toList();
   }
@@ -155,7 +156,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(7, (i) {
         final weekday = i + 1; // 1 = Mon, 7 = Sun
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
           return dt.weekday == weekday;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': days[i], 'revenue': rev};
@@ -167,7 +168,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(daysInMonth, (i) {
         final day = i + 1;
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
           return dt.day == day;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': '$day', 'revenue': rev};
@@ -178,7 +179,7 @@ class _RevenueTabState extends State<RevenueTab> {
       return List.generate(12, (i) {
         final month = i + 1;
         final rev = bills.where((b) {
-          final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+          final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
           return dt.month == month;
         }).fold(0, (s, b) => s + b.finalAmount);
         return {'label': months[i], 'revenue': rev};

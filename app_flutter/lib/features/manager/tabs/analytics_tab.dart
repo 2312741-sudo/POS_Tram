@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
+import '../../../core/domain/business_day.dart';
 
 class AnalyticsTab extends StatefulWidget {
   const AnalyticsTab({super.key});
@@ -40,14 +41,14 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   List<BillModel> get _filteredBills {
     if (_period == 'ALL') return _bills;
-    final now = DateTime.now();
+    final now = BusinessDay.now(); // ngày kinh doanh
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final sevenDaysAgo = today.subtract(const Duration(days: 7));
     final lastMonth = DateTime(now.year, now.month - 1, 1);
 
     return _bills.where((b) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
       if (_period == 'TODAY') {
         return dt.year == now.year && dt.month == now.month && dt.day == now.day;
       }

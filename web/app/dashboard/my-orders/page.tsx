@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useDashboardData, type HistoryOrder } from "@/lib/data-context";
 import { scopeOwnBills, type BillOwnerFields } from "@/lib/bill-scope";
 import { businessDayStartFor } from "@/lib/business-day";
+import { nowMs } from "@/lib/kitchen";
 import { billStatusLabel, formatVND, getBillTimestamp } from "@/lib/reports";
 import { describeSelection } from "@/lib/product-options";
 import { lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
@@ -34,7 +35,7 @@ export default function MyOrdersPage() {
     const q = search.trim().toLowerCase();
     // Ngày kinh doanh: ngày bắt đầu từ "giờ bắt đầu ngày" của cửa hàng (vd. 04:00)
     const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
-    const start = new Date(Date.now() - cutoffMs);
+    const start = new Date(nowMs() - cutoffMs);
     start.setHours(0, 0, 0, 0);
     const from = range === "TODAY" ? start.getTime() : range === "7D" ? start.getTime() - 6 * 86400_000 : 0;
     return mine

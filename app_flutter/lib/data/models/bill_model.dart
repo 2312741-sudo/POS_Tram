@@ -3,6 +3,7 @@ import 'order_item_model.dart';
 import 'order_action_log_model.dart';
 import 'promotion_model.dart';
 import '../../core/domain/deleted_items.dart';
+import '../../core/domain/business_day.dart';
 
 // ==================== PAYMENT SPLIT MODEL (MULTI-METHOD) ====================
 class PaymentSplitModel {
@@ -201,6 +202,10 @@ class BillModel {
       deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
     );
   }
+
+  /// Mốc xếp NGÀY KINH DOANH (lùi theo giờ bắt đầu ngày của cửa hàng) — dùng cho lọc/gom theo ngày,
+  /// KHÔNG dùng để hiển thị giờ.
+  int get businessTimeMs => BusinessDay.shiftMs(reportTimeMs);
 
   /// Mốc thời gian xếp ngày báo cáo (docs/REPORT_SPEC.md §3.4):
   /// - CANCELLED: cancelledAt → closedAt → createdAt (đơn hủy thuộc NGÀY HỦY)

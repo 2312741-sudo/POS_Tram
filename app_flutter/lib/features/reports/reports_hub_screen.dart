@@ -15,6 +15,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../core/domain/business_day.dart';
 
 enum ReportKind {
   overview('BC_TONGHOP', 'Tổng quan Quản trị', Icons.dashboard_outlined),
@@ -105,7 +106,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   }
 
   void _applyDateRange(DateRangeFilter filter) {
-    final now = DateTime.now();
+    final now = BusinessDay.now(); // ngày kinh doanh (Cài đặt cửa hàng)
     final today = DateTime(now.year, now.month, now.day);
     setState(() {
       _dateFilter = filter;

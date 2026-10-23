@@ -1,6 +1,7 @@
 // Pure Dart date utilities for reports (UTC+7 / Asia/Ho_Chi_Minh)
 // Không import Flutter framework
 import '../../data/models/bill_model.dart';
+import '../domain/business_day.dart';
 
 class ReportDateUtils {
   static const Duration utc7Offset = Duration(hours: 7);
@@ -24,8 +25,12 @@ class ReportDateUtils {
     return toUtc7(ms);
   }
 
-  /// Mốc xếp ngày của một hóa đơn theo quy tắc §3.4.
-  static DateTime billDateTime(BillModel b) => toUtc7(b.reportTimeMs);
+  /// Mốc xếp NGÀY KINH DOANH của một hóa đơn theo quy tắc §3.4: mốc thực lùi đi "giờ bắt đầu ngày"
+  /// của cửa hàng (Cài đặt cửa hàng → Ngày kinh doanh; 0 = như cũ). Dùng để chia ngày/tháng.
+  static DateTime billDateTime(BillModel b) => toUtc7(BusinessDay.shiftMs(b.reportTimeMs));
+
+  /// Giờ thực của hóa đơn (UTC+7) — dùng cho biểu đồ theo khung giờ, KHÔNG lùi theo ngày kinh doanh.
+  static DateTime billClockTime(BillModel b) => toUtc7(b.reportTimeMs);
 
   /// Bắt đầu của ngày (00:00:00.000) ở UTC+7
   static DateTime startOfDay(DateTime dt) {

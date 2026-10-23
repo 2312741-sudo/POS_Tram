@@ -1,3 +1,4 @@
+import '../../core/domain/business_day.dart';
 import 'customer_model.dart';
 
 // ==================== STORE INFO MODEL ====================
@@ -23,6 +24,9 @@ class StoreInfoModel {
   // Chỉ đọc trên POS: Chủ quán đặt trên Web Admin; KHÔNG đưa vào toMap() để update() không ghi đè
   final List<LoyaltyTier> loyaltyTiers;
   final bool sharedLoyaltyEnabled;
+  // Giờ bắt đầu ngày kinh doanh (phút từ 0h). KHÔNG đưa vào toMap(): chỉ ghi qua màn Cài đặt cửa hàng
+  // (saveBusinessDayStart) để các nơi khác gọi saveStoreInfo không vô tình ghi đè về 0.
+  final int businessDayStartMinute;
   // Chỉ để hiển thị — do máy chủ ghi khi liên kết Chấm Công Trạm; KHÔNG đưa vào toMap()
   final String chamCongStoreId;
   final String chamCongStoreName;
@@ -50,6 +54,7 @@ class StoreInfoModel {
     this.pointEarnRate = 1.0,
     this.loyaltyTiers = LoyaltyTier.defaults,
     this.sharedLoyaltyEnabled = false,
+    this.businessDayStartMinute = 0,
     this.chamCongStoreId = '',
     this.chamCongStoreName = '',
   });
@@ -78,6 +83,7 @@ class StoreInfoModel {
       pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
       loyaltyTiers: LoyaltyTier.parseList(map['loyaltyTiers']),
       sharedLoyaltyEnabled: map['sharedLoyalty'] is Map && (map['sharedLoyalty'] as Map)['enabled'] == true,
+      businessDayStartMinute: BusinessDay.normalize(map['businessDayStartMinute']),
       chamCongStoreId: map['chamCongStoreId']?.toString() ?? '',
       chamCongStoreName: map['chamCongStoreName']?.toString() ?? '',
     );
@@ -145,6 +151,7 @@ class StoreInfoModel {
       pointEarnRate: pointEarnRate ?? this.pointEarnRate,
       loyaltyTiers: loyaltyTiers ?? this.loyaltyTiers,
       sharedLoyaltyEnabled: sharedLoyaltyEnabled,
+      businessDayStartMinute: businessDayStartMinute,
       chamCongStoreId: chamCongStoreId,
       chamCongStoreName: chamCongStoreName,
     );

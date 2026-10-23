@@ -292,6 +292,8 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     );
                   } else if (val == 'ZONES') {
                     context.push('/zone-management');
+                  } else if (val == 'STORE_SETTINGS') {
+                    context.push('/store-settings');
                   } else if (val == 'STORE') {
                     _showStoreSwitcherDialog();
                   } else if (val == 'CHAMCONG_LINK') {
@@ -354,6 +356,17 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                           Icon(Icons.map_outlined, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('Khu vực & bàn'),
+                        ],
+                      ),
+                    ),
+                  if (_auth.isRootOwner || _auth.can(AppPermissions.manageStoreSettings))
+                    PopupMenuItem(
+                      value: 'STORE_SETTINGS',
+                      child: Row(
+                        children: [
+                          Icon(Icons.settings_outlined, size: 18, color: context.tc.primary),
+                          const SizedBox(width: 8),
+                          const Text('Cài đặt cửa hàng'),
                         ],
                       ),
                     ),

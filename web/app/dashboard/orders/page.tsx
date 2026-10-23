@@ -23,6 +23,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { businessDayStartFor } from "@/lib/business-day";
+import { nowMs } from "@/lib/kitchen";
 import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/product-code";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
@@ -89,7 +90,7 @@ export default function OrdersPage() {
   const filtered = useMemo(() => {
     // Ngày kinh doanh: lùi "bây giờ" và mốc hóa đơn theo giờ bắt đầu ngày của cửa hàng
     const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
-    const now = new Date(Date.now() - cutoffMs);
+    const now = new Date(nowMs() - cutoffMs);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return historyData.filter((h) => {

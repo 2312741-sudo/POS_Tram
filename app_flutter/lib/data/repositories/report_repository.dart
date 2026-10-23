@@ -1,3 +1,4 @@
+import '../../core/domain/business_day.dart';
 import '../../core/domain/customer_search.dart';
 import '../../core/domain/shift_scope.dart';
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
@@ -128,6 +129,8 @@ class ReportRepository {
 
   /// Cấu hình điểm toàn chuỗi (loyalty_config) ưu tiên hơn cấu hình riêng của chi nhánh; không đọc được → giữ nguyên.
   Future<StoreInfoModel> _withChainLoyalty(StoreInfoModel info) async {
+    // Cửa hàng đang dùng: nạp giờ bắt đầu ngày kinh doanh cho mọi báo cáo / bộ lọc theo ngày
+    BusinessDay.startMinutes = info.businessDayStartMinute;
     try {
       final snap = await storeInfoRef.root.child('loyalty_config').get().timeout(const Duration(seconds: 2));
       return info.withChainLoyalty(snap.value);
@@ -167,6 +170,26 @@ class ReportRepository {
     // Dùng update() thay vì set(): giữ nguyên các trường do máy chủ / trường khác ghi mà
     // model không quản lý (ownerId, chamCongStoreId, chamCongStoreName...).
     await storeInfoRef.update(info.toMap());
+  }
+
+  /// Cài đặt cửa hàng: ghi các trường chỉnh được ở màn Cài đặt cửa hàng (thông tin, VietQR, tùy chọn bán hàng,
+  /// giờ bắt đầu ngày kinh doanh). Dùng update() nên không đụng các trường khác (máy in, điểm, Chấm Công…).
+  Future<void> saveStoreSettings(StoreInfoModel info, {required int businessDayStartMinute}) async {
+    final start = BusinessDay.normalize(businessDayStartMinute);
+    await storeInfoRef.update({
+      'storeName': info.storeName,
+      'address': info.address,
+      'phone': info.phone,
+      'wifiName': info.wifiName,
+      'bankId': info.bankId,
+      'bankAccount': info.bankAccount,
+      'accountName': info.accountName,
+      'defaultVatRate': info.defaultVatRate,
+      'allowStackPromotions': info.allowStackPromotions,
+      'allowStaffViewShiftDifference': info.allowStaffViewShiftDifference,
+      'businessDayStartMinute': start,
+    });
+    BusinessDay.startMinutes = start;
   }
 
   Future<void> updateStoreShiftDifferenceSetting(bool allow, {String? storeCode}) async {

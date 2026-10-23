@@ -16,6 +16,7 @@ import '../../features/permissions/permissions_matrix_screen.dart';
 import '../../features/menu_management/menu_management_screen.dart';
 import '../../features/category_management/category_management_screen.dart';
 import '../../features/zone_management/zone_management_screen.dart';
+import '../../features/store_settings/store_settings_screen.dart';
 import '../../features/user_management/user_management_screen.dart';
 import '../../features/online_orders/online_order_screen.dart';
 import '../../features/online_orders/online_order_detail_screen.dart';
@@ -104,6 +105,7 @@ class AppRouter {
       GoRoute(path: '/menu-management', builder: (_, __) => const MenuManagementScreen()),
       GoRoute(path: '/category-management', builder: (_, state) => CategoryManagementScreen(initialStoreCode: state.extra as String?)),
       GoRoute(path: '/zone-management', builder: (_, __) => const ZoneManagementScreen()),
+      GoRoute(path: '/store-settings', builder: (_, __) => const StoreSettingsScreen()),
       GoRoute(path: '/user-management', builder: (_, __) => const UserManagementScreen()),
       GoRoute(path: '/online-orders', builder: (_, __) => const OnlineOrderScreen()),
       GoRoute(

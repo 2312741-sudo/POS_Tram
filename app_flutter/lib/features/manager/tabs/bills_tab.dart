@@ -11,6 +11,7 @@ import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../../../core/utils/share_utils.dart';
+import '../../../core/domain/business_day.dart';
 
 class BillsTab extends StatefulWidget {
   const BillsTab({super.key});
@@ -101,7 +102,7 @@ class _BillsTabState extends State<BillsTab> {
   }
 
   List<BillModel> get _filteredBills {
-    final now = DateTime.now();
+    final now = BusinessDay.now(); // ngày kinh doanh
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
@@ -113,7 +114,7 @@ class _BillsTabState extends State<BillsTab> {
       if (_statusFilter == 'ALL' && b.status != 'PAID' && b.status != 'CANCELLED') return false;
 
       // 2. Date Filter
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
       final billDay = DateTime(dt.year, dt.month, dt.day);
 
       if (_dateFilter == 'TODAY') {

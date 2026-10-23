@@ -12,6 +12,7 @@ import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../../cash_shift/cash_shift_dialog.dart';
 import '../../reports/reports_hub_screen.dart';
+import '../../../core/domain/business_day.dart';
 
 class OverviewTab extends StatefulWidget {
   final VoidCallback onGoToPOS;
@@ -72,10 +73,10 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   List<BillModel> get _todayPaidBills {
-    final now = DateTime.now();
+    final now = BusinessDay.now(); // ngày kinh doanh
     return _bills.where((b) {
       if (b.status != 'PAID') return false;
-      final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+      final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
       return dt.year == now.year && dt.month == now.month && dt.day == now.day;
     }).toList();
   }
@@ -88,9 +89,9 @@ class _OverviewTabState extends State<OverviewTab> {
 
   int get _todaySuspiciousCount {
     if (!_canViewAudit) return 0;
-    final now = DateTime.now();
+    final now = BusinessDay.now();
     return _auditLogs.where((l) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(l.timestamp);
+      final dt = DateTime.fromMillisecondsSinceEpoch(BusinessDay.shiftMs(l.timestamp));
       final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
       return isToday && l.isSuspicious;
     }).length;
@@ -98,12 +99,12 @@ class _OverviewTabState extends State<OverviewTab> {
 
   // 7-day revenue trend data
   List<Map<String, dynamic>> get _sevenDayTrend {
-    final now = DateTime.now();
+    final now = BusinessDay.now();
     return List.generate(7, (i) {
       final targetDate = now.subtract(Duration(days: 6 - i));
       final dayBills = _bills.where((b) {
         if (b.status != 'PAID') return false;
-        final dt = DateTime.fromMillisecondsSinceEpoch(b.reportTimeMs);
+        final dt = DateTime.fromMillisecondsSinceEpoch(b.businessTimeMs);
         return dt.year == targetDate.year && dt.month == targetDate.month && dt.day == targetDate.day;
       });
       final revenue = dayBills.fold(0, (s, b) => s + b.finalAmount);

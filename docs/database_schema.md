@@ -199,3 +199,13 @@ Hai cờ tùy chọn trên `stores/{store}/campaigns/{campaignId}` (mọi loại
 | `blockPoints: true` | Hóa đơn có dùng chương trình này **không được tích điểm** (vẫn gắn khách). Máy chủ `applyLoyaltyEarn` đọc cờ từ `campaigns/{id}/blockPoints` theo `bill.discounts[].campaignId` và bỏ qua tích điểm (`skipped: "campaign-blocks-points"`). App hiển thị "Đơn dùng khuyến mãi không tích điểm". |
 
 Hợp đồng song song: `CampaignModel` (Dart), `Campaign`/`parseCampaign` (`web/lib/pricing-engine.ts`), `isBirthdayToday` (cả hai), `billBlocksPoints` (`functions/src/sharedLoyalty.ts`).
+
+## 2.12 Ngày kinh doanh (`storeInfo/businessDayStartMinute`)
+
+`stores/{store}/storeInfo/businessDayStartMinute` (int, phút từ 0h, 0..720, mặc định 0 = ngày bắt đầu 00:00).
+Cửa hàng hoạt động qua 0h đặt giá trị này (vd. `240` = 04:00): hóa đơn chốt **trước** giờ này tính vào ngày kinh doanh **trước**
+(01:30 sáng 23/10 → doanh thu ngày 22/10). Chỉ dùng để **chia ngày/tháng** — biểu đồ theo khung giờ và mọi chỗ hiển thị giờ vẫn dùng giờ thực.
+
+- Cách tính: lùi mốc thời gian hóa đơn đi N phút rồi dùng lại logic "ngày theo giờ Việt Nam". Web: `web/lib/business-day.ts` (`getBusinessBillTimestamp` trong `reports.ts`); Flutter: `core/domain/business_day.dart` (`BillModel.businessTimeMs`, `ReportDateUtils.billDateTime`).
+- Chỉnh ở: Web `Cài đặt cửa hàng` (`/dashboard/settings`), App `Cài đặt cửa hàng` (`/store-settings`) — quyền `MANAGE_STORE_SETTINGS`.
+- Ca làm việc (`cash_shifts`) KHÔNG đổi: ca vẫn theo giờ mở/chốt thực của từng tài khoản.

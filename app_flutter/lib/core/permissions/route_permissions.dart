@@ -33,6 +33,7 @@ class RoutePermissions {
     '/menu-management': [AppPermissions.manageMenu, AppPermissions.editMenu],
     '/category-management': [AppPermissions.manageMenu, AppPermissions.editMenu],
     '/zone-management': [AppPermissions.manageTables],
+    '/store-settings': [AppPermissions.manageStoreSettings],
     '/online-orders': [AppPermissions.viewOnlineOrders],
     '/online-order-detail': [AppPermissions.viewOnlineOrders],
     '/dashboard': [AppPermissions.viewReports],
