@@ -27,7 +27,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
-  List<StoreInfoModel> _availableStores = [];
+  static final List<StoreInfoModel> _defaultStores = [
+    StoreInfoModel(storeCode: 'TRAM01', storeName: 'POS Trạm - Chi nhánh 01 (Đà Lạt)'),
+    StoreInfoModel(storeCode: 'TRAM02', storeName: 'POS Trạm - Chi nhánh 02 (Sài Gòn)'),
+    StoreInfoModel(storeCode: 'TRAM03', storeName: 'POS Trạm - Chi nhánh 03'),
+    StoreInfoModel(storeCode: 'TRAM04', storeName: 'POS Trạm - Chi nhánh 04'),
+  ];
+
+  List<StoreInfoModel> _availableStores = _defaultStores;
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberStore = true;
@@ -101,6 +108,8 @@ class _LoginScreenState extends State<LoginScreen> {
         _rememberStore = remember;
         if (savedCode != null && savedCode.isNotEmpty) {
           _storeCodeCtrl.text = savedCode;
+        } else if (_storeCodeCtrl.text.isEmpty) {
+          _storeCodeCtrl.text = 'TRAM01';
         }
       });
     }
@@ -108,8 +117,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadStores() async {
     final stores = await _fb.getAllStores();
-    if (mounted && stores.isNotEmpty) {
-      setState(() => _availableStores = stores);
+    if (mounted) {
+      if (stores.isNotEmpty && stores.any((s) => s.storeCode.startsWith('TRAM'))) {
+        setState(() => _availableStores = stores);
+      } else {
+        setState(() => _availableStores = _defaultStores);
+      }
     }
   }
 

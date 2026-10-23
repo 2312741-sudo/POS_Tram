@@ -15,7 +15,19 @@ class CustomerCandidate {
 
   /// Lần ghé/gắn hóa đơn gần nhất (ms), 0 nếu chưa rõ
   final int lastVisitAt;
-  const CustomerCandidate({required this.id, required this.name, required this.phone, this.points = 0, this.totalPoints = 0, this.lastVisitAt = 0});
+  final String gender;
+  final String birthday;
+
+  const CustomerCandidate({
+    required this.id,
+    required this.name,
+    required this.phone,
+    this.points = 0,
+    this.totalPoints = 0,
+    this.lastVisitAt = 0,
+    this.gender = 'Khác',
+    this.birthday = '',
+  });
 }
 
 /// Khoảng [start, end) trong chuỗi hiển thị cần tô sáng
@@ -24,7 +36,7 @@ class MatchRange {
   final int end;
   const MatchRange(this.start, this.end);
   @override
-  bool operator ==(Object o) => o is MatchRange && o.start == start && o.end == end;
+  bool operator ==(Object other) => other is MatchRange && other.start == start && other.end == end;
   @override
   int get hashCode => Object.hash(start, end);
   @override

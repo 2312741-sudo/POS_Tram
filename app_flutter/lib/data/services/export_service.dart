@@ -7,7 +7,6 @@ import '../models/app_models.dart';
 import '../../core/reports/bill_report_rows.dart';
 import '../../core/reports/report_calculator.dart';
 import '../../core/utils/share_utils.dart';
-import '../models/product_model.dart';
 import 'firebase_service.dart';
 
 class ExportService {

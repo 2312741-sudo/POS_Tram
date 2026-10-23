@@ -172,6 +172,7 @@ class CartCustomerBar extends StatelessWidget {
   final VoidCallback onLookup;
   final VoidCallback onUsePoints;
   final VoidCallback onClear;
+  final VoidCallback? onEdit;
   final int earnPoints;
   final double earnRate;
   final List<LoyaltyTier> tiers;
@@ -191,6 +192,7 @@ class CartCustomerBar extends StatelessWidget {
     required this.onLookup,
     required this.onUsePoints,
     required this.onClear,
+    this.onEdit,
     this.earnPoints = 0,
     this.earnRate = 1,
     this.tiers = const [],
@@ -219,49 +221,59 @@ class CartCustomerBar extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.warningInk),
                       )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${c.fullName} • ${c.phone}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
-                          ),
-                          if (pointsUnknown)
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    'Điểm hiện có: chưa tải được',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk, fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                                if (onRetryPoints != null)
-                                  InkWell(
-                                    onTap: onRetryPoints,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      child: Text('Thử lại', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w800, color: context.tc.warningInk, decoration: TextDecoration.underline)),
-                                    ),
-                                  ),
-                              ],
-                            )
-                          else
+                    : InkWell(
+                        onTap: onEdit,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
+                              '${c.fullName} • ${c.phone}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
                             ),
-                          LoyaltyEarnPreview(pointsUnknown: pointsUnknown, pointsBlocked: pointsBlocked, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
-                        ],
+                            if (pointsUnknown)
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'Điểm hiện có: chưa tải được',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  if (onRetryPoints != null)
+                                    InkWell(
+                                      onTap: onRetryPoints,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        child: Text('Thử lại', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w800, color: context.tc.warningInk, decoration: TextDecoration.underline)),
+                                      ),
+                                    ),
+                                ],
+                              )
+                            else
+                              Text(
+                                'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
+                              ),
+                            LoyaltyEarnPreview(pointsUnknown: pointsUnknown, pointsBlocked: pointsBlocked, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
+                          ],
+                        ),
                       ),
               ),
               if (c != null) ...[
+                if (onEdit != null)
+                  IconButton(
+                    tooltip: 'Sửa thông tin khách',
+                    icon: Icon(Icons.edit_outlined, size: 20, color: context.tc.textSecondary),
+                    onPressed: onEdit,
+                  ),
                 TextButton(
                   onPressed: onUsePoints,
                   child: Text(pointsUsed > 0 ? 'Đổi điểm' : 'Dùng điểm'),

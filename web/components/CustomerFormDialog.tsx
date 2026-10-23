@@ -8,22 +8,26 @@ import type { StoreCustomer } from "@/lib/customers";
 interface Props {
   storeCode: string;
   existing: StoreCustomer[];
+  initial?: StoreCustomer | null;
   saving?: boolean;
   error?: string;
   onCancel: () => void;
   onSave: (v: { name: string; phone: string; gender: string; birthday: string }) => void;
 }
 
-/** Tạo khách hàng mới (điểm khởi tạo = 0) cho một chi nhánh */
-export default function CustomerFormDialog({ storeCode, existing, saving, error, onCancel, onSave }: Props) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState("Khác");
-  const [birthday, setBirthday] = useState("");
+/** Tạo hoặc sửa thông tin khách hàng cho một chi nhánh */
+export default function CustomerFormDialog({ storeCode, existing, initial, saving, error, onCancel, onSave }: Props) {
+  const [name, setName] = useState(initial?.hoTen || "");
+  const [phone, setPhone] = useState(initial?.soDienThoai || "");
+  const [gender, setGender] = useState(initial?.gioiTinh || "Khác");
+  const [birthday, setBirthday] = useState(initial?.ngaySinh || "");
   const [localError, setLocalError] = useState("");
 
+  const isEditing = Boolean(initial);
+
   const submit = () => {
-    const r = validateNewCustomer({ name, phone }, existing);
+    const listToCheck = isEditing ? existing.filter((c) => c.id !== initial?.id) : existing;
+    const r = validateNewCustomer({ name, phone }, listToCheck);
     if ("error" in r) {
       setLocalError(r.error);
       return;
@@ -35,15 +39,15 @@ export default function CustomerFormDialog({ storeCode, existing, saving, error,
 
   return (
     <ModalShell
-      title="Thêm khách hàng mới"
-      subtitle={`Chi nhánh ${storeCode} • điểm khởi tạo 0`}
+      title={isEditing ? "Chỉnh sửa thông tin khách hàng" : "Thêm khách hàng mới"}
+      subtitle={isEditing ? `Mã: ${initial?.maKhachHang || initial?.id} • ${initial?.diemHienTai || 0} điểm` : `Chi nhánh ${storeCode} • điểm khởi tạo 0`}
       icon={<UserPlus size={18} color="var(--primary)" />}
       onClose={onCancel}
       footer={
         <>
           <button type="button" style={btnGhost} onClick={onCancel}>Hủy</button>
           <button type="button" style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={submit}>
-            {saving ? "Đang lưu..." : "Lưu khách hàng"}
+            {saving ? "Đang lưu..." : (isEditing ? "Lưu thay đổi" : "Lưu khách hàng")}
           </button>
         </>
       }

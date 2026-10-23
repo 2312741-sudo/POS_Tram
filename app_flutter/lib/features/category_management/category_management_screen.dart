@@ -284,7 +284,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       });
                       // Lưu lên máy chủ để web và các máy khác thấy cùng thứ tự
                       _fb.setCategoryOrder(_categories.map((c) => c.name).toList(), storeCode: _selectedStoreCode).catchError((Object e) {
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Không lưu được thứ tự danh mục: $e'), backgroundColor: Colors.red),
                         );

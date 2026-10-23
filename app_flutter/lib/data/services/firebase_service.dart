@@ -103,6 +103,12 @@ class FirebaseService {
     } catch (_) {}
   }
 
+  void clearSession() {
+    _currentStoreCode = 'TRAM01';
+    _reportRepo.clearSession();
+    _syncDependentServices();
+  }
+
   void switchStore(String storeCode) {
     _currentStoreCode = storeCode.toUpperCase().trim();
     _reportRepo.clearShiftCache();

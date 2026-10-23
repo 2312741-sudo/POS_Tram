@@ -42,12 +42,13 @@ class CartCampaignPricing {
     );
   }
 
-  /// Chương trình "tặng/giảm món theo giá trị đơn" đủ điều kiện nhưng món thưởng chưa có trong đơn?
-  /// CHỈ loại này mới cho bấm để tự thêm món thưởng. "Mua X tặng/giảm Y" KHÔNG tự thêm món:
-  /// nhân viên tự gọi món Y, mỗi món X ghép với món Y thực tế có trong đơn.
-  static bool needsRewardItems(PriceQuoteModel quote, CampaignModel campaign) =>
-      campaign.campaignType.toUpperCase().replaceAll('_', '') == 'ORDERVALUEITEMBENEFIT' &&
-      quote.reasons.any((r) => r.campaignId == campaign.campaignId && r.reasonCode == 'REWARD_ITEM_NOT_IN_BILL');
+  /// Chương trình "tặng/giảm món theo giá trị đơn" hoặc "Mua X tặng/giảm Y" đủ điều kiện nhưng món thưởng chưa có trong đơn?
+  /// Cho phép bấm để tự thêm món thưởng vào đơn.
+  static bool needsRewardItems(PriceQuoteModel quote, CampaignModel campaign) {
+    final type = campaign.campaignType.toUpperCase().replaceAll('_', '');
+    return (type == 'ORDERVALUEITEMBENEFIT' || type == 'BUYXGETY') &&
+        quote.reasons.any((r) => r.campaignId == campaign.campaignId && r.reasonCode == 'REWARD_ITEM_NOT_IN_BILL');
+  }
 
   /// Kế hoạch tự thêm món thưởng: số phần cần thêm + các món có thể chọn (theo món và theo nhóm món).
   /// Trả null nếu chưa đủ điều kiện hoặc không có món thưởng nào trong thực đơn.
@@ -57,15 +58,19 @@ class CartCampaignPricing {
     required List<ProductModel> products,
   }) {
     final lns = lines(cart, products);
-    bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) =>
-        ids.contains(l.itemId) || (l.groupId != null && groups.contains(l.groupId));
+    bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
+      if (ids.contains(l.itemId)) return true;
+      if (l.groupId == null || groups.isEmpty) return false;
+      final gNorm = l.groupId!.trim().toLowerCase();
+      return groups.any((g) => g.trim().toLowerCase() == gNorm);
+    }
 
     List<ProductModel> pick(Set<String> ids, Set<String> groups) => products
         .where((p) =>
             !p.isTopping &&
             p.isAvailable &&
             !c.excludedItemIds.contains(p.id.toString()) &&
-            (ids.contains(p.id.toString()) || groups.contains(p.category)))
+            (ids.contains(p.id.toString()) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
         .toList();
 
     final type = c.campaignType.toUpperCase().replaceAll('_', '');

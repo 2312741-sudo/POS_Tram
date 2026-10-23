@@ -536,14 +536,14 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: order.items.map((item) {
                                           final options = <String>[];
-                                          if (item.selectedSize != null) options.add('Size ${item.selectedSize}');
-                                          if (item.selectedSugar != null) options.add(item.selectedSugar!);
-                                          if (item.selectedIce != null) options.add(item.selectedIce!);
+                                          if (item.selectedSize.isNotEmpty) options.add('Size ${item.selectedSize}');
+                                          if (item.selectedSugar.isNotEmpty) options.add(item.selectedSugar);
+                                          if (item.selectedIce.isNotEmpty) options.add(item.selectedIce);
                                           if (item.selectedToppings.isNotEmpty) {
                                             options.add(item.selectedToppings.join(', '));
                                           }
-                                          if (item.note != null && item.note!.trim().isNotEmpty) {
-                                            options.add('Ghi chú: ${item.note}');
+                                          if (item.note.trim().isNotEmpty) {
+                                            options.add('Ghi chú: ${item.note.trim()}');
                                           }
 
                                           return Padding(

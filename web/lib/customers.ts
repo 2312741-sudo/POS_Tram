@@ -22,6 +22,8 @@ export interface StoreCustomer {
   diemHienTai: number;
   tongDiem: number;
   hangThanhVien: string;
+  gioiTinh?: string;
+  ngaySinh?: string;
   /** Mốc tạo (ms) để sắp xếp / hiển thị */
   createdAt?: number;
   ngayTao?: string;
@@ -90,6 +92,8 @@ export function parseStoreCustomer(
     tongDiem: total,
     // Hạng luôn tính lại từ tổng điểm + cấu hình hạng của chi nhánh (giá trị lưu có thể đã cũ)
     hangThanhVien: tierForPoints(total, tiers),
+    gioiTinh: firstString(v, ["gioi_tinh", "gioiTinh", "gender"]) || "Khác",
+    ngaySinh: firstString(v, ["ngay_sinh", "ngaySinh", "birthday"]),
     createdAt,
     ngayTao: createdAt !== undefined ? new Date(createdAt).toLocaleDateString("vi-VN") : undefined,
     tongChiTieu: firstNumber(v, ["tong_chi_tieu", "totalSpent"]),

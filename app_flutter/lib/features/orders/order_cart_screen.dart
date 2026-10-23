@@ -1,4 +1,5 @@
 // lib/features/orders/order_cart_screen.dart
+import 'package:intl/intl.dart';
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/product_availability.dart';
 import '../crm/customer_management_screen.dart';
@@ -196,6 +197,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         debugPrint('Error loading campaigns into cart: $e');
       }
 
+      if (_products.isEmpty) {
+        try {
+          final prods = await _fb.getProducts(storeCode: _fb.currentStoreCode);
+          if (mounted && prods.isNotEmpty && _products.isEmpty) {
+            setState(() => _products = prods);
+          }
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           _storeInfo = info;
@@ -206,6 +216,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             _campaignById[c.campaignId] = c;
           }
         });
+        _recalculateDiscounts();
       }
     } catch (_) {}
   }
@@ -873,6 +884,41 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     } catch (_) {}
   }
 
+  /// Tự áp dụng các chương trình khuyến mãi tự động (autoApply: true, không có mã, không bắt buộc ghi chú)
+  void _autoApplyEligibleCampaigns() {
+    _autoApplyBirthdayCampaigns();
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final allowStack = _storeInfo?.allowStackPromotions ?? true;
+    final newlyApplied = <String>[];
+
+    for (final c in _campaigns) {
+      if (!c.autoApply || c.hasCodes || c.requireStaffNote || c.birthdayOnly) continue;
+      if (!c.isEligibleAt(now)) continue;
+      if (_appliedDiscounts.any((d) => d.campaignId == c.campaignId)) continue;
+
+      final q = _quoteCampaign(c);
+      final amt = q.totalPromotionDiscount;
+      if (amt <= 0) continue;
+
+      if (!allowStack && _appliedDiscounts.isNotEmpty) {
+        final currentMax = _appliedDiscounts.fold<int>(0, (max, d) => d.amount > max ? d.amount : max);
+        if (amt > currentMax) {
+          _appliedDiscounts.clear();
+          _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+          newlyApplied.add(c.name);
+        }
+      } else {
+        _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+        newlyApplied.add(c.name);
+      }
+    }
+
+    if (newlyApplied.isNotEmpty && mounted) {
+      setState(() {});
+    }
+  }
+
   void _recalculateDiscounts() {
     final List<BillDiscountModel> valid = [];
     final List<String> dropped = [];
@@ -911,6 +957,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         SnackBar(content: Text('Đã gỡ khuyến mãi không còn đủ điều kiện: ${dropped.join(", ")}')),
       );
     }
+    _autoApplyEligibleCampaigns();
   }
 
   // ==================== SEND TO KITCHEN ====================
@@ -1254,6 +1301,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             phone: c?.phone ?? m.phone,
             points: m.found ? m.points : (c?.currentPoints ?? 0),
             totalPoints: m.found ? m.totalPoints : (c?.totalPoints ?? 0),
+            gender: c?.gender ?? 'Khác',
+            birthday: c?.birthday ?? '',
           );
         },
         createCustomer: (name, phone, {gender = 'Khác', birthday = ''}) async {
@@ -1268,6 +1317,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           );
           await _fb.saveCustomer(c); // 0 điểm; nếu SĐT đã có điểm chung, máy chủ gắn vào bản ghi đó
           return c;
+        },
+        updateCustomer: (updated) async {
+          await _fb.saveCustomer(updated);
+          if (_selectedCustomer?.id == updated.id) {
+            setState(() => _selectedCustomer = updated);
+            TableCustomerLogic.writeToTable(widget.table, updated);
+            await _fb.saveTable(widget.table);
+            _recalculateDiscounts();
+            _autoApplyEligibleCampaigns();
+          }
         },
       ),
     );
@@ -1305,6 +1364,252 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
     if (!mounted) return;
     await _setCustomer(picked);
+  }
+
+  static DateTime? _parseBirthday(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(t)) {
+      return DateTime.tryParse(t);
+    }
+    if (RegExp(r'^\d{1,2}/\d{1,2}/\d{4}$').hasMatch(t)) {
+      final parts = t.split('/');
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return DateTime.tryParse(t);
+  }
+
+  Future<void> _showEditCustomerDialog(KmtCustomerModel customer) async {
+    final nameCtrl = TextEditingController(text: customer.fullName);
+    final phoneCtrl = TextEditingController(text: customer.phone);
+    String gender = ['Nam', 'Nữ', 'Khác'].contains(customer.gender) ? customer.gender : 'Khác';
+    DateTime? birthday = _parseBirthday(customer.birthday);
+    final bdayCtrl = TextEditingController(
+      text: birthday != null ? DateFormat('dd/MM/yyyy').format(birthday) : '',
+    );
+    String? formError;
+    bool isSaving = false;
+
+    final tiers = _storeInfo?.loyaltyTiers ?? LoyaltyTier.defaults;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.edit_outlined, color: context.tc.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Chỉnh Sửa Khách Hàng',
+                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (formError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              formError!,
+                              style: TextStyle(fontSize: 12, color: Colors.red.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: context.tc.cardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.tc.borderLight),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Mã: ${customer.code.isNotEmpty ? customer.code : customer.id}',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary)),
+                        Text('${customer.currentPoints} pt (${customer.tierName(tiers)})',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800))),
+                      ],
+                    ),
+                  ),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Họ và tên *',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) {
+                      if (formError != null) setDialogState(() => formError = null);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Số điện thoại *',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) {
+                      if (formError != null) setDialogState(() => formError = null);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Giới tính',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textPrimary),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
+                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
+                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                      ],
+                      selected: {gender},
+                      onSelectionChanged: (set) => setDialogState(() => gender = set.first),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: bdayCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Ngày sinh',
+                      hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
+                      prefixIcon: const Icon(Icons.cake_outlined),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: birthday != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                setDialogState(() {
+                                  birthday = null;
+                                  bdayCtrl.clear();
+                                });
+                              },
+                            )
+                          : const Icon(Icons.calendar_today, size: 18),
+                    ),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final initial = birthday ?? DateTime(2000, 1, 1);
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: initial.isAfter(now) ? now : initial,
+                        firstDate: DateTime(1920),
+                        lastDate: now,
+                        helpText: 'CHỌN NGÀY SINH KHÁCH HÀNG',
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          birthday = picked;
+                          bdayCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx, false),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
+              onPressed: isSaving
+                  ? null
+                  : () {
+                      final name = nameCtrl.text.trim();
+                      final phone = phoneCtrl.text.trim();
+                      final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+                      if (name.isEmpty) {
+                        setDialogState(() => formError = 'Vui lòng nhập họ và tên khách hàng');
+                        return;
+                      }
+                      if (digits.length < 9) {
+                        setDialogState(() => formError = 'Số điện thoại phải có ít nhất 9 chữ số');
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      Navigator.pop(ctx, true);
+                    },
+              child: const Text('Lưu thay đổi'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
+
+    final updated = customer.copyWith(
+      name: name,
+      phone: phone,
+      gender: gender,
+      birthday: bdayStr,
+    );
+
+    try {
+      await _fb.saveCustomer(updated);
+      if (!mounted) return;
+      setState(() => _selectedCustomer = updated);
+      TableCustomerLogic.writeToTable(widget.table, updated);
+      await _fb.saveTable(widget.table);
+      _recalculateDiscounts();
+      _autoApplyEligibleCampaigns();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã cập nhật thông tin khách hàng "${updated.fullName}"')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi cập nhật khách hàng: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
   }
 
   // ==================== ITEM DISCOUNT & MANAGER APPROVAL ====================
@@ -2468,6 +2773,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 return;
                               }
                             }
+                            if (!context.mounted) return;
                             String? staffNote;
                             if (c.requireStaffNote) {
                               staffNote = await _promptStaffNote(context);
@@ -3438,6 +3744,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 final customerBar = CartCustomerBar(
                   pointsBlocked: _pointsBlockedByPromo,
                   customer: _selectedCustomer,
+                  onEdit: _selectedCustomer == null ? null : () => _showEditCustomerDialog(_selectedCustomer!),
                   pointsUsed: _pointsUsed,
                   earnPoints: _earnPreview,
                   earnRate: _earnRate,

@@ -195,11 +195,17 @@ PriceQuoteModel calculatePrice({
     if (!appliedCampaigns.contains(campaignId)) appliedCampaigns.add(campaignId);
   }
 
+  bool matchGroup(String? itemGroup, Set<String> targetGroups) {
+    if (itemGroup == null || targetGroups.isEmpty) return false;
+    final itemNorm = itemGroup.trim().toLowerCase();
+    return targetGroups.any((g) => g.trim().toLowerCase() == itemNorm);
+  }
+
   bool inScope(CampaignModel c, PricingLineItem l) {
     if (l.isGift) return false;
     if (c.excludedItemIds.contains(l.itemId)) return false;
     if (c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty) return true;
-    return c.includedItemIds.contains(l.itemId) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
+    return c.includedItemIds.contains(l.itemId) || matchGroup(l.groupId, c.includedGroupIds.toSet());
   }
 
   /// Giảm [units] phần của dòng [line] theo cách tính lợi ích; tôn trọng giảm giá đã có trên dòng
@@ -298,8 +304,8 @@ PriceQuoteModel calculatePrice({
         final rewardIds = condition.rewardItemIds.toSet();
         final buyGroups = condition.buyGroupIds.toSet();
         final rewardGroups = condition.rewardGroupIds.toSet();
-        bool isBuy(PricingLineItem l) => buyIds.contains(l.itemId) || (l.groupId != null && buyGroups.contains(l.groupId));
-        bool isReward(PricingLineItem l) => rewardIds.contains(l.itemId) || (l.groupId != null && rewardGroups.contains(l.groupId));
+        bool isBuy(PricingLineItem l) => buyIds.contains(l.itemId) || matchGroup(l.groupId, buyGroups);
+        bool isReward(PricingLineItem l) => rewardIds.contains(l.itemId) || matchGroup(l.groupId, rewardGroups);
         final buyQty = condition.requiredBuyQty;
         final rewardQty = condition.rewardQty;
         if ((buyIds.isEmpty && buyGroups.isEmpty) || (rewardIds.isEmpty && rewardGroups.isEmpty) || buyQty <= 0 || rewardQty <= 0) {
@@ -391,7 +397,7 @@ PriceQuoteModel calculatePrice({
       final candidates = input.lines
           .where((l) =>
               !l.isGift &&
-              (rewardIds.contains(l.itemId) || (l.groupId != null && rewardGroups.contains(l.groupId))) &&
+              (rewardIds.contains(l.itemId) || matchGroup(l.groupId, rewardGroups)) &&
               !campaign.excludedItemIds.contains(l.itemId))
           .toList();
       if (candidates.isEmpty) {

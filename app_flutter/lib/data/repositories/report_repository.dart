@@ -42,16 +42,27 @@ class ReportRepository {
   CashShiftModel? get activeShiftCache {
     final id = shiftIdentity;
     final fromList = findOwnOpenShift(_cachedCashShiftsList ?? const <CashShiftModel>[], uid: id.uid, username: id.username);
-    if (fromList != null) return fromList;
+    if (fromList != null) {
+      if (fromList.storeCode.isNotEmpty && fromList.storeCode != _currentStoreCode) return null;
+      return fromList;
+    }
     final o = _optimisticOpenShift;
-    if (o != null && o.isOpen && shiftOwnedBy(o, uid: id.uid, username: id.username)) return o;
+    if (o != null && o.isOpen && shiftOwnedBy(o, uid: id.uid, username: id.username)) {
+      if (o.storeCode.isNotEmpty && o.storeCode != _currentStoreCode) return null;
+      return o;
+    }
     return null;
   }
 
   /// Ca đang mở của tài khoản hiện tại trong một danh sách ca bất kỳ.
   CashShiftModel? ownOpenShiftIn(Iterable<CashShiftModel> shifts) {
     final id = shiftIdentity;
-    return findOwnOpenShift(shifts, uid: id.uid, username: id.username) ?? activeShiftCache;
+    final own = findOwnOpenShift(shifts, uid: id.uid, username: id.username);
+    if (own != null) {
+      if (own.storeCode.isNotEmpty && own.storeCode != _currentStoreCode) return null;
+      return own;
+    }
+    return activeShiftCache;
   }
 
   /// Chỉ giữ những ca tài khoản hiện tại được phép thấy.
@@ -62,7 +73,6 @@ class ReportRepository {
 
   List<CashShiftModel>? _cachedCashShiftsList; // TOÀN BỘ ca của chi nhánh (thô); luôn lọc qua scopeVisibleShifts khi trả ra
   Stream<List<CashShiftModel>>? _cachedCashShiftsStream;
-  Stream<List<CashShiftModel>>? _underlyingBroadcastStream;
   StreamSubscription<List<CashShiftModel>>? _underlyingCashShiftsSub;
   String? _cachedCashShiftsStoreCode;
 
@@ -94,12 +104,15 @@ class ReportRepository {
   /// Mặc định: false (POS hoàn toàn dùng Realtime Database tại stores/{storeCode}/customers).
   static bool useFirestoreCustomers = false;
 
+  void clearSession() {
+    clearShiftCache();
+  }
+
   void clearShiftCache() {
     _optimisticOpenShift = null;
     _cachedCashShiftsList = null;
     _underlyingCashShiftsSub?.cancel();
     _underlyingCashShiftsSub = null;
-    _underlyingBroadcastStream = null;
     _cachedCashShiftsStream = null;
     _cachedCashShiftsStoreCode = null;
   }
@@ -223,18 +236,30 @@ class ReportRepository {
           if (v == true) codes.add(k.toString().toUpperCase());
         });
       }
-      if (!codes.contains(_currentStoreCode)) codes.add(_currentStoreCode);
+      if (codes.isEmpty && _currentStoreCode.isNotEmpty) {
+        codes.add(_currentStoreCode);
+      }
       codes.sort();
-      final result = await Future.wait(codes.map((code) async {
+      final storeList = await Future.wait(codes.map((code) async {
         try {
-          final snap = await _root.child('stores').child(code).child('storeInfo').get().timeout(const Duration(seconds: 5));
+          final snap = await _root.child('stores').child(code).child('storeInfo').get().timeout(const Duration(seconds: 4));
           if (snap.exists && snap.value is Map) {
             return StoreInfoModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), code);
           }
-        } catch (_) {}
-        return StoreInfoModel(storeCode: code, storeName: 'POS Trạm - $code');
+          final userSnap = await _root.child('stores').child(code).child('users').child(uid).get().timeout(const Duration(seconds: 2));
+          if (userSnap.exists && userSnap.value != null) {
+            return StoreInfoModel(storeCode: code, storeName: 'POS Trạm - $code');
+          }
+        } catch (_) {
+          // Bị permission denied hoặc không thể truy cập -> loại bỏ cửa hàng này
+        }
+        return null;
       }));
-      return result;
+      final result = storeList.whereType<StoreInfoModel>().toList();
+      if (result.isNotEmpty && _currentStoreCode.isNotEmpty && !result.any((s) => s.storeCode == _currentStoreCode)) {
+        _onSwitchStore?.call(result.first.storeCode);
+      }
+      return result.isNotEmpty ? result : fallback;
     } catch (_) {
       return fallback;
     }
@@ -338,7 +363,6 @@ class ReportRepository {
     }).handleError((_) => _cachedCashShiftsList ?? <CashShiftModel>[]);
 
     final broadcast = rawStream.asBroadcastStream();
-    _underlyingBroadcastStream = broadcast;
     _underlyingCashShiftsSub = broadcast.listen((list) {
       _cachedCashShiftsList = list;
     }, onError: (_) {});
@@ -780,7 +804,16 @@ class ReportRepository {
         final c = KmtCustomerModel.fromMap(m, e.key.toString());
         int t(Object? v) => v is num ? v.toInt() : 0;
         final last = [t(m['ngay_cap_nhat']), t(m['lastVisitAt']), c.createdAt ?? 0].reduce((a, b) => a > b ? a : b);
-        out.add(CustomerCandidate(id: c.id, name: c.fullName, phone: c.phone, points: c.currentPoints, totalPoints: c.totalPoints, lastVisitAt: last));
+        out.add(CustomerCandidate(
+          id: c.id,
+          name: c.fullName,
+          phone: c.phone,
+          points: c.currentPoints,
+          totalPoints: c.totalPoints,
+          lastVisitAt: last,
+          gender: c.gender,
+          birthday: c.birthday,
+        ));
       }
       return out;
     } catch (_) {

@@ -587,8 +587,16 @@ class CampaignModel {
     if (schedule.absoluteStart != null && timestampMs < schedule.absoluteStart!) {
       return false;
     }
-    if (schedule.absoluteEnd != null && timestampMs > schedule.absoluteEnd!) {
-      return false;
+    if (schedule.absoluteEnd != null) {
+      // Nếu absoluteEnd rơi vào 00:00:00 (do chọn ngày không chọn giờ), tính đến hết ngày (23:59:59.999)
+      var endMs = schedule.absoluteEnd!;
+      final endDt = DateTime.fromMillisecondsSinceEpoch(endMs, isUtc: true).add(const Duration(hours: 7));
+      if (endDt.hour == 0 && endDt.minute == 0 && endDt.second == 0 && endDt.millisecond == 0) {
+        endMs += 86399999;
+      }
+      if (timestampMs > endMs) {
+        return false;
+      }
     }
 
     // Lịch luôn tính theo giờ Việt Nam (UTC+7), không phụ thuộc múi giờ của máy

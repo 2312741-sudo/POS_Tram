@@ -14,7 +14,7 @@ class AuthRepository {
         _getUsersRef = getUsersRef,
         _getRolesRef = getRolesRef;
 
-  DatabaseReference get _root => _getRoot();
+  DatabaseReference get root => _getRoot();
   DatabaseReference get usersRef => _getUsersRef();
   DatabaseReference get rolesRef => _getRolesRef();
 

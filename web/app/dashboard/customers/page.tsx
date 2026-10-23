@@ -81,6 +81,7 @@ export default function CustomersPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<StoreCustomer | null>(null);
+  const [editTarget, setEditTarget] = useState<StoreCustomer | null>(null);
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StoreCustomer | null>(null);
@@ -312,6 +313,46 @@ export default function CustomersPage() {
       flash(`Đã thêm khách hàng ${v.name}`);
     } catch (e) {
       setOpError(errorMessage(e, "Không tạo được khách hàng"));
+    } finally {
+      setOpSaving(false);
+    }
+  };
+
+  const handleUpdateCustomer = async (v: { name: string; phone: string; gender: string; birthday: string }) => {
+    if (!editTarget) return;
+    setOpSaving(true);
+    setOpError("");
+    try {
+      const now = Date.now();
+      const st = editTarget.storeCode;
+      const cid = editTarget.id;
+      await update(ref(db), {
+        [`stores/${st}/customers/${cid}/ho_ten`]: v.name,
+        [`stores/${st}/customers/${cid}/name`]: v.name,
+        [`stores/${st}/customers/${cid}/ho_ten_upper`]: v.name.toUpperCase(),
+        [`stores/${st}/customers/${cid}/so_dien_thoai`]: v.phone,
+        [`stores/${st}/customers/${cid}/phone`]: v.phone,
+        [`stores/${st}/customers/${cid}/gioi_tinh`]: v.gender,
+        [`stores/${st}/customers/${cid}/gender`]: v.gender,
+        [`stores/${st}/customers/${cid}/ngay_sinh`]: v.birthday,
+        [`stores/${st}/customers/${cid}/birthday`]: v.birthday,
+        [`stores/${st}/customers/${cid}/ngay_cap_nhat`]: now,
+        [`stores/${st}/audit_logs/log_${now}_cust`]: {
+          timestamp: now,
+          username: actor.username,
+          userFullName: actor.fullName || actor.username,
+          userRole: actor.role || "",
+          action: "CUSTOMER_UPDATE",
+          targetType: "CUSTOMER",
+          targetId: cid,
+          storeCode: st,
+          details: `Cập nhật thông tin khách hàng ${v.name} (${v.phone}) qua Web Admin`,
+        },
+      });
+      setEditTarget(null);
+      flash(`Đã cập nhật thông tin khách hàng ${v.name}`);
+    } catch (e) {
+      setOpError(errorMessage(e, "Không cập nhật được khách hàng"));
     } finally {
       setOpSaving(false);
     }
@@ -828,6 +869,15 @@ export default function CustomersPage() {
                           <button
                             onClick={() => {
                               setOpError("");
+                              setEditTarget(c);
+                            }}
+                            style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6 }}
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpError("");
                               setAdjustTarget(c);
                             }}
                             style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--primary)", fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6 }}
@@ -917,6 +967,17 @@ export default function CustomersPage() {
           error={opError}
           onCancel={() => setShowCustomerForm(false)}
           onSave={handleCreateCustomer}
+        />
+      )}
+      {editTarget && (
+        <CustomerFormDialog
+          storeCode={editTarget.storeCode}
+          existing={customers.filter((c) => c.storeCode === editTarget.storeCode)}
+          initial={editTarget}
+          saving={opSaving}
+          error={opError}
+          onCancel={() => setEditTarget(null)}
+          onSave={handleUpdateCustomer}
         />
       )}
       {adjustTarget && (

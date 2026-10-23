@@ -35,10 +35,12 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
   void initState() {
     super.initState();
     _sub = _fb.itemCatalogStream(storeCode: widget.storeCode).listen((c) {
-      if (mounted) setState(() {
-        _catalog = c;
-        _loaded = true;
-      });
+      if (mounted) {
+        setState(() {
+          _catalog = c;
+          _loaded = true;
+        });
+      }
     });
   }
 

@@ -99,7 +99,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     _tabController = TabController(length: 3, vsync: this);
     // Instant cache-first initialization to prevent UI lag
     final cached = _fb.activeShiftCache;
-    if (cached != null && cached.isOpen) {
+    if (cached != null && cached.isOpen && (cached.storeCode.isEmpty || cached.storeCode == _auth.currentStoreCode)) {
       _currentShift = cached;
       _isLoading = false;
       if (_canViewDifference) {
@@ -115,7 +115,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       if (!mounted) return;
       final openShift = _fb.ownOpenShiftIn(shifts);
       setState(() {
-        if (openShift != null && openShift.isOpen) {
+        if (openShift != null && openShift.isOpen && (openShift.storeCode.isEmpty || openShift.storeCode == _auth.currentStoreCode)) {
           _currentShift = openShift;
           if (_actualCashCtrl.text.isEmpty && _canViewDifference) {
             _actualCashCtrl.text = openShift.expectedCash.toString();
@@ -154,7 +154,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
     final shift = _fb.activeShiftCache ?? await _fb.getCurrentOpenShift();
     if (mounted) {
       setState(() {
-        if (shift != null && shift.isOpen) {
+        if (shift != null && shift.isOpen && (shift.storeCode.isEmpty || shift.storeCode == _auth.currentStoreCode)) {
           _currentShift = shift;
           if (_canViewDifference) {
             _actualCashCtrl.text = shift.expectedCash.toString();

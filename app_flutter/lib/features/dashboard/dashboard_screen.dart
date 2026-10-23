@@ -22,7 +22,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<BillModel> _bills = [];
   List<TableModel> _tables = [];
-  List<OnlineOrderModel> _onlineOrders = [];
   bool _loading = false;
 
   @override
@@ -38,9 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _fb.tablesStream().listen((t) {
       if (mounted) setState(() => _tables = t);
     }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
-    _fb.onlineOrdersStream().listen((o) {
-      if (mounted) setState(() => _onlineOrders = o);
-    });
   }
 
   List<BillModel> get _todayPaidBills {
@@ -55,7 +51,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int get _todayRevenue => _todayPaidBills.fold(0, (s, o) => s + o.finalAmount);
   int get _todayDiscounts => _todayPaidBills.fold(0, (s, o) => s + o.totalDiscount);
   int get _occupiedTables => _tables.where((t) => t.inUse).length;
-  int get _pendingOnline => _onlineOrders.where((o) => o.isPending).length;
 
   Map<String, int> get _topProducts {
     final map = <String, int>{};

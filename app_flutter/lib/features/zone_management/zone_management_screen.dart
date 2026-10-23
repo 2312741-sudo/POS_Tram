@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../data/models/zone_model.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/domain/zone_plan.dart';
 import '../../core/services/auth_service.dart';

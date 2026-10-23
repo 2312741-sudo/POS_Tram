@@ -141,7 +141,14 @@ class PromotionModel {
     if (!isActive) return false;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (startDate > 0 && now < startDate) return false;
-    if (endDate > 0 && now > endDate) return false;
+    if (endDate > 0) {
+      var end = endDate;
+      final endDt = DateTime.fromMillisecondsSinceEpoch(end, isUtc: true).add(const Duration(hours: 7));
+      if (endDt.hour == 0 && endDt.minute == 0 && endDt.second == 0 && endDt.millisecond == 0) {
+        end += 86399999;
+      }
+      if (now > end) return false;
+    }
     if (maxUsage > 0 && usageCount >= maxUsage) return false;
     if (minBillAmount > 0 && subTotal < minBillAmount) return false;
     return true;

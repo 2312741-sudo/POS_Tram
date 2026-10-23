@@ -232,7 +232,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime(2030),
                               );
-                              if (picked != null) setDlgState(() => startDate = picked);
+                              if (picked != null) {
+                                setDlgState(() => startDate = DateTime(picked.year, picked.month, picked.day, 0, 0, 0, 0));
+                              }
                             },
                           ),
                         ),
@@ -248,7 +250,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime(2030),
                               );
-                              if (picked != null) setDlgState(() => endDate = picked);
+                              if (picked != null) {
+                                setDlgState(() => endDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59, 999));
+                              }
                             },
                           ),
                         ),

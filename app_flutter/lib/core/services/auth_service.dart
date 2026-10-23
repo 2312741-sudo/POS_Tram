@@ -566,7 +566,16 @@ class AuthService extends ChangeNotifier {
     await prefs.remove(_keyRole);
     await prefs.remove(_keyFullName);
     await prefs.remove(_keyUid);
+    final rememberStore = await getRememberStoreOption();
+    if (!rememberStore) {
+      await prefs.remove(_keyStoreCode);
+    }
     _currentUser = null;
+    _currentStoreInfo = null;
+    _cachedRoles = [];
+    _currentStoreCode = '';
+    _switchingStore = false;
+    _fb.clearSession();
     notifyListeners();
   }
 }
