@@ -109,12 +109,99 @@ class CartCampaignPricing {
   static String? reason(PriceQuoteModel quote, CampaignModel campaign) =>
       quote.reasons.where((r) => r.campaignId == campaign.campaignId).map((r) => r.reasonMessage).firstOrNull;
 
+  /// Lấy thông tin chi tiết về combo Mua X tặng/giảm Y:
+  /// - [buyUnits]: Tổng số lượng món mua (nước) trong giỏ hàng
+  /// - [rewardUnitsInCart]: Số lượng món giảm giá (bánh) hiện có trong giỏ hàng
+  /// - [maxRewardAllowed]: Số lượng món giảm giá tối đa được phép theo số món nước
+  /// - [remainingRewardUnits]: Số lượng món giảm giá còn được phép chọn thêm
+  /// - [candidates]: Danh sách các món thuộc nhóm hoặc món được giảm giá
+  /// - [benefitMode]: Cách tính giảm (FIXED, PERCENT, FREE, FIXED_PRICE)
+  /// - [discountPerUnit]: Số tiền giảm ước tính mỗi phần
+  static ({
+    int buyUnits,
+    int rewardUnitsInCart,
+    int maxRewardAllowed,
+    int remainingRewardUnits,
+    int requiredBuyQty,
+    int rewardQty,
+    List<ProductModel> candidates,
+    int discountPerUnit,
+    String benefitMode,
+  })? getComboInfo(
+    CampaignModel c, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+  }) {
+    final type = c.campaignType.toUpperCase().replaceAll('_', '');
+    final lns = lines(cart, products);
+
+    bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
+      if (ids.contains(l.itemId)) return true;
+      if (l.groupId == null || groups.isEmpty) return false;
+      final gNorm = l.groupId!.trim().toLowerCase();
+      return groups.any((g) => g.trim().toLowerCase() == gNorm);
+    }
+
+    List<ProductModel> pick(Set<String> ids, Set<String> groups) => products
+        .where((p) =>
+            !p.isTopping &&
+            p.isAvailable &&
+            !c.excludedItemIds.contains(p.id.toString()) &&
+            (ids.contains(p.id.toString()) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
+        .toList();
+
+    if (type == 'BUYXGETY') {
+      for (final cond in c.buyConditions) {
+        final buyIds = cond.buyItemIds.toSet(), buyGroups = cond.buyGroupIds.toSet();
+        final rewardIds = cond.rewardItemIds.toSet(), rewardGroups = cond.rewardGroupIds.toSet();
+        if (cond.requiredBuyQty <= 0 || cond.rewardQty <= 0) continue;
+
+        // Số lượng nước trong giỏ hàng
+        final buyUnits = lns
+            .where((l) => !l.isGift && matches(l, buyIds, buyGroups))
+            .fold<int>(0, (s, l) => s + l.quantity);
+
+        // Số lượng bánh hiện có trong giỏ hàng
+        final rewardUnitsInCart = lns
+            .where((l) => !l.isGift && matches(l, rewardIds, rewardGroups))
+            .fold<int>(0, (s, l) => s + l.quantity);
+
+        final bundles = cond.multiplyByBundle ? buyUnits ~/ cond.requiredBuyQty : (buyUnits >= cond.requiredBuyQty ? 1 : 0);
+        final maxRewardAllowed = bundles * cond.rewardQty;
+        final remainingRewardUnits = (maxRewardAllowed - rewardUnitsInCart).clamp(0, 9999);
+
+        final candidates = pick(rewardIds, rewardGroups);
+        int discountPerUnit = 0;
+        final mode = cond.benefitMode.toUpperCase().replaceAll('_', '');
+        if (mode == 'FIXED' || mode == 'DISCOUNTAMOUNT') {
+          discountPerUnit = cond.value;
+        } else if (mode == 'FREE' || mode == 'FREEITEM') {
+          discountPerUnit = candidates.isNotEmpty ? candidates.first.price : 0;
+        }
+
+        return (
+          buyUnits: buyUnits,
+          rewardUnitsInCart: rewardUnitsInCart,
+          maxRewardAllowed: maxRewardAllowed,
+          remainingRewardUnits: remainingRewardUnits,
+          requiredBuyQty: cond.requiredBuyQty,
+          rewardQty: cond.rewardQty,
+          candidates: candidates,
+          discountPerUnit: discountPerUnit,
+          benefitMode: cond.benefitMode,
+        );
+      }
+    }
+    return null;
+  }
+
   /// Bản ghi giảm giá lưu vào bill.discounts (giữ promoId/promoCode cho tương thích + trường mới cho báo cáo)
   static BillDiscountModel discount(
     CampaignModel campaign,
     int amount, {
     String? voucherCode,
     String? staffNote,
+    int? comboCount,
   }) {
     final code = (voucherCode != null && voucherCode.trim().isNotEmpty) ? voucherCode.trim().toUpperCase() : null;
     return BillDiscountModel(
@@ -128,6 +215,7 @@ class CartCampaignPricing {
       programCode: campaign.programCode,
       campaignType: campaign.campaignType,
       voucherCode: code,
+      comboCount: comboCount,
     );
   }
 
@@ -153,7 +241,10 @@ class CartCampaignPricing {
       final q = quote(c, cart: cart, products: products, branchId: branchId, guestCount: guestCount, customerBirthday: customerBirthday);
       final amt = q.totalPromotionDiscount;
       if (amt > 0) {
-        out.add(d.copyWith(amount: amt));
+        final comboCnt = q.rewardBenefits
+            .where((b) => b.campaignId == c.campaignId)
+            .fold<int>(0, (s, b) => s + b.quantity);
+        out.add(d.copyWith(amount: amt, comboCount: comboCnt > 0 ? comboCnt : d.comboCount));
       } else {
         dropped.add(d.description);
       }

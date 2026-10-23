@@ -553,6 +553,8 @@ class ReportCalculator {
         ));
         campaignMap[key]!.usedCount += 1;
         campaignMap[key]!.discountAmount += d.amount;
+        final comboCnt = d.comboCount ?? (d.toMap()['comboCount'] as num?)?.toInt() ?? 0;
+        campaignMap[key]!.comboCount += comboCnt;
       }
 
       // Points
@@ -582,6 +584,7 @@ class ReportCalculator {
       promoCode: c.promoCode,
       name: c.name,
       usedCount: c.usedCount,
+      comboCount: c.comboCount,
       discountAmount: c.discountAmount,
     )).toList();
 
@@ -805,6 +808,8 @@ class ReportCalculator {
         );
         final amount = (m['amount'] as num?)?.toInt() ?? d.amount;
         acc.discountAmount += amount;
+        final comboCnt = d.comboCount ?? (m['comboCount'] as num?)?.toInt() ?? 0;
+        acc.comboCount += comboCnt;
         if (voucherCode.isNotEmpty) acc.voucherCodesUsed += 1;
         if (seenInBill.add(key)) {
           acc.billCount += 1;
@@ -818,6 +823,7 @@ class ReportCalculator {
           voucherCode: voucherCode,
           discount: amount,
           billFinalAmount: b.finalAmount,
+          comboCount: comboCnt,
         ));
       }
     }
@@ -850,6 +856,7 @@ class ReportCalculator {
               code: a.code,
               type: a.type,
               billCount: a.billCount,
+              comboCount: a.comboCount,
               discountAmount: a.discountAmount,
               revenue: a.revenue,
               voucherCodesUsed: a.voucherCodesUsed,
@@ -1044,6 +1051,7 @@ class _CampaignAccumulator {
   final String promoCode;
   final String name;
   int usedCount = 0;
+  int comboCount = 0;
   int discountAmount = 0;
 
   _CampaignAccumulator({required this.promoId, required this.promoCode, required this.name});
@@ -1073,6 +1081,7 @@ class _CampaignReportAccumulator {
   final String code;
   final String type;
   int billCount = 0;
+  int comboCount = 0;
   int discountAmount = 0;
   int revenue = 0;
   int voucherCodesUsed = 0;

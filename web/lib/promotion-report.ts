@@ -20,6 +20,8 @@ export interface CampaignBillRow {
   storeCode?: string;
   /** Số điểm tích lũy khách đã đổi trên hóa đơn này (chỉ dòng "Đổi điểm tích lũy") */
   pointsUsed?: number;
+  /** Số lượng combo áp dụng trên hóa đơn này */
+  comboCount?: number;
 }
 
 export interface CampaignSummary {
@@ -30,6 +32,8 @@ export interface CampaignSummary {
   type: string;
   typeLabel: string;
   billCount: number;
+  /** Tổng số lượng combo được áp dụng */
+  comboCount: number;
   totalDiscount: number;
   /** Doanh thu (finalAmount) của các hóa đơn có áp dụng chiến dịch */
   revenue: number;
@@ -46,6 +50,8 @@ export interface CampaignReport {
   totalDiscount: number;
   /** Số hóa đơn (không trùng) có ít nhất một khuyến mãi */
   billCount: number;
+  /** Tổng số combo được áp dụng toàn kỳ */
+  comboCount: number;
   revenue: number;
   vouchersUsed: number;
   /** Tổng điểm tích lũy khách đã đổi trong kỳ */
@@ -83,6 +89,7 @@ interface DiscountLike {
   name?: unknown;
   description?: unknown;
   amount?: unknown;
+  comboCount?: unknown;
 }
 
 /** Khóa nhóm + thông tin hiển thị của một dòng giảm giá */
@@ -107,6 +114,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
   const promoBills = new Map<string, number>();
   let vouchersUsed = 0;
   let totalDiscount = 0;
+  let totalComboCount = 0;
 
   for (const b of deduplicateBills(bills)) {
     if (String(b.status || "PAID").toUpperCase() !== "PAID") continue;
@@ -115,6 +123,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     const finalAmount = Number(b.finalAmount != null ? b.finalAmount : b.totalAmount || 0) || 0;
     for (const d of discounts) {
       const amount = Math.max(0, Number(d.amount) || 0);
+      const comboCount = Math.max(0, Number(d.comboCount) || 0);
       const id = campaignIdentity(d);
       let c = map.get(id.key);
       if (!c) {
@@ -126,6 +135,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
           type: id.type,
           typeLabel: campaignTypeLabel(id.type),
           billCount: 0,
+          comboCount: 0,
           totalDiscount: 0,
           revenue: 0,
           vouchersUsed: 0,
@@ -144,6 +154,10 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
       const voucher = str(d.voucherCode);
       c.totalDiscount += amount;
       totalDiscount += amount;
+      if (comboCount > 0) {
+        c.comboCount += comboCount;
+        totalComboCount += comboCount;
+      }
       if (voucher) {
         c.vouchersUsed += 1;
         vouchersUsed += 1;
@@ -152,6 +166,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
       const row = c._bills.get(b.id);
       if (row) {
         row.discount += amount;
+        if (comboCount > 0) row.comboCount = (row.comboCount || 0) + comboCount;
         if (voucher && !row.voucherCode.split(", ").includes(voucher)) {
           row.voucherCode = row.voucherCode ? `${row.voucherCode}, ${voucher}` : voucher;
         }
@@ -163,6 +178,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
           tableName: b.tableName || "",
           voucherCode: voucher,
           discount: amount,
+          comboCount: comboCount > 0 ? comboCount : undefined,
           finalAmount,
           staff: b.cashierName || b.staffFullName || b.staffUsername || "",
           storeCode: b.storeCode,
@@ -186,7 +202,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     if (!c) {
       c = {
         key: POINTS_ROW_KEY, campaignId: "", name: "Đổi điểm tích lũy", code: "DOI_DIEM", type: "POINTS", typeLabel: campaignTypeLabel("POINTS"),
-        billCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
+        billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
       };
       map.set(POINTS_ROW_KEY, c);
     }
@@ -218,6 +234,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     campaigns,
     totalDiscount,
     billCount: promoBills.size,
+    comboCount: totalComboCount,
     revenue: Array.from(promoBills.values()).reduce((s, v) => s + v, 0),
     vouchersUsed,
     pointsUsed: pointsUsedTotal,

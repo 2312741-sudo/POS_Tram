@@ -441,6 +441,7 @@ class PromoCampaignSummary {
   final String promoCode;
   final String name;
   final int usedCount;
+  final int comboCount;
   final int discountAmount;
 
   const PromoCampaignSummary({
@@ -448,6 +449,7 @@ class PromoCampaignSummary {
     required this.promoCode,
     required this.name,
     required this.usedCount,
+    this.comboCount = 0,
     required this.discountAmount,
   });
 
@@ -456,6 +458,7 @@ class PromoCampaignSummary {
     'promoCode': promoCode,
     'name': name,
     'usedCount': usedCount,
+    'comboCount': comboCount,
     'discountAmount': discountAmount,
   };
 }
@@ -861,6 +864,9 @@ class CampaignBillRef {
   /// Điểm tích lũy khách đã đổi trên hóa đơn (chỉ dòng "Đổi điểm tích lũy")
   final int pointsUsed;
 
+  /// Số lượng combo được hưởng trên hóa đơn này
+  final int comboCount;
+
   const CampaignBillRef({
     required this.billId,
     required this.billCode,
@@ -870,6 +876,7 @@ class CampaignBillRef {
     required this.discount,
     required this.billFinalAmount,
     this.pointsUsed = 0,
+    this.comboCount = 0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -881,6 +888,7 @@ class CampaignBillRef {
     'discount': discount,
     'billFinalAmount': billFinalAmount,
     'pointsUsed': pointsUsed,
+    'comboCount': comboCount,
   };
 }
 
@@ -891,6 +899,7 @@ class CampaignReportItem {
   final String code;
   final String type;
   final int billCount;
+  final int comboCount;
   final int discountAmount;
   final int revenue;
   final int voucherCodesUsed;
@@ -906,6 +915,7 @@ class CampaignReportItem {
     required this.code,
     required this.type,
     required this.billCount,
+    this.comboCount = 0,
     required this.discountAmount,
     required this.revenue,
     required this.voucherCodesUsed,
@@ -920,6 +930,7 @@ class CampaignReportItem {
     'code': code,
     'type': type,
     'billCount': billCount,
+    'comboCount': comboCount,
     'discountAmount': discountAmount,
     'revenue': revenue,
     'voucherCodesUsed': voucherCodesUsed,

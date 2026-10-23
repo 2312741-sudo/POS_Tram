@@ -340,9 +340,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       case ReportKind.paymentMethods:
         return ['Hình thức thanh toán', 'Số giao dịch', 'Doanh thu gộp', 'Giảm giá', 'Tiền VAT', 'Thực thu'];
       case ReportKind.promotions:
-        return ['Mã CT / Voucher', 'Tên chương trình', 'Loại hình', 'Lượt áp dụng', 'Chi phí giảm giá'];
+        return ['Mã CT / Voucher', 'Tên chương trình', 'Loại hình', 'Lượt áp dụng', 'Số combo', 'Chi phí giảm giá'];
       case ReportKind.campaigns:
-        return ['Tên chương trình', 'Mã CT', 'Loại', 'Số hóa đơn', 'Tổng giảm giá', 'Doanh thu HĐ', 'Lượt dùng voucher', 'Điểm đã đổi'];
+        return ['Tên chương trình', 'Mã CT', 'Loại', 'Số hóa đơn', 'Số combo', 'Tổng giảm giá', 'Doanh thu HĐ', 'Lượt dùng voucher', 'Điểm đã đổi'];
       case ReportKind.bills:
         return BillReportRows.summaryHeaders;
       case ReportKind.billItems:
@@ -474,13 +474,13 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         final p = ReportCalculator.calculatePromotionsReport(bills);
         final rows = <List<dynamic>>[];
         for (final c in p.campaigns) {
-          rows.add([c.promoCode, c.name, 'Voucher Bill', c.usedCount, ReportExportService.formatCurrency(c.discountAmount)]);
+          rows.add([c.promoCode, c.name, 'Voucher Bill', c.usedCount, c.comboCount > 0 ? '${c.comboCount} combo' : '—', ReportExportService.formatCurrency(c.discountAmount)]);
         }
         if (p.pointsRedemption.usedCount > 0) {
-          rows.add(['KMT_POINTS', 'Đổi điểm thưởng', 'Tích điểm', p.pointsRedemption.usedCount, ReportExportService.formatCurrency(p.pointsRedemption.discountAmount)]);
+          rows.add(['KMT_POINTS', 'Đổi điểm thưởng', 'Tích điểm', p.pointsRedemption.usedCount, '—', ReportExportService.formatCurrency(p.pointsRedemption.discountAmount)]);
         }
         for (final it in p.itemDiscounts.details) {
-          rows.add(['ITEM_PROMO', it.productName, 'Giảm theo món', it.quantity, ReportExportService.formatCurrency(it.discountAmount)]);
+          rows.add(['ITEM_PROMO', it.productName, 'Giảm theo món', it.quantity, '—', ReportExportService.formatCurrency(it.discountAmount)]);
         }
         return rows;
 
@@ -490,6 +490,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           c.code,
           c.type,
           c.billCount,
+          c.comboCount > 0 ? '${c.comboCount} combo' : '—',
           ReportExportService.formatCurrency(c.discountAmount),
           ReportExportService.formatCurrency(c.revenue),
           c.voucherCodesUsed,

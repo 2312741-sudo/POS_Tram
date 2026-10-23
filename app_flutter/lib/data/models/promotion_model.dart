@@ -223,6 +223,7 @@ class BillDiscountModel {
   final String? programCode;
   final String? campaignType;
   final String? voucherCode;
+  final int? comboCount; // Số lượng combo được hưởng (ví dụ: 1 bánh + 1 nước = 1 combo, 3 bánh = 3 combo)
 
   BillDiscountModel({
     this.promoId,
@@ -235,6 +236,7 @@ class BillDiscountModel {
     this.programCode,
     this.campaignType,
     this.voucherCode,
+    this.comboCount,
   });
 
   factory BillDiscountModel.fromMap(Map<dynamic, dynamic> map) {
@@ -254,6 +256,7 @@ class BillDiscountModel {
       programCode: str('programCode'),
       campaignType: str('campaignType'),
       voucherCode: str('voucherCode'),
+      comboCount: (map['comboCount'] as num?)?.toInt(),
     );
   }
 
@@ -268,9 +271,15 @@ class BillDiscountModel {
     if (programCode != null) 'programCode': programCode,
     if (campaignType != null) 'campaignType': campaignType,
     if (voucherCode != null) 'voucherCode': voucherCode,
+    if (comboCount != null && comboCount! > 0) 'comboCount': comboCount,
   };
 
-  BillDiscountModel copyWith({int? amount, String? description, String? campaignName}) => BillDiscountModel(
+  BillDiscountModel copyWith({
+    int? amount,
+    String? description,
+    String? campaignName,
+    int? comboCount,
+  }) => BillDiscountModel(
         promoId: promoId,
         promoCode: promoCode,
         description: description ?? this.description,
@@ -281,5 +290,6 @@ class BillDiscountModel {
         programCode: programCode,
         campaignType: campaignType,
         voucherCode: voucherCode,
+        comboCount: comboCount ?? this.comboCount,
       );
 }

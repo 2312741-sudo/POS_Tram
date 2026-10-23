@@ -28,6 +28,7 @@ import '../../data/services/campaign_service.dart';
 import '../../data/services/loyalty_service.dart';
 import '../promotions/voucher_check.dart';
 import 'widgets/campaign_pricing.dart';
+import 'widgets/combo_reward_picker_sheet.dart';
 import '../../core/domain/deleted_items.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 import 'widgets/cart_item_card.dart';
@@ -833,6 +834,85 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     return true;
   }
 
+  /// Mở màn hình chọn món giảm giá Combo (chỉ hiển thị món/nhóm món được chọn giảm giá,
+  /// giới hạn số lượng món được chọn theo số lượng món điều kiện (nước) trong giỏ hàng).
+  Future<bool> _pickComboRewardItems(CampaignModel c) async {
+    final combo = CartCampaignPricing.getComboInfo(c, cart: _cart, products: _products);
+    if (combo == null) {
+      return _addRewardItems(c);
+    }
+
+    if (combo.buyUnits <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đơn chưa có món nước nào đủ điều kiện của "${c.name}". Vui lòng chọn nước trước.'),
+            backgroundColor: AppColors.accent,
+          ),
+        );
+      }
+      return false;
+    }
+
+    if (combo.candidates.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chương trình chưa cấu hình món giảm giá hoặc các món đã hết hàng.')),
+        );
+      }
+      return false;
+    }
+
+    final maxToSelect = combo.remainingRewardUnits > 0 ? combo.remainingRewardUnits : combo.maxRewardAllowed;
+    if (maxToSelect <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đơn đã đủ số món giảm giá (${combo.rewardUnitsInCart} món) theo ${combo.buyUnits} món nước.')),
+        );
+      }
+      return true;
+    }
+
+    final chosen = await showModalBottomSheet<Map<ProductModel, int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ComboRewardPickerSheet(
+        campaign: c,
+        maxAllowedUnits: maxToSelect,
+        waterCount: combo.buyUnits,
+        candidateProducts: combo.candidates,
+        discountPerUnit: combo.discountPerUnit,
+        benefitDescription: describeCampaignBenefit(c),
+      ),
+    );
+
+    if (chosen == null || chosen.isEmpty) return false;
+
+    final staffUser = _auth.currentUser?.username ?? 'staff';
+    final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+    setState(() {
+      for (final entry in chosen.entries) {
+        final p = entry.key;
+        final qty = entry.value;
+        if (qty <= 0) continue;
+        _cart.add(OrderItemModel(
+          productId: p.id,
+          name: p.name,
+          price: p.price,
+          quantity: qty,
+          orderedBy: staffUser,
+          orderedByName: staffName,
+          orderedAt: DateTime.now().millisecondsSinceEpoch,
+          isSentKitchen: false,
+        ));
+      }
+    });
+    widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+    await _fb.saveTable(widget.table).catchError((_) {});
+    return true;
+  }
+
   /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại
   PriceQuoteModel _quoteCampaign(CampaignModel c) => CartCampaignPricing.quote(
         c,
@@ -857,11 +937,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     for (final c in _campaigns) {
       if (!c.birthdayOnly || c.hasCodes || !c.isEligibleAt(DateTime.now().millisecondsSinceEpoch)) continue;
       if (_appliedDiscounts.any((d) => d.campaignId == c.campaignId)) continue;
-      final amt = _quoteCampaign(c).totalPromotionDiscount;
+      final q = _quoteCampaign(c);
+      final amt = q.totalPromotionDiscount;
       if (amt <= 0) continue;
       final allowStack = _storeInfo?.allowStackPromotions ?? true;
       if (!allowStack) _appliedDiscounts.clear();
-      _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+      final comboCnt = q.rewardBenefits.where((b) => b.campaignId == c.campaignId).fold<int>(0, (s, b) => s + b.quantity);
+      _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
       added.add(c.name);
     }
     if (added.isNotEmpty) {
@@ -901,15 +983,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       final amt = q.totalPromotionDiscount;
       if (amt <= 0) continue;
 
+      final comboCnt = q.rewardBenefits.where((b) => b.campaignId == c.campaignId).fold<int>(0, (s, b) => s + b.quantity);
       if (!allowStack && _appliedDiscounts.isNotEmpty) {
         final currentMax = _appliedDiscounts.fold<int>(0, (max, d) => d.amount > max ? d.amount : max);
         if (amt > currentMax) {
           _appliedDiscounts.clear();
-          _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+          _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
           newlyApplied.add(c.name);
         }
       } else {
-        _appliedDiscounts.add(CartCampaignPricing.discount(c, amt));
+        _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
         newlyApplied.add(c.name);
       }
     }
@@ -1598,6 +1681,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       setState(() => _selectedCustomer = updated);
       TableCustomerLogic.writeToTable(widget.table, updated);
       await _fb.saveTable(widget.table);
+      if (!mounted) return;
       _recalculateDiscounts();
       _autoApplyEligibleCampaigns();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2622,8 +2706,26 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               branchId: _fb.currentStoreCode,
                               quote: campaign != null ? _quoteCampaign(campaign) : null,
                             );
-                            setDlgState(() => voucherResult = result);
-                            if (!result.isValid || campaign == null) return;
+                            var currentResult = result;
+                            if ((!currentResult.isValid || currentResult.discount <= 0) && campaign != null) {
+                              final combo = CartCampaignPricing.getComboInfo(campaign, cart: _cart, products: _products);
+                              if (combo != null && combo.buyUnits > 0 && combo.remainingRewardUnits > 0) {
+                                final added = await _pickComboRewardItems(campaign);
+                                if (added) {
+                                  final newQuote = _quoteCampaign(campaign);
+                                  currentResult = evaluateVoucher(
+                                    code: code,
+                                    voucher: voucher,
+                                    campaign: campaign,
+                                    nowMs: DateTime.now().millisecondsSinceEpoch,
+                                    branchId: _fb.currentStoreCode,
+                                    quote: newQuote,
+                                  );
+                                }
+                              }
+                            }
+                            setDlgState(() => voucherResult = currentResult);
+                            if (!currentResult.isValid || campaign == null || currentResult.discount <= 0) return;
 
                             // Bắt buộc nhân viên nhập ghi chú nếu requireStaffNote = true
                             String? staffNote;
@@ -2641,11 +2743,21 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             }
 
                             final applied = campaign;
+                            final quote = _quoteCampaign(applied);
+                            final comboCnt = quote.rewardBenefits
+                                .where((b) => b.campaignId == applied.campaignId)
+                                .fold<int>(0, (s, b) => s + b.quantity);
+
                             setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
                               _appliedDiscounts.removeWhere((d) => d.campaignId == applied.campaignId);
-                              _appliedDiscounts.add(CartCampaignPricing.discount(applied, result.discount,
-                                  voucherCode: code, staffNote: staffNote));
+                              _appliedDiscounts.add(CartCampaignPricing.discount(
+                                applied,
+                                currentResult.discount,
+                                voucherCode: code,
+                                staffNote: staffNote,
+                                comboCount: comboCnt > 0 ? comboCnt : null,
+                              ));
                             });
                             voucherCtrl.clear();
                           },
@@ -2746,33 +2858,92 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       final q = _quoteCampaign(c);
                       final amt = q.totalPromotionDiscount;
                       final reason = CartCampaignPricing.reason(q, c);
-                      // Đủ điều kiện nhưng chưa có món thưởng trong đơn → cho bấm để tự thêm món
-                      final canAutoAdd = amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
+                      final combo = CartCampaignPricing.getComboInfo(c, cart: _cart, products: _products);
+                      final isCombo = combo != null;
+                      final hasWater = isCombo && combo.buyUnits > 0;
+                      final needsCakes = isCombo && hasWater && combo.remainingRewardUnits > 0;
+                      final canAutoAdd = !isCombo && amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
+
+                      String sub = '${c.typeDisplay} • ${describeCampaignBenefit(c)}';
+                      if (isCombo) {
+                        if (!hasWater) {
+                          sub += ' • Chưa có nước trong đơn (chọn nước trước)';
+                        } else if (needsCakes) {
+                          sub += ' • Đơn có ${combo.buyUnits} nước → Bấm để chọn tối đa ${combo.remainingRewardUnits} món giảm giá';
+                        } else {
+                          sub += ' • Đã đủ ${combo.maxRewardAllowed} combo → -${FormatUtils.vnd(amt)}';
+                        }
+                      } else {
+                        if (amt > 0) {
+                          sub += ' → -${FormatUtils.vnd(amt)}';
+                        } else if (canAutoAdd) {
+                          sub += ' • Đơn đủ điều kiện — bấm để tự thêm món được tặng/giảm';
+                        } else if (reason != null) {
+                          sub += ' • $reason';
+                        }
+                      }
+
                       return CheckboxListTile(
                         value: isSelected,
-                        enabled: amt > 0 || isSelected || canAutoAdd,
+                        enabled: isCombo ? hasWater : (amt > 0 || isSelected || canAutoAdd),
                         title: Text(c.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
-                        subtitle: Text(
-                          '${c.typeDisplay} • ${describeCampaignBenefit(c)}'
-                          '${amt > 0 ? " → -${FormatUtils.vnd(amt)}" : (canAutoAdd ? " • Đơn đủ điều kiện — bấm để tự thêm món được tặng/giảm" : (reason != null ? " • $reason" : ""))}',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11),
-                        ),
+                        subtitle: Text(sub, style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                        secondary: (isCombo && hasWater && isSelected && combo.remainingRewardUnits > 0)
+                            ? TextButton.icon(
+                                icon: const Icon(Icons.add_circle_outline, size: 16),
+                                label: Text('Thêm ${combo.remainingRewardUnits} món', style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                                onPressed: () async {
+                                  final added = await _pickComboRewardItems(c);
+                                  if (added) {
+                                    final newQ = _quoteCampaign(c);
+                                    final newAmt = newQ.totalPromotionDiscount;
+                                    final comboCnt = newQ.rewardBenefits
+                                        .where((b) => b.campaignId == c.campaignId)
+                                        .fold<int>(0, (s, b) => s + b.quantity);
+                                    setDlgState(() {
+                                      _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
+                                      _appliedDiscounts.add(CartCampaignPricing.discount(
+                                        c,
+                                        newAmt,
+                                        comboCount: comboCnt > 0 ? comboCnt : null,
+                                      ));
+                                    });
+                                  }
+                                },
+                              )
+                            : null,
                         onChanged: (val) async {
                           if (val == true) {
-                            var applyAmt = amt;
-                            if (canAutoAdd) {
-                              final added = await _addRewardItems(c);
-                              if (!added) return;
-                              applyAmt = _quoteCampaign(c).totalPromotionDiscount;
-                              if (applyAmt <= 0) {
+                            if (isCombo) {
+                              if (!hasWater) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Đã thêm món nhưng chưa tính được ưu đãi.')));
+                                    const SnackBar(content: Text('Vui lòng chọn món nước vào đơn trước khi áp dụng combo này.')),
+                                  );
                                 }
-                                setDlgState(() {});
                                 return;
                               }
+                              if (needsCakes) {
+                                final added = await _pickComboRewardItems(c);
+                                if (!added) return;
+                              }
+                            } else if (canAutoAdd) {
+                              final added = await _addRewardItems(c);
+                              if (!added) return;
                             }
+
+                            final newQ = _quoteCampaign(c);
+                            final applyAmt = newQ.totalPromotionDiscount;
+                            if (applyAmt <= 0) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Chưa tính được ưu đãi cho chương trình này.')),
+                                );
+                              }
+                              setDlgState(() {});
+                              return;
+                            }
+
                             if (!context.mounted) return;
                             String? staffNote;
                             if (c.requireStaffNote) {
@@ -2786,10 +2957,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 return;
                               }
                             }
+
+                            final comboCnt = newQ.rewardBenefits
+                                .where((b) => b.campaignId == c.campaignId)
+                                .fold<int>(0, (s, b) => s + b.quantity);
+
                             setDlgState(() {
                               if (!allowStack) _appliedDiscounts.clear();
                               _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
-                              _appliedDiscounts.add(CartCampaignPricing.discount(c, applyAmt, staffNote: staffNote));
+                              _appliedDiscounts.add(CartCampaignPricing.discount(
+                                c,
+                                applyAmt,
+                                staffNote: staffNote,
+                                comboCount: comboCnt > 0 ? comboCnt : null,
+                              ));
                             });
                           } else {
                             setDlgState(() {

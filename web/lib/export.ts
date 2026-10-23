@@ -903,18 +903,18 @@ export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: Repo
     [],
   ];
 
-  const summaryHeaders = ["Chương trình", "Mã chương trình", "Loại", "Số hóa đơn", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Mã voucher đã dùng", "Điểm đã đổi"];
+  const summaryHeaders = ["Chương trình", "Mã chương trình", "Loại", "Số hóa đơn", "Số lượng combo", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Mã voucher đã dùng", "Điểm đã đổi"];
   const summaryAoa = [
     ...head("Báo cáo khuyến mãi theo chương trình"),
     summaryHeaders,
-    ...data.campaigns.map((c) => [c.name, c.code || "—", c.typeLabel, c.billCount, c.totalDiscount, c.revenue, c.vouchersUsed, c.voucherCodes.join(", "), c.pointsUsed ?? 0]),
-    ["TỔNG CỘNG", "—", "—", data.billCount, data.totalDiscount, data.revenue, data.vouchersUsed, "", data.pointsUsed],
+    ...data.campaigns.map((c) => [c.name, c.code || "—", c.typeLabel, c.billCount, c.comboCount > 0 ? c.comboCount : "—", c.totalDiscount, c.revenue, c.vouchersUsed, c.voucherCodes.join(", "), c.pointsUsed ?? 0]),
+    ["TỔNG CỘNG", "—", "—", data.billCount, data.comboCount > 0 ? data.comboCount : "—", data.totalDiscount, data.revenue, data.vouchersUsed, "", data.pointsUsed],
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(summaryAoa);
-  ws1["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 40 }, { wch: 14 }];
+  ws1["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 40 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp chương trình");
 
-  const detailHeaders = ["Chương trình", "Mã chương trình", "Mã hóa đơn", "Thời gian", "Bàn", "Mã voucher", "Giảm giá (VNĐ)", "Tổng tiền HĐ (VNĐ)", "Nhân viên", "Điểm đã đổi"];
+  const detailHeaders = ["Chương trình", "Mã chương trình", "Mã hóa đơn", "Thời gian", "Bàn", "Số combo", "Mã voucher", "Giảm giá (VNĐ)", "Tổng tiền HĐ (VNĐ)", "Nhân viên", "Điểm đã đổi"];
   const detailRows: (string | number)[][] = [];
   data.campaigns.forEach((c) =>
     c.bills.forEach((b) =>
@@ -924,6 +924,7 @@ export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: Repo
         b.billCode,
         b.timestamp ? format(new Date(b.timestamp), "dd/MM/yyyy HH:mm") : "—",
         b.tableName || "—",
+        b.comboCount ? b.comboCount : "—",
         b.voucherCode || "—",
         b.discount,
         b.finalAmount,
