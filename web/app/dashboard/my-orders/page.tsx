@@ -4,6 +4,7 @@ import { ClipboardList, Search, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useDashboardData, type HistoryOrder } from "@/lib/data-context";
 import { scopeOwnBills, type BillOwnerFields } from "@/lib/bill-scope";
+import { businessDayStartFor } from "@/lib/business-day";
 import { billStatusLabel, formatVND, getBillTimestamp } from "@/lib/reports";
 import { describeSelection } from "@/lib/product-options";
 import { lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
@@ -19,7 +20,7 @@ const fmtTime = (ms: number) => (ms > 0 ? new Date(ms).toLocaleString("vi-VN") :
 /** Lịch sử đơn do CHÍNH tài khoản lập / thu tiền — mọi vai trò xem được (chỉ đọc) */
 export default function MyOrdersPage() {
   const { user } = useAuth();
-  const { historyData, historyLoaded } = useDashboardData();
+  const { historyData, historyLoaded, currentStoreCode } = useDashboardData();
   const [range, setRange] = useState<(typeof RANGES)[number]["id"]>("TODAY");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<HistoryOrder | null>(null);
@@ -31,14 +32,16 @@ export default function MyOrdersPage() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const start = new Date();
+    // Ngày kinh doanh: ngày bắt đầu từ "giờ bắt đầu ngày" của cửa hàng (vd. 04:00)
+    const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
+    const start = new Date(Date.now() - cutoffMs);
     start.setHours(0, 0, 0, 0);
     const from = range === "TODAY" ? start.getTime() : range === "7D" ? start.getTime() - 6 * 86400_000 : 0;
     return mine
       .map((b) => ({ b, ts: getBillTimestamp(b as never) }))
-      .filter(({ b, ts }) => ts >= from && (!q || `${b.billCode ?? ""} ${b.orderCode ?? ""} ${b.tableName ?? ""}`.toLowerCase().includes(q)))
+      .filter(({ b, ts }) => ts - cutoffMs >= from && (!q || `${b.billCode ?? ""} ${b.orderCode ?? ""} ${b.tableName ?? ""}`.toLowerCase().includes(q)))
       .sort((a, c) => c.ts - a.ts);
-  }, [mine, range, search]);
+  }, [mine, range, search, currentStoreCode]);
 
   const total = rows.filter(({ b }) => (b.status || "PAID").toUpperCase() === "PAID").reduce((s, { b }) => s + (Number(b.finalAmount ?? b.totalAmount) || 0), 0);
   const chip = (active: boolean) => ({

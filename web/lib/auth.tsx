@@ -218,7 +218,7 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (pathname.startsWith("/dashboard/users")) {
     return hasPermission(user, "MANAGE_USERS");
   }
-  if (pathname.startsWith("/dashboard/stores")) {
+  if (pathname.startsWith("/dashboard/stores") || pathname.startsWith("/dashboard/settings")) {
     return hasPermission(user, "MANAGE_STORE_SETTINGS");
   }
   if (pathname.startsWith("/dashboard/audit") || pathname.startsWith("/dashboard/action-codes")) {

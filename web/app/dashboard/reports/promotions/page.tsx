@@ -3,7 +3,8 @@ import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { BadgePercent, Calendar, ChevronDown, ChevronRight, Download, Receipt, Store, Ticket, TrendingUp } from "lucide-react";
 import { useDashboardData } from "@/lib/data-context";
-import { formatNumber, formatVND, getBillTimestamp, getUTC7Date } from "@/lib/reports";
+import { businessDayStartFor } from "@/lib/business-day";
+import { formatNumber, formatVND, getBusinessBillTimestamp, getUTC7Date } from "@/lib/reports";
 import { calculateCampaignReport } from "@/lib/promotion-report";
 import { exportCampaignReportExcel, type ReportStoreInfo } from "@/lib/export";
 
@@ -43,7 +44,8 @@ export default function PromotionReportPage() {
 
   // Khoảng thời gian (UTC+7) — giống các báo cáo khác
   const range = useMemo(() => {
-    const now = new Date().getTime();
+    // Ngày kinh doanh: mốc "bây giờ" lùi theo giờ bắt đầu ngày; hóa đơn lọc bằng mốc đã lùi tương ứng
+    const now = new Date().getTime() - businessDayStartFor(currentStoreCode) * 60_000;
     const n = getUTC7Date(now);
     const y = n.getUTCFullYear();
     const m = n.getUTCMonth();
@@ -68,7 +70,7 @@ export default function PromotionReportPage() {
         return { start: s, end: e };
       }
     }
-  }, [dateRange, customStart, customEnd]);
+  }, [dateRange, customStart, customEnd, currentStoreCode]);
 
   const rangeLabel = useMemo(() => {
     if (dateRange === "CUSTOM" && !customStart) return "Tất cả thời gian";
@@ -80,7 +82,7 @@ export default function PromotionReportPage() {
     () =>
       historyData.filter((b) => {
         if (currentStoreCode !== "ALL" && b.storeCode && b.storeCode !== currentStoreCode) return false;
-        const ts = getBillTimestamp(b);
+        const ts = getBusinessBillTimestamp(b);
         return ts >= range.start && ts <= range.end;
       }),
     [historyData, currentStoreCode, range]

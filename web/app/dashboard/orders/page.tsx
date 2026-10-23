@@ -22,6 +22,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { businessDayStartFor } from "@/lib/business-day";
 import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/product-code";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
@@ -86,7 +87,9 @@ export default function OrdersPage() {
   }, [tables, historyData, filterZone]);
 
   const filtered = useMemo(() => {
-    const now = new Date();
+    // Ngày kinh doanh: lùi "bây giờ" và mốc hóa đơn theo giờ bắt đầu ngày của cửa hàng
+    const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
+    const now = new Date(Date.now() - cutoffMs);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return historyData.filter((h) => {
@@ -98,7 +101,7 @@ export default function OrdersPage() {
         (h.orderStaff || "").toLowerCase().includes(search.toLowerCase()) ||
         (h.cashierName || "").toLowerCase().includes(search.toLowerCase());
 
-      const dt = new Date(getBillTimestamp(h as never) || (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()));
+      const dt = new Date((getBillTimestamp(h as never) || (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime())) - businessDayStartFor((h as { storeCode?: string }).storeCode) * 60_000);
       let matchDate = true;
       if (datePreset === "TODAY") {
         matchDate = dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth() && dt.getDate() === now.getDate();
@@ -131,7 +134,7 @@ export default function OrdersPage() {
 
       return matchSearch && matchDate && matchMethod && matchZone && matchTable && matchStatus;
     });
-  }, [historyData, search, datePreset, filterDate, filterMethod, filterStatus, filterZone, filterTable]);
+  }, [historyData, search, datePreset, filterDate, filterMethod, filterStatus, filterZone, filterTable, currentStoreCode]);
 
   // Aggregate stats: chỉ cộng tiền đơn đã thanh toán (đơn hủy vẫn hiển thị trong danh sách nhưng không tính doanh thu)
   const revenueBills = useMemo(() => filtered.filter((h) => isRevenueBill(h)), [filtered]);

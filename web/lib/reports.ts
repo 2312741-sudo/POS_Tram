@@ -1,4 +1,5 @@
 import { resolveProductCode } from "./product-code";
+import { businessDateOf, businessDayStartFor } from "./business-day";
 /**
  * POS Trạm - Core Financial & Analytical Reports Engine
  * Tuân thủ chuẩn DOCS-REPORT-SPEC-2026-01 (REPORT SPEC v2.0.0)
@@ -543,6 +544,14 @@ export function getBillTimestamp(bill: HistoryOrder): number {
 }
 
 /**
+ * Mốc thời gian để XẾP NGÀY KINH DOANH: [getBillTimestamp] lùi đi "giờ bắt đầu ngày" của cửa hàng
+ * (Cài đặt cửa hàng → Ngày kinh doanh). Chỉ dùng để chia ngày/tháng; biểu đồ theo giờ vẫn dùng giờ thực.
+ */
+export function getBusinessBillTimestamp(bill: HistoryOrder): number {
+  return getBillTimestamp(bill) - businessDayStartFor(bill.storeCode) * 60_000;
+}
+
+/**
  * Giá trị đơn hủy: max(tạm tính/tổng tiền, tổng tiền món đã xóa).
  * Đơn hủy bằng "Xóa hết món" có subTotal = 0 vì mọi món đã bị xóa trước khi hủy.
  * LƯU Ý: đây là dòng kiểm toán riêng, KHÔNG cộng chung với "Tổng tiền xóa món".
@@ -820,7 +829,7 @@ export function calculateRevenueByPeriod(
   }>();
 
   for (const b of paidBills) {
-    const ts = getBillTimestamp(b);
+    const ts = getBusinessBillTimestamp(b);
     const d = getUTC7Date(ts);
     const year = d.getUTCFullYear();
     const month = d.getUTCMonth() + 1;
@@ -1617,7 +1626,7 @@ export function generateEndOfDayZReport(
   // Preserve ordering or sort by netRevenue desc
   const zones = Array.from(zoneMap.values());
 
-  const dateStr = options?.date || (paidBills.length > 0 ? new Date(getBillTimestamp(paidBills[0])).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+  const dateStr = options?.date || businessDateOf(paidBills.length > 0 ? getBillTimestamp(paidBills[0]) : Date.now(), businessDayStartFor(paidBills[0]?.storeCode));
   const storeCode = options?.storeCode || (paidBills[0]?.storeCode || "TRAM01");
   const storeName = options?.storeName || (paidBills[0]?.storeName || `POS Trạm - ${storeCode}`);
 

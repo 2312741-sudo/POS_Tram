@@ -32,6 +32,7 @@ import {
   ClipboardList,
   StickyNote,
   Info,
+  Settings,
 } from "lucide-react";
 
 const navItems = [
@@ -41,6 +42,7 @@ const navItems = [
   { href: "/dashboard/customers", label: "Khách hàng CRM (KMT)", icon: Users },
   { href: "/dashboard/product-sales", label: "Hàng hoá Bán ra", icon: ShoppingCart },
   { href: "/dashboard/stores", label: "Hệ thống Chi nhánh", icon: Store },
+  { href: "/dashboard/settings", label: "Cài đặt cửa hàng", icon: Settings },
   { href: "/dashboard/tables", label: "Sơ đồ Phòng/Bàn", icon: LayoutGrid },
   { href: "/dashboard/kitchen", label: "Màn hình Bếp", icon: Flame },
   { href: "/dashboard/my-orders", label: "Đơn của tôi", icon: ClipboardList },

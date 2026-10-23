@@ -1,5 +1,6 @@
 "use client";
 import { resolveStaffUid } from "./staff-key";
+import { normalizeBusinessDayStart, setBusinessDayConfig } from "./business-day";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { db, auth, functions } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
@@ -284,6 +285,8 @@ export interface StoreItem {
   allowStaffViewShiftDifference?: boolean;
   pointEarnRate?: number;
   pointRedeemRate?: number;
+  /** Giờ bắt đầu ngày kinh doanh, tính bằng phút từ 0h (0 = 00:00). Xem lib/business-day.ts */
+  businessDayStartMinute?: number;
   /** Điểm tích lũy tối thiểu cho từng hạng (storeInfo.loyaltyTiers); luôn có giá trị (mặc định nếu chưa cấu hình) */
   loyaltyTiers?: LoyaltyTier[];
   /** Điểm dùng chung toàn hệ thống — Chủ quán xác nhận (storeInfo.sharedLoyalty) */
@@ -757,6 +760,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         // Cấu hình tích / đổi điểm (trang Khách hàng)
         pointEarnRate: typeof info.pointEarnRate === "number" ? info.pointEarnRate : undefined,
         pointRedeemRate: typeof info.pointRedeemRate === "number" ? info.pointRedeemRate : undefined,
+        businessDayStartMinute: normalizeBusinessDayStart(info.businessDayStartMinute),
         loyaltyTiers: normalizeTiers(info.loyaltyTiers),
         sharedLoyalty: parseSharedLoyalty(info.sharedLoyalty),
         active: info.active ?? true,
@@ -889,6 +893,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
     list.sort((a, b) => a.storeCode.localeCompare(b.storeCode));
     if (list.length > 0) {
+      // Ngày kinh doanh theo từng cửa hàng (dùng cho lọc/gom doanh thu theo ngày)
+      setBusinessDayConfig(
+        Object.fromEntries(list.map((st) => [st.storeCode, normalizeBusinessDayStart(st.businessDayStartMinute)])),
+        normalizeBusinessDayStart(list[0]?.businessDayStartMinute),
+      );
       setStores(list);
       try {
         sessionStorage.setItem("tram_cached_stores", JSON.stringify(list));

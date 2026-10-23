@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo } from "react";
+import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData, ProductItem } from "@/lib/data-context";
 import {
   generateEndOfDayZReport,
@@ -7,6 +8,7 @@ import {
   formatVND,
   getBillTimestamp,
   getUTC7Date,
+  getBusinessBillTimestamp,
 } from "@/lib/reports";
 import { exportEndOfDayZReport, exportProductSalesReport, ReportStoreInfo } from "@/lib/export";
 import {
@@ -68,7 +70,10 @@ export default function EndOfDayReportPage() {
   // Filter bills by store and date (UTC+7)
   const filteredBills = useMemo(() => {
     const now = new Date();
-    const nowUTC7 = getUTC7Date(now.getTime());
+    // Ngày kinh doanh: lùi mốc "bây giờ" và mốc hóa đơn theo giờ bắt đầu ngày của cửa hàng
+    const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
+    const nowBiz = now.getTime() - cutoffMs;
+    const nowUTC7 = getUTC7Date(nowBiz);
     const todayYear = nowUTC7.getUTCFullYear();
     const todayMonth = nowUTC7.getUTCMonth();
     const todayDate = nowUTC7.getUTCDate();
@@ -78,7 +83,7 @@ export default function EndOfDayReportPage() {
         return false;
       }
 
-      const ts = getBillTimestamp(b);
+      const ts = getBusinessBillTimestamp(b);
       const bDate = getUTC7Date(ts);
       const bYear = bDate.getUTCFullYear();
       const bMonth = bDate.getUTCMonth();
@@ -93,7 +98,7 @@ export default function EndOfDayReportPage() {
         }
         case "7DAYS": {
           const sevenDaysAgo = Date.UTC(todayYear, todayMonth, todayDate - 7);
-          return ts >= sevenDaysAgo && ts <= now.getTime();
+          return ts >= sevenDaysAgo && ts <= nowBiz;
         }
         case "THIS_MONTH":
           return bYear === todayYear && bMonth === todayMonth;

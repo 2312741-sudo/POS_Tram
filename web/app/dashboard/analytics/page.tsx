@@ -26,6 +26,7 @@ import {
   Receipt,
   Layers,
 } from "lucide-react";
+import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData } from "@/lib/data-context";
 import {
   calculateOverviewReport,
@@ -34,6 +35,7 @@ import {
   calculatePaymentMethodsReport,
   getBillTimestamp,
   getUTC7Date,
+  getBusinessBillTimestamp,
   formatVND,
   formatNumber,
   itemLineDiscount,
@@ -77,7 +79,10 @@ export default function AnalyticsPage() {
 
   // UTC+7 filtering
   const filteredHistory = useMemo(() => {
-    const nowParts = toDateParts(getUTC7Date(nowTs));
+    // Ngày kinh doanh (Cài đặt cửa hàng): lùi "bây giờ" theo giờ bắt đầu ngày
+    const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
+    const nowBiz = nowTs - cutoffMs;
+    const nowParts = toDateParts(getUTC7Date(nowBiz));
 
     return historyData.filter((h) => {
       if (currentStoreCode !== "ALL" && h.storeCode && h.storeCode !== currentStoreCode) {
@@ -85,20 +90,20 @@ export default function AnalyticsPage() {
       }
       if (period === "ALL") return true;
 
-      const ts = getBillTimestamp(h);
-      if (!ts) return false;
+      const ts = getBusinessBillTimestamp(h);
+      if (!getBillTimestamp(h)) return false;
       const bParts = toDateParts(getUTC7Date(ts));
 
       if (period === "TODAY") {
         return bParts.dateStr === nowParts.dateStr;
       }
       if (period === "YESTERDAY") {
-        const yestParts = toDateParts(getUTC7Date(nowTs - 24 * 60 * 60 * 1000));
+        const yestParts = toDateParts(getUTC7Date(nowBiz - 24 * 60 * 60 * 1000));
         return bParts.dateStr === yestParts.dateStr;
       }
       if (period === "7DAYS") {
-        const d7Ts = nowTs - 7 * 24 * 60 * 60 * 1000;
-        return ts >= d7Ts && ts <= nowTs;
+        const d7Ts = nowBiz - 7 * 24 * 60 * 60 * 1000;
+        return ts >= d7Ts && ts <= nowBiz;
       }
       if (period === "THIS_MONTH") {
         return bParts.year === nowParts.year && bParts.month === nowParts.month;

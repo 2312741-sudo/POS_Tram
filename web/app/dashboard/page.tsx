@@ -26,6 +26,7 @@ interface StatCard {
   bgColor: string;
 }
 
+import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData } from "@/lib/data-context";
 import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
 
@@ -59,15 +60,17 @@ const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
 };
 
 export default function DashboardPage() {
-  const { historyData, tables: tablesData, onlineOrders, loading: ctxLoading } = useDashboardData();
+  const { historyData, tables: tablesData, onlineOrders, loading: ctxLoading, currentStoreCode } = useDashboardData();
   const loading = ctxLoading && tablesData.length === 0;
 
-  const today = new Date();
+  // Ngày kinh doanh: "hôm nay" bắt đầu từ giờ bắt đầu ngày của cửa hàng (Cài đặt cửa hàng)
+  const cutoffMs = businessDayStartFor(currentStoreCode) * 60_000;
+  const today = new Date(Date.now() - cutoffMs);
   const todayStart = startOfDay(today).getTime();
   const todayEnd = endOfDay(today).getTime();
 
   const todayHistory = historyData.filter((h) => {
-    const ts = typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime();
+    const ts = (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()) - cutoffMs;
     return ts >= todayStart && ts <= todayEnd;
   });
 
@@ -92,7 +95,7 @@ export default function DashboardPage() {
     const dayEnd = endOfDay(date).getTime();
     const dayRevenue = historyData
       .filter((h) => {
-        const ts = typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime();
+        const ts = (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()) - cutoffMs;
         return ts >= dayStart && ts <= dayEnd;
       })
       .reduce((sum, h) => sum + (Number(h.totalAmount) || 0), 0);
