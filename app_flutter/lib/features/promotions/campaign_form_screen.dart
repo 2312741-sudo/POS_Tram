@@ -31,6 +31,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   late TextEditingController _maxUsesController;
   late TextEditingController _maxUsesPerCustomerController;
   late TextEditingController _priorityController;
+  late TextEditingController _maxCampaignsPerOrderController;
 
   // Discount config controllers
   late TextEditingController _thresholdController;
@@ -78,6 +79,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     _maxUsesController = TextEditingController(text: widget.campaign?.maxUses?.toString() ?? '');
     _maxUsesPerCustomerController = TextEditingController(text: widget.campaign?.maxUsesPerCustomer?.toString() ?? '');
     _priorityController = TextEditingController(text: widget.campaign?.priority.toString() ?? '1');
+    _maxCampaignsPerOrderController = TextEditingController(text: widget.campaign?.maxCampaignsPerOrder?.toString() ?? '');
 
     if (widget.campaign != null) {
       _campaignType = CampaignType.fromMap(widget.campaign!.campaignType);
@@ -164,6 +166,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     _maxUsesController.dispose();
     _maxUsesPerCustomerController.dispose();
     _priorityController.dispose();
+    _maxCampaignsPerOrderController.dispose();
     _thresholdController.dispose();
     _discountValueController.dispose();
     _maxDiscountController.dispose();
@@ -287,6 +290,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         birthdayOnly: _birthdayOnly,
         blockPoints: _blockPoints,
         stackingMode: _stackingMode ? 'ENABLED' : 'DISABLED',
+        maxCampaignsPerOrder: _stackingMode ? int.tryParse(_maxCampaignsPerOrderController.text.trim()) : 1,
         priority: int.tryParse(_priorityController.text) ?? 1,
         active: _active,
         createdAt: widget.campaign?.createdAt ?? DateTime.now().millisecondsSinceEpoch,
@@ -935,11 +939,27 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 onChanged: _hasCodes ? null : (val) => setState(() => _autoApply = val),
               ),
               SwitchListTile(
-                title: const Text('Cho phép cộng dồn'),
-                subtitle: const Text('Được áp dụng chung với KM khác'),
+                title: const Text('Cho phép cộng dồn với CTKM khác'),
+                subtitle: Text(_stackingMode
+                    ? 'Được áp dụng chung với các CTKM khác trong cùng hóa đơn'
+                    : 'Áp dụng độc quyền: Đơn dùng CTKM này không được cộng dồn với bất kỳ CTKM nào khác (ví dụ: Combo không đi cùng giảm giá sinh nhật)'),
                 value: _stackingMode,
                 onChanged: (val) => setState(() => _stackingMode = val),
               ),
+              if (_stackingMode)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: TextFormField(
+                    controller: _maxCampaignsPerOrderController,
+                    decoration: const InputDecoration(
+                      labelText: 'Số lượng CTKM tối đa trên 1 đơn',
+                      hintText: 'Để trống = không giới hạn',
+                      helperText: 'Giới hạn tối đa số CTKM áp dụng trên mỗi hóa đơn để tránh giảm giá quá nhiều',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
               SwitchListTile(
                 title: const Text('Kích hoạt chương trình'),
                 subtitle: const Text('Bật để chương trình hoạt động ngay'),

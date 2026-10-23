@@ -251,4 +251,147 @@ class CartCampaignPricing {
     }
     return (discounts: out, dropped: dropped);
   }
+
+  /// Kiểm tra xem CTKM [incoming] có thể áp dụng vào đơn hiện tại (đang có [currentDiscounts]) hay không
+  static ({
+    bool canStack,
+    bool requiresClearingExisting,
+    CampaignModel? conflictingExclusiveCampaign,
+    int? maxAllowedCampaigns,
+    String? reason,
+  }) checkStacking({
+    required List<BillDiscountModel> currentDiscounts,
+    required CampaignModel incoming,
+    required Map<String, CampaignModel> campaignsById,
+    bool allowStackPromotions = true,
+  }) {
+    final otherDiscounts = currentDiscounts.where((d) => d.campaignId != incoming.campaignId).toList();
+    if (otherDiscounts.isEmpty) {
+      return (
+        canStack: true,
+        requiresClearingExisting: false,
+        conflictingExclusiveCampaign: null,
+        maxAllowedCampaigns: incoming.effectiveMaxCampaignsPerOrder,
+        reason: null,
+      );
+    }
+
+    if (!allowStackPromotions) {
+      return (
+        canStack: false,
+        requiresClearingExisting: true,
+        conflictingExclusiveCampaign: null,
+        maxAllowedCampaigns: 1,
+        reason: 'Cửa hàng đang cài đặt không cho phép cộng dồn khuyến mãi.',
+      );
+    }
+
+    if (!incoming.isStackable || incoming.effectiveMaxCampaignsPerOrder == 1) {
+      return (
+        canStack: false,
+        requiresClearingExisting: true,
+        conflictingExclusiveCampaign: null,
+        maxAllowedCampaigns: 1,
+        reason: 'Chương trình "${incoming.name}" áp dụng độc quyền (không cho phép cộng dồn với CTKM khác).',
+      );
+    }
+
+    // Kiểm tra xem trong các ưu đãi đã có, có CTKM độc quyền nào không
+    for (final d in otherDiscounts) {
+      if (d.campaignId != null) {
+        final existingC = campaignsById[d.campaignId];
+        if (existingC != null && (!existingC.isStackable || existingC.effectiveMaxCampaignsPerOrder == 1)) {
+          return (
+            canStack: false,
+            requiresClearingExisting: false,
+            conflictingExclusiveCampaign: existingC,
+            maxAllowedCampaigns: 1,
+            reason: 'Đơn đang áp dụng "${existingC.name}" (chương trình độc quyền, không cho phép cộng dồn).',
+          );
+        }
+      }
+    }
+
+    // Kiểm tra giới hạn số lượng tối đa trên đơn
+    final limits = <int>[
+      incoming.effectiveMaxCampaignsPerOrder,
+      for (final d in otherDiscounts)
+        if (d.campaignId != null && campaignsById.containsKey(d.campaignId))
+          campaignsById[d.campaignId]!.effectiveMaxCampaignsPerOrder,
+    ].where((n) => n > 0 && n < 999).toList();
+
+    if (limits.isNotEmpty) {
+      final maxAllowed = limits.reduce((a, b) => a < b ? a : b);
+      if (otherDiscounts.length >= maxAllowed) {
+        return (
+          canStack: false,
+          requiresClearingExisting: false,
+          conflictingExclusiveCampaign: null,
+          maxAllowedCampaigns: maxAllowed,
+          reason: 'Đơn đã đạt giới hạn tối đa $maxAllowed chương trình khuyến mãi theo cài đặt.',
+        );
+      }
+      return (
+        canStack: true,
+        requiresClearingExisting: false,
+        conflictingExclusiveCampaign: null,
+        maxAllowedCampaigns: maxAllowed,
+        reason: null,
+      );
+    }
+
+    return (
+      canStack: true,
+      requiresClearingExisting: false,
+      conflictingExclusiveCampaign: null,
+      maxAllowedCampaigns: null,
+      reason: null,
+    );
+  }
+
+  /// Thực hiện cộng dồn hoặc thay thế khi thêm một khuyến mãi mới vào giỏ
+  static ({List<BillDiscountModel> discounts, List<String> removed}) addWithStacking({
+    required List<BillDiscountModel> currentDiscounts,
+    required BillDiscountModel incomingDiscount,
+    CampaignModel? incomingCampaign,
+    required Map<String, CampaignModel> campaignsById,
+    bool allowStackPromotions = true,
+  }) {
+    final without = currentDiscounts.where((d) =>
+        (incomingDiscount.campaignId != null && d.campaignId != incomingDiscount.campaignId) ||
+        (incomingDiscount.promoId != null && d.promoId != incomingDiscount.promoId) ||
+        (incomingDiscount.voucherCode != null && d.voucherCode != incomingDiscount.voucherCode)).toList();
+
+    bool isStackable(CampaignModel? c) => c == null || (c.isStackable && c.effectiveMaxCampaignsPerOrder > 1);
+
+    List<BillDiscountModel> keep;
+    if (!allowStackPromotions || (incomingCampaign != null && !isStackable(incomingCampaign))) {
+      keep = [];
+    } else {
+      keep = without.where((d) {
+        final c = d.campaignId == null ? null : campaignsById[d.campaignId];
+        return isStackable(c);
+      }).toList();
+
+      final limits = <int>[
+        if (incomingCampaign != null && incomingCampaign.effectiveMaxCampaignsPerOrder < 999)
+          incomingCampaign.effectiveMaxCampaignsPerOrder,
+        for (final d in keep)
+          if (d.campaignId != null && campaignsById.containsKey(d.campaignId))
+            if (campaignsById[d.campaignId]!.effectiveMaxCampaignsPerOrder < 999)
+              campaignsById[d.campaignId]!.effectiveMaxCampaignsPerOrder,
+      ];
+
+      if (limits.isNotEmpty) {
+        final maxAllowed = limits.reduce((a, b) => a < b ? a : b);
+        final maxKeep = (maxAllowed - 1).clamp(0, 999);
+        if (keep.length > maxKeep) {
+          keep = keep.sublist(keep.length - maxKeep);
+        }
+      }
+    }
+
+    final removed = without.where((d) => !keep.contains(d)).map((d) => d.description).toList();
+    return (discounts: [...keep, incomingDiscount], removed: removed);
+  }
 }

@@ -76,6 +76,8 @@ export interface Campaign {
   blockPoints?: boolean;
   /** "ENABLED" | "DISABLED" (đã chuẩn hóa, "STACKABLE" cũ = ENABLED) */
   stackingMode: "ENABLED" | "DISABLED";
+  /** Số lượng CTKM tối đa trong 1 đơn (null/undefined = không giới hạn nếu ENABLED, 1 nếu DISABLED) */
+  maxCampaignsPerOrder?: number;
   priority: number;
   active: boolean;
   createdAt: number;
@@ -175,6 +177,7 @@ export function parseCampaign(id: string, raw: Record<string, unknown> | null | 
     birthdayOnly: r.birthdayOnly === true,
     blockPoints: r.blockPoints === true,
     stackingMode: normalizeStackingMode(r.stackingMode != null ? String(r.stackingMode) : null),
+    maxCampaignsPerOrder: optInt(r.maxCampaignsPerOrder),
     priority: toInt(r.priority),
     active: Boolean(r.active),
     createdAt: toInt(r.createdAt),
@@ -812,10 +815,27 @@ export function addWithStacking(
   const without = applied.filter((d) => d.campaignId !== incoming.campaign.campaignId);
   const stackable = (c: Campaign | undefined) => c == null || c.stackingMode === "ENABLED";
   let keep = without;
-  if (!allowStackPromotions || !stackable(incoming.campaign)) {
+  const incMax = incoming.campaign.maxCampaignsPerOrder;
+  if (!allowStackPromotions || !stackable(incoming.campaign) || incMax === 1) {
     keep = [];
   } else {
-    keep = without.filter((d) => stackable(campaignsById[d.campaignId]));
+    keep = without.filter((d) => {
+      const c = campaignsById[d.campaignId];
+      return stackable(c) && (c?.maxCampaignsPerOrder !== 1);
+    });
+    // Giới hạn số lượng CTKM tối đa trên đơn
+    const limits = [
+      incMax,
+      ...keep.map((d) => campaignsById[d.campaignId]?.maxCampaignsPerOrder),
+    ].filter((n): n is number => typeof n === "number" && n > 0);
+
+    if (limits.length > 0) {
+      const maxAllowed = Math.min(...limits);
+      const maxKeep = Math.max(0, maxAllowed - 1);
+      if (keep.length > maxKeep) {
+        keep = keep.slice(keep.length - maxKeep);
+      }
+    }
   }
   const removed = without.filter((d) => !keep.includes(d)).map((d) => d.description);
   return { discounts: [...keep, incoming.discount], removed };

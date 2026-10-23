@@ -496,6 +496,7 @@ class CampaignModel {
 
   // Cộng dồn
   final String stackingMode; // DISABLED, ENABLED
+  final int? maxCampaignsPerOrder; // Giới hạn số CTKM tối đa trong 1 đơn (null/0 = không giới hạn nếu ENABLED, 1 nếu DISABLED)
   final int priority; // Ưu tiên (số nhỏ = cao hơn)
 
   // Trạng thái
@@ -533,6 +534,7 @@ class CampaignModel {
     this.birthdayOnly = false,
     this.blockPoints = false,
     required this.stackingMode,
+    this.maxCampaignsPerOrder,
     required this.priority,
     required this.active,
     required this.createdAt,
@@ -543,6 +545,15 @@ class CampaignModel {
   });
 
   bool get isStackable => normalizeStackingMode(stackingMode) == StackingMode.enabled.toMap();
+
+  /// Số CTKM tối đa cho phép trên đơn khi dùng chương trình này (mặc định 1 nếu không cộng dồn, 999 nếu không giới hạn)
+  int get effectiveMaxCampaignsPerOrder {
+    if (!isStackable) return 1;
+    if (maxCampaignsPerOrder != null && maxCampaignsPerOrder! > 0) {
+      return maxCampaignsPerOrder!;
+    }
+    return 999;
+  }
 
   bool get isUpcoming {
     if (schedule.absoluteStart == null) return false;
@@ -657,6 +668,7 @@ class CampaignModel {
       'birthdayOnly': birthdayOnly,
       'blockPoints': blockPoints,
       'stackingMode': stackingMode,
+      'maxCampaignsPerOrder': maxCampaignsPerOrder,
       'priority': priority,
       'active': active,
       'createdAt': createdAt,
@@ -696,6 +708,9 @@ class CampaignModel {
       birthdayOnly: map['birthdayOnly'] == true,
       blockPoints: map['blockPoints'] == true,
       stackingMode: normalizeStackingMode(map['stackingMode']?.toString()),
+      maxCampaignsPerOrder: map['maxCampaignsPerOrder'] != null
+          ? int.tryParse(map['maxCampaignsPerOrder'].toString())
+          : null,
       priority: map['priority']?.toInt() ?? 0,
       active: map['active'] ?? false,
       createdAt: map['createdAt']?.toInt() ?? 0,
@@ -731,6 +746,8 @@ class CampaignModel {
     bool? birthdayOnly,
     bool? blockPoints,
     String? stackingMode,
+    int? maxCampaignsPerOrder,
+    bool clearMaxCampaignsPerOrder = false,
     int? priority,
     bool? active,
     int? createdAt,
@@ -764,6 +781,7 @@ class CampaignModel {
       birthdayOnly: birthdayOnly ?? this.birthdayOnly,
       blockPoints: blockPoints ?? this.blockPoints,
       stackingMode: stackingMode ?? this.stackingMode,
+      maxCampaignsPerOrder: clearMaxCampaignsPerOrder ? null : (maxCampaignsPerOrder ?? this.maxCampaignsPerOrder),
       priority: priority ?? this.priority,
       active: active ?? this.active,
       createdAt: createdAt ?? this.createdAt,

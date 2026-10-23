@@ -375,6 +375,24 @@ describe("cộng dồn (stacking)", () => {
     expect(addWithStacking([d(A)], { discount: d(A), campaign: A }, byId).discounts).toHaveLength(1);
   });
 
+  it("giới hạn số lượng CTKM tối đa trên 1 đơn (maxCampaignsPerOrder)", () => {
+    const C = camp({ campaignId: "C", campaignType: "BILLDISCOUNT", stackingMode: "ENABLED", maxCampaignsPerOrder: 2 });
+    const localById = { ...byId, C };
+    // Khi thêm C vào giỏ có [A], tổng = 2 <= 2 -> giữ cả 2
+    const r1 = addWithStacking([d(A)], { discount: d(C), campaign: C }, localById);
+    expect(r1.discounts.map((x) => x.campaignId)).toEqual(["A", "C"]);
+
+    // Khi thêm B vào giỏ đã có [A, C] (C giới hạn 2) -> chỉ giữ tối đa 2 (loại bớt CTKM cũ)
+    const r2 = addWithStacking([d(A), d(C)], { discount: d(B), campaign: B }, localById);
+    expect(r2.discounts).toHaveLength(2);
+    expect(r2.discounts.map((x) => x.campaignId)).toContain("B");
+
+    // maxCampaignsPerOrder = 1 tương đương độc quyền
+    const M1 = camp({ campaignId: "M1", campaignType: "BILLDISCOUNT", stackingMode: "ENABLED", maxCampaignsPerOrder: 1 });
+    const r3 = addWithStacking([d(A)], { discount: d(M1), campaign: M1 }, { ...localById, M1 });
+    expect(r3.discounts.map((x) => x.campaignId)).toEqual(["M1"]);
+  });
+
   it("STACKABLE (web cũ) = ENABLED, DISABLED giữ nguyên", () => {
     expect(parseCampaign("X", { stackingMode: "stackable" }).stackingMode).toBe("ENABLED");
     expect(parseCampaign("X", { stackingMode: "DISABLED" }).stackingMode).toBe("DISABLED");

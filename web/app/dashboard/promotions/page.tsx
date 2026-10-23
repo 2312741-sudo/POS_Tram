@@ -66,6 +66,7 @@ interface CampaignItem {
   birthdayOnly?: boolean;
   blockPoints?: boolean;
   stackingMode: string;
+  maxCampaignsPerOrder?: number;
   priority: number;
   createdAt: number;
   updatedAt: number;
@@ -151,7 +152,9 @@ export default function PromotionsPage() {
           birthdayOnly: v.birthdayOnly === true, blockPoints: v.blockPoints === true,
           tiers: v.tiers || [], buyConditions: v.buyConditions || [], budgetMoney: v.budgetMoney || 0,
           maxUses: v.maxUses || 0, maxUsesPerCustomer: v.maxUsesPerCustomer || 0, hasCodes: v.hasCodes ?? false,
-          autoApply: v.autoApply ?? false, stackingMode: normalizeStackingMode(v.stackingMode), priority: v.priority || 0,
+          autoApply: v.autoApply ?? false, stackingMode: normalizeStackingMode(v.stackingMode),
+          maxCampaignsPerOrder: v.maxCampaignsPerOrder != null ? Number(v.maxCampaignsPerOrder) : undefined,
+          priority: v.priority || 0,
           createdAt: v.createdAt || 0, updatedAt: v.updatedAt || 0, createdBy: v.createdBy || ""
         });
       });
@@ -332,6 +335,7 @@ export default function PromotionsPage() {
         birthdayOnly: campaignForm.birthdayOnly,
         blockPoints: campaignForm.blockPoints,
         stackingMode: normalizeStackingMode(campaignForm.stackingMode),
+        maxCampaignsPerOrder: campaignForm.stackingMode === "DISABLED" ? 1 : (Number(campaignForm.maxCampaignsPerOrder) > 0 ? Number(campaignForm.maxCampaignsPerOrder) : null),
         priority: Number(campaignForm.priority) || 0,
         createdAt: editingCampaign?.createdAt || now,
         updatedAt: now,
@@ -606,6 +610,11 @@ export default function PromotionsPage() {
                                 {cam.blockPoints && (
                                   <span style={badgeStyle("#7c3aed")}>🚫 Không tích điểm</span>
                                 )}
+                                {cam.stackingMode === "DISABLED" ? (
+                                  <span style={badgeStyle("#dc2626")}>🔒 Độc quyền (Không cộng dồn)</span>
+                                ) : cam.maxCampaignsPerOrder && cam.maxCampaignsPerOrder > 0 ? (
+                                  <span style={badgeStyle("#059669")}>Tối đa {cam.maxCampaignsPerOrder} CTKM/đơn</span>
+                                ) : null}
                                 {cam.includedItemIds && cam.includedItemIds.length > 0 && (
                                   <span style={badgeStyle("#2563eb")}>📦 {cam.includedItemIds.length} món</span>
                                 )}
@@ -1222,6 +1231,54 @@ export default function PromotionsPage() {
                   </div>
                 </div>
               </label>
+            </div>
+
+            {/* 5b. Quy tắc cộng dồn & Giới hạn số CTKM trên 1 đơn */}
+            <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px 14px", marginTop: "4px", display: "grid", gap: "10px" }}>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>
+                🛡️ Quy tắc cộng dồn & Giới hạn áp dụng trong 1 đơn
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={campaignForm.stackingMode !== "DISABLED"}
+                  onChange={(e) => setCampaignForm({
+                    ...campaignForm,
+                    stackingMode: e.target.checked ? "ENABLED" : "DISABLED"
+                  })}
+                  style={{ marginTop: "3px", width: "16px", height: "16px" }}
+                />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
+                    {campaignForm.stackingMode !== "DISABLED" ? "Cho phép cộng dồn với CTKM khác trong cùng đơn" : "🔒 Áp dụng độc quyền (Không cho phép cộng dồn)"}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
+                    {campaignForm.stackingMode !== "DISABLED"
+                      ? "Chương trình này có thể áp dụng cùng các khuyến mãi khác trong đơn (tuân thủ giới hạn số lượng CTKM)."
+                      : "Đơn hàng áp dụng chương trình này sẽ KHÔNG được cộng dồn với bất kỳ CTKM nào khác (ví dụ: giảm giá combo sẽ không đi cùng giảm giá sinh nhật hay voucher khác, tránh giảm giá quá nhiều làm ảnh hưởng dòng tiền của quán)."}
+                  </div>
+                </div>
+              </label>
+              {campaignForm.stackingMode !== "DISABLED" && (
+                <div style={{ paddingLeft: "26px", display: "grid", gap: "6px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--text)" }}>
+                    Số lượng CTKM tối đa được áp dụng trong cùng 1 đơn
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Không giới hạn"
+                      value={campaignForm.maxCampaignsPerOrder}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, maxCampaignsPerOrder: e.target.value })}
+                      style={{ width: "160px", padding: "6px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--surface)" }}
+                    />
+                    <span style={{ fontSize: "12px", color: "var(--subtext)" }}>
+                      (Để trống = không giới hạn số lượng. Ví dụ: nhập 2 để đơn chỉ được dùng tối đa 2 CTKM)
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 6. Cài đặt khác */}

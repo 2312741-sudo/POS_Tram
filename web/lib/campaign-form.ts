@@ -110,6 +110,8 @@ export interface CampaignFormState {
   /** Khóa tích điểm: đơn dùng chương trình này không được tích điểm */
   blockPoints: boolean;
   stackingMode: string;
+  /** Giới hạn số lượng CTKM tối đa trên 1 đơn ("" = không giới hạn nếu ENABLED, 1 nếu DISABLED) */
+  maxCampaignsPerOrder: string;
   priority: string;
   // BILLDISCOUNT
   discountType: "PERCENT" | "AMOUNT";
@@ -145,7 +147,7 @@ export function emptyCampaignForm(): CampaignFormState {
   return {
     name: "", programCode: "", description: "", campaignType: "BILLDISCOUNT",
     active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
-    hasCodes: false, autoApply: true, requireStaffNote: false, birthdayOnly: false, blockPoints: false, stackingMode: "ENABLED", priority: "0",
+    hasCodes: false, autoApply: true, requireStaffNote: false, birthdayOnly: false, blockPoints: false, stackingMode: "ENABLED", maxCampaignsPerOrder: "", priority: "0",
     discountType: "PERCENT", discountValue: "", maxDiscount: "", threshold: "",
     fixedPriceValue: "",
     rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardBenefit: "FREEITEM", rewardValue: "",
@@ -170,6 +172,7 @@ export interface StoredCampaign {
   birthdayOnly?: boolean;
   blockPoints?: boolean;
   stackingMode?: string;
+  maxCampaignsPerOrder?: number;
   priority?: number;
   tiers?: RawTier[];
   buyConditions?: RawBuyCondition[];
@@ -220,6 +223,7 @@ export function campaignToForm(cam: StoredCampaign): CampaignFormState {
     birthdayOnly: cam.birthdayOnly === true,
     blockPoints: cam.blockPoints === true,
     stackingMode: normalizeStackingMode(cam.stackingMode),
+    maxCampaignsPerOrder: posStr(num(cam.maxCampaignsPerOrder)),
     priority: String(cam.priority || 0),
     includedItemIds: strList(cam.includedItemIds),
     includedGroupIds: strList(cam.includedGroupIds),

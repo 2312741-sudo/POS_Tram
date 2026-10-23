@@ -941,6 +941,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       final amt = q.totalPromotionDiscount;
       if (amt <= 0) continue;
       final allowStack = _storeInfo?.allowStackPromotions ?? true;
+      final check = CartCampaignPricing.checkStacking(
+        currentDiscounts: _appliedDiscounts,
+        incoming: c,
+        campaignsById: _campaignById,
+        allowStackPromotions: allowStack,
+      );
+      if (!check.canStack) continue;
       if (!allowStack) _appliedDiscounts.clear();
       final comboCnt = q.rewardBenefits.where((b) => b.campaignId == c.campaignId).fold<int>(0, (s, b) => s + b.quantity);
       _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
@@ -984,17 +991,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (amt <= 0) continue;
 
       final comboCnt = q.rewardBenefits.where((b) => b.campaignId == c.campaignId).fold<int>(0, (s, b) => s + b.quantity);
-      if (!allowStack && _appliedDiscounts.isNotEmpty) {
-        final currentMax = _appliedDiscounts.fold<int>(0, (max, d) => d.amount > max ? d.amount : max);
-        if (amt > currentMax) {
-          _appliedDiscounts.clear();
-          _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
-          newlyApplied.add(c.name);
+      final check = CartCampaignPricing.checkStacking(
+        currentDiscounts: _appliedDiscounts,
+        incoming: c,
+        campaignsById: _campaignById,
+        allowStackPromotions: allowStack,
+      );
+      if (!check.canStack) {
+        if (!allowStack && _appliedDiscounts.isNotEmpty) {
+          final currentMax = _appliedDiscounts.fold<int>(0, (max, d) => d.amount > max ? d.amount : max);
+          if (amt > currentMax) {
+            _appliedDiscounts.clear();
+            _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
+            newlyApplied.add(c.name);
+          }
         }
-      } else {
-        _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
-        newlyApplied.add(c.name);
+        continue;
       }
+      _appliedDiscounts.add(CartCampaignPricing.discount(c, amt, comboCount: comboCnt > 0 ? comboCnt : null));
+      newlyApplied.add(c.name);
     }
 
     if (newlyApplied.isNotEmpty && mounted) {
@@ -2743,21 +2758,87 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             }
 
                             final applied = campaign;
+                            final stackCheck = CartCampaignPricing.checkStacking(
+                              currentDiscounts: _appliedDiscounts,
+                              incoming: applied,
+                              campaignsById: _campaignById,
+                              allowStackPromotions: allowStack,
+                            );
+                            if (!stackCheck.canStack) {
+                              if (stackCheck.conflictingExclusiveCampaign != null) {
+                                if (!context.mounted) return;
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Xung Đột Khuyến Mãi'),
+                                    content: Text(
+                                      'Đơn hàng đang áp dụng "${stackCheck.conflictingExclusiveCampaign!.name}" (áp dụng độc quyền, không cộng dồn).\n\n'
+                                      'Bạn có muốn gỡ "${stackCheck.conflictingExclusiveCampaign!.name}" để áp dụng mã "${applied.name}" không?'
+                                    ),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Đổi sang mã mới', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
+                                _appliedDiscounts.removeWhere((d) => d.campaignId == stackCheck.conflictingExclusiveCampaign!.campaignId);
+                              } else if (stackCheck.requiresClearingExisting && _appliedDiscounts.isNotEmpty) {
+                                if (!context.mounted) return;
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Áp Dụng Độc Quyền'),
+                                    content: Text(
+                                      'Chương trình "${applied.name}" áp dụng độc quyền (không cho phép cộng dồn với CTKM khác).\n\n'
+                                      'Áp dụng mã này sẽ gỡ các khuyến mãi hiện có trên đơn:\n'
+                                      '${_appliedDiscounts.map((d) => "• ${d.description}").join("\n")}\n\n'
+                                      'Bạn có muốn tiếp tục?'
+                                    ),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Đồng ý gỡ & áp dụng', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
+                                _appliedDiscounts.clear();
+                              } else if (stackCheck.reason != null) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(stackCheck.reason!), backgroundColor: AppColors.danger));
+                                }
+                                return;
+                              }
+                            }
+
                             final quote = _quoteCampaign(applied);
                             final comboCnt = quote.rewardBenefits
                                 .where((b) => b.campaignId == applied.campaignId)
                                 .fold<int>(0, (s, b) => s + b.quantity);
 
                             setDlgState(() {
-                              if (!allowStack) _appliedDiscounts.clear();
-                              _appliedDiscounts.removeWhere((d) => d.campaignId == applied.campaignId);
-                              _appliedDiscounts.add(CartCampaignPricing.discount(
-                                applied,
-                                currentResult.discount,
-                                voucherCode: code,
-                                staffNote: staffNote,
-                                comboCount: comboCnt > 0 ? comboCnt : null,
-                              ));
+                              final added = CartCampaignPricing.addWithStacking(
+                                currentDiscounts: _appliedDiscounts,
+                                incomingDiscount: CartCampaignPricing.discount(
+                                  applied,
+                                  currentResult.discount,
+                                  voucherCode: code,
+                                  staffNote: staffNote,
+                                  comboCount: comboCnt > 0 ? comboCnt : null,
+                                ),
+                                incomingCampaign: applied,
+                                campaignsById: _campaignById,
+                                allowStackPromotions: allowStack,
+                              );
+                              _appliedDiscounts = added.discounts;
                             });
                             voucherCtrl.clear();
                           },
@@ -2865,6 +2946,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       final canAutoAdd = !isCombo && amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
 
                       String sub = '${c.typeDisplay} • ${describeCampaignBenefit(c)}';
+                      if (!c.isStackable) {
+                        sub += ' • 🔒 Độc quyền';
+                      } else if (c.effectiveMaxCampaignsPerOrder < 999) {
+                        sub += ' • Tối đa ${c.effectiveMaxCampaignsPerOrder} CTKM/đơn';
+                      }
                       if (isCombo) {
                         if (!hasWater) {
                           sub += ' • Chưa có nước trong đơn (chọn nước trước)';
@@ -2914,6 +3000,67 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             : null,
                         onChanged: (val) async {
                           if (val == true) {
+                            final stackCheck = CartCampaignPricing.checkStacking(
+                              currentDiscounts: _appliedDiscounts,
+                              incoming: c,
+                              campaignsById: _campaignById,
+                              allowStackPromotions: allowStack,
+                            );
+                            if (!stackCheck.canStack) {
+                              if (stackCheck.conflictingExclusiveCampaign != null) {
+                                if (!context.mounted) return;
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Xung Đột Khuyến Mãi'),
+                                    content: Text(
+                                      'Đơn hàng đang áp dụng "${stackCheck.conflictingExclusiveCampaign!.name}" (áp dụng độc quyền, không cộng dồn).\n\n'
+                                      'Bạn có muốn gỡ "${stackCheck.conflictingExclusiveCampaign!.name}" để áp dụng "${c.name}" không?'
+                                    ),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Đổi sang KM mới', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
+                                _appliedDiscounts.removeWhere((d) => d.campaignId == stackCheck.conflictingExclusiveCampaign!.campaignId);
+                              } else if (stackCheck.requiresClearingExisting && _appliedDiscounts.isNotEmpty) {
+                                if (!context.mounted) return;
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Áp Dụng Độc Quyền'),
+                                    content: Text(
+                                      'Chương trình "${c.name}" được cài đặt áp dụng độc quyền (không cho phép cộng dồn với CTKM khác).\n\n'
+                                      'Áp dụng chương trình này sẽ gỡ các khuyến mãi hiện có trên đơn:\n'
+                                      '${_appliedDiscounts.map((d) => "• ${d.description}").join("\n")}\n\n'
+                                      'Bạn có muốn tiếp tục?'
+                                    ),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Đồng ý gỡ & áp dụng', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
+                                _appliedDiscounts.clear();
+                              } else if (stackCheck.reason != null) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(stackCheck.reason!), backgroundColor: AppColors.danger));
+                                }
+                                return;
+                              }
+                            }
+
                             if (isCombo) {
                               if (!hasWater) {
                                 if (context.mounted) {
@@ -2963,14 +3110,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 .fold<int>(0, (s, b) => s + b.quantity);
 
                             setDlgState(() {
-                              if (!allowStack) _appliedDiscounts.clear();
-                              _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
-                              _appliedDiscounts.add(CartCampaignPricing.discount(
-                                c,
-                                applyAmt,
-                                staffNote: staffNote,
-                                comboCount: comboCnt > 0 ? comboCnt : null,
-                              ));
+                              final added = CartCampaignPricing.addWithStacking(
+                                currentDiscounts: _appliedDiscounts,
+                                incomingDiscount: CartCampaignPricing.discount(
+                                  c,
+                                  applyAmt,
+                                  staffNote: staffNote,
+                                  comboCount: comboCnt > 0 ? comboCnt : null,
+                                ),
+                                incomingCampaign: c,
+                                campaignsById: _campaignById,
+                                allowStackPromotions: allowStack,
+                              );
+                              _appliedDiscounts = added.discounts;
                             });
                           } else {
                             setDlgState(() {
