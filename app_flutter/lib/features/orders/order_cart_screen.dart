@@ -106,6 +106,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     widget.table.ensureCodes();
     _cart = List.from(widget.initialProducts.isNotEmpty ? widget.initialProducts : widget.table.currentItems);
     _guestCount = widget.table.guestCount ?? 2;
+    // Phục hồi ưu đãi khuyến mãi đã áp dụng từ bàn (giúp treo đơn qua giờ combo không bị mất)
+    _appliedDiscounts = List.from(widget.table.currentDiscounts);
+    if (_cart.isNotEmpty) {
+      widget.table.openedAt ??= DateTime.now().millisecondsSinceEpoch;
+    }
     _selectedCustomer = TableCustomerLogic.restore(widget.table);
     if (_selectedCustomer != null) {
       _customerPointsUnknown = true;
@@ -1082,14 +1087,29 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
   }
 
+  void _syncTableDiscounts() {
+    widget.table.discountsJson = _appliedDiscounts.isEmpty
+        ? null
+        : jsonEncode(_appliedDiscounts.map((e) => e.toMap()).toList());
+  }
+
   void _recalculateDiscounts() {
     final List<BillDiscountModel> valid = [];
     final List<String> dropped = [];
     for (final d in _appliedDiscounts) {
       if (d.campaignId != null && _campaignById.containsKey(d.campaignId)) {
-        // Chương trình KM mới: tính lại bằng Pricing Engine
-        final r = CartCampaignPricing.recalculate([d], _campaignById,
-            cart: _cart, products: _products, branchId: _fb.currentStoreCode, guestCount: _guestCount, customerBirthday: _selectedCustomer?.birthday);
+        // Chương trình KM mới: tính lại bằng Pricing Engine (bỏ qua khung giờ nếu đơn đã áp dụng trước đó)
+        final r = CartCampaignPricing.recalculate(
+          [d],
+          _campaignById,
+          cart: _cart,
+          products: _products,
+          branchId: _fb.currentStoreCode,
+          guestCount: _guestCount,
+          customerBirthday: _selectedCustomer?.birthday,
+          orderTimestampMs: widget.table.openedAt,
+          isExistingOrder: true,
+        );
         valid.addAll(r.discounts);
         dropped.addAll(r.dropped);
       } else if (d.promoId != null) {
@@ -1115,6 +1135,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       }
     }
     setState(() => _appliedDiscounts = valid);
+    _syncTableDiscounts();
+    if (widget.table.currentOrderJson.isNotEmpty) {
+      _fb.saveTable(widget.table).catchError((_) {});
+    }
     if (dropped.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Đã gỡ khuyến mãi không còn đủ điều kiện: ${dropped.join(", ")}')),
@@ -4250,6 +4274,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   branchId: _fb.currentStoreCode,
                   customerBirthday: _selectedCustomer?.birthday,
                   guestCount: _guestCount,
+                  orderTimestampMs: widget.table.openedAt,
+                  isExistingOrder: true,
                 );
 
                 final groups = buildCartProductGroups(

@@ -14,6 +14,8 @@ class PricingInput {
   final String? enteredCode;
   final int manualDiscountMoney;
   final int pricingPolicyVersion;
+  /// Bỏ qua kiểm tra khung giờ (dùng khi tính lại đơn ĐÃ ÁP DỤNG khuyến mãi để treo đơn qua giờ không bị mất)
+  final bool ignoreSchedule;
 
   PricingInput({
     required this.branchId,
@@ -25,6 +27,7 @@ class PricingInput {
     this.enteredCode,
     this.manualDiscountMoney = 0,
     this.pricingPolicyVersion = 1,
+    this.ignoreSchedule = false,
   });
 }
 
@@ -272,7 +275,7 @@ PriceQuoteModel calculatePrice({
 
   // Evaluate campaigns
   for (var campaign in activeCampaigns) {
-    if (!campaign.isEligibleAt(input.serverNowMs)) {
+    if (!input.ignoreSchedule && !campaign.isEligibleAt(input.serverNowMs)) {
       addReason(campaign, 'OUTSIDE_SCHEDULE', 'Ngoài thời gian áp dụng');
       continue;
     }

@@ -3,7 +3,8 @@
 // Hiển thị món trong giỏ hàng theo cấu trúc Cây / Nhánh (Tree Grouped View):
 // - GỐC (Root Header): Tên món chung, tổng số phần, tổng tiền sau giảm giá của cả nhóm.
 // - NHÁNH (Branches): Các phân nhánh biến thể (Size, Đường, Đá, Topping, Ghi chú, Giảm giá món, Ưu đãi khuyến mãi).
-// - Các nhánh được kết nối trực quan bằng đường kẻ cây (Tree Line Painter: ├── và └──).
+// - Các nhánh được kết nối trực quan bằng đường kẻ cây thanh thoát, không đóng hộp rườm rà.
+// - Nút thao tác (Ghi chú, Giảm giá) dạng icon compact để không bao giờ bị đè/chồng chéo giá tiền.
 // - Nếu sản phẩm chỉ có 1 nhánh duy nhất: hiển thị gọn gàng như thẻ đơn thông thường.
 
 import 'package:flutter/material.dart';
@@ -90,7 +91,7 @@ List<CartProductGroup> buildCartProductGroups({
   return groupOrder.map((k) => groups[k]!).toList();
 }
 
-/// CustomPainter vẽ đường nối nhánh cây phân cấp (Tree branch connector)
+/// CustomPainter vẽ đường nối nhánh cây phân cấp (Tree branch connector thanh thoát)
 class TreeBranchPainter extends CustomPainter {
   final bool isFirst;
   final bool isLast;
@@ -108,7 +109,7 @@ class TreeBranchPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
       ..color = lineColor
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
     final dotPaint = Paint()
@@ -116,14 +117,14 @@ class TreeBranchPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final x = size.width / 2;
-    const branchY = 18.0;
+    const branchY = 12.0;
 
     if (isLast) {
-      // Đường dọc từ đỉnh xuống gần branchY rồi uốn cong 90 độ rẽ sang phải
+      // Đường dọc từ đỉnh xuống gần branchY rồi uốn cong nhẹ sang phải
       final path = Path()
         ..moveTo(x, 0)
-        ..lineTo(x, (branchY - 8).clamp(0, size.height))
-        ..quadraticBezierTo(x, branchY, x + 8, branchY)
+        ..lineTo(x, (branchY - 6).clamp(0, size.height))
+        ..quadraticBezierTo(x, branchY, x + 6, branchY)
         ..lineTo(size.width, branchY);
       canvas.drawPath(path, linePaint);
     } else {
@@ -133,12 +134,8 @@ class TreeBranchPainter extends CustomPainter {
       canvas.drawLine(Offset(x, branchY), Offset(size.width, branchY), linePaint);
     }
 
-    // Nút tròn phân nhánh (node dot)
-    canvas.drawCircle(Offset(x, branchY), 4.5, dotPaint);
-    final innerPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(x, branchY), 2.0, innerPaint);
+    // Nút tròn phân nhánh nhỏ gọn, tinh tế
+    canvas.drawCircle(Offset(x, branchY), 3.0, dotPaint);
   }
 
   @override
@@ -187,12 +184,12 @@ class CartTreeGroupCard extends StatelessWidget {
       );
     }
 
-    // Sản phẩm có ≥ 2 nhánh: hiển thị cấu trúc Cây (Gốc + các Nhánh con)
+    // Sản phẩm có ≥ 2 nhánh: hiển thị cấu trúc Cây (Gốc + các Nhánh con thoáng mắt)
     return Card(
-      elevation: 1,
+      elevation: 0.5,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: context.tc.borderLight),
       ),
       child: Column(
@@ -203,12 +200,12 @@ class CartTreeGroupCard extends StatelessWidget {
 
           const Divider(height: 1, thickness: 1),
 
-          // 2. DANH SÁCH CÁC NHÁNH (BRANCHES)
+          // 2. DANH SÁCH CÁC NHÁNH (BRANCHES - thoáng đãng, không đóng hộp riêng)
           Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 6, left: 6, right: 8),
+            padding: const EdgeInsets.fromLTRB(4, 6, 8, 8),
             child: Column(
               children: [
-                for (int i = 0; i < group.branches.length; i++)
+                for (int i = 0; i < group.branches.length; i++) ...[
                   _buildBranchRow(
                     context,
                     branchIndex: i,
@@ -216,6 +213,12 @@ class CartTreeGroupCard extends StatelessWidget {
                     isFirst: i == 0,
                     isLast: i == group.branches.length - 1,
                   ),
+                  if (i < group.branches.length - 1)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20),
+                      child: Divider(height: 10, thickness: 0.6, color: context.tc.borderLight),
+                    ),
+                ],
               ],
             ),
           ),
@@ -227,27 +230,27 @@ class CartTreeGroupCard extends StatelessWidget {
   /// Gốc sản phẩm: Tên món, số lượng nhánh, tổng số phần, tổng tiền gốc và tổng tiền thực trả
   Widget _buildRootHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      color: context.tc.primaryLight.withValues(alpha: 0.28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      color: context.tc.primaryLight.withValues(alpha: 0.22),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Biểu tượng gốc sản phẩm
           Container(
-            width: 34,
-            height: 34,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: context.tc.card,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(color: context.tc.borderLight),
             ),
             child: Icon(
               Icons.account_tree_rounded,
-              size: 20,
+              size: 16,
               color: context.tc.primary,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           // Tên sản phẩm + Nhãn số nhánh & số phần
           Expanded(
@@ -258,31 +261,20 @@ class CartTreeGroupCard extends StatelessWidget {
                   group.productName,
                   style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                    fontSize: 14,
                     color: context.tc.textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: context.tc.primaryLight,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '${group.branches.length} nhánh biến thể • ${group.totalQuantity} phần',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: context.tc.primaryDark,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 1),
+                Text(
+                  '${group.branches.length} phân nhánh tùy chọn • ${group.totalQuantity} phần',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: context.tc.primaryDark,
+                  ),
                 ),
               ],
             ),
@@ -296,7 +288,7 @@ class CartTreeGroupCard extends StatelessWidget {
                 Text(
                   FormatUtils.vnd(group.totalGross),
                   style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
+                    fontSize: 10,
                     color: context.tc.textSecondary,
                     decoration: TextDecoration.lineThrough,
                   ),
@@ -304,7 +296,7 @@ class CartTreeGroupCard extends StatelessWidget {
               Text(
                 FormatUtils.vnd(group.effectiveTotal),
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: group.hasAnyDiscount ? AppColors.success : context.tc.primary,
                 ),
@@ -314,10 +306,12 @@ class CartTreeGroupCard extends StatelessWidget {
 
           // Nút xóa toàn bộ nhóm nếu có
           if (onRemoveGroup != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 2),
             IconButton(
               tooltip: 'Xóa toàn bộ ${group.productName}',
-              icon: Icon(Icons.delete_sweep_outlined, size: 20, color: context.tc.textSecondary),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              icon: Icon(Icons.delete_sweep_outlined, size: 18, color: context.tc.textSecondary),
               onPressed: () => onRemoveGroup!(group),
             ),
           ],
@@ -340,16 +334,15 @@ class CartTreeGroupCard extends StatelessWidget {
     final hasIce = item.selectedIce.trim().isNotEmpty;
     final hasToppings = item.selectedToppings.isNotEmpty;
     final hasAttrs = hasSize || hasSugar || hasIce || hasToppings;
-    final compact = MediaQuery.of(context).size.width < 380;
 
     return Stack(
       children: [
-        // Cột vẽ đường kẻ cây phân cấp (Tree line)
+        // Cột vẽ đường kẻ cây phân cấp (Tree line mỏng gọn)
         Positioned(
           left: 0,
           top: 0,
           bottom: 0,
-          width: 26,
+          width: 20,
           child: CustomPaint(
             painter: TreeBranchPainter(
               isFirst: isFirst,
@@ -360,124 +353,130 @@ class CartTreeGroupCard extends StatelessWidget {
           ),
         ),
 
-        // Thân nội dung của nhánh
+        // Thân nội dung của nhánh (không đóng khung hộp cứng nhắc)
         Padding(
-          padding: const EdgeInsets.only(left: 26),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-            decoration: BoxDecoration(
-              color: context.tc.cardElevated.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.tc.borderLight),
-            ),
+          padding: const EdgeInsets.only(left: 20),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 2, 2, 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // A. Tiêu đề nhánh + Trạng thái + Nút xóa nhánh
+                // A. Thuộc tính biến thể / Tiêu đề nhánh + Trạng thái + Nút xóa
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // Tag số thứ tự nhánh nhỏ gọn
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: context.tc.primaryLight.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(3),
                         border: Border.all(color: context.tc.primary.withValues(alpha: 0.2)),
                       ),
                       child: Text(
-                        'Nhánh #${branchIndex + 1}',
+                        '#${branchIndex + 1}',
                         style: GoogleFonts.beVietnamPro(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: context.tc.primaryDark,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    if (branch.soldOut && !item.isSentKitchen)
+                    const SizedBox(width: 4),
+
+                    // Biến thể (Size, Đường, Đá, Topping)
+                    Expanded(
+                      child: hasAttrs
+                          ? Wrap(
+                              spacing: 3,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (hasSize)
+                                  _BranchAttrChip('Size ${item.selectedSize.trim()}', context.tc.info, context.tc.infoLight),
+                                if (hasSugar)
+                                  _BranchAttrChip(item.selectedSugar.trim(), context.tc.success, context.tc.successLight),
+                                if (hasIce)
+                                  _BranchAttrChip(
+                                    item.selectedIce.trim(),
+                                    context.ink(const Color(0xFF0F5E66)),
+                                    context.bg(const Color(0xFFE0F2F1)),
+                                  ),
+                                if (hasToppings)
+                                  _BranchAttrChip(
+                                    '+${item.selectedToppings.join(', ')}',
+                                    context.tc.warningInk,
+                                    context.tc.warningLight,
+                                  ),
+                              ],
+                            )
+                          : Text(
+                              'Tiêu chuẩn',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                color: context.tc.textSecondary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                    ),
+
+                    if (branch.soldOut && !item.isSentKitchen) ...[
+                      const SizedBox(width: 4),
                       StatusBadge(
-                        label: 'Hết hàng',
+                        label: 'Hết',
                         color: context.tc.danger,
                         icon: Icons.warning_amber_rounded,
-                        fontSize: 10,
+                        fontSize: 9.5,
                       ),
-                    if (item.isSentKitchen)
+                    ],
+                    if (item.isSentKitchen) ...[
+                      const SizedBox(width: 4),
                       StatusBadge(
-                        label: 'Đã gửi bếp',
+                        label: 'Bếp',
                         color: context.tc.success,
                         icon: Icons.check,
-                        fontSize: 10,
+                        fontSize: 9.5,
                       ),
-                    const Spacer(),
+                    ],
+
                     IconButton(
-                      tooltip: 'Xóa nhánh #${branchIndex + 1}',
+                      tooltip: 'Xóa phần #${branchIndex + 1}',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                      icon: Icon(Icons.close_rounded, size: 18, color: context.tc.textSecondary),
+                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                      icon: Icon(Icons.close_rounded, size: 16, color: context.tc.textSecondary),
                       onPressed: () => onRemove(branch.cartIndex),
                     ),
                   ],
                 ),
 
-                // B. Thuộc tính biến thể (Size, Đường, Đá, Topping)
-                if (hasAttrs) ...[
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () => onEditNote(branch.cartIndex),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        if (hasSize)
-                          _BranchAttrChip('Size ${item.selectedSize.trim()}', context.tc.info, context.tc.infoLight),
-                        if (hasSugar)
-                          _BranchAttrChip(item.selectedSugar.trim(), context.tc.success, context.tc.successLight),
-                        if (hasIce)
-                          _BranchAttrChip(
-                            item.selectedIce.trim(),
-                            context.ink(const Color(0xFF0F5E66)),
-                            context.bg(const Color(0xFFE0F2F1)),
-                          ),
-                        if (hasToppings)
-                          _BranchAttrChip(
-                            '+${item.selectedToppings.join(', ')}',
-                            context.tc.warningInk,
-                            context.tc.warningLight,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // C. Ghi chú của nhánh
+                // B. Ghi chú của nhánh (nếu có)
                 if (item.note.isNotEmpty) ...[
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 3),
                   InkWell(
                     onTap: () => onEditNote(branch.cartIndex),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: context.tc.warningLight,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: context.tc.warning.withValues(alpha: 0.45)),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: context.tc.warning.withValues(alpha: 0.35)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.edit_note, size: 15, color: context.tc.warningInk),
-                          const SizedBox(width: 4),
+                          Icon(Icons.edit_note, size: 13, color: context.tc.warningInk),
+                          const SizedBox(width: 3),
                           Flexible(
                             child: Text(
                               'Ghi chú: ${item.note}',
                               style: GoogleFonts.beVietnamPro(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 fontStyle: FontStyle.italic,
                                 color: context.tc.warningInk,
                                 fontWeight: FontWeight.w600,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -487,20 +486,20 @@ class CartTreeGroupCard extends StatelessWidget {
                   ),
                 ],
 
-                // D. Giảm giá món thủ công
+                // C. Giảm giá món thủ công
                 if (item.hasDiscount) ...[
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 3),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                     decoration: BoxDecoration(
                       color: context.tc.dangerLight,
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: context.tc.danger.withValues(alpha: 0.3)),
+                      border: Border.all(color: context.tc.danger.withValues(alpha: 0.25)),
                     ),
                     child: Text(
                       CartItemCard.discountLabel(item),
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 11,
+                        fontSize: 10.5,
                         color: context.tc.danger,
                         fontWeight: FontWeight.w600,
                       ),
@@ -508,14 +507,14 @@ class CartTreeGroupCard extends StatelessWidget {
                   ),
                 ],
 
-                // E. Giảm giá do chương trình khuyến mãi (Combo, Mua X tặng Y, ...)
+                // D. Giảm giá do chương trình khuyến mãi (Combo, Mua X tặng Y, ...)
                 if (branch.promoDiscounts.isNotEmpty) ...[
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 3),
                   for (final promo in branch.promoDiscounts)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
+                      padding: const EdgeInsets.only(bottom: 2),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFF7ED),
                           borderRadius: BorderRadius.circular(4),
@@ -524,15 +523,15 @@ class CartTreeGroupCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.card_giftcard_rounded, size: 14, color: Color(0xFFC2410C)),
-                            const SizedBox(width: 4),
+                            const Icon(Icons.card_giftcard_rounded, size: 13, color: Color(0xFFC2410C)),
+                            const SizedBox(width: 3),
                             Flexible(
                               child: Text(
                                 promo.isGift
                                     ? '🎁 Món tặng (100%): ${promo.campaignName}'
                                     : '🎁 Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
                                 style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   color: const Color(0xFFC2410C),
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -545,21 +544,22 @@ class CartTreeGroupCard extends StatelessWidget {
                     ),
                 ],
 
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
 
-                // F. Giá tiền + Thao tác (Ghi chú, Giảm giá) + Stepper
+                // E. Giá tiền + Nút Thao tác (icon vuông nhỏ không đè chữ) + Stepper
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // Cột giá tiền (chiếm trọn không gian bên trái, không bao giờ bị đè)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(
                             children: [
                               Text(
                                 '${FormatUtils.vnd(item.unitPrice)} × ${item.quantity}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 11,
                                   color: context.tc.textSecondary,
@@ -567,52 +567,63 @@ class CartTreeGroupCard extends StatelessWidget {
                               ),
                               if (branch.hasAnyDiscount) ...[
                                 const SizedBox(width: 4),
-                                Text(
-                                  FormatUtils.vnd(item.lineGross),
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 10,
-                                    color: context.tc.textSecondary,
-                                    decoration: TextDecoration.lineThrough,
+                                Flexible(
+                                  child: Text(
+                                    FormatUtils.vnd(item.lineGross),
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 10,
+                                      color: context.tc.textSecondary,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              FormatUtils.vnd(branch.effectiveTotal),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: branch.hasAnyDiscount ? AppColors.success : context.tc.primary,
-                              ),
+                          Text(
+                            FormatUtils.vnd(branch.effectiveTotal),
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: branch.hasAnyDiscount ? AppColors.success : context.tc.primary,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    _BranchActionPill(
-                      icon: Icons.edit_note,
-                      label: item.note.isEmpty ? '+ Ghi chú' : 'Ghi chú',
-                      compact: compact,
+
+                    const SizedBox(width: 6),
+
+                    // Nút icon Ghi chú (bật sáng khi đã có ghi chú)
+                    _BranchIconBtn(
+                      icon: Icons.edit_note_rounded,
+                      tooltip: item.note.isEmpty ? 'Thêm ghi chú' : 'Sửa ghi chú',
+                      isActive: item.note.isNotEmpty,
+                      activeColor: context.tc.warningInk,
+                      activeBgColor: context.tc.warningLight,
                       onTap: () => onEditNote(branch.cartIndex),
                     ),
                     const SizedBox(width: 4),
-                    _BranchActionPill(
+
+                    // Nút icon Giảm giá món (bật sáng đỏ khi đã giảm giá)
+                    _BranchIconBtn(
                       icon: item.hasDiscount ? Icons.discount : Icons.discount_outlined,
-                      label: item.hasDiscount ? 'Đã giảm' : 'Giảm món',
-                      compact: compact,
+                      tooltip: item.hasDiscount ? 'Đã giảm món' : 'Giảm món',
+                      isActive: item.hasDiscount,
+                      activeColor: context.tc.danger,
+                      activeBgColor: context.tc.dangerLight,
                       onTap: () => onDiscount(branch.cartIndex),
-                      color: item.hasDiscount ? context.tc.danger : null,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
+
+                    // Bộ tăng giảm số lượng gọn gàng
                     QuantityStepper(
                       value: item.quantity,
                       onDecrement: () => onDecrement(branch.cartIndex),
                       onIncrement: () => onIncrement(branch.cartIndex),
-                      buttonSize: compact ? 32 : 36,
+                      buttonSize: 30,
                     ),
                   ],
                 ),
@@ -635,63 +646,54 @@ class _BranchAttrChip extends StatelessWidget {
   Widget build(BuildContext context) {
     if (label.trim().isEmpty) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(4)),
+      padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(3)),
       child: Text(
         label.trim(),
-        style: TextStyle(fontSize: 10, color: textColor, fontWeight: FontWeight.w700),
+        style: TextStyle(fontSize: 9.5, color: textColor, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
-class _BranchActionPill extends StatelessWidget {
+class _BranchIconBtn extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String tooltip;
+  final bool isActive;
+  final Color? activeColor;
+  final Color? activeBgColor;
   final VoidCallback onTap;
-  final Color? color;
-  final bool compact;
 
-  const _BranchActionPill({
+  const _BranchIconBtn({
     required this.icon,
-    required this.label,
+    required this.tooltip,
     required this.onTap,
-    this.color,
-    this.compact = false,
+    this.isActive = false,
+    this.activeColor,
+    this.activeBgColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fg = color ?? context.tc.textPrimary;
+    final fg = isActive ? (activeColor ?? context.tc.primary) : context.tc.textSecondary;
+    final bg = isActive ? (activeBgColor ?? context.tc.primaryLight) : context.tc.cardElevated;
+    final border = isActive ? fg.withValues(alpha: 0.4) : context.tc.borderLight;
+
     return Tooltip(
-      message: label,
+      message: tooltip,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
         child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 32 : 36, minWidth: compact ? 32 : 36),
-          padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 6),
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: color != null ? color!.withValues(alpha: 0.1) : context.tc.cardElevated,
+            color: bg,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: color != null ? color!.withValues(alpha: 0.4) : context.tc.borderLight,
-            ),
+            border: Border.all(color: border),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: compact ? 15 : 17, color: fg),
-              if (!compact) ...[
-                const SizedBox(width: 3),
-                Text(
-                  label,
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
-                ),
-              ],
-            ],
-          ),
+          child: Icon(icon, size: 16, color: fg),
         ),
       ),
     );

@@ -206,6 +206,7 @@ class OrderRepository {
     dst.customerName = src.customerName;
     dst.customerPhone = src.customerPhone;
     dst.note = src.note;
+    dst.discountsJson = src.discountsJson;
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
@@ -280,6 +281,7 @@ class OrderRepository {
     target.currentOrderCode = sourceTable.currentOrderCode;
     target.actionLogsJson = sourceTable.actionLogsJson;
     target.deletedItemsJson = sourceTable.deletedItemsJson;
+    target.discountsJson = sourceTable.discountsJson;
     // Trạng thái "Chờ thanh toán" đi theo đơn sang bàn đích.
     target.prePrintedAt = sourceTable.prePrintedAt;
     target.prePrintedBy = sourceTable.prePrintedBy;

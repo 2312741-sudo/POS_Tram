@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../core/utils/format_utils.dart';
 import 'order_item_model.dart';
 import 'order_action_log_model.dart';
+import 'promotion_model.dart';
 import '../../core/domain/deleted_items.dart';
 
 // ==================== TABLE MODEL (KIOTVIET FNB) ====================
@@ -50,6 +51,10 @@ class TableModel {
   /// Hợp đồng chung với web: field `note` trên node tables/{key}.
   String? note;
 
+  /// Danh sách ưu đãi khuyến mãi / voucher đã áp dụng trên bàn (JSON mảng [BillDiscountModel]).
+  /// Giúp treo đơn qua giờ combo không bị mất khuyến mãi đã chọn trước đó.
+  String? discountsJson;
+
   TableModel({
     required this.name,
     required this.zone,
@@ -74,7 +79,19 @@ class TableModel {
     this.customerName,
     this.customerPhone,
     this.note,
+    this.discountsJson,
   }) : _currentOrderJson = currentOrderJson;
+
+  /// Danh sách ưu đãi khuyến mãi / voucher đã áp dụng trên bàn
+  List<BillDiscountModel> get currentDiscounts {
+    if (discountsJson == null || discountsJson!.isEmpty) return [];
+    try {
+      final List list = jsonDecode(discountsJson!);
+      return list.map((e) => BillDiscountModel.fromMap(e)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   /// Giỏ món hiện tại (JSON). Gán giá trị mới mà NỘI DUNG TÍNH TIỀN thay đổi (khác
   /// [billSignatureOf]) sẽ tự xóa trạng thái "đã in tạm tính" → bàn quay về "Có khách".
@@ -243,11 +260,13 @@ class TableModel {
       customerName: nz(map['customerName']),
       customerPhone: nz(map['customerPhone']),
       note: nz(map['note']),
+      discountsJson: nz(map['discountsJson']),
     );
   }
 
   Map<String, dynamic> toMap() => {
     if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
+    if (discountsJson != null && discountsJson!.isNotEmpty) 'discountsJson': discountsJson,
     'name': name,
     'zone': zone,
     'inUse': inUse,
@@ -344,6 +363,7 @@ class TableModel {
     mergedIntoTable = null;
     actionLogsJson = null;
     deletedItemsJson = null;
+    discountsJson = null;
     note = null;
     clearPrePrint();
     clearCustomer();

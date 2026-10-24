@@ -224,13 +224,13 @@ void main() {
         ),
       );
 
-      // Kiểm tra Gốc: Tên sản phẩm và nhãn 2 nhánh • 2 phần
+      // Kiểm tra Gốc: Tên sản phẩm và nhãn 2 nhánh
       expect(find.text('Trà Đào Cam Sả'), findsOneWidget);
-      expect(find.text('2 nhánh biến thể • 2 phần'), findsOneWidget);
+      expect(find.textContaining('2 phân nhánh'), findsOneWidget);
 
       // Kiểm tra các Nhánh
-      expect(find.text('Nhánh #1'), findsOneWidget);
-      expect(find.text('Nhánh #2'), findsOneWidget);
+      expect(find.text('#1'), findsOneWidget);
+      expect(find.text('#2'), findsOneWidget);
       expect(find.text('Ghi chú: Mang về'), findsOneWidget);
       expect(find.textContaining('🎁 Giảm KM: -10.000 đ'), findsOneWidget);
 
@@ -245,6 +245,114 @@ void main() {
       expect(deleteButtons, findsNWidgets(2));
       await tester.tap(deleteButtons.last);
       expect(removedIndex, equals(1));
+    });
+
+    test('Treo đơn qua giờ combo vẫn giữ được ưu đãi combo khi recalculate', () {
+      final cart = [
+        OrderItemModel(
+          productId: 101,
+          name: 'Trà Đào Cam Sả',
+          price: 35000,
+          quantity: 1,
+        ),
+        OrderItemModel(
+          productId: 201,
+          name: 'Bánh Croissant',
+          price: 30000,
+          quantity: 1,
+        ),
+      ];
+
+      final products = [
+        ProductModel(id: 101, name: 'Trà Đào Cam Sả', price: 35000, category: 'Nước', unit: 'Ly'),
+        ProductModel(id: 201, name: 'Bánh Croissant', price: 30000, category: 'Bánh', unit: 'Cái'),
+      ];
+
+      // Combo chỉ áp dụng từ 07:00 đến 09:00
+      final schedule = CampaignSchedule(
+        timeSlots: [
+          CampaignTimeSlot(startTime: '07:00', endTime: '09:00'),
+        ],
+      );
+
+      final campaign = CampaignModel(
+        campaignId: 'COMBO_MORNING',
+        programCode: 'COMBO_SANG',
+        name: 'Combo Sáng Giảm 10K',
+        description: 'Mua nước + bánh từ 7h-9h giảm 10k',
+        campaignType: 'BUY_X_GET_Y',
+        schedule: schedule,
+        branchIds: const [],
+        includedCustomerIds: const [],
+        excludedCustomerIds: const [],
+        includedItemIds: const [],
+        includedGroupIds: const [],
+        excludedItemIds: const [],
+        tiers: const [],
+        buyConditions: [
+          CampaignBuyCondition(
+            conditionId: 'COND_1',
+            buyItemIds: const [],
+            buyGroupIds: ['Nước'],
+            requiredBuyQty: 1,
+            rewardItemIds: const [],
+            rewardGroupIds: ['Bánh'],
+            rewardQty: 1,
+            benefitMode: 'FIXED',
+            value: 10000,
+            multiplyByBundle: true,
+          ),
+        ],
+        warnRepeatedCustomer: false,
+        hasCodes: false,
+        autoApply: false,
+        stackingMode: 'STACKABLE',
+        priority: 1,
+        active: true,
+        createdAt: 0,
+        updatedAt: 0,
+        createdBy: 'admin',
+        version: 1,
+      );
+
+      final appliedDiscounts = <BillDiscountModel>[
+        BillDiscountModel(
+          campaignId: campaign.campaignId,
+          campaignName: campaign.name,
+          description: campaign.description,
+          amount: 10000,
+        ),
+      ];
+
+      // Đơn đã áp dụng combo lúc 08:30 (trong giờ combo).
+      // Giờ hiện tại là 09:30 (ngoài giờ combo, qua giờ).
+      // Recalculate với isExistingOrder: true (treo đơn)
+      final r = CartCampaignPricing.recalculate(
+        appliedDiscounts,
+        {campaign.campaignId: campaign},
+        cart: cart,
+        products: products,
+        branchId: 'TRAM_01',
+        isExistingOrder: true,
+      );
+
+      // Ưu đãi combo vẫn PHẢI ĐƯỢC GIỮ LẠI, không bị rơi vào dropped!
+      expect(r.dropped, isEmpty);
+      expect(r.discounts.length, equals(1));
+      expect(r.discounts.first.amount, equals(10000));
+      expect(r.discounts.first.campaignId, equals('COMBO_MORNING'));
+
+      // Cũng kiểm tra computeLinePromotionDiscounts trên từng dòng món
+      final linePromos = CartCampaignPricing.computeLinePromotionDiscounts(
+        cart: cart,
+        appliedDiscounts: r.discounts,
+        campaignsById: {campaign.campaignId: campaign},
+        products: products,
+        branchId: 'TRAM_01',
+        isExistingOrder: true,
+      );
+      expect(linePromos.containsKey(1), isTrue);
+      expect(linePromos[1]!.first.discountAmount, equals(10000));
     });
   });
 }

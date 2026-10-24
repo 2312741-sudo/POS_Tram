@@ -29,6 +29,8 @@ class CartCampaignPricing {
     required String branchId,
     String? customerBirthday,
     int? guestCount,
+    int? orderTimestampMs,
+    bool isExistingOrder = true,
   }) {
     final result = <int, List<({String campaignName, int discountAmount, int quantity, bool isGift})>>{};
     if (cart.isEmpty || appliedDiscounts.isEmpty) return result;
@@ -44,6 +46,8 @@ class CartCampaignPricing {
         branchId: branchId,
         guestCount: guestCount,
         customerBirthday: customerBirthday,
+        nowMs: orderTimestampMs,
+        ignoreSchedule: isExistingOrder,
       );
 
       final seenLines = <String>{};
@@ -89,6 +93,7 @@ class CartCampaignPricing {
     int? guestCount,
     String? customerBirthday,
     int? nowMs,
+    bool ignoreSchedule = false,
   }) {
     return calculatePrice(
       input: PricingInput(
@@ -97,6 +102,7 @@ class CartCampaignPricing {
         guestCount: guestCount,
         serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
         lines: lines(cart, products),
+        ignoreSchedule: ignoreSchedule,
       ),
       activeCampaigns: [campaign],
       counters: const {},
@@ -291,6 +297,8 @@ class CartCampaignPricing {
     required String branchId,
     int? guestCount,
     String? customerBirthday,
+    int? orderTimestampMs,
+    bool isExistingOrder = true,
   }) {
     final out = <BillDiscountModel>[];
     final dropped = <String>[];
@@ -300,7 +308,18 @@ class CartCampaignPricing {
         out.add(d);
         continue;
       }
-      final q = quote(c, cart: cart, products: products, branchId: branchId, guestCount: guestCount, customerBirthday: customerBirthday);
+      // Với đơn đã áp dụng CTKM (khi treo đơn qua giờ combo):
+      // Bỏ qua giới hạn khung giờ (ignoreSchedule: true), chỉ tính toán dựa trên món thực tế trong giỏ.
+      final q = quote(
+        c,
+        cart: cart,
+        products: products,
+        branchId: branchId,
+        guestCount: guestCount,
+        customerBirthday: customerBirthday,
+        nowMs: orderTimestampMs,
+        ignoreSchedule: isExistingOrder,
+      );
       final amt = q.totalPromotionDiscount;
       if (amt > 0) {
         final comboCnt = q.rewardBenefits
