@@ -141,6 +141,8 @@ export interface CampaignFormState {
   includedGroupIds: string[];
   daysOfWeek: number[];
   timeSlots: { startTime: string; endTime: string }[];
+  /** Chi nhánh áp dụng */
+  branchIds: string[];
 }
 
 export function emptyCampaignForm(): CampaignFormState {
@@ -153,6 +155,7 @@ export function emptyCampaignForm(): CampaignFormState {
     rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardBenefit: "FREEITEM", rewardValue: "",
     buyItemIds: [], buyGroupIds: [], buyQty: "1", multiplyByBundle: true,
     includedItemIds: [], includedGroupIds: [], daysOfWeek: [], timeSlots: [],
+    branchIds: ["TRAM01", "TRAM02", "TRAM03", "TRAM04"],
   };
 }
 
@@ -178,6 +181,7 @@ export interface StoredCampaign {
   buyConditions?: RawBuyCondition[];
   includedItemIds?: string[];
   includedGroupIds?: string[];
+  branchIds?: string[];
 }
 
 const posStr = (n: number) => (n > 0 ? String(n) : "");
@@ -229,6 +233,7 @@ export function campaignToForm(cam: StoredCampaign): CampaignFormState {
     includedGroupIds: strList(cam.includedGroupIds),
     daysOfWeek: Array.isArray(cam.schedule?.daysOfWeek) ? [...cam.schedule.daysOfWeek] : [],
     timeSlots: Array.isArray(cam.schedule?.timeSlots) ? cam.schedule.timeSlots.map((s) => ({ ...s })) : [],
+    branchIds: Array.isArray(cam.branchIds) && cam.branchIds.length > 0 ? [...cam.branchIds] : ["TRAM01", "TRAM02", "TRAM03", "TRAM04"],
   };
 
   if (tier) {

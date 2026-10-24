@@ -281,9 +281,12 @@ export default function PromotionsPage() {
     return { codes, notes };
   };
 
-  const writeVoucherCodes = async (campaignId: string, codes: string[]) => {
+  const writeVoucherCodes = async (campaignId: string, codes: string[], targetBranches?: string[]) => {
     const now = Date.now();
-    await update(ref(db, `stores/${targetStoreCode}`), buildVoucherCreateUpdates(campaignId, codes, now, (i) => newVoucherId(now, i)));
+    const branches = targetBranches && targetBranches.length > 0 ? targetBranches : [targetStoreCode];
+    for (const b of branches) {
+      await update(ref(db, `stores/${b}`), buildVoucherCreateUpdates(campaignId, codes, now, (i) => newVoucherId(now, i)));
+    }
   };
 
   // Handle Save Campaign
@@ -314,6 +317,10 @@ export default function PromotionsPage() {
       if (campaignForm.daysOfWeek.length > 0) schedule.daysOfWeek = campaignForm.daysOfWeek;
       if (campaignForm.timeSlots.length > 0) schedule.timeSlots = campaignForm.timeSlots;
 
+      const selectedBranches = campaignForm.branchIds && campaignForm.branchIds.length > 0
+        ? campaignForm.branchIds
+        : (editingCampaign?.branchIds?.length ? editingCampaign.branchIds : [targetStoreCode]);
+
       const data = {
         campaignId,
         programCode,
@@ -322,7 +329,7 @@ export default function PromotionsPage() {
         campaignType: campaignForm.campaignType,
         active: campaignForm.active,
         schedule,
-        branchIds: editingCampaign?.branchIds?.length ? editingCampaign.branchIds : [targetStoreCode],
+        branchIds: selectedBranches,
         includedItemIds: benefit.includedItemIds,
         includedGroupIds: benefit.includedGroupIds,
         tiers: benefit.tiers,
@@ -342,11 +349,12 @@ export default function PromotionsPage() {
         createdBy: editingCampaign?.createdBy || "Admin"
       };
 
-      const camRef = ref(db, `stores/${targetStoreCode}/campaigns/${campaignId}`);
-      // Sửa: update để giữ các trường do Flutter ghi mà web không quản lý (excludedItemIds, version...)
-      if (editingCampaign) await update(camRef, data);
-      else await set(camRef, data);
-      if (codes.length > 0) await writeVoucherCodes(campaignId, codes);
+      for (const b of selectedBranches) {
+        const camRef = ref(db, `stores/${b}/campaigns/${campaignId}`);
+        if (editingCampaign) await update(camRef, data);
+        else await set(camRef, data);
+      }
+      if (codes.length > 0) await writeVoucherCodes(campaignId, codes, selectedBranches);
       setShowCampaignModal(false);
       setEditingCampaign(null);
     } catch (e) {
@@ -362,7 +370,9 @@ export default function PromotionsPage() {
       const res = await collectVoucherCodes(selectedVoucherCampaign);
       if (res.error) { setFormError(res.error); setSaving(false); return; }
       if (res.codes.length === 0) { setFormError("Không có mã nào để tạo"); setSaving(false); return; }
-      await writeVoucherCodes(selectedVoucherCampaign, res.codes);
+      const cam = campaigns.find(c => c.campaignId === selectedVoucherCampaign);
+      const targetBranches = cam?.branchIds && cam.branchIds.length > 0 ? cam.branchIds : [targetStoreCode];
+      await writeVoucherCodes(selectedVoucherCampaign, res.codes, targetBranches);
       setShowVoucherModal(false);
     } catch (e) { setFormError(errorMessage(e) || "Lỗi tạo mã"); }
     setSaving(false);
@@ -416,7 +426,11 @@ export default function PromotionsPage() {
   };
 
   const toggleCampaignActive = async (cam: CampaignItem) => {
-    await update(ref(db, `stores/${targetStoreCode}/campaigns/${cam.campaignId}`), { active: !cam.active, updatedAt: Date.now() });
+    const branches = cam.branchIds && cam.branchIds.length > 0 ? cam.branchIds : [targetStoreCode];
+    const now = Date.now();
+    for (const b of branches) {
+      await update(ref(db, `stores/${b}/campaigns/${cam.campaignId}`), { active: !cam.active, updatedAt: now });
+    }
   };
 
   // Ô nhập mã: dán danh sách hoặc sinh ngẫu nhiên (dùng trong form KM và modal thêm mã)
@@ -835,6 +849,47 @@ export default function PromotionsPage() {
               <select value={campaignForm.campaignType} onChange={(e) => setCampaignForm({ ...campaignForm, campaignType: normalizeCampaignType(e.target.value) })} style={inputStyle} disabled={!!editingCampaign}>
                 {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
+            </div>
+
+            {/* Chi nhánh áp dụng */}
+            <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "10px 14px" }}>
+              <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
+                🏢 Chi nhánh áp dụng
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>
+                  <input
+                    type="checkbox"
+                    checked={stores.filter(s => s.active !== false).length > 0 && stores.filter(s => s.active !== false).every(s => campaignForm.branchIds.includes(s.storeCode))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCampaignForm({ ...campaignForm, branchIds: stores.filter(s => s.active !== false).map(s => s.storeCode) });
+                      } else {
+                        setCampaignForm({ ...campaignForm, branchIds: [targetStoreCode] });
+                      }
+                    }}
+                  />
+                  Tất cả chi nhánh
+                </label>
+                {stores.filter(s => s.active !== false).map((s) => (
+                  <label key={s.storeCode} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                    <input
+                      type="checkbox"
+                      checked={campaignForm.branchIds.includes(s.storeCode)}
+                      onChange={(e) => {
+                        const cur = new Set(campaignForm.branchIds);
+                        if (e.target.checked) cur.add(s.storeCode);
+                        else {
+                          cur.delete(s.storeCode);
+                          if (cur.size === 0) cur.add(targetStoreCode);
+                        }
+                        setCampaignForm({ ...campaignForm, branchIds: Array.from(cur) });
+                      }}
+                    />
+                    {s.storeName || s.storeCode}
+                  </label>
+                ))}
+              </div>
             </div>
             
             {/* 1. Cấu hình Ưu đãi & Giảm giá */}

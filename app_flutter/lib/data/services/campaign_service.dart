@@ -70,27 +70,38 @@ class CampaignService {
     return CampaignModel.fromMap(Map<String, dynamic>.from(snapshot.value as Map<dynamic, dynamic>));
   }
 
-  /// Tạo hoặc cập nhật khuyến mãi
+  /// Tạo hoặc cập nhật khuyến mãi (đồng bộ trên tất cả chi nhánh được chọn)
   Future<void> saveCampaign(CampaignModel campaign) async {
     // Id rỗng làm đường dẫn thành `campaigns/` => ghi ĐÈ cả nhánh khuyến mãi của cửa hàng
     _requireCampaignId(campaign.campaignId);
-    await _storeRef.child('campaigns/${campaign.campaignId}').set(campaign.toMap());
+    final branches = campaign.branchIds.isNotEmpty ? campaign.branchIds : [_currentStoreCode];
+    for (final b in branches) {
+      await _db.ref('stores/$b/campaigns/${campaign.campaignId}').set(campaign.toMap());
+    }
   }
 
   static void _requireCampaignId(String id) {
     if (!isValidCampaignId(id)) throw ArgumentError('Mã chương trình khuyến mãi không hợp lệ: "$id"');
   }
 
-  /// Xóa mềm khuyến mãi (chỉ set active = false, không xóa hẳn)
+  /// Xóa mềm khuyến mãi (chỉ set active = false, đồng bộ chi nhánh)
   Future<void> deleteCampaign(String campaignId) async {
-    // Chỉ ghi trường active (không ghi đè cả node bằng dữ liệu đã đọc lại)
-    await _storeRef.child('campaigns/$campaignId').update({'active': false, 'updatedAt': DateTime.now().millisecondsSinceEpoch});
+    final c = await getCampaign(campaignId);
+    final branches = c?.branchIds.isNotEmpty == true ? c!.branchIds : [_currentStoreCode];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final b in branches) {
+      await _db.ref('stores/$b/campaigns/$campaignId').update({'active': false, 'updatedAt': now});
+    }
   }
 
-  /// Bật/Tắt khuyến mãi
+  /// Bật/Tắt khuyến mãi (đồng bộ chi nhánh)
   Future<void> toggleCampaignActive(String campaignId, bool active) async {
-    // Chỉ ghi trường active: không ghi đè cả node (tránh mất dữ liệu nếu đọc thiếu trường)
-    await _storeRef.child('campaigns/$campaignId').update({'active': active, 'updatedAt': DateTime.now().millisecondsSinceEpoch});
+    final c = await getCampaign(campaignId);
+    final branches = c?.branchIds.isNotEmpty == true ? c!.branchIds : [_currentStoreCode];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final b in branches) {
+      await _db.ref('stores/$b/campaigns/$campaignId').update({'active': active, 'updatedAt': now});
+    }
   }
 
   /// Tạo ID campaign mới
@@ -203,7 +214,11 @@ class CampaignService {
     if (updates.isNotEmpty) {
       updates['campaigns/$campaignId/hasCodes'] = true;
       updates['campaigns/$campaignId/updatedAt'] = now;
-      await _storeRef.update(updates);
+      final c = await getCampaign(campaignId);
+      final branches = c?.branchIds.isNotEmpty == true ? c!.branchIds : [_currentStoreCode];
+      for (final b in branches) {
+        await _db.ref('stores/$b').update(updates);
+      }
     }
     return VoucherCreateResult(created, existing);
   }

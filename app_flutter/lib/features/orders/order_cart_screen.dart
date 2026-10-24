@@ -1000,14 +1000,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại
-  PriceQuoteModel _quoteCampaign(CampaignModel c) => CartCampaignPricing.quote(
-        c,
-        cart: _cart,
-        products: _products,
-        branchId: _fb.currentStoreCode,
-        guestCount: _guestCount,
-        customerBirthday: _selectedCustomer?.birthday,
-      );
+  PriceQuoteModel _quoteCampaign(CampaignModel c) {
+    final isApplied = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
+    return CartCampaignPricing.quote(
+      c,
+      cart: _cart,
+      products: _products,
+      branchId: _fb.currentStoreCode,
+      guestCount: _guestCount,
+      customerBirthday: _selectedCustomer?.birthday,
+      nowMs: widget.table.openedAt,
+      ignoreSchedule: isApplied,
+    );
+  }
 
   /// Đơn đang dùng chương trình KM khóa tích điểm?
   bool get _pointsBlockedByPromo => _appliedDiscounts.any((d) {
@@ -2996,7 +3001,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Text('Chương trình khuyến mãi khả dụng:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     if (!_allPromotions.any((p) => p.isActive && p.code.isEmpty) &&
-                        !_campaigns.any((c) => !c.hasCodes && c.isEligibleAt(nowMs)))
+                        !_campaigns.any((c) => !c.hasCodes && (c.isEligibleAt(nowMs) || _appliedDiscounts.any((d) => d.campaignId == c.campaignId))))
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Text(
@@ -3050,7 +3055,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       );
                     }),
                     // Chương trình KM mới (không phát hành mã) - tính bằng Pricing Engine
-                    ..._campaigns.where((c) => !c.hasCodes && c.isEligibleAt(nowMs)).map((c) {
+                    ..._campaigns.where((c) => !c.hasCodes && (c.isEligibleAt(nowMs) || _appliedDiscounts.any((d) => d.campaignId == c.campaignId))).map((c) {
                       final isSelected = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
                       final q = _quoteCampaign(c);
                       final amt = q.totalPromotionDiscount;
@@ -3322,6 +3327,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       _appliedDiscounts
         ..clear()
         ..addAll(originalDiscounts);
+    } else {
+      _syncTableDiscounts();
+      if (widget.table.currentOrderJson.isNotEmpty) {
+        _fb.saveTable(widget.table).catchError((_) {});
+      }
     }
     if (mounted) setState(() {});
   }
@@ -4164,7 +4174,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        _syncTableDiscounts();
+        if (widget.table.currentOrderJson.isNotEmpty) {
+          _fb.saveTable(widget.table).catchError((_) {});
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4413,6 +4431,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 );
               },
             ),
+      ),
     );
   }
 
