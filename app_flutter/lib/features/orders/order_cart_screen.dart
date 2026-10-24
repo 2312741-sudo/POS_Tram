@@ -859,6 +859,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   /// Tự thêm món được tặng/giảm vào đơn khi đơn đã đủ điều kiện nhưng món thưởng chưa có.
   /// Một món thưởng → thêm luôn; nhiều món → hỏi chọn. Trả true khi đã thêm.
   Future<bool> _addRewardItems(CampaignModel c) async {
+    if (_products.isEmpty) {
+      try {
+        final prods = await _fb.getProducts(storeCode: _fb.currentStoreCode);
+        if (prods.isNotEmpty && mounted) {
+          setState(() => _products = prods);
+        }
+      } catch (_) {}
+    }
     final plan = CartCampaignPricing.rewardPlan(c, cart: _cart, products: _products);
     if (plan == null) {
       if (mounted) {
@@ -907,6 +915,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   /// Mở màn hình chọn món giảm giá Combo (chỉ hiển thị món/nhóm món được chọn giảm giá,
   /// giới hạn số lượng món được chọn theo số lượng món điều kiện (nước) trong giỏ hàng).
   Future<bool> _pickComboRewardItems(CampaignModel c) async {
+    if (_products.isEmpty) {
+      try {
+        final prods = await _fb.getProducts(storeCode: _fb.currentStoreCode);
+        if (prods.isNotEmpty && mounted) {
+          setState(() => _products = prods);
+        }
+      } catch (_) {}
+    }
     final combo = CartCampaignPricing.getComboInfo(c, cart: _cart, products: _products);
     if (combo == null) {
       return _addRewardItems(c);

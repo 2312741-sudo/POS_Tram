@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/domain/pricing_engine.dart';
 import 'package:tram_flutter/data/models/campaign_models.dart';
+import 'package:tram_flutter/data/models/order_item_model.dart';
+import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/data/models/promotion_model.dart';
 import 'package:tram_flutter/features/orders/widgets/campaign_pricing.dart';
 import 'package:tram_flutter/features/promotions/voucher_check.dart';
@@ -289,5 +291,78 @@ void main() {
     final res = evaluateVoucher(code: 'KM_KM_G003', voucher: null, campaign: camp, nowMs: 1000, branchId: 'B', quote: quote);
     expect(res.isValid, true);
     expect(res.discount, 16000);
+  });
+
+  test('Tặng 1 trà chanh cho đơn trên 100k - rewardPlan tìm thấy món Trà Olong - Chanh tươi khớp theo tên', () {
+    final c = CampaignModel(
+      campaignId: 'CAM_1792678534437_g4b5',
+      programCode: 'KM/G-002',
+      name: 'Grab- Tặng 1 trà chanh cho hóa đơn trên 100K',
+      description: '',
+      campaignType: 'ORDERVALUEITEMBENEFIT',
+      schedule: CampaignSchedule(),
+      branchIds: const ['TRAM01'],
+      includedCustomerIds: const [],
+      excludedCustomerIds: const [],
+      includedItemIds: const [],
+      includedGroupIds: const [],
+      excludedItemIds: const [],
+      tiers: [
+        CampaignTier(
+          tierId: 'TIER_1',
+          conditionBasis: 'TOTALAMOUNT',
+          threshold: 100000,
+          benefitMode: 'FREEITEM',
+          value: 10000,
+          maxDiscountMoney: 0,
+          maxRewardQty: 1,
+          rewardItemIds: const ['Trà Olong - Chanh tươi'],
+          sortOrder: 1,
+        )
+      ],
+      buyConditions: const [],
+      warnRepeatedCustomer: false,
+      hasCodes: false,
+      autoApply: false,
+      stackingMode: 'ENABLED',
+      priority: 0,
+      active: true,
+      createdAt: 0,
+      updatedAt: 0,
+      createdBy: 'Admin',
+      version: 1,
+    );
+
+    final cart = [
+      OrderItemModel(productId: 200, name: 'Trà Olong - Quả mọng', price: 30000, quantity: 1),
+      OrderItemModel(productId: 201, name: 'Bánh lăn choco - vừa', price: 30000, quantity: 1),
+      OrderItemModel(productId: 202, name: 'Bánh lăn choco - nhỏ', price: 15000, quantity: 1),
+      OrderItemModel(productId: 203, name: 'Món khác', price: 50000, quantity: 1),
+    ];
+
+    final products = [
+      ProductModel(id: 1, name: 'Trà Olong - Chanh tươi', code: 'DR202500002', price: 20000, unit: 'Ly', category: 'TRÀ TRÁI CÂY'),
+      ProductModel(id: 200, name: 'Trà Olong - Quả mọng', code: 'DR202600200', price: 30000, unit: 'Ly', category: 'TRÀ TRÁI CÂY'),
+      ProductModel(id: 201, name: 'Bánh lăn choco - vừa', code: 'CK001', price: 30000, unit: 'Cái', category: 'BÁNH LĂN NƯỚNG'),
+      ProductModel(id: 202, name: 'Bánh lăn choco - nhỏ', code: 'CK002', price: 15000, unit: 'Cái', category: 'BÁNH LĂN NƯỚNG'),
+      ProductModel(id: 203, name: 'Món khác', code: 'OT001', price: 50000, unit: 'Phần', category: 'KHÁC'),
+    ];
+
+    final plan = CartCampaignPricing.rewardPlan(c, cart: cart, products: products);
+    expect(plan, isNotNull);
+    expect(plan!.units, 1);
+    expect(plan.candidates.first.name, 'Trà Olong - Chanh tươi');
+
+    // Sau khi tự động thêm món trà chanh vào đơn
+    cart.add(OrderItemModel(
+      productId: plan.candidates.first.id,
+      name: plan.candidates.first.name,
+      price: plan.candidates.first.price,
+      quantity: plan.units,
+    ));
+
+    final quote = CartCampaignPricing.quote(c, cart: cart, products: products, branchId: 'TRAM01');
+    expect(quote.totalPromotionDiscount, 20000); // Tặng 100% ly trà chanh 20k
+    expect(quote.appliedCampaignIds, contains('CAM_1792678534437_g4b5'));
   });
 }
