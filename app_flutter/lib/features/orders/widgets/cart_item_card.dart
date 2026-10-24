@@ -23,6 +23,9 @@ class CartItemCard extends StatelessWidget {
   /// Chi tiết giảm giá khuyến mãi (Combo, Mua X tặng Y, theo hóa đơn...) áp dụng trên dòng này
   final List<({String campaignName, int discountAmount, int quantity, bool isGift})> promoDiscounts;
 
+  /// Nhãn tùy biến cho trạng thái bếp (ví dụ: "Đã gửi bếp (1/8)" khi đơn gồm nhiều đợt gửi)
+  final String? kitchenBadgeLabel;
+
   /// Nội dung nhãn giảm giá của dòng món, gồm số phần được giảm
   /// (VD: "🏷️ Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
   static String discountLabel(OrderItemModel item) {
@@ -44,6 +47,7 @@ class CartItemCard extends StatelessWidget {
     required this.onDecrement,
     this.soldOut = false,
     this.promoDiscounts = const [],
+    this.kitchenBadgeLabel,
   });
 
   @override
@@ -87,9 +91,9 @@ class CartItemCard extends StatelessWidget {
                             icon: Icons.warning_amber_rounded,
                             fontSize: 10,
                           ),
-                        if (item.isSentKitchen)
+                        if (kitchenBadgeLabel != null || item.isSentKitchen)
                           StatusBadge(
-                            label: 'Đã gửi bếp',
+                            label: kitchenBadgeLabel ?? 'Đã gửi bếp',
                             color: context.tc.success,
                             icon: Icons.check,
                             fontSize: 10,

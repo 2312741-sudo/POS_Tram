@@ -571,12 +571,90 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    final sortedIndices = group.branches.map((b) => b.cartIndex).toList()..sort((a, b) => b.compareTo(a));
+    final sortedIndices = group.branches.expand((b) => b.cartIndices).toSet().toList()..sort((a, b) => b.compareTo(a));
     for (final idx in sortedIndices) {
       if (idx < _cart.length) {
         await _removeItem(idx, kitchenGatePassed: true);
       }
     }
+  }
+
+  Future<void> _confirmRemoveBranch(CartBranchItem branch) async {
+    if (!await _ensureShiftOpen() || !mounted) return;
+    if (branch.cartIndices.length <= 1) {
+      await _confirmRemoveItem(branch.cartIndex);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_outline, color: context.tc.danger, size: 24),
+            const SizedBox(width: 8),
+            Text('Xác nhận xóa món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Bạn có chắc muốn xóa tất cả ${branch.totalQuantity} phần của nhánh "${branch.item.name}" khỏi bàn ${widget.table.name}?',
+          style: GoogleFonts.beVietnamPro(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final sortedIndices = List<int>.from(branch.cartIndices)..sort((a, b) => b.compareTo(a));
+    for (final idx in sortedIndices) {
+      if (idx < _cart.length) {
+        await _removeItem(idx, kitchenGatePassed: true);
+      }
+    }
+  }
+
+  Future<void> _incrementBranch(CartBranchItem branch) async {
+    if (!await _ensureShiftOpen() || !mounted) return;
+    final unsentIdx = branch.cartIndices.lastWhere(
+      (idx) => idx < _cart.length && !_cart[idx].isSentKitchen && !_cart[idx].hasDiscount,
+      orElse: () => -1,
+    );
+    if (unsentIdx >= 0) {
+      await _incrementItem(unsentIdx);
+    } else {
+      final targetIdx = branch.cartIndices.lastWhere((idx) => idx < _cart.length, orElse: () => branch.cartIndex);
+      await _incrementItem(targetIdx);
+    }
+  }
+
+  Future<void> _decrementBranch(CartBranchItem branch) async {
+    if (!await _ensureShiftOpen() || !mounted) return;
+    final unsentIdx = branch.cartIndices.lastWhere(
+      (idx) => idx < _cart.length && !_cart[idx].isSentKitchen,
+      orElse: () => -1,
+    );
+    if (unsentIdx >= 0) {
+      await _decrementItem(unsentIdx);
+    } else {
+      final targetIdx = branch.cartIndices.lastWhere((idx) => idx < _cart.length, orElse: () => branch.cartIndex);
+      await _decrementItem(targetIdx);
+    }
+  }
+
+  Future<void> _showEditBranchNoteAndToppingDialog(CartBranchItem branch) async {
+    await _showEditItemNoteAndToppingDialog(branch.cartIndex, syncIndices: branch.cartIndices);
   }
 
   Future<void> _removeItem(int index, {bool kitchenGatePassed = false}) async {
@@ -2139,7 +2217,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   }
 
   // ==================== EDIT ITEM NOTE & TOPPING DIALOG ====================
-  Future<void> _showEditItemNoteAndToppingDialog(int index) async {
+  Future<void> _showEditItemNoteAndToppingDialog(int index, {List<int>? syncIndices}) async {
     if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
 
@@ -2545,15 +2623,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       ),
                       onPressed: () async {
                         setState(() {
-                          _cart[index] = _cart[index].copyWith(
-                            note: noteCtrl.text.trim(),
-                            selectedToppings: selectedToppings,
-                            toppingPrice: calcToppingPrice,
-                            selectedSize: selectedSize,
-                            sizeExtraPrice: sizeExtra,
-                            selectedSugar: isDrinkOrTea ? selectedSugar : '',
-                            selectedIce: isDrinkOrTea ? selectedIce : '',
-                          );
+                          final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
+                          for (final idx in targetIndices) {
+                            if (idx < _cart.length) {
+                              _cart[idx] = _cart[idx].copyWith(
+                                note: noteCtrl.text.trim(),
+                                selectedToppings: selectedToppings,
+                                toppingPrice: calcToppingPrice,
+                                selectedSize: selectedSize,
+                                sizeExtraPrice: sizeExtra,
+                                selectedSugar: isDrinkOrTea ? selectedSugar : '',
+                                selectedIce: isDrinkOrTea ? selectedIce : '',
+                              );
+                            }
+                          }
                         });
 
                         widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
@@ -4356,6 +4439,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               onIncrement: _incrementItem,
                               onDecrement: _decrementItem,
                               onRemoveGroup: _confirmRemoveGroup,
+                              onRemoveBranch: _confirmRemoveBranch,
+                              onIncrementBranch: _incrementBranch,
+                              onDecrementBranch: _decrementBranch,
+                              onEditNoteBranch: _showEditBranchNoteAndToppingDialog,
                             ),
                           )
                         : ListView.separated(

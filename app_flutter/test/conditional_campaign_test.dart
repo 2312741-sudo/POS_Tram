@@ -91,7 +91,8 @@ void main() {
     });
 
     test('PromotionModel isValid returns true throughout the end date even if saved as 00:00:00', () {
-      final endAtMidnight = DateTime(2026, 10, 24, 0, 0, 0).millisecondsSinceEpoch;
+      final now = DateTime.now();
+      final endAtMidnight = DateTime(now.year, now.month, now.day, 0, 0, 0).millisecondsSinceEpoch;
       final promo = PromotionModel(
         id: 'P1',
         name: 'Giảm 20k',

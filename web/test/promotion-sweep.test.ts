@@ -8,7 +8,7 @@ const line = (id: string, item: string, qty: number, price: number, group?: stri
 /** Dữ liệu thô như web ghi vào RTDB cho "Combo bánh và nước giảm 10K" */
 const rawCombo = {
   campaignId: "CAM_HD1", programCode: "KM/HD0001", name: "Combo bánh và nước giảm 10K", campaignType: "BUYXGETY", active: true,
-  schedule: { timezone: "Asia/Ho_Chi_Minh", timeSlots: [{ startTime: "18:00", endTime: "20:00" }, { startTime: "22:00", endTime: "12:00" }] },
+  schedule: { timezone: "Asia/Ho_Chi_Minh", timeSlots: [{ startTime: "18:00", endTime: "20:00" }, { startTime: "22:00", endTime: "00:00" }, { startTime: "02:00", endTime: "04:00" }] },
   branchIds: ["TRAM01"], hasCodes: false, stackingMode: "ENABLED", priority: 0, createdAt: 1,
   buyConditions: [{ conditionId: "C1", buyItemIds: [], buyGroupIds: ["TRÀ TRÁI CÂY", "TRÀ TRÁI CÂY PRE"], requiredBuyQty: 1, rewardItemIds: ["77"], rewardGroupIds: [], rewardQty: 1, benefitMode: "FIXED", value: 10000, multiplyByBundle: true }],
 };
@@ -20,9 +20,13 @@ describe("Combo bánh & nước (Mua X theo nhóm, khung giờ)", () => {
   it("đúng khung giờ 19:00 → giảm 10.000đ", () => {
     expect(q(combo(), cart, vn(2026, 10, 22, 19)).totalPromotionDiscount).toBe(10000);
   });
-  it("khung giờ qua đêm 22:00–12:00: 23:30 và 08:00 đều áp dụng", () => {
+  it("khung giờ 22:00–00:00 và 02:00–04:00: 00:55/01:00 bị chặn, 02:30 áp dụng", () => {
     expect(q(combo(), cart, vn(2026, 10, 22, 23, 30)).totalPromotionDiscount).toBe(10000);
-    expect(q(combo(), cart, vn(2026, 10, 23, 8)).totalPromotionDiscount).toBe(10000);
+    // 00:55 và 01:00 nằm ngoài khung giờ (chưa tới 02:00 sáng)
+    expect(q(combo(), cart, vn(2026, 10, 23, 0, 55)).totalPromotionDiscount).toBe(0);
+    expect(q(combo(), cart, vn(2026, 10, 23, 1)).totalPromotionDiscount).toBe(0);
+    // 02:30 đúng ca 02:00-04:00 (2h sáng mới bật)
+    expect(q(combo(), cart, vn(2026, 10, 23, 2, 30)).totalPromotionDiscount).toBe(10000);
   });
   it("ngoài khung giờ (15:00) → không áp dụng, có lý do", () => {
     const r = q(combo(), cart, vn(2026, 10, 22, 15));

@@ -354,5 +354,111 @@ void main() {
       expect(linePromos.containsKey(1), isTrue);
       expect(linePromos[1]!.first.discountAmount, equals(10000));
     });
+
+    test('Không chia nhánh món đã gửi bếp và chưa gửi bếp nếu cùng tính chất; chỉ chia khi khác tính chất', () {
+      // Giỏ hàng gồm:
+      // Line 0: Trà Olong - Chanh tươi (x1, 100% đường, 100% đá, đã gửi bếp isSentKitchen = true)
+      // Line 1: Trà Olong - Chanh tươi (x7, 100% đường, 100% đá, chưa gửi bếp isSentKitchen = false)
+      // Line 2: Trà Olong - Chanh tươi (x2, 50% đường, 50% đá, đã gửi bếp isSentKitchen = true - tính chất khác)
+      final cart = [
+        OrderItemModel(
+          productId: 10,
+          name: 'Trà Olong - Chanh tươi',
+          price: 20000,
+          quantity: 1,
+          selectedSugar: '100% đường',
+          selectedIce: '100% đá',
+          isSentKitchen: true,
+        ),
+        OrderItemModel(
+          productId: 10,
+          name: 'Trà Olong - Chanh tươi',
+          price: 20000,
+          quantity: 7,
+          selectedSugar: '100% đường',
+          selectedIce: '100% đá',
+          isSentKitchen: false,
+        ),
+        OrderItemModel(
+          productId: 10,
+          name: 'Trà Olong - Chanh tươi',
+          price: 20000,
+          quantity: 2,
+          selectedSugar: '50% đường',
+          selectedIce: '50% đá',
+          isSentKitchen: true,
+        ),
+      ];
+
+      final groups = buildCartProductGroups(
+        cart: cart,
+        linePromoDiscounts: const {},
+        isSoldOutFn: (_) => false,
+      );
+
+      // Cùng 1 sản phẩm Trà Olong Chanh tươi -> 1 group
+      expect(groups.length, equals(1));
+      final group = groups.first;
+      expect(group.totalQuantity, equals(10)); // 1 + 7 + 2 = 10 phần
+
+      // Chỉ có 2 nhánh vì Line 0 và Line 1 có cùng tính chất (100% đường, 100% đá) dù khác trạng thái bếp!
+      expect(group.branches.length, equals(2));
+
+      // Nhánh 1: 100% đường, 100% đá (gồm line 0 và line 1 gom lại)
+      final branch1 = group.branches[0];
+      expect(branch1.totalQuantity, equals(8)); // 1 + 7 = 8 phần
+      expect(branch1.cartIndices, equals([0, 1]));
+      expect(branch1.sentCount, equals(1));
+      expect(branch1.unsentCount, equals(7));
+      expect(branch1.item.selectedSugar, equals('100% đường'));
+      expect(branch1.item.selectedIce, equals('100% đá'));
+      expect(branch1.effectiveTotal, equals(160000));
+
+      // Nhánh 2: 50% đường, 50% đá (line 2 riêng vì khác tính chất)
+      final branch2 = group.branches[1];
+      expect(branch2.totalQuantity, equals(2));
+      expect(branch2.cartIndices, equals([2]));
+      expect(branch2.sentCount, equals(2));
+      expect(branch2.unsentCount, equals(0));
+      expect(branch2.item.selectedSugar, equals('50% đường'));
+      expect(branch2.item.selectedIce, equals('50% đá'));
+      expect(branch2.effectiveTotal, equals(40000));
+    });
+
+    test('Nếu tất cả các dòng của món đều cùng tính chất thì gom thành 1 nhánh duy nhất (hiển thị thẻ đơn gọn gàng)', () {
+      final cart = [
+        OrderItemModel(
+          productId: 10,
+          name: 'Trà Olong - Chanh tươi',
+          price: 20000,
+          quantity: 1,
+          selectedSugar: '100% đường',
+          selectedIce: '100% đá',
+          isSentKitchen: true,
+        ),
+        OrderItemModel(
+          productId: 10,
+          name: 'Trà Olong - Chanh tươi',
+          price: 20000,
+          quantity: 7,
+          selectedSugar: '100% đường',
+          selectedIce: '100% đá',
+          isSentKitchen: true,
+        ),
+      ];
+
+      final groups = buildCartProductGroups(
+        cart: cart,
+        linePromoDiscounts: const {},
+        isSoldOutFn: (_) => false,
+      );
+
+      expect(groups.length, equals(1));
+      expect(groups.first.branches.length, equals(1)); // Đúng 1 nhánh duy nhất!
+      expect(groups.first.totalQuantity, equals(8));
+      expect(groups.first.branches.first.sentCount, equals(8));
+      expect(groups.first.branches.first.unsentCount, equals(0));
+      expect(groups.first.effectiveTotal, equals(160000));
+    });
   });
 }

@@ -16,20 +16,29 @@ import '../../../data/models/order_item_model.dart';
 import '../../../widgets/common_widgets.dart';
 import 'cart_item_card.dart';
 
-/// Dữ liệu một nhánh trong nhóm sản phẩm
+/// Dữ liệu một nhánh trong nhóm sản phẩm (tập hợp các dòng giỏ hàng có cùng tính chất/tùy chọn)
 class CartBranchItem {
   final int cartIndex;
+  final List<int> cartIndices;
   final OrderItemModel item;
+  final List<OrderItemModel> rawItems;
   final List<({String campaignName, int discountAmount, int quantity, bool isGift})> promoDiscounts;
   final bool soldOut;
+  final int sentCount;
+  final int unsentCount;
 
   const CartBranchItem({
     required this.cartIndex,
+    this.cartIndices = const [],
     required this.item,
+    this.rawItems = const [],
     this.promoDiscounts = const [],
     this.soldOut = false,
+    this.sentCount = 0,
+    this.unsentCount = 0,
   });
 
+  int get totalQuantity => item.quantity;
   int get totalPromoDiscount => promoDiscounts.fold<int>(0, (s, p) => s + p.discountAmount);
   int get effectiveTotal => (item.itemTotal - totalPromoDiscount).clamp(0, item.lineGross);
   bool get hasAnyDiscount => item.hasDiscount || totalPromoDiscount > 0;
@@ -56,7 +65,37 @@ class CartProductGroup {
   bool get hasAnyDiscount => totalDiscount > 0;
 }
 
-/// Gom các món trong giỏ hàng thành danh sách các nhóm sản phẩm gốc kèm các nhánh
+/// Tạo khóa nhận diện tính chất/tùy chọn của món.
+/// KHÔNG tính trạng thái gửi bếp (isSentKitchen) để các món giống hệt tính chất
+/// (dù gửi trước hay gửi sau) luôn được gom chung một nhánh trực quan, gọn gàng.
+String getCartItemNatureKey(
+  OrderItemModel item,
+  List<({String campaignName, int discountAmount, int quantity, bool isGift})> promos,
+) {
+  final sortedToppings = List<String>.from(item.selectedToppings)..sort();
+  final promoKey = promos.map((p) => '${p.campaignName}:${p.isGift ? "GIFT" : p.discountAmount}').join('|');
+
+  final manualDiscountKey = item.hasDiscount
+      ? '${item.discountPercent}_${item.discountUnitAmount}_${item.discountAmount}_${item.discountReason.trim().toLowerCase()}'
+      : 'none';
+
+  return [
+    item.price,
+    item.selectedSize.trim().toLowerCase(),
+    item.sizeExtraPrice,
+    item.selectedSugar.trim().toLowerCase(),
+    item.selectedIce.trim().toLowerCase(),
+    sortedToppings.join(',').toLowerCase(),
+    item.toppingPrice,
+    item.note.trim().toLowerCase(),
+    manualDiscountKey,
+    promoKey,
+  ].join(':::');
+}
+
+/// Gom các món trong giỏ hàng thành danh sách các nhóm sản phẩm gốc kèm các nhánh.
+/// Chỉ phân nhánh khi món KHÁC TÍNH CHẤT (size, đường, đá, topping, ghi chú, chiết khấu).
+/// Không phân nhánh theo trạng thái gửi bếp (món đã gửi bếp và chưa gửi bếp có cùng tính chất sẽ gộp chung).
 List<CartProductGroup> buildCartProductGroups({
   required List<OrderItemModel> cart,
   required Map<int, List<({String campaignName, int discountAmount, int quantity, bool isGift})>> linePromoDiscounts,
@@ -64,28 +103,102 @@ List<CartProductGroup> buildCartProductGroups({
 }) {
   final groups = <String, CartProductGroup>{};
   final groupOrder = <String>[];
+  final branchBuckets = <String, Map<String, List<({int index, OrderItemModel item, List<({String campaignName, int discountAmount, int quantity, bool isGift})> promos, bool soldOut})>>>{};
+  final branchOrder = <String, List<String>>{};
 
   for (int i = 0; i < cart.length; i++) {
     final item = cart[i];
-    final key = item.productId > 0 ? 'id_${item.productId}' : 'name_${item.name.trim().toLowerCase()}';
-    final branch = CartBranchItem(
-      cartIndex: i,
-      item: item,
-      promoDiscounts: linePromoDiscounts[i] ?? const [],
-      soldOut: isSoldOutFn(item),
-    );
+    final groupKey = item.productId > 0 ? 'id_${item.productId}' : 'name_${item.name.trim().toLowerCase()}';
+    final promos = linePromoDiscounts[i] ?? const [];
+    final soldOut = isSoldOutFn(item);
+    final natureKey = getCartItemNatureKey(item, promos);
 
-    if (!groups.containsKey(key)) {
-      groupOrder.add(key);
-      groups[key] = CartProductGroup(
-        groupKey: key,
-        productId: item.productId,
-        productName: item.name,
-        branches: [branch],
-      );
-    } else {
-      groups[key]!.branches.add(branch);
+    if (!branchBuckets.containsKey(groupKey)) {
+      groupOrder.add(groupKey);
+      branchBuckets[groupKey] = {};
+      branchOrder[groupKey] = [];
     }
+
+    if (!branchBuckets[groupKey]!.containsKey(natureKey)) {
+      branchOrder[groupKey]!.add(natureKey);
+      branchBuckets[groupKey]![natureKey] = [];
+    }
+
+    branchBuckets[groupKey]![natureKey]!.add((
+      index: i,
+      item: item,
+      promos: promos,
+      soldOut: soldOut,
+    ));
+  }
+
+  for (final groupKey in groupOrder) {
+    final natureKeys = branchOrder[groupKey]!;
+    final branches = <CartBranchItem>[];
+
+    for (final nk in natureKeys) {
+      final entries = branchBuckets[groupKey]![nk]!;
+      final cartIndices = entries.map((e) => e.index).toList();
+      final rawItems = entries.map((e) => e.item).toList();
+
+      final totalQty = rawItems.fold<int>(0, (s, it) => s + it.quantity);
+      final sentCount = rawItems.where((it) => it.isSentKitchen).fold<int>(0, (s, it) => s + it.quantity);
+      final unsentCount = rawItems.where((it) => !it.isSentKitchen).fold<int>(0, (s, it) => s + it.quantity);
+      final totalDiscountAmount = rawItems.fold<int>(0, (s, it) => s + it.discountAmount);
+      final totalDiscountedQty = rawItems.fold<int>(0, (s, it) => s + it.discountedQuantity);
+      final isAnySoldOut = entries.any((e) => e.soldOut);
+
+      // Merge promo discounts
+      final mergedPromos = <String, ({String campaignName, int discountAmount, int quantity, bool isGift})>{};
+      for (final e in entries) {
+        for (final p in e.promos) {
+          final pKey = '${p.campaignName}_${p.isGift}';
+          if (!mergedPromos.containsKey(pKey)) {
+            mergedPromos[pKey] = p;
+          } else {
+            final old = mergedPromos[pKey]!;
+            mergedPromos[pKey] = (
+              campaignName: old.campaignName,
+              discountAmount: old.discountAmount + p.discountAmount,
+              quantity: old.quantity + p.quantity,
+              isGift: old.isGift,
+            );
+          }
+        }
+      }
+
+      final firstItem = rawItems.first;
+      final consolidatedItem = firstItem.copyWith(
+        quantity: totalQty,
+        discountAmount: totalDiscountAmount,
+        discountedQuantity: totalDiscountedQty,
+        isSentKitchen: sentCount > 0 && unsentCount == 0,
+      );
+
+      // Ưu tiên chọn chỉ mục dòng chưa gửi bếp để thao tác tăng/giảm số lượng
+      final primaryIndex = cartIndices.firstWhere(
+        (idx) => idx < cart.length && !cart[idx].isSentKitchen,
+        orElse: () => cartIndices.first,
+      );
+
+      branches.add(CartBranchItem(
+        cartIndex: primaryIndex,
+        cartIndices: cartIndices,
+        item: consolidatedItem,
+        rawItems: rawItems,
+        promoDiscounts: mergedPromos.values.toList(),
+        soldOut: isAnySoldOut,
+        sentCount: sentCount,
+        unsentCount: unsentCount,
+      ));
+    }
+
+    groups[groupKey] = CartProductGroup(
+      groupKey: groupKey,
+      productId: branches.first.item.productId,
+      productName: branches.first.item.name,
+      branches: branches,
+    );
   }
 
   return groupOrder.map((k) => groups[k]!).toList();
@@ -155,6 +268,11 @@ class CartTreeGroupCard extends StatelessWidget {
   final void Function(int cartIndex) onIncrement;
   final void Function(int cartIndex) onDecrement;
   final void Function(CartProductGroup group)? onRemoveGroup;
+  final void Function(CartBranchItem branch)? onRemoveBranch;
+  final void Function(CartBranchItem branch)? onEditNoteBranch;
+  final void Function(CartBranchItem branch)? onDiscountBranch;
+  final void Function(CartBranchItem branch)? onIncrementBranch;
+  final void Function(CartBranchItem branch)? onDecrementBranch;
 
   const CartTreeGroupCard({
     super.key,
@@ -165,6 +283,11 @@ class CartTreeGroupCard extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     this.onRemoveGroup,
+    this.onRemoveBranch,
+    this.onEditNoteBranch,
+    this.onDiscountBranch,
+    this.onIncrementBranch,
+    this.onDecrementBranch,
   });
 
   @override
@@ -172,15 +295,19 @@ class CartTreeGroupCard extends StatelessWidget {
     // Nếu sản phẩm chỉ có 1 nhánh duy nhất: hiển thị thẻ đơn gọn gàng
     if (group.branches.length == 1) {
       final b = group.branches.first;
+      final kitchenBadge = (b.sentCount > 0 && b.unsentCount > 0)
+          ? 'Đã gửi bếp (${b.sentCount}/${b.totalQuantity})'
+          : null;
       return CartItemCard(
         item: b.item,
-        onRemove: () => onRemove(b.cartIndex),
-        onEditNote: () => onEditNote(b.cartIndex),
-        onDiscount: () => onDiscount(b.cartIndex),
-        onIncrement: () => onIncrement(b.cartIndex),
-        onDecrement: () => onDecrement(b.cartIndex),
+        onRemove: () => onRemoveBranch != null ? onRemoveBranch!(b) : onRemove(b.cartIndex),
+        onEditNote: () => onEditNoteBranch != null ? onEditNoteBranch!(b) : onEditNote(b.cartIndex),
+        onDiscount: () => onDiscountBranch != null ? onDiscountBranch!(b) : onDiscount(b.cartIndex),
+        onIncrement: () => onIncrementBranch != null ? onIncrementBranch!(b) : onIncrement(b.cartIndex),
+        onDecrement: () => onDecrementBranch != null ? onDecrementBranch!(b) : onDecrement(b.cartIndex),
         soldOut: b.soldOut,
         promoDiscounts: b.promoDiscounts,
+        kitchenBadgeLabel: kitchenBadge,
       );
     }
 
@@ -420,7 +547,7 @@ class CartTreeGroupCard extends StatelessWidget {
                             ),
                     ),
 
-                    if (branch.soldOut && !item.isSentKitchen) ...[
+                    if (branch.soldOut && branch.sentCount == 0) ...[
                       const SizedBox(width: 4),
                       StatusBadge(
                         label: 'Hết',
@@ -429,10 +556,18 @@ class CartTreeGroupCard extends StatelessWidget {
                         fontSize: 9.5,
                       ),
                     ],
-                    if (item.isSentKitchen) ...[
+                    if (branch.sentCount > 0 && branch.unsentCount == 0) ...[
                       const SizedBox(width: 4),
                       StatusBadge(
                         label: 'Bếp',
+                        color: context.tc.success,
+                        icon: Icons.check,
+                        fontSize: 9.5,
+                      ),
+                    ] else if (branch.sentCount > 0 && branch.unsentCount > 0) ...[
+                      const SizedBox(width: 4),
+                      StatusBadge(
+                        label: 'Bếp: ${branch.sentCount}/${branch.totalQuantity}',
                         color: context.tc.success,
                         icon: Icons.check,
                         fontSize: 9.5,
@@ -444,7 +579,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                       icon: Icon(Icons.close_rounded, size: 16, color: context.tc.textSecondary),
-                      onPressed: () => onRemove(branch.cartIndex),
+                      onPressed: () => onRemoveBranch != null ? onRemoveBranch!(branch) : onRemove(branch.cartIndex),
                     ),
                   ],
                 ),
@@ -603,7 +738,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       isActive: item.note.isNotEmpty,
                       activeColor: context.tc.warningInk,
                       activeBgColor: context.tc.warningLight,
-                      onTap: () => onEditNote(branch.cartIndex),
+                      onTap: () => onEditNoteBranch != null ? onEditNoteBranch!(branch) : onEditNote(branch.cartIndex),
                     ),
                     const SizedBox(width: 4),
 
@@ -614,15 +749,15 @@ class CartTreeGroupCard extends StatelessWidget {
                       isActive: item.hasDiscount,
                       activeColor: context.tc.danger,
                       activeBgColor: context.tc.dangerLight,
-                      onTap: () => onDiscount(branch.cartIndex),
+                      onTap: () => onDiscountBranch != null ? onDiscountBranch!(branch) : onDiscount(branch.cartIndex),
                     ),
                     const SizedBox(width: 6),
 
                     // Bộ tăng giảm số lượng gọn gàng
                     QuantityStepper(
                       value: item.quantity,
-                      onDecrement: () => onDecrement(branch.cartIndex),
-                      onIncrement: () => onIncrement(branch.cartIndex),
+                      onDecrement: () => onDecrementBranch != null ? onDecrementBranch!(branch) : onDecrement(branch.cartIndex),
+                      onIncrement: () => onIncrementBranch != null ? onIncrementBranch!(branch) : onIncrement(branch.cartIndex),
                       buttonSize: 30,
                     ),
                   ],

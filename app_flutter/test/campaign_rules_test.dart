@@ -623,4 +623,72 @@ void main() {
     expect(qSameBday.totalPromotionDiscount, 30000);
     expect(qSameBday.appliedCampaignIds, contains('CAM_BDAY'));
   });
+
+  test('Combo bánh nước: ca 2h sáng (02:00-04:00) không được kích hoạt lúc 00:55 hay 01:00, đúng 02:00 mới bật', () {
+    final combo = CampaignModel(
+      campaignId: 'CAM_1792679049224_lzvb',
+      programCode: 'KM/HD0001',
+      name: 'Combo bánh và nước giảm 10K',
+      description: '',
+      campaignType: 'BUYXGETY',
+      schedule: CampaignSchedule(
+        timeSlots: [
+          CampaignTimeSlot(startTime: '18:00', endTime: '20:00'),
+          CampaignTimeSlot(startTime: '22:00', endTime: '00:00'),
+          CampaignTimeSlot(startTime: '02:00', endTime: '04:00'),
+        ],
+      ),
+      branchIds: const ['TRAM01'],
+      includedCustomerIds: const [],
+      excludedCustomerIds: const [],
+      includedItemIds: const [],
+      includedGroupIds: const [],
+      excludedItemIds: const [],
+      tiers: const [],
+      buyConditions: [
+        CampaignBuyCondition(
+          conditionId: 'COND_1',
+          buyItemIds: const [],
+          buyGroupIds: const ['TRÀ TRÁI CÂY'],
+          rewardItemIds: const [],
+          rewardGroupIds: const ['BÁNH LĂN NƯỚNG'],
+          requiredBuyQty: 1,
+          rewardQty: 1,
+          benefitMode: 'FIXED',
+          value: 10000,
+          multiplyByBundle: true,
+        ),
+      ],
+      warnRepeatedCustomer: false,
+      hasCodes: false,
+      autoApply: false,
+      stackingMode: 'DISABLED',
+      priority: 0,
+      active: true,
+      createdAt: 0,
+      updatedAt: 0,
+      createdBy: 'Admin',
+      version: 1,
+    );
+
+    // Thời điểm 00:55 sáng ngày 25/10/2026 (UTC+7)
+    final time0055 = DateTime.utc(2026, 10, 24, 17, 55).millisecondsSinceEpoch; // 17:55 UTC = 00:55 VN
+    expect(combo.isEligibleAt(time0055), isFalse);
+
+    // Thời điểm 01:00 sáng ngày 25/10/2026 (UTC+7)
+    final time0100 = DateTime.utc(2026, 10, 24, 18, 0).millisecondsSinceEpoch; // 18:00 UTC = 01:00 VN
+    expect(combo.isEligibleAt(time0100), isFalse);
+
+    // Thời điểm 02:00 sáng ngày 25/10/2026 (UTC+7) -> ĐÚNG 2H SÁNG MỚI BẬT!
+    final time0200 = DateTime.utc(2026, 10, 24, 19, 0).millisecondsSinceEpoch; // 19:00 UTC = 02:00 VN
+    expect(combo.isEligibleAt(time0200), isTrue);
+
+    // Thời điểm 03:30 sáng ngày 25/10/2026 (UTC+7)
+    final time0330 = DateTime.utc(2026, 10, 24, 20, 30).millisecondsSinceEpoch;
+    expect(combo.isEligibleAt(time0330), isTrue);
+
+    // Thời điểm 04:05 sáng ngày 25/10/2026 (UTC+7) -> Hết ca
+    final time0405 = DateTime.utc(2026, 10, 24, 21, 5).millisecondsSinceEpoch;
+    expect(combo.isEligibleAt(time0405), isFalse);
+  });
 }
