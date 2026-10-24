@@ -276,4 +276,18 @@ void main() {
     expect(c.stackingMode, 'ENABLED');
     expect(c.isStackable, true);
   });
+
+  test('evaluateVoucher hỗ trợ nhập programCode của chương trình không phát hành mã voucher (hasCodes: false)', () {
+    final camp = _c(id: 'KM_G003', type: 'ITEMPRICERULE', hasCodes: false, items: ['Trà Olong - Xoài'], tiers: [
+      _t(mode: 'FIXEDPRICE', value: 14000)
+    ]);
+    final lines = [
+      PricingLineItem(lineId: '1', itemId: '2', itemName: 'Trà Olong - Xoài', quantity: 1, unitPrice: 30000),
+    ];
+    final quote = _q(camp, lines);
+    // Nhập code KM_KM_G003 trực tiếp (voucher == null)
+    final res = evaluateVoucher(code: 'KM_KM_G003', voucher: null, campaign: camp, nowMs: 1000, branchId: 'B', quote: quote);
+    expect(res.isValid, true);
+    expect(res.discount, 16000);
+  });
 }

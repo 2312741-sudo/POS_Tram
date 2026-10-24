@@ -34,6 +34,9 @@ class PricingInput {
 class PricingLineItem {
   final String lineId;
   final String itemId;
+  final String? itemName;
+  final String? itemCode;
+  final String? dbKey;
   final String? itemVariantId;
   final String? groupId;
   final int quantity;
@@ -49,6 +52,9 @@ class PricingLineItem {
   PricingLineItem({
     required this.lineId,
     required this.itemId,
+    this.itemName,
+    this.itemCode,
+    this.dbKey,
     this.itemVariantId,
     this.groupId,
     required this.quantity,
@@ -60,9 +66,19 @@ class PricingLineItem {
   });
 
   /// Dựng từ dòng món của giỏ hàng (giữ cấu hình giảm giá theo phần)
-  factory PricingLineItem.fromOrderItem(OrderItemModel item, {required String lineId, String? groupId}) => PricingLineItem(
+  factory PricingLineItem.fromOrderItem(
+    OrderItemModel item, {
+    required String lineId,
+    String? groupId,
+    String? itemCode,
+    String? dbKey,
+  }) =>
+      PricingLineItem(
         lineId: lineId,
         itemId: item.productId.toString(),
+        itemName: item.name,
+        itemCode: itemCode,
+        dbKey: dbKey,
         groupId: groupId,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
@@ -70,6 +86,38 @@ class PricingLineItem {
         discountPercent: item.discountPercent,
         discountUnitAmount: item.discountUnitAmount,
       );
+
+  /// Chuẩn hóa bỏ dấu tiếng Việt để đối sánh linh hoạt (không phụ thuộc gõ dấu khác nhau)
+  static String stripAccents(String str) {
+    var result = str;
+    const from =
+        'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
+    const to =
+        'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
+    for (int i = 0; i < from.length; i++) {
+      result = result.replaceAll(from[i], to[i]);
+    }
+    return result;
+  }
+
+  /// Kiểm tra xem dòng món này có khớp với định danh [target] hay không.
+  /// [target] có thể là: numeric productId, tên món, mã SKU món, hoặc database key RTDB.
+  bool matchesTarget(String target) {
+    final t = target.trim().toLowerCase();
+    if (t.isEmpty) return false;
+    if (itemId.toLowerCase() == t) return true;
+    if (itemName != null && itemName!.trim().toLowerCase() == t) return true;
+    if (itemCode != null && itemCode!.trim().toLowerCase() == t) return true;
+    if (dbKey != null && dbKey!.trim().toLowerCase() == t) return true;
+    final tAscii = stripAccents(t);
+    if (itemName != null && stripAccents(itemName!.trim().toLowerCase()) == tAscii) return true;
+    return false;
+  }
+
+  /// Kiểm tra xem dòng món này có khớp với bất kỳ định danh nào trong [targets] hay không.
+  bool matchesAnyTarget(Iterable<String> targets) {
+    return targets.any((t) => matchesTarget(t));
+  }
 
   /// Tổng giảm thủ công của dòng = giảm mỗi phần × số phần được giảm (chặn theo tiền dòng)
   int get manualLineDiscount => isGift
@@ -206,9 +254,9 @@ PriceQuoteModel calculatePrice({
 
   bool inScope(CampaignModel c, PricingLineItem l) {
     if (l.isGift) return false;
-    if (c.excludedItemIds.contains(l.itemId)) return false;
+    if (l.matchesAnyTarget(c.excludedItemIds)) return false;
     if (c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty) return true;
-    return c.includedItemIds.contains(l.itemId) || matchGroup(l.groupId, c.includedGroupIds.toSet());
+    return l.matchesAnyTarget(c.includedItemIds) || matchGroup(l.groupId, c.includedGroupIds.toSet());
   }
 
   /// Giảm [units] phần của dòng [line] theo cách tính lợi ích; tôn trọng giảm giá đã có trên dòng
@@ -307,8 +355,8 @@ PriceQuoteModel calculatePrice({
         final rewardIds = condition.rewardItemIds.toSet();
         final buyGroups = condition.buyGroupIds.toSet();
         final rewardGroups = condition.rewardGroupIds.toSet();
-        bool isBuy(PricingLineItem l) => buyIds.contains(l.itemId) || matchGroup(l.groupId, buyGroups);
-        bool isReward(PricingLineItem l) => rewardIds.contains(l.itemId) || matchGroup(l.groupId, rewardGroups);
+        bool isBuy(PricingLineItem l) => l.matchesAnyTarget(buyIds) || matchGroup(l.groupId, buyGroups);
+        bool isReward(PricingLineItem l) => l.matchesAnyTarget(rewardIds) || matchGroup(l.groupId, rewardGroups);
         final buyQty = condition.requiredBuyQty;
         final rewardQty = condition.rewardQty;
         if ((buyIds.isEmpty && buyGroups.isEmpty) || (rewardIds.isEmpty && rewardGroups.isEmpty) || buyQty <= 0 || rewardQty <= 0) {
@@ -319,7 +367,7 @@ PriceQuoteModel calculatePrice({
         int avail(PricingLineItem l) => l.quantity - (rewardedUnits[l.lineId] ?? 0);
         int xo = 0, yo = 0, bo = 0; // chỉ X, chỉ Y, vừa X vừa Y
         for (final l in input.lines) {
-          if (l.isGift || campaign.excludedItemIds.contains(l.itemId)) continue;
+          if (l.isGift || l.matchesAnyTarget(campaign.excludedItemIds)) continue;
           final isX = isBuy(l);
           final isY = isReward(l);
           final a = max(0, avail(l));
@@ -358,7 +406,7 @@ PriceQuoteModel calculatePrice({
         }
 
         final candidates = input.lines
-            .where((l) => !l.isGift && isReward(l) && !campaign.excludedItemIds.contains(l.itemId))
+            .where((l) => !l.isGift && isReward(l) && !l.matchesAnyTarget(campaign.excludedItemIds))
             .toList();
         campaignDiscount += distributeReward(
           candidates: candidates,
@@ -400,8 +448,8 @@ PriceQuoteModel calculatePrice({
       final candidates = input.lines
           .where((l) =>
               !l.isGift &&
-              (rewardIds.contains(l.itemId) || matchGroup(l.groupId, rewardGroups)) &&
-              !campaign.excludedItemIds.contains(l.itemId))
+              (l.matchesAnyTarget(rewardIds) || matchGroup(l.groupId, rewardGroups)) &&
+              !l.matchesAnyTarget(campaign.excludedItemIds))
           .toList();
       if (candidates.isEmpty) {
         addReason(campaign, 'REWARD_ITEM_NOT_IN_BILL', 'Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng');

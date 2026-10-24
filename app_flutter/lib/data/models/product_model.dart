@@ -185,4 +185,34 @@ class ProductModel {
     noteGroupIds: clearNoteGroupIds ? null : (noteGroupIds ?? this.noteGroupIds),
     toppingGroupIds: clearToppingGroupIds ? null : (toppingGroupIds ?? this.toppingGroupIds),
   );
+
+  static String stripAccents(String str) {
+    var result = str;
+    const from =
+        'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
+    const to =
+        'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
+    for (int i = 0; i < from.length; i++) {
+      result = result.replaceAll(from[i], to[i]);
+    }
+    return result;
+  }
+
+  /// Kiểm tra xem món này có khớp với [target] (ID số, Tên món, Mã SKU, hoặc RTDB Key).
+  bool matchesTarget(String target) {
+    final t = target.trim().toLowerCase();
+    if (t.isEmpty) return false;
+    if (id.toString() == t) return true;
+    if (name.trim().toLowerCase() == t) return true;
+    if (code.trim().toLowerCase() == t) return true;
+    if (dbKey != null && dbKey!.trim().toLowerCase() == t) return true;
+    final tAscii = stripAccents(t);
+    if (stripAccents(name.trim().toLowerCase()) == tAscii) return true;
+    return false;
+  }
+
+  /// Kiểm tra xem món này có khớp với bất kỳ mục nào trong [targets].
+  bool matchesAnyTarget(Iterable<String> targets) {
+    return targets.any((t) => matchesTarget(t));
+  }
 }

@@ -2802,6 +2802,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             }
                             if (campaign != null) _campaignById[campaign.campaignId] = campaign;
 
+                            // 2b. Nếu không tìm thấy mã voucher cá thể, kiểm tra xem có khớp với mã chương trình (programCode) không
+                            if (campaign == null) {
+                              final cleanCode = code.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+                              campaign = _campaigns.where((c) {
+                                if (c.programCode.toUpperCase() == code) return true;
+                                final cleanProg = c.programCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+                                return cleanProg.isNotEmpty && cleanProg == cleanCode;
+                              }).firstOrNull;
+                            }
+                            if (campaign != null) _campaignById[campaign.campaignId] = campaign;
+
                             final result = evaluateVoucher(
                               code: code,
                               voucher: voucher,

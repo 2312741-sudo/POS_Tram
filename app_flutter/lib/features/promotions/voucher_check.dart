@@ -129,27 +129,29 @@ VoucherCheckResult evaluateVoucher({
   String? currentBillId,
 }) {
   final c = normalizeVoucherCode(code);
-  if (voucher == null) {
+  if (voucher == null && (campaign == null || campaign.hasCodes)) {
     return VoucherCheckResult(VoucherCheckStatus.notFound, 'Mã $c không tồn tại');
   }
-  final state = voucher.state.toUpperCase();
-  if (state == VoucherState.redeemed.toMap() &&
-      !(currentBillId != null && currentBillId.isNotEmpty && voucher.redeemedBillId == currentBillId)) {
-    final bill = voucher.redeemedBillCode ?? voucher.redeemedBillId ?? '?';
-    final at = voucher.redeemedAt != null ? _fmtTime(voucher.redeemedAt!) : '?';
-    final by = voucher.redeemedByName ?? voucher.redeemedBy ?? '?';
-    final table = (voucher.tableName ?? '').isNotEmpty ? ' (${voucher.tableName})' : '';
-    return VoucherCheckResult(VoucherCheckStatus.redeemed, 'Mã đã được sử dụng ở đơn $bill$table lúc $at bởi $by',
-        voucher: voucher, campaign: campaign);
-  }
-  if (state == VoucherState.cancelled.toMap()) {
-    return VoucherCheckResult(VoucherCheckStatus.cancelled, 'Mã đã hủy', voucher: voucher, campaign: campaign);
-  }
-  if (state == VoucherState.draft.toMap()) {
-    return VoucherCheckResult(VoucherCheckStatus.notReleased, 'Mã chưa được phát hành', voucher: voucher, campaign: campaign);
-  }
-  if (state == VoucherState.reserved.toMap() && voucher.holdExpiresAt != null && voucher.holdExpiresAt! > nowMs) {
-    return VoucherCheckResult(VoucherCheckStatus.held, 'Mã đang được giữ bởi giao dịch khác', voucher: voucher, campaign: campaign);
+  if (voucher != null) {
+    final state = voucher.state.toUpperCase();
+    if (state == VoucherState.redeemed.toMap() &&
+        !(currentBillId != null && currentBillId.isNotEmpty && voucher.redeemedBillId == currentBillId)) {
+      final bill = voucher.redeemedBillCode ?? voucher.redeemedBillId ?? '?';
+      final at = voucher.redeemedAt != null ? _fmtTime(voucher.redeemedAt!) : '?';
+      final by = voucher.redeemedByName ?? voucher.redeemedBy ?? '?';
+      final table = (voucher.tableName ?? '').isNotEmpty ? ' (${voucher.tableName})' : '';
+      return VoucherCheckResult(VoucherCheckStatus.redeemed, 'Mã đã được sử dụng ở đơn $bill$table lúc $at bởi $by',
+          voucher: voucher, campaign: campaign);
+    }
+    if (state == VoucherState.cancelled.toMap()) {
+      return VoucherCheckResult(VoucherCheckStatus.cancelled, 'Mã đã hủy', voucher: voucher, campaign: campaign);
+    }
+    if (state == VoucherState.draft.toMap()) {
+      return VoucherCheckResult(VoucherCheckStatus.notReleased, 'Mã chưa được phát hành', voucher: voucher, campaign: campaign);
+    }
+    if (state == VoucherState.reserved.toMap() && voucher.holdExpiresAt != null && voucher.holdExpiresAt! > nowMs) {
+      return VoucherCheckResult(VoucherCheckStatus.held, 'Mã đang được giữ bởi giao dịch khác', voucher: voucher, campaign: campaign);
+    }
   }
   if (campaign == null || !campaign.active) {
     return VoucherCheckResult(VoucherCheckStatus.campaignInactive, 'Chương trình của mã đã ngừng hoạt động',

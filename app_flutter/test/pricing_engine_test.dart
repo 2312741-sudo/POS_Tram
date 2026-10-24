@@ -430,5 +430,102 @@ void main() {
       expect(allocs[1], 3);
       expect(allocs[2], 3);
     });
+
+    test('A-22: Khuyến mãi Trà Xoài - Khớp theo tên món khi includedItemIds lưu tên món', () {
+      // Giỏ hàng có món id=2, tên="Trà Olong - Xoài", giá=30.000đ
+      final lines = [
+        PricingLineItem(
+          lineId: 'L0',
+          itemId: '2',
+          itemName: 'Trà Olong - Xoài',
+          itemCode: 'DR202500003',
+          dbKey: 'Trà Olong - Xoài',
+          groupId: 'TRÀ TRÁI CÂY',
+          quantity: 1,
+          unitPrice: 30000,
+        ),
+      ];
+
+      // Chương trình "Grab- Khuyễn mãi 50% (16K) cho trà xoài":
+      // includedItemIds chứa tên món 'Trà Olong - Xoài'
+      // Đồng giá (FIXEDPRICE) 14.000đ -> Giảm 30.000 - 14.000 = 16.000đ
+      final campaign = _createCampaign(
+        id: 'CAM_1792678747107_dn5u',
+        type: 'ITEMPRICERULE',
+        itemIds: ['Trà Olong - Xoài'],
+        tiers: [
+          CampaignTier(
+            tierId: 'TIER_1',
+            conditionBasis: 'TOTALAMOUNT',
+            threshold: 0,
+            benefitMode: 'FIXEDPRICE',
+            value: 14000,
+            maxDiscountMoney: 0,
+            maxRewardQty: 0,
+            rewardItemIds: [],
+            sortOrder: 1,
+          )
+        ],
+      );
+
+      final input = PricingInput(branchId: 'TRAM01', serverNowMs: 0, lines: lines);
+      final result = calculatePrice(
+        input: input,
+        activeCampaigns: [campaign],
+        counters: {},
+        customerCounters: {},
+      );
+
+      expect(result.appliedCampaignIds, contains('CAM_1792678747107_dn5u'));
+      expect(result.totalPromotionDiscount, 16000);
+      expect(result.totalDiscountMoney, 16000);
+      expect(result.netMoney, 14000);
+    });
+
+    test('A-23: Khuyến mãi Trà Xoài khớp cả biến thể PRE và đối sánh không dấu', () {
+      final lines = [
+        PricingLineItem(
+          lineId: 'L0',
+          itemId: '0',
+          itemName: 'Trà olong - Xoài PRE',
+          itemCode: 'DR202600197',
+          dbKey: '-P3oSUAjaThmkd28gdGz',
+          groupId: 'TRÀ TRÁI CÂY PRE',
+          quantity: 2,
+          unitPrice: 33000,
+        ),
+      ];
+
+      final campaign = _createCampaign(
+        id: 'CAM_XOAI_PRE',
+        type: 'ITEMPRICERULE',
+        itemIds: ['Trà olong - Xoài PRE'],
+        tiers: [
+          CampaignTier(
+            tierId: 'TIER_1',
+            conditionBasis: 'TOTALAMOUNT',
+            threshold: 0,
+            benefitMode: 'FIXEDPRICE',
+            value: 14000,
+            maxDiscountMoney: 0,
+            maxRewardQty: 0,
+            rewardItemIds: [],
+            sortOrder: 1,
+          )
+        ],
+      );
+
+      final input = PricingInput(branchId: 'TRAM01', serverNowMs: 0, lines: lines);
+      final result = calculatePrice(
+        input: input,
+        activeCampaigns: [campaign],
+        counters: {},
+        customerCounters: {},
+      );
+
+      expect(result.appliedCampaignIds, contains('CAM_XOAI_PRE'));
+      // Mỗi ly 33k đồng giá 14k -> giảm 19k/ly * 2 = 38k
+      expect(result.totalPromotionDiscount, 38000);
+    });
   });
 }

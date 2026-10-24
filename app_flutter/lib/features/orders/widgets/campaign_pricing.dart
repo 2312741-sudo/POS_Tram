@@ -12,9 +12,21 @@ class CartCampaignPricing {
   /// Dựng dòng tính giá từ giỏ hàng (lineId = vị trí dòng, groupId = tên nhóm món)
   static List<PricingLineItem> lines(List<OrderItemModel> cart, List<ProductModel> products) {
     final cat = {for (final p in products) p.id: p.category};
+    final prodByNumId = {for (final p in products) p.id: p};
+    final prodByName = {for (final p in products) p.name.trim().toLowerCase(): p};
     return [
       for (int i = 0; i < cart.length; i++)
-        PricingLineItem.fromOrderItem(cart[i], lineId: 'L$i', groupId: cat[cart[i].productId]),
+        (() {
+          final item = cart[i];
+          final p = prodByNumId[item.productId] ?? prodByName[item.name.trim().toLowerCase()];
+          return PricingLineItem.fromOrderItem(
+            item,
+            lineId: 'L$i',
+            groupId: p?.category ?? cat[item.productId],
+            itemCode: p?.code,
+            dbKey: p?.dbKey,
+          );
+        })(),
     ];
   }
 
@@ -127,7 +139,7 @@ class CartCampaignPricing {
   }) {
     final lns = lines(cart, products);
     bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
-      if (ids.contains(l.itemId)) return true;
+      if (l.matchesAnyTarget(ids)) return true;
       if (l.groupId == null || groups.isEmpty) return false;
       final gNorm = l.groupId!.trim().toLowerCase();
       return groups.any((g) => g.trim().toLowerCase() == gNorm);
@@ -137,8 +149,8 @@ class CartCampaignPricing {
         .where((p) =>
             !p.isTopping &&
             p.isAvailable &&
-            !c.excludedItemIds.contains(p.id.toString()) &&
-            (ids.contains(p.id.toString()) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
+            !c.excludedItemIds.any((ex) => p.matchesTarget(ex)) &&
+            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
         .toList();
 
     final type = c.campaignType.toUpperCase().replaceAll('_', '');
@@ -159,8 +171,8 @@ class CartCampaignPricing {
       final inScopeAll = c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty;
       int base = 0;
       for (final l in lns) {
-        if (l.isGift || c.excludedItemIds.contains(l.itemId)) continue;
-        final inScope = inScopeAll || c.includedItemIds.contains(l.itemId) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
+        if (l.isGift || l.matchesAnyTarget(c.excludedItemIds)) continue;
+        final inScope = inScopeAll || l.matchesAnyTarget(c.includedItemIds) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
         if (inScope) base += l.unitPrice * l.quantity - l.manualLineDiscount;
       }
       final tiers = List<CampaignTier>.from(c.tiers)..sort((a, b) => b.threshold.compareTo(a.threshold));
@@ -204,7 +216,7 @@ class CartCampaignPricing {
     final lns = lines(cart, products);
 
     bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
-      if (ids.contains(l.itemId)) return true;
+      if (l.matchesAnyTarget(ids)) return true;
       if (l.groupId == null || groups.isEmpty) return false;
       final gNorm = l.groupId!.trim().toLowerCase();
       return groups.any((g) => g.trim().toLowerCase() == gNorm);
@@ -214,8 +226,8 @@ class CartCampaignPricing {
         .where((p) =>
             !p.isTopping &&
             p.isAvailable &&
-            !c.excludedItemIds.contains(p.id.toString()) &&
-            (ids.contains(p.id.toString()) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
+            !c.excludedItemIds.any((ex) => p.matchesTarget(ex)) &&
+            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
         .toList();
 
     if (type == 'BUYXGETY') {
