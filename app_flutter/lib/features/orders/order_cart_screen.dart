@@ -4354,7 +4354,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       )
                     : _treeViewMode
                         ? ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 76),
                             itemCount: groups.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 10),
                             itemBuilder: (context, index) => CartTreeGroupCard(
@@ -4372,7 +4372,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             ),
                           )
                         : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 76),
                             itemCount: _cart.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 8),
                             itemBuilder: (context, index) => CartItemCard(
@@ -4396,13 +4396,46 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       onEditGuests: _showEditGuestCountDialog,
                       onDecrementGuests: _guestCount > 1 ? () => _updateGuestCount(_guestCount - 1) : null,
                       onIncrementGuests: () => _updateGuestCount(_guestCount + 1),
-                      onAddItems: _goToAddItems,
                       treeViewMode: _treeViewMode,
                       onToggleTreeViewMode: _cart.isNotEmpty ? (v) => _setTreeViewMode(v) : null,
                       totalQty: _cart.fold(0, (s, i) => s + i.quantity),
                       uniqueProductsCount: groups.length,
                     ),
-                    Expanded(child: cartList),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(child: cartList),
+                          // Nút thêm món (+) khối tròn nổi ngay trên phần khách hàng
+                          Positioned(
+                            right: 16,
+                            bottom: 12,
+                            child: Tooltip(
+                              message: 'Thêm món',
+                              child: Material(
+                                color: context.tc.primary,
+                                shape: const CircleBorder(),
+                                elevation: 5,
+                                shadowColor: Colors.black45,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: _goToAddItems,
+                                  child: Container(
+                                    width: 52,
+                                    height: 52,
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     if (!wide) customerBar,
                     if (!wide) summary,
                   ],

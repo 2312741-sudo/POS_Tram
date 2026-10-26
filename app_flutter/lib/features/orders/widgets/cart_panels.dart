@@ -20,7 +20,7 @@ class CartHeaderBar extends StatelessWidget {
   final VoidCallback onEditGuests;
   final VoidCallback? onDecrementGuests;
   final VoidCallback onIncrementGuests;
-  final VoidCallback onAddItems;
+  final VoidCallback? onAddItems;
 
   /// Chế độ hiển thị dạng cây (Nhánh) hay dạng phẳng (Danh sách)
   final bool treeViewMode;
@@ -36,7 +36,7 @@ class CartHeaderBar extends StatelessWidget {
     required this.onEditGuests,
     required this.onDecrementGuests,
     required this.onIncrementGuests,
-    required this.onAddItems,
+    this.onAddItems,
     this.treeViewMode = true,
     this.onToggleTreeViewMode,
     this.totalQty = 0,
@@ -152,19 +152,6 @@ class CartHeaderBar extends StatelessWidget {
               onTapValue: onEditGuests,
               buttonSize: 28,
             ),
-          ),
-          const SizedBox(width: 6),
-
-          // Thêm món (nút gọn gàng)
-          FilledButton.icon(
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Thêm món'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 32),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              textStyle: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            onPressed: onAddItems,
           ),
         ],
       ),
