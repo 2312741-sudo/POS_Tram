@@ -4,13 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/services/firebase_service.dart';
 
-class QRCodeScreen extends StatefulWidget {
+class QRCodeScreen extends StatelessWidget {
   final String tableName;
   final String tableZone;
 
@@ -20,37 +19,6 @@ class QRCodeScreen extends StatefulWidget {
     required this.tableZone,
   });
 
-  @override
-  State<QRCodeScreen> createState() => _QRCodeScreenState();
-}
-
-class _QRCodeScreenState extends State<QRCodeScreen> {
-  String _baseUrl = AppConstants.onlineOrderWebUrl;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBaseUrl();
-  }
-
-  Future<void> _loadBaseUrl() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString(AppConstants.prefQrOrderBaseUrl);
-      if (savedUrl != null && savedUrl.trim().isNotEmpty) {
-        setState(() {
-          _baseUrl = savedUrl.trim();
-          _isLoading = false;
-        });
-        return;
-      }
-    } catch (_) {}
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
-
   String get _currentStoreCode {
     final authStore = AuthService().currentStoreCode;
     if (authStore.isNotEmpty) return authStore;
@@ -59,70 +27,12 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
   }
 
   String get _qrData {
-    String cleanBase = _baseUrl.trim();
+    String cleanBase = AppConstants.onlineOrderWebUrl.trim();
     while (cleanBase.endsWith('/')) {
       cleanBase = cleanBase.substring(0, cleanBase.length - 1);
     }
     final path = cleanBase.endsWith('/order') ? cleanBase : '$cleanBase/order';
-    return '$path?table=${Uri.encodeComponent(widget.tableName)}&zone=${Uri.encodeComponent(widget.tableZone)}&store=${Uri.encodeComponent(_currentStoreCode)}';
-  }
-
-  Future<void> _editBaseUrl() async {
-    final controller = TextEditingController(text: _baseUrl);
-    final newUrl = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.tc.cardElevated,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Cài đặt Domain Order', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Nhập tên miền hoặc địa chỉ IP của web order (ví dụ: http://192.168.1.100:3000 hoặc https://tenmiencuaban.com):',
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'http://localhost:3000',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                prefixIcon: const Icon(Icons.link),
-              ),
-              keyboardType: TextInputType.url,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Hủy', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: Text('Lưu', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-
-    if (newUrl != null && newUrl.isNotEmpty && newUrl != _baseUrl) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(AppConstants.prefQrOrderBaseUrl, newUrl);
-      setState(() {
-        _baseUrl = newUrl;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã cập nhật domain: $newUrl', style: GoogleFonts.beVietnamPro()),
-            backgroundColor: context.tc.primary,
-          ),
-        );
-      }
-    }
+    return '$path?table=${Uri.encodeComponent(tableName)}&zone=${Uri.encodeComponent(tableZone)}&store=${Uri.encodeComponent(_currentStoreCode)}';
   }
 
   void _share(BuildContext context) {
@@ -137,13 +47,6 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: context.tc.background,
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
       backgroundColor: context.tc.background,
       appBar: AppBar(
@@ -165,11 +68,6 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
           color: context.tc.textPrimary, fontSize: 17, fontWeight: FontWeight.w700,
         )),
         actions: [
-          IconButton(
-            icon: Icon(Icons.settings_outlined, color: context.tc.textPrimary),
-            onPressed: _editBaseUrl,
-            tooltip: 'Cài đặt domain web',
-          ),
           IconButton(
             icon: Icon(Icons.share_outlined, color: context.tc.textPrimary),
             onPressed: () => _share(context),
@@ -204,10 +102,10 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Bàn ${widget.tableName}', style: GoogleFonts.beVietnamPro(
+                      Text('Bàn $tableName', style: GoogleFonts.beVietnamPro(
                         color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 18,
                       )),
-                      Text('${widget.tableZone} • Chi nhánh: $_currentStoreCode', style: GoogleFonts.beVietnamPro(
+                      Text('$tableZone • Chi nhánh: $_currentStoreCode', style: GoogleFonts.beVietnamPro(
                         color: context.tc.textSecondary, fontSize: 13,
                       )),
                     ],
@@ -249,7 +147,7 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Bàn ${widget.tableName} • ${widget.tableZone}',
+                Text('Bàn $tableName • $tableZone',
                   style: GoogleFonts.beVietnamPro(
                     color: const Color(0xFF0F1117),
                     fontWeight: FontWeight.w600, fontSize: 14,
@@ -269,20 +167,9 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Đường dẫn gọi món', style: GoogleFonts.beVietnamPro(
-                      color: context.tc.textSecondary, fontSize: 12,
-                    )),
-                    GestureDetector(
-                      onTap: _editBaseUrl,
-                      child: Text('Đổi domain', style: GoogleFonts.beVietnamPro(
-                        color: context.tc.primary, fontSize: 12, fontWeight: FontWeight.w600,
-                      )),
-                    ),
-                  ],
-                ),
+                Text('Đường dẫn gọi món', style: GoogleFonts.beVietnamPro(
+                  color: context.tc.textSecondary, fontSize: 12,
+                )),
                 const SizedBox(height: 6),
                 Text(_qrData, style: GoogleFonts.beVietnamPro(
                   color: context.tc.info, fontSize: 13,
@@ -312,7 +199,7 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                _Instruction('1. In mã QR và đặt lên bàn ${widget.tableName}'),
+                _Instruction('1. In mã QR và đặt lên bàn $tableName'),
                 const _Instruction('2. Khách hàng quét mã bằng camera điện thoại để xem menu & gọi món'),
                 const _Instruction('3. Khách có thể tùy chỉnh size, topping, đường/đá, gọi nhân viên'),
                 const _Instruction('4. Khi khách gửi đơn, POS báo chuông và hiển thị trong mục "Đơn online"'),

@@ -10,14 +10,15 @@ import {
   Search,
   Plus,
   Minus,
-  ShoppingCart,
+  ShoppingBag,
   CheckCircle2,
   Clock,
-  Sparkles,
   X,
   Coffee,
   ChevronRight,
   RefreshCw,
+  ChefHat,
+  Receipt,
 } from "lucide-react";
 
 interface ProductSize {
@@ -40,7 +41,7 @@ interface ProductItem {
 }
 
 interface CartItem {
-  id: string; // unique cart line id
+  id: string;
   productId: number | string;
   name: string;
   basePrice: number;
@@ -64,13 +65,106 @@ const DEFAULT_TOPPING_PRICES: Record<string, number> = {
   "Sương sáo": 8000,
 };
 
+const DEFAULT_PRODUCTS: ProductItem[] = [
+  {
+    id: "sample_1",
+    name: "Cà Phê Sữa Đá Trạm",
+    price: 32000,
+    category: "Cà Phê",
+    isAvailable: true,
+    sizes: { S: -4000, M: 0, L: 6000 },
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_2",
+    name: "Cà Phê Muối Trạm",
+    price: 35000,
+    category: "Cà Phê",
+    isAvailable: true,
+    sizes: { M: 0, L: 6000 },
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_3",
+    name: "Bạc Xỉu Kem Béo",
+    price: 35000,
+    category: "Cà Phê",
+    isAvailable: true,
+    sizes: { S: -4000, M: 0, L: 6000 },
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_4",
+    name: "Trà Đào Cam Sả",
+    price: 39000,
+    category: "Trà Trái Cây",
+    isAvailable: true,
+    sizes: { M: 0, L: 8000 },
+    allowedToppings: ["Đào miếng", "Trân châu trắng"],
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_5",
+    name: "Trà Xoài Macchiato",
+    price: 42000,
+    category: "Trà Trái Cây",
+    isAvailable: true,
+    sizes: { M: 0, L: 8000 },
+    allowedToppings: ["Kem Cheese", "Trân châu trắng"],
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_6",
+    name: "Trà Sữa Ô Long Nướng",
+    price: 38000,
+    category: "Trà Sữa",
+    isAvailable: true,
+    sizes: { M: 0, L: 8000 },
+    allowedToppings: ["Trân châu đen", "Trân châu trắng", "Thạch phô mai", "Kem Cheese"],
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_7",
+    name: "Matcha Latte Nhật Bản",
+    price: 45000,
+    category: "Đặc Biệt",
+    isAvailable: true,
+    sizes: { M: 0, L: 8000 },
+    hasIceSugarOptions: true,
+  },
+  {
+    id: "sample_8",
+    name: "Bánh Croissant Bơ Tỏi",
+    price: 35000,
+    category: "Bánh Ngọt",
+    isAvailable: true,
+  },
+];
+
 function formatVND(amount: number): string {
   return amount.toLocaleString("vi-VN") + "đ";
 }
 
+export default function OrderPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ background: "#F8F4EE", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-[#7E2930] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-semibold text-[#7E2930]">Đang mở thực đơn Trạm F&amp;B...</p>
+          </div>
+        </div>
+      }
+    >
+      <OrderContent />
+    </Suspense>
+  );
+}
+
 function OrderContent() {
   const searchParams = useSearchParams();
-  const rawTable = searchParams.get("table") || "Bàn 01";
+  const rawTable = searchParams.get("table") || "01";
   const rawZone = searchParams.get("zone") || "Khu A";
   const rawStore = searchParams.get("store") || "TRAM01";
 
@@ -105,6 +199,7 @@ function OrderContent() {
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activeOrderStatus, setActiveOrderStatus] = useState<string>("PENDING");
   const [callWaiterStatus, setCallWaiterStatus] = useState<string | null>(null);
+  const [callingWaiter, setCallingWaiter] = useState(false);
 
   // 1. Listen to Store Info, Products & Categories
   useEffect(() => {
@@ -138,7 +233,7 @@ function OrderContent() {
           });
         }
       }
-      setProducts(list);
+      setProducts(list.length > 0 ? list : DEFAULT_PRODUCTS);
       setLoading(false);
     });
 
@@ -200,10 +295,10 @@ function OrderContent() {
     });
   }, [products, selectedCategory, searchQuery]);
 
-  // Open customization modal
-  const openCustomization = (product: ProductItem) => {
-    setSelectedProduct(product);
-    setSelectedSize(product.sizes && Object.keys(product.sizes).length > 0 ? Object.keys(product.sizes)[0] : "M");
+  // Open Customization Modal
+  const openCustomization = (p: ProductItem) => {
+    setSelectedProduct(p);
+    setSelectedSize("M");
     setSelectedToppings([]);
     setSelectedSugar("100% đường");
     setSelectedIce("100% đá");
@@ -211,40 +306,46 @@ function OrderContent() {
     setItemQty(1);
   };
 
-  // Calculate unit price for modal item
+  // Calculate Single Item Unit Price with Size & Toppings
   const currentModalUnitPrice = useMemo(() => {
     if (!selectedProduct) return 0;
     let base = selectedProduct.price;
-    if (selectedProduct.sizes && selectedProduct.sizes[selectedSize]) {
+    if (selectedProduct.sizes && selectedProduct.sizes[selectedSize] !== undefined) {
       base += selectedProduct.sizes[selectedSize];
     }
-    selectedToppings.forEach((top) => {
-      base += DEFAULT_TOPPING_PRICES[top] || 10000;
-    });
-    return base;
-  }, [selectedProduct, selectedSize, selectedToppings]);
-
-  // Add customized item to cart
-  const addToCart = () => {
-    if (!selectedProduct) return;
-    const sizeExtra = selectedProduct.sizes?.[selectedSize] || 0;
     const toppingTotal = selectedToppings.reduce(
       (sum, t) => sum + (DEFAULT_TOPPING_PRICES[t] || 10000),
       0
     );
-    const unitPrice = selectedProduct.price + sizeExtra + toppingTotal;
+    return Math.max(0, base + toppingTotal);
+  }, [selectedProduct, selectedSize, selectedToppings]);
 
+  // Add Item to Cart
+  const handleAddToCart = () => {
+    if (!selectedProduct) return;
+
+    let sizeExtra = 0;
+    if (selectedProduct.sizes && selectedProduct.sizes[selectedSize] !== undefined) {
+      sizeExtra = selectedProduct.sizes[selectedSize];
+    }
+
+    const toppingTotal = selectedToppings.reduce(
+      (sum, t) => sum + (DEFAULT_TOPPING_PRICES[t] || 10000),
+      0
+    );
+
+    const unitPrice = Math.max(0, selectedProduct.price + sizeExtra + toppingTotal);
     const cartLineId = `${selectedProduct.id}_${selectedSize}_${selectedSugar}_${selectedIce}_${selectedToppings.sort().join(",")}_${itemNote.trim()}`;
 
     setCart((prev) => {
       const existingIdx = prev.findIndex((item) => item.id === cartLineId);
       if (existingIdx >= 0) {
-        const updated = [...prev];
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          quantity: updated[existingIdx].quantity + itemQty,
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          quantity: next[existingIdx].quantity + itemQty,
         };
-        return updated;
+        return next;
       }
       return [
         ...prev,
@@ -306,16 +407,9 @@ function OrderContent() {
         notes: orderNote.trim(),
       };
 
-      // Push to stores/{storeCode}/online_orders
       const onlineOrdersRef = ref(db, `stores/${storeCode}/online_orders`);
       const newOrderRef = push(onlineOrdersRef);
       await set(newOrderRef, payload);
-
-      // Dual-sync to root /online_orders if branch is TRAM01
-      if (storeCode === "TRAM01") {
-        const rootOnlineRef = ref(db, `online_orders/${newOrderRef.key}`);
-        set(rootOnlineRef, payload).catch(() => {});
-      }
 
       setActiveOrderId(newOrderRef.key);
       setActiveOrderStatus("PENDING");
@@ -332,7 +426,9 @@ function OrderContent() {
 
   // Call Waiter function
   const handleCallWaiter = async () => {
+    if (callingWaiter) return;
     if (!confirm(`Bạn muốn gọi nhân viên phục vụ đến bàn ${tableName}?`)) return;
+    setCallingWaiter(true);
     try {
       const payload = {
         tableName,
@@ -346,324 +442,753 @@ function OrderContent() {
       const onlineOrdersRef = ref(db, `stores/${storeCode}/online_orders`);
       const newRef = push(onlineOrdersRef);
       await set(newRef, payload);
-      setCallWaiterStatus("Đã báo nhân viên! Phục vụ sẽ đến bàn ngay.");
+      setCallWaiterStatus(`Đã gọi nhân viên! Phục vụ sẽ đến Bàn ${tableName} ngay.`);
       setTimeout(() => setCallWaiterStatus(null), 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Không xác định";
       alert("Lỗi gọi phục vụ: " + msg);
+    } finally {
+      setCallingWaiter(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 pb-28 font-sans antialiased">
-      {/* 1. Header */}
-      <header className="sticky top-0 z-30 bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md">
-        <div className="max-w-md mx-auto px-4 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center font-black text-lg border border-white/30">
+    <div
+      style={{
+        backgroundColor: "#F8F4EE",
+        color: "#1C1A2D",
+        minHeight: "100vh",
+        paddingBottom: "110px",
+        fontFamily: "'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      {/* 1. Header Nhận Diện Trạm F&B */}
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+          color: "#FFFFFF",
+          boxShadow: "0 4px 20px rgba(92, 31, 36, 0.25)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
+        }}
+      >
+        <div style={{ maxWidth: "480px", margin: "0 auto", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "42px",
+                height: "42px",
+                borderRadius: "14px",
+                background: "rgba(255, 255, 255, 0.15)",
+                backdropFilter: "blur(8px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "1.5px solid rgba(255, 255, 255, 0.3)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                fontSize: "20px",
+              }}
+            >
               ☕
             </div>
             <div>
-              <h1 className="font-bold text-base leading-tight tracking-wide">{storeName}</h1>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/20 text-xs font-semibold text-amber-100 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Bàn {tableName} • {tableZone}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <h1 style={{ fontWeight: 800, fontSize: "16px", letterSpacing: "0.5px", margin: 0 }}>
+                  {storeName}
+                </h1>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: "2px 6px",
+                    borderRadius: "6px",
+                    background: "#D97706",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  {storeCode}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "2px 8px",
+                  borderRadius: "20px",
+                  background: "rgba(0, 0, 0, 0.22)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#F6EFDF",
+                  marginTop: "4px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: "#146A65",
+                    boxShadow: "0 0 6px #4FB8AE",
+                  }}
+                />
+                <span>Bàn {tableName} • {tableZone}</span>
               </div>
             </div>
           </div>
+
+          {/* Quick Call Waiter Button */}
           <button
             onClick={handleCallWaiter}
-            className="flex flex-col items-center justify-center w-11 h-11 rounded-full bg-white text-orange-600 shadow-md active:scale-95 transition-transform"
-            title="Gọi nhân viên"
+            disabled={callingWaiter}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "46px",
+              height: "46px",
+              borderRadius: "14px",
+              background: "#FFFFFF",
+              color: "#7E2930",
+              border: "1.5px solid #F6EFDF",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              cursor: "pointer",
+              transition: "transform 0.15s",
+            }}
+            title="Gọi nhân viên phục vụ"
           >
-            <Bell className="w-5 h-5 fill-current" />
-            <span className="text-[9px] font-bold mt-0.5 leading-none">Gọi NV</span>
+            <Bell size={18} fill="#7E2930" />
+            <span style={{ fontSize: "9px", fontWeight: 800, marginTop: "2px" }}>Gọi NV</span>
           </button>
         </div>
 
-        {/* Call Waiter Notification Banner */}
+        {/* Notification Banner when calling waiter */}
         {callWaiterStatus && (
-          <div className="bg-emerald-600 text-white text-xs font-medium px-4 py-2 text-center animate-fadeIn flex items-center justify-center gap-1.5 shadow-inner">
-            <CheckCircle2 className="w-4 h-4" />
-            {callWaiterStatus}
+          <div
+            style={{
+              background: "#146A65",
+              color: "#FFFFFF",
+              fontSize: "12px",
+              fontWeight: 600,
+              padding: "8px 16px",
+              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)",
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>{callWaiterStatus}</span>
           </div>
         )}
       </header>
 
-      {/* 2. Active Order Live Tracking Banner (If order placed) */}
+      {/* 2. Order Live Status Tracker (Tiến độ gọi món thời gian thực) */}
       {activeOrderId && (
-        <div className="max-w-md mx-auto px-4 mt-3">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-amber-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                Mã đơn: #{activeOrderId.slice(-6).toUpperCase()}
-              </span>
+        <div style={{ maxWidth: "480px", margin: "12px auto 0", padding: "0 16px" }}>
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "16px",
+              border: "1.5px solid #E6DEC8",
+              boxShadow: "0 4px 14px rgba(126, 41, 48, 0.06)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <div>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#8E8C94", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Mã đơn hàng: #{activeOrderId.slice(-6).toUpperCase()}
+                </span>
+                <div style={{ fontSize: "14px", fontWeight: 800, color: "#7E2930", marginTop: "2px" }}>
+                  Bàn {tableName} • {tableZone}
+                </div>
+              </div>
+
               <span
-                className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
-                  activeOrderStatus === "CONFIRMED"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : activeOrderStatus === "COMPLETED"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-amber-100 text-amber-800"
-                }`}
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background:
+                    activeOrderStatus === "CONFIRMED"
+                      ? "#E6F4F2"
+                      : activeOrderStatus === "COMPLETED"
+                      ? "#E3EFF7"
+                      : "#FBEFD4",
+                  color:
+                    activeOrderStatus === "CONFIRMED"
+                      ? "#146A65"
+                      : activeOrderStatus === "COMPLETED"
+                      ? "#1C4E6B"
+                      : "#B45309",
+                  border: `1px solid ${
+                    activeOrderStatus === "CONFIRMED"
+                      ? "#146A65"
+                      : activeOrderStatus === "COMPLETED"
+                      ? "#1C4E6B"
+                      : "#D97706"
+                  }`,
+                }}
               >
                 {activeOrderStatus === "CONFIRMED" ? (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Quán đã nhận đơn
+                    <ChefHat size={14} />
+                    Đã duyệt • Đang làm
                   </>
                 ) : activeOrderStatus === "COMPLETED" ? (
                   <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Đã hoàn tất
+                    <CheckCircle2 size={14} />
+                    Đã phục vụ
                   </>
                 ) : (
                   <>
-                    <Clock className="w-3.5 h-3.5 animate-spin" />
-                    Chờ nhân viên duyệt...
+                    <Clock size={14} className="animate-spin" />
+                    Chờ thu ngân duyệt...
                   </>
                 )}
               </span>
             </div>
-            <p className="text-xs text-stone-600 leading-relaxed">
-              {activeOrderStatus === "CONFIRMED"
-                ? "🎉 Quán đã nhận đơn và đang chuẩn bị món cho bạn! Món sẽ được mang ra bàn sớm."
-                : activeOrderStatus === "COMPLETED"
-                ? "✅ Món ăn đã phục vụ xong. Chúc bạn có trải nghiệm thật ngon miệng!"
-                : "⏳ Đơn của bạn đã được gửi tới quầy thu ngân. Vui lòng chờ vài giây để quán xác nhận..."}
-            </p>
+
+            {/* Stepper Progress Indicator */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginTop: "8px" }}>
+              <div
+                style={{
+                  padding: "8px",
+                  borderRadius: "10px",
+                  background: "#F6EFDF",
+                  textAlign: "center",
+                  border: "1px solid #E6DEC8",
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#7E2930" }}>1. Đã gửi đơn</div>
+                <div style={{ fontSize: "10px", color: "#146A65", fontWeight: 600 }}>✓ Hoàn tất</div>
+              </div>
+
+              <div
+                style={{
+                  padding: "8px",
+                  borderRadius: "10px",
+                  background: activeOrderStatus === "CONFIRMED" || activeOrderStatus === "COMPLETED" ? "#E6F4F2" : "#FFFFFF",
+                  textAlign: "center",
+                  border: `1px solid ${activeOrderStatus === "CONFIRMED" || activeOrderStatus === "COMPLETED" ? "#146A65" : "#E6DEC8"}`,
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 700, color: activeOrderStatus === "CONFIRMED" || activeOrderStatus === "COMPLETED" ? "#146A65" : "#8E8C94" }}>
+                  2. Pha chế
+                </div>
+                <div style={{ fontSize: "10px", color: "#8E8C94" }}>
+                  {activeOrderStatus === "CONFIRMED" || activeOrderStatus === "COMPLETED" ? "Đang chuẩn bị" : "Chờ quầy"}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "8px",
+                  borderRadius: "10px",
+                  background: activeOrderStatus === "COMPLETED" ? "#E3EFF7" : "#FFFFFF",
+                  textAlign: "center",
+                  border: `1px solid ${activeOrderStatus === "COMPLETED" ? "#1C4E6B" : "#E6DEC8"}`,
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 700, color: activeOrderStatus === "COMPLETED" ? "#1C4E6B" : "#8E8C94" }}>
+                  3. Lên món
+                </div>
+                <div style={{ fontSize: "10px", color: "#8E8C94" }}>
+                  {activeOrderStatus === "COMPLETED" ? "Đã ra bàn" : "Chờ phục vụ"}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* 3. Search Bar */}
-      <div className="max-w-md mx-auto px-4 mt-3">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+      <div style={{ maxWidth: "480px", margin: "14px auto 0", padding: "0 16px" }}>
+        <div style={{ position: "relative" }}>
+          <Search
+            size={18}
+            style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#8E8C94" }}
+          />
           <input
             type="text"
-            placeholder="Tìm trà sữa, cafe, bánh nướng..."
+            placeholder="Tìm cà phê, trà trái cây, topping..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+            style={{
+              width: "100%",
+              padding: "11px 16px 11px 40px",
+              background: "#FFFFFF",
+              border: "1.5px solid #E6DEC8",
+              borderRadius: "14px",
+              fontSize: "14px",
+              color: "#1C1A2D",
+              boxShadow: "0 2px 6px rgba(28, 26, 45, 0.03)",
+              outline: "none",
+            }}
           />
-        </div>
-      </div>
-
-      {/* 4. Category Tabs (Sticky) */}
-      <div className="sticky top-[68px] z-20 bg-stone-50/95 backdrop-blur-md border-b border-stone-200/80 py-2.5 mt-2">
-        <div className="max-w-md mx-auto px-4 flex gap-2 overflow-x-auto no-scrollbar">
-          {allCategories.map((cat) => (
+          {searchQuery && (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                selectedCategory === cat
-                  ? "bg-amber-600 text-white shadow-sm"
-                  : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-100"
-              }`}
+              onClick={() => setSearchQuery("")}
+              style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#8E8C94", cursor: "pointer" }}
             >
-              {cat}
+              <X size={16} />
             </button>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* 5. Product Grid */}
-      <main className="max-w-md mx-auto px-4 mt-4">
+      {/* 4. Category Tabs (Sticky Bar) */}
+      <div
+        style={{
+          position: "sticky",
+          top: "66px",
+          zIndex: 20,
+          background: "rgba(248, 244, 238, 0.96)",
+          backdropFilter: "blur(10px)",
+          borderBottom: "1px solid #E6DEC8",
+          padding: "10px 0",
+          marginTop: "10px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "480px",
+            margin: "0 auto",
+            padding: "0 16px",
+            display: "flex",
+            gap: "8px",
+            overflowX: "auto",
+            scrollbarWidth: "none",
+          }}
+        >
+          {allCategories.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                style={{
+                  whiteSpace: "nowrap",
+                  padding: "7px 15px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: isSelected ? 700 : 600,
+                  transition: "all 0.15s",
+                  border: isSelected ? "1.5px solid #7E2930" : "1.5px solid #E6DEC8",
+                  background: isSelected ? "#7E2930" : "#FFFFFF",
+                  color: isSelected ? "#FFFFFF" : "#5D5B63",
+                  boxShadow: isSelected ? "0 3px 10px rgba(126, 41, 48, 0.25)" : "none",
+                  cursor: "pointer",
+                }}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 5. Product Grid Menu */}
+      <main style={{ maxWidth: "480px", margin: "14px auto 0", padding: "0 16px" }}>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-stone-400">
-            <RefreshCw className="w-8 h-8 animate-spin text-amber-600 mb-3" />
-            <p className="text-sm font-medium">Đang tải thực đơn...</p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", color: "#8E8C94" }}>
+            <RefreshCw size={32} className="animate-spin" style={{ color: "#7E2930", marginBottom: "12px" }} />
+            <p style={{ fontSize: "14px", fontWeight: 600, color: "#7E2930" }}>Đang tải thực đơn Trạm...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center text-stone-400">
-            <UtensilsCrossed className="w-12 h-12 stroke-[1.5] mb-2" />
-            <p className="font-semibold text-stone-600 text-sm">Không tìm thấy món phù hợp</p>
-            <p className="text-xs text-stone-400 mt-1">Hãy thử tìm với từ khóa khác</p>
+          <div style={{ textAlign: "center", padding: "50px 20px", color: "#8E8C94" }}>
+            <UtensilsCrossed size={44} style={{ margin: "0 auto 10px", opacity: 0.6 }} />
+            <p style={{ fontSize: "15px", fontWeight: 700, color: "#1C1A2D" }}>Không tìm thấy món phù hợp</p>
+            <p style={{ fontSize: "12px", color: "#8E8C94", marginTop: "4px" }}>Vui lòng thử tìm kiếm với tên món khác</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {filteredProducts.map((p) => (
-              <div
-                key={p.id || p.name}
-                onClick={() => openCustomization(p)}
-                className="bg-white rounded-2xl p-3 shadow-sm border border-stone-200/80 flex flex-col justify-between cursor-pointer active:scale-[0.98] transition-transform"
-              >
-                <div>
-                  <div className="w-full aspect-square rounded-xl bg-amber-50 overflow-hidden mb-2.5 relative flex items-center justify-center">
-                    {p.imageBase64 ? (
-                      <img
-                        src={p.imageBase64}
-                        alt={p.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Coffee className="w-10 h-10 text-amber-300 stroke-[1.5]" />
-                    )}
-                    <span className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-md">
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                    </span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+            {filteredProducts.map((p) => {
+              const hasSizes = p.sizes && Object.keys(p.sizes).length > 0;
+              return (
+                <div
+                  key={p.id || p.name}
+                  onClick={() => openCustomization(p)}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "18px",
+                    padding: "12px",
+                    border: "1.5px solid #E6DEC8",
+                    boxShadow: "0 4px 12px rgba(28, 26, 45, 0.04)",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    transition: "transform 0.15s, box-shadow 0.15s",
+                  }}
+                >
+                  <div>
+                    {/* Product Image / Icon placeholder */}
+                    <div
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1/1",
+                        borderRadius: "14px",
+                        background: "#F6EFDF",
+                        overflow: "hidden",
+                        marginBottom: "10px",
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        border: "1px solid #ECE5D8",
+                      }}
+                    >
+                      {p.imageBase64 ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={p.imageBase64}
+                          alt={p.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div style={{ textAlign: "center", color: "#7E2930" }}>
+                          <Coffee size={36} strokeWidth={1.5} />
+                          <div style={{ fontSize: "10px", fontWeight: 700, marginTop: "2px", opacity: 0.8 }}>TRẠM</div>
+                        </div>
+                      )}
+
+                      {/* Add button pill */}
+                      <button
+                        style={{
+                          position: "absolute",
+                          bottom: "8px",
+                          right: "8px",
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          background: "#7E2930",
+                          color: "#FFFFFF",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 3px 8px rgba(126, 41, 48, 0.35)",
+                          cursor: "pointer",
+                        }}
+                        title="Chọn món"
+                      >
+                        <Plus size={18} strokeWidth={2.5} />
+                      </button>
+                    </div>
+
+                    <h3
+                      style={{
+                        fontWeight: 700,
+                        fontSize: "13px",
+                        lineHeight: 1.35,
+                        color: "#1C1A2D",
+                        margin: 0,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {p.name}
+                    </h3>
+                    <div style={{ fontSize: "11px", color: "#8E8C94", marginTop: "3px" }}>{p.category}</div>
                   </div>
-                  <h3 className="font-bold text-xs leading-snug line-clamp-2 text-stone-800">
-                    {p.name}
-                  </h3>
-                  <p className="text-[11px] text-stone-400 mt-0.5">{p.category}</p>
-                </div>
-                <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between">
-                  <span className="font-extrabold text-sm text-amber-600">
-                    {formatVND(p.price)}
-                  </span>
-                  {p.sizes && Object.keys(p.sizes).length > 0 && (
-                    <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
-                      Chọn size
+
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      paddingTop: "8px",
+                      borderTop: "1px solid #F6EFDF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ fontWeight: 800, fontSize: "14px", color: "#7E2930" }}>
+                      {formatVND(p.price)}
                     </span>
-                  )}
+                    {hasSizes && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: "#7E2930",
+                          background: "#FBECEE",
+                          padding: "2px 6px",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        Chọn size
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
 
-      {/* 6. Sticky Bottom Cart Bar */}
+      {/* 6. Sticky Floating Cart Bar (Đỏ mận Trạm) */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200 p-3 shadow-xl">
-          <div className="max-w-md mx-auto flex items-center justify-between gap-3">
+        <div
+          style={{
+            position: "fixed",
+            bottom: "16px",
+            left: 0,
+            right: 0,
+            zIndex: 40,
+            padding: "0 16px",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "480px",
+              margin: "0 auto",
+              background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+              color: "#FFFFFF",
+              borderRadius: "20px",
+              padding: "12px 18px",
+              boxShadow: "0 8px 25px rgba(92, 31, 36, 0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              border: "1.5px solid rgba(255, 255, 255, 0.2)",
+            }}
+          >
             <div
               onClick={() => setShowCartModal(true)}
-              className="flex items-center gap-3 cursor-pointer"
+              style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
             >
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/30">
-                  <ShoppingCart className="w-6 h-6" />
+              <div style={{ position: "relative" }}>
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "14px",
+                    background: "rgba(255, 255, 255, 0.18)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                >
+                  <ShoppingBag size={22} color="#FFFFFF" />
                 </div>
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white">
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-6px",
+                    right: "-6px",
+                    minWidth: "20px",
+                    height: "20px",
+                    padding: "0 4px",
+                    borderRadius: "10px",
+                    background: "#D97706",
+                    color: "#FFFFFF",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "2px solid #7E2930",
+                  }}
+                >
                   {totalCartQty}
                 </span>
               </div>
+
               <div>
-                <p className="text-xs text-stone-400 font-medium">Tổng tiền</p>
-                <p className="text-base font-extrabold text-amber-600 leading-tight">
+                <div style={{ fontSize: "11px", color: "#F6EFDF", fontWeight: 600 }}>Giỏ hàng bàn {tableName}</div>
+                <div style={{ fontSize: "17px", fontWeight: 900, color: "#FFFFFF", letterSpacing: "0.2px" }}>
                   {formatVND(totalCartAmount)}
-                </p>
+                </div>
               </div>
             </div>
 
             <button
               onClick={() => setShowCartModal(true)}
-              className="flex-1 max-w-[200px] py-3 px-5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold text-sm shadow-md shadow-orange-600/30 flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+              style={{
+                background: "#FFFFFF",
+                color: "#7E2930",
+                border: "none",
+                borderRadius: "12px",
+                padding: "10px 16px",
+                fontWeight: 800,
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(0, 0, 0, 0.15)",
+              }}
             >
-              <span>Xem giỏ hàng</span>
-              <ChevronRight className="w-4 h-4" />
+              <span>Xem giỏ</span>
+              <ChevronRight size={16} strokeWidth={2.5} />
             </button>
           </div>
         </div>
       )}
 
-      {/* 7. Product Customization Modal */}
+      {/* 7. Product Customization Modal (Drawer Tùy Chỉnh Món) */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slideUp">
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(28, 26, 45, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setSelectedProduct(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              background: "#FFFFFF",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              maxHeight: "88vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="p-4 border-b border-stone-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-amber-50 overflow-hidden shrink-0 flex items-center justify-center">
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #E6DEC8",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#FAF7F2",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "12px",
+                    background: "#F6EFDF",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid #ECE5D8",
+                  }}
+                >
                   {selectedProduct.imageBase64 ? (
-                    <img src={selectedProduct.imageBase64} alt="" className="w-full h-full object-cover" />
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={selectedProduct.imageBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
-                    <Coffee className="w-6 h-6 text-amber-500" />
+                    <Coffee size={24} color="#7E2930" />
                   )}
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-stone-900 leading-snug">{selectedProduct.name}</h3>
-                  <p className="text-xs font-extrabold text-amber-600 mt-0.5">
+                  <h3 style={{ fontSize: "15px", fontWeight: 800, color: "#1C1A2D", margin: 0 }}>
+                    {selectedProduct.name}
+                  </h3>
+                  <div style={{ fontSize: "15px", fontWeight: 900, color: "#7E2930", marginTop: "2px" }}>
                     {formatVND(currentModalUnitPrice)}
-                  </p>
+                  </div>
                 </div>
               </div>
+
               <button
                 onClick={() => setSelectedProduct(null)}
-                className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: "#E6DEC8",
+                  color: "#1C1A2D",
+                  border: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
               >
-                <X className="w-4 h-4" />
+                <X size={18} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 overflow-y-auto space-y-4">
+            <div style={{ padding: "18px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" }}>
               {/* Size Selection */}
               {selectedProduct.sizes && Object.keys(selectedProduct.sizes).length > 0 && (
                 <div>
-                  <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                    Chọn kích thước (Size)
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    {Object.entries(selectedProduct.sizes).map(([sz, extra]) => (
-                      <button
-                        key={sz}
-                        onClick={() => setSelectedSize(sz)}
-                        className={`p-2.5 rounded-xl border text-center transition-all ${
-                          selectedSize === sz
-                            ? "border-amber-600 bg-amber-50/80 text-amber-800 font-bold"
-                            : "border-stone-200 text-stone-600 hover:border-stone-300"
-                        }`}
-                      >
-                        <div className="text-xs font-bold">Size {sz}</div>
-                        <div className="text-[10px] text-stone-400 mt-0.5">
-                          {extra > 0 ? `+${formatVND(extra)}` : "Chuẩn"}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Topping Selection */}
-              {selectedProduct.allowedToppings && selectedProduct.allowedToppings.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                    Thêm Topping
-                  </h4>
-                  <div className="space-y-1.5">
-                    {selectedProduct.allowedToppings.map((top) => {
-                      const isSelected = selectedToppings.includes(top);
-                      const topPrice = DEFAULT_TOPPING_PRICES[top] || 10000;
+                  <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
+                    1. Kích thước (Size)
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${Object.keys(selectedProduct.sizes).length}, 1fr)`, gap: "8px" }}>
+                    {Object.entries(selectedProduct.sizes).map(([sName, sExtra]) => {
+                      const isSel = selectedSize === sName;
                       return (
-                        <div
-                          key={top}
-                          onClick={() => {
-                            setSelectedToppings((prev) =>
-                              isSelected ? prev.filter((t) => t !== top) : [...prev, top]
-                            );
+                        <button
+                          key={sName}
+                          onClick={() => setSelectedSize(sName)}
+                          style={{
+                            padding: "10px 8px",
+                            borderRadius: "12px",
+                            border: isSel ? "2px solid #7E2930" : "1.5px solid #E6DEC8",
+                            background: isSel ? "#FBECEE" : "#FFFFFF",
+                            color: isSel ? "#7E2930" : "#1C1A2D",
+                            textAlign: "center",
+                            cursor: "pointer",
                           }}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                            isSelected
-                              ? "border-amber-500 bg-amber-50/60 text-amber-900"
-                              : "border-stone-200 text-stone-700 hover:border-stone-300"
-                          }`}
                         >
-                          <span className="text-xs font-medium">{top}</span>
-                          <span className="text-xs font-bold text-amber-700">+{formatVND(topPrice)}</span>
-                        </div>
+                          <div style={{ fontWeight: 800, fontSize: "14px" }}>Size {sName}</div>
+                          <div style={{ fontSize: "11px", fontWeight: 600, color: isSel ? "#7E2930" : "#8E8C94", marginTop: "2px" }}>
+                            {sExtra > 0 ? `+${formatVND(sExtra)}` : sExtra < 0 ? formatVND(sExtra) : "Chuẩn"}
+                          </div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
               )}
 
-              {/* Ice & Sugar options */}
-              {selectedProduct.hasIceSugarOptions && (
-                <div className="grid grid-cols-2 gap-3">
+              {/* Sugar & Ice options */}
+              {selectedProduct.hasIceSugarOptions !== false && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div>
-                    <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                      Mức đường
-                    </h4>
+                    <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
+                      Mức Đường
+                    </label>
                     <select
                       value={selectedSugar}
                       onChange={(e) => setSelectedSugar(e.target.value)}
-                      className="w-full text-xs font-medium p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      style={{
+                        width: "100%",
+                        padding: "9px 12px",
+                        borderRadius: "10px",
+                        border: "1.5px solid #E6DEC8",
+                        background: "#FFFFFF",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#1C1A2D",
+                      }}
                     >
                       <option value="100% đường">100% đường (chuẩn)</option>
                       <option value="70% đường">70% đường (ít ngọt)</option>
@@ -672,196 +1197,424 @@ function OrderContent() {
                       <option value="0% đường">Không đường</option>
                     </select>
                   </div>
+
                   <div>
-                    <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                      Mức đá
-                    </h4>
+                    <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
+                      Mức Đá
+                    </label>
                     <select
                       value={selectedIce}
                       onChange={(e) => setSelectedIce(e.target.value)}
-                      className="w-full text-xs font-medium p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      style={{
+                        width: "100%",
+                        padding: "9px 12px",
+                        borderRadius: "10px",
+                        border: "1.5px solid #E6DEC8",
+                        background: "#FFFFFF",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#1C1A2D",
+                      }}
                     >
                       <option value="100% đá">100% đá (chuẩn)</option>
-                      <option value="50% đá">50% đá (ít đá)</option>
-                      <option value="30% đá">30% đá</option>
-                      <option value="0% đá">Không đá</option>
+                      <option value="70% đá">70% đá (ít đá)</option>
+                      <option value="50% đá">50% đá</option>
+                      <option value="Không đá">Không đá</option>
+                      <option value="Nóng">Uống Nóng ♨</option>
                     </select>
                   </div>
                 </div>
               )}
 
-              {/* Note input */}
+              {/* Toppings Checklist */}
+              {selectedProduct.allowedToppings && selectedProduct.allowedToppings.length > 0 && (
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
+                    2. Thêm Topping
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    {selectedProduct.allowedToppings.map((top) => {
+                      const isSel = selectedToppings.includes(top);
+                      const price = DEFAULT_TOPPING_PRICES[top] || 10000;
+                      return (
+                        <div
+                          key={top}
+                          onClick={() => {
+                            setSelectedToppings((prev) =>
+                              isSel ? prev.filter((t) => t !== top) : [...prev, top]
+                            );
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: "10px",
+                            border: isSel ? "2px solid #7E2930" : "1.5px solid #E6DEC8",
+                            background: isSel ? "#FBECEE" : "#FFFFFF",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: isSel ? "#7E2930" : "#1C1A2D" }}>{top}</div>
+                            <div style={{ fontSize: "11px", color: isSel ? "#7E2930" : "#8E8C94", fontWeight: 600 }}>+{formatVND(price)}</div>
+                          </div>
+                          <div
+                            style={{
+                              width: "18px",
+                              height: "18px",
+                              borderRadius: "6px",
+                              border: isSel ? "2px solid #7E2930" : "2px solid #D8CFBD",
+                              background: isSel ? "#7E2930" : "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#FFFFFF",
+                              fontSize: "11px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            {isSel ? "✓" : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Item Note */}
               <div>
-                <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                  Ghi chú cho món
-                </h4>
+                <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", textTransform: "uppercase", display: "block", marginBottom: "6px" }}>
+                  Ghi chú cho món này
+                </label>
                 <input
                   type="text"
-                  placeholder="Ví dụ: Để riêng đá, đậm trà..."
+                  placeholder="Ví dụ: ít đá, để đá riêng..."
                   value={itemNote}
                   onChange={(e) => setItemNote(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    borderRadius: "10px",
+                    border: "1.5px solid #E6DEC8",
+                    fontSize: "13px",
+                    color: "#1C1A2D",
+                    outline: "none",
+                  }}
                 />
               </div>
 
-              {/* Quantity Selector */}
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">Số lượng</span>
-                <div className="flex items-center gap-3">
+              {/* Quantity Counter */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid #F6EFDF" }}>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#1C1A2D" }}>Số lượng:</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#FAF7F2", padding: "4px 8px", borderRadius: "12px", border: "1px solid #E6DEC8" }}>
                   <button
-                    onClick={() => setItemQty((q) => Math.max(1, q - 1))}
-                    className="w-8 h-8 rounded-full border border-stone-300 flex items-center justify-center font-bold text-stone-600 active:bg-stone-100"
+                    onClick={() => setItemQty(Math.max(1, itemQty - 1))}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      borderRadius: "8px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E6DEC8",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#7E2930",
+                      cursor: "pointer",
+                    }}
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus size={14} />
                   </button>
-                  <span className="font-extrabold text-base w-6 text-center">{itemQty}</span>
+                  <span style={{ fontWeight: 800, fontSize: "15px", minWidth: "24px", textAlign: "center" }}>{itemQty}</span>
                   <button
-                    onClick={() => setItemQty((q) => q + 1)}
-                    className="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold active:bg-amber-700 shadow-sm"
+                    onClick={() => setItemQty(itemQty + 1)}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      borderRadius: "8px",
+                      background: "#7E2930",
+                      border: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#FFFFFF",
+                      cursor: "pointer",
+                    }}
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus size={14} />
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-stone-100 bg-stone-50">
+            {/* Modal Footer Submit */}
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #E6DEC8", background: "#FAF7F2" }}>
               <button
-                onClick={addToCart}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold text-sm shadow-md shadow-orange-600/30 active:scale-95 transition-transform"
+                onClick={handleAddToCart}
+                style={{
+                  width: "100%",
+                  padding: "13px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+                  color: "#FFFFFF",
+                  border: "none",
+                  fontWeight: 800,
+                  fontSize: "15px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 14px rgba(126, 41, 48, 0.35)",
+                  cursor: "pointer",
+                }}
               >
-                Thêm vào giỏ • {formatVND(currentModalUnitPrice * itemQty)}
+                <span>Thêm vào giỏ</span>
+                <span>•</span>
+                <span>{formatVND(currentModalUnitPrice * itemQty)}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 8. Cart Review & Submit Modal */}
+      {/* 8. Cart Review & Checkout Modal */}
       {showCartModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slideUp">
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(28, 26, 45, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowCartModal(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              background: "#FFFFFF",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              maxHeight: "88vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
-            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base text-stone-900">Giỏ hàng của bạn</h3>
-                <p className="text-xs text-stone-500">
-                  Bàn {tableName} • {tableZone}
-                </p>
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #E6DEC8",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+                color: "#FFFFFF",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, fontSize: "16px" }}>
+                <ShoppingBag size={20} />
+                <span>Giỏ Hàng Bàn {tableName}</span>
               </div>
               <button
                 onClick={() => setShowCartModal(false)}
-                className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700"
+                style={{ background: "none", border: "none", color: "#FFFFFF", cursor: "pointer" }}
               >
-                <X className="w-4 h-4" />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Item List */}
-            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+            {/* Cart Items List */}
+            <div style={{ padding: "16px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }}>
               {cart.map((item, idx) => (
-                <div key={item.id} className="p-3 bg-stone-50 rounded-2xl border border-stone-200/70">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-xs text-stone-900">{item.name}</h4>
-                      <p className="text-[11px] text-stone-500 mt-0.5">
-                        {item.selectedSize && `Size ${item.selectedSize}`}
-                        {item.selectedToppings.length > 0 && ` + ${item.selectedToppings.join(", ")}`}
-                      </p>
-                      {(item.selectedSugar || item.selectedIce) && (
-                        <p className="text-[10px] text-stone-400">
-                          {item.selectedSugar} • {item.selectedIce}
-                        </p>
-                      )}
-                      {item.note && (
-                        <p className="text-[11px] text-amber-700 italic mt-0.5">
-                          &quot;{item.note}&quot;
-                        </p>
-                      )}
+                <div
+                  key={item.id + idx}
+                  style={{
+                    background: "#FAF7F2",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    border: "1.5px solid #E6DEC8",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: "14px", color: "#1C1A2D" }}>{item.name}</div>
+                    <div style={{ fontSize: "12px", color: "#7E2930", fontWeight: 700, marginTop: "2px" }}>
+                      {formatVND(item.unitPrice)} x {item.quantity} = {formatVND(item.unitPrice * item.quantity)}
                     </div>
-                    <span className="font-bold text-xs text-amber-600">
-                      {formatVND(item.unitPrice * item.quantity)}
-                    </span>
+
+                    {/* Options list */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "6px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: "#FBECEE", color: "#7E2930" }}>
+                        Size {item.selectedSize}
+                      </span>
+                      <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#FFFFFF", border: "1px solid #E6DEC8", color: "#5D5B63" }}>
+                        {item.selectedSugar}
+                      </span>
+                      <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#FFFFFF", border: "1px solid #E6DEC8", color: "#5D5B63" }}>
+                        {item.selectedIce}
+                      </span>
+                      {item.selectedToppings.map((top) => (
+                        <span key={top} style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "#E6F4F2", color: "#146A65", fontWeight: 600 }}>
+                          +{top}
+                        </span>
+                      ))}
+                    </div>
+
+                    {item.note && (
+                      <div style={{ fontSize: "11px", color: "#B45309", fontStyle: "italic", marginTop: "4px" }}>
+                        Ghi chú: {item.note}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-stone-200/50">
+                  {/* Quantity adjustment / remove */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <button
-                      onClick={() => setCart((prev) => prev.filter((_, i) => i !== idx))}
-                      className="text-[11px] text-rose-500 hover:text-rose-700 font-medium"
-                    >
-                      Xóa
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          if (item.quantity <= 1) {
-                            setCart((prev) => prev.filter((_, i) => i !== idx));
-                          } else {
-                            setCart((prev) => {
-                              const cp = [...prev];
-                              cp[idx].quantity -= 1;
-                              return cp;
-                            });
-                          }
-                        }}
-                        className="w-6 h-6 rounded-full bg-white border border-stone-200 flex items-center justify-center text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="font-bold text-xs w-4 text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => {
+                      onClick={() => {
+                        if (item.quantity === 1) {
+                          setCart((prev) => prev.filter((_, i) => i !== idx));
+                        } else {
                           setCart((prev) => {
-                            const cp = [...prev];
-                            cp[idx].quantity += 1;
-                            return cp;
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], quantity: next[idx].quantity - 1 };
+                            return next;
                           });
-                        }}
-                        className="w-6 h-6 rounded-full bg-amber-600 text-white flex items-center justify-center text-xs font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
+                        }
+                      }}
+                      style={{
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "8px",
+                        background: "#FFFFFF",
+                        border: "1px solid #E6DEC8",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#7E2930",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span style={{ fontWeight: 800, fontSize: "13px", minWidth: "18px", textAlign: "center" }}>
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setCart((prev) => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+                          return next;
+                        });
+                      }}
+                      style={{
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "8px",
+                        background: "#7E2930",
+                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#FFFFFF",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Plus size={13} />
+                    </button>
                   </div>
                 </div>
               ))}
 
-              {/* Order global note */}
-              <div className="mt-4">
-                <label className="text-xs font-bold text-stone-700 uppercase tracking-wider mb-1 block">
-                  Ghi chú cho cả đơn (tùy chọn)
+              {/* Order Note Field */}
+              <div style={{ marginTop: "6px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 800, color: "#7E2930", display: "block", marginBottom: "6px" }}>
+                  Ghi chú chung cho đơn hàng (Bàn {tableName}):
                 </label>
                 <textarea
-                  rows={2}
-                  placeholder="Lời nhắn cho quán (ví dụ: làm nhanh giúp em nhé...)"
+                  placeholder="Ví dụ: Giao cùng lúc, mang thêm ly nước đá..."
                   value={orderNote}
                   onChange={(e) => setOrderNote(e.target.value)}
-                  className="w-full text-xs p-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  rows={2}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: "12px",
+                    border: "1.5px solid #E6DEC8",
+                    fontSize: "13px",
+                    color: "#1C1A2D",
+                    outline: "none",
+                    resize: "none",
+                  }}
                 />
               </div>
-            </div>
 
-            {/* Footer Summary & Submit */}
-            <div className="p-4 border-t border-stone-100 bg-white">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-stone-500 font-medium">Tổng tiền thanh toán</span>
-                <span className="text-lg font-extrabold text-amber-600">
+              {/* Order Summary */}
+              <div
+                style={{
+                  background: "#F6EFDF",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  border: "1px solid #E6DEC8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#1C1A2D" }}>
+                  Tổng cộng ({totalCartQty} món):
+                </span>
+                <span style={{ fontSize: "18px", fontWeight: 900, color: "#7E2930" }}>
                   {formatVND(totalCartAmount)}
                 </span>
               </div>
+            </div>
+
+            {/* Footer Submit Button */}
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #E6DEC8", background: "#FAF7F2" }}>
               <button
-                disabled={submitting}
                 onClick={handleSubmitOrder}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold text-sm shadow-md shadow-orange-600/30 flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-50"
+                disabled={submitting || cart.length === 0}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #7E2930 0%, #5C1F24 100%)",
+                  color: "#FFFFFF",
+                  border: "none",
+                  fontWeight: 900,
+                  fontSize: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 16px rgba(126, 41, 48, 0.4)",
+                  cursor: submitting ? "not-allowed" : "pointer",
+                  opacity: submitting ? 0.7 : 1,
+                }}
               >
                 {submitting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Đang gửi đơn...</span>
+                    <RefreshCw size={18} className="animate-spin" />
+                    <span>Đang gửi đơn xuống quán...</span>
                   </>
                 ) : (
-                  <span>Gửi Order Đến Quán</span>
+                  <>
+                    <Receipt size={18} />
+                    <span>Xác Nhận Gọi Món ({formatVND(totalCartAmount)})</span>
+                  </>
                 )}
               </button>
             </div>
@@ -869,19 +1622,5 @@ function OrderContent() {
         </div>
       )}
     </div>
-  );
-}
-
-export default function OrderPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-400">
-          <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
-        </div>
-      }
-    >
-      <OrderContent />
-    </Suspense>
   );
 }
