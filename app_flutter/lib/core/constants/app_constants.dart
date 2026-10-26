@@ -2,8 +2,8 @@
 
 class AppConstants {
   // Firebase
-  static const String firebaseDatabaseUrl = 'https://ungdungdidong-94edd-default-rtdb.firebaseio.com';
-  static const String onlineOrderWebUrl = 'https://ungdungdidong-94edd.web.app';
+  static const String firebaseDatabaseUrl = 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app';
+  static const String onlineOrderWebUrl = 'http://localhost:3000';
 
   // SharedPreferences keys
   static const String prefUsername = 'USERNAME';
@@ -15,6 +15,7 @@ class AppConstants {
   static const String prefBankId = 'BANK_ID';
   static const String prefBankAccount = 'BANK_ACCOUNT';
   static const String prefAccountName = 'ACCOUNT_NAME';
+  static const String prefQrOrderBaseUrl = 'QR_ORDER_BASE_URL';
 
   // Default values
   static const String defaultPrinterIp = '192.168.1.100';

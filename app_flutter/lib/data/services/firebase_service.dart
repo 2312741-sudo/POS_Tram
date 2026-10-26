@@ -503,6 +503,17 @@ class FirebaseService {
   Future<void> updateOnlineOrderStatus(String key, String status) =>
       _orderRepo.updateOnlineOrderStatus(key, status);
 
+  Future<bool> confirmOnlineOrderAndAddToTable(
+    OnlineOrderModel order, {
+    String? staffUsername,
+    String? staffFullName,
+  }) =>
+      _orderRepo.confirmOnlineOrderAndAddToTable(
+        order,
+        staffUsername: staffUsername,
+        staffFullName: staffFullName,
+      );
+
   // ==================== KIOTVIET CASH SHIFT ====================
   CashShiftModel? get activeShiftCache => _reportRepo.activeShiftCache;
 

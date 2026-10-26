@@ -1593,6 +1593,92 @@ class OrderRepository {
     await onlineOrdersRef.child(key).update({'status': status});
   }
 
+  /// Duyệt đơn QR Online và gộp trực tiếp món vào bàn
+  Future<bool> confirmOnlineOrderAndAddToTable(
+    OnlineOrderModel order, {
+    String? staffUsername,
+    String? staffFullName,
+  }) async {
+    try {
+      final tableKey = '${order.tableZone}_${order.tableName}';
+      final tableSnap = await tablesRef.child(tableKey).get();
+      TableModel table;
+      if (tableSnap.exists && tableSnap.value != null) {
+        table = TableModel.fromMap(tableSnap.value as Map, tableKey);
+      } else {
+        // Tìm bàn theo tên & khu vực phòng trường hợp định dạng key lệch
+        final allSnap = await tablesRef.get();
+        TableModel? found;
+        if (allSnap.exists && allSnap.value is Map) {
+          final allMap = allSnap.value as Map;
+          for (final e in allMap.entries) {
+            if (e.value is Map) {
+              final t = TableModel.fromMap(e.value as Map, e.key.toString());
+              if (t.name == order.tableName && t.zone == order.tableZone) {
+                found = t;
+                break;
+              }
+            }
+          }
+        }
+        table = found ?? TableModel(name: order.tableName, zone: order.tableZone);
+      }
+
+      final newItems = order.items;
+      if (newItems.isNotEmpty) {
+        final currentItems = table.currentItems;
+        final Map<String, OrderItemModel> map = {};
+        for (final item in currentItems) {
+          final k = '${item.productId}_${item.selectedSize}_${item.selectedSugar}_${item.selectedIce}_${item.selectedToppings.join(',')}';
+          map[k] = item;
+        }
+        for (final item in newItems) {
+          final k = '${item.productId}_${item.selectedSize}_${item.selectedSugar}_${item.selectedIce}_${item.selectedToppings.join(',')}';
+          if (map.containsKey(k)) {
+            final exist = map[k]!;
+            map[k] = exist.copyWith(
+              quantity: exist.quantity + item.quantity,
+              note: '${exist.note} ${item.note}'.trim(),
+            );
+          } else {
+            map[k] = item;
+          }
+        }
+
+        table.inUse = true;
+        table.openedAt ??= DateTime.now().millisecondsSinceEpoch;
+        table.currentOrderJson = jsonEncode(map.values.map((e) => e.toMap()).toList());
+        table.addActionLog(OrderActionLogModel(
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          staffUsername: staffUsername ?? 'staff',
+          staffFullName: staffFullName ?? 'Nhân viên',
+          action: 'CONFIRM_ONLINE_ORDER',
+          details: 'Duyệt đơn QR Online: thêm ${newItems.length} món',
+        ));
+
+        await saveTable(table);
+
+        // Bắn lệnh vào bếp cho các món mới
+        await sendOrderToKitchen(
+          table: table,
+          items: newItems,
+          note: order.notes,
+          orderedBy: staffUsername ?? 'QR_CUSTOMER',
+          orderedByName: staffFullName ?? 'Khách gọi qua QR',
+        );
+      }
+
+      // Cập nhật trạng thái đơn online
+      if (order.firebaseKey != null) {
+        await updateOnlineOrderStatus(order.firebaseKey!, 'CONFIRMED');
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error confirming online order: $e');
+      return false;
+    }
+  }
+
   int compareTables(TableModel a, TableModel b) {
     if (a.zone != b.zone) {
       return a.zone.toLowerCase().compareTo(b.zone.toLowerCase());

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
@@ -51,6 +52,42 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
   Future<void> _updateStatus(OnlineOrderModel order, String status) async {
     if (order.firebaseKey == null) return;
     await _fb.updateOnlineOrderStatus(order.firebaseKey!, status);
+  }
+
+  Future<void> _handleConfirm(OnlineOrderModel order) async {
+    final user = AuthService().currentUser;
+    if (order.isCallWaiter) {
+      await _updateStatus(order, 'CONFIRMED');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã tiếp nhận yêu cầu gọi phục vụ tại bàn ${order.tableName}!', style: GoogleFonts.beVietnamPro()),
+            backgroundColor: context.tc.cardElevated,
+          ),
+        );
+      }
+      return;
+    }
+
+    final success = await _fb.confirmOnlineOrderAndAddToTable(
+      order,
+      staffUsername: user?.username,
+      staffFullName: user?.fullName,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!'
+                : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
+            style: GoogleFonts.beVietnamPro(),
+          ),
+          backgroundColor: success ? context.tc.cardElevated : context.tc.danger,
+        ),
+      );
+    }
   }
 
   @override
@@ -115,7 +152,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
       itemBuilder: (_, i) => _OnlineOrderCard(
         order: orders[i],
         showActions: showActions,
-        onConfirm: () => _updateStatus(orders[i], 'CONFIRMED'),
+        onConfirm: () => _handleConfirm(orders[i]),
         onCancel: () => _updateStatus(orders[i], 'CANCELLED'),
         onTap: () => context.push('/online-order-detail', extra: orders[i]),
       ).animate(delay: (i * 50).ms).fadeIn(duration: 250.ms),

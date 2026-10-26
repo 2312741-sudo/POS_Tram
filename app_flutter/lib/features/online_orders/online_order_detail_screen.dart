@@ -1,6 +1,7 @@
 // lib/features/online_orders/online_order_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
@@ -190,10 +191,35 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                     flex: 2,
                     child: ElevatedButton(
                       onPressed: () async {
-                        if (order.firebaseKey != null) {
-                          await FirebaseService().updateOnlineOrderStatus(order.firebaseKey!, 'CONFIRMED');
+                        final fb = FirebaseService();
+                        final user = AuthService().currentUser;
+                        bool success = false;
+                        if (order.isCallWaiter) {
+                          if (order.firebaseKey != null) {
+                            await fb.updateOnlineOrderStatus(order.firebaseKey!, 'CONFIRMED');
+                            success = true;
+                          }
+                        } else {
+                          success = await fb.confirmOnlineOrderAndAddToTable(
+                            order,
+                            staffUsername: user?.username,
+                            staffFullName: user?.fullName,
+                          );
                         }
-                        if (context.mounted) Navigator.pop(context);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                success
+                                    ? 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!'
+                                    : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
+                                style: GoogleFonts.beVietnamPro(),
+                              ),
+                              backgroundColor: success ? context.tc.cardElevated : context.tc.danger,
+                            ),
+                          );
+                          Navigator.pop(context);
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
