@@ -31,6 +31,7 @@ export default function EndOfDayReportPage() {
   const [showServingModal, setShowServingModal] = useState<boolean>(false);
 
   // Tab Hàng hoá states
+  const [productSection, setProductSection] = useState<"SERVING" | "SOLD">("SERVING");
   const [productSearch, setProductSearch] = useState<string>("");
   const [productSortBy, setProductSortBy] = useState<"QTY_DESC" | "REV_DESC" | "NAME_ASC">("REV_DESC");
   const [productViewMode, setProductViewMode] = useState<"AMOUNT" | "QUANTITY">("AMOUNT");
@@ -254,6 +255,105 @@ export default function EndOfDayReportPage() {
 
   const totalProductQty = useMemo(() => productSalesList.reduce((s, it) => s + it.quantity, 0), [productSalesList]);
   const totalProductRev = useMemo(() => productSalesList.reduce((s, it) => s + it.netRevenue, 0), [productSalesList]);
+
+  // Tab 3: Serving products list aggregated from active tables
+  const servingProductsList = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        productName: string;
+        productCode: string;
+        unitPrice: number;
+        quantity: number;
+        estimatedRevenue: number;
+        category: string;
+        sentKitchenQty: number;
+        unsentKitchenQty: number;
+        tables: Record<string, number>;
+      }
+    > = {};
+
+    activeTables.forEach((t) => {
+      let items: Array<{
+        name?: string;
+        productName?: string;
+        id?: string | number;
+        productId?: string | number;
+        price?: number;
+        quantity?: number;
+        count?: number;
+        selectedToppings?: Array<{ price?: number }>;
+        isSentKitchen?: boolean;
+      }> = [];
+      if (t.currentOrderJson) {
+        try {
+          const parsed = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
+          if (Array.isArray(parsed)) items = parsed;
+        } catch {}
+      }
+
+      const tableLabel = t.zone ? `${t.name} (${t.zone})` : t.name;
+
+      items.forEach((it) => {
+        const name = (it.name || it.productName || "").trim();
+        if (!name) return;
+        const pid = it.productId != null ? it.productId : it.id;
+        const code = (pid != null && (productsMap[pid]?.code || (productsMap[pid] as { productCode?: string })?.productCode)) ||
+                     (productsMap[name]?.code || (productsMap[name] as { productCode?: string })?.productCode) || "";
+        const price = Number(it.price || 0);
+        const qty = Number(it.quantity || it.count || 1);
+        let toppingSum = 0;
+        if (Array.isArray(it.selectedToppings)) {
+          toppingSum = it.selectedToppings.reduce((s, tp) => s + (tp.price || 0), 0);
+        }
+        const itemTotal = (price + toppingSum) * qty;
+        const isSent = it.isSentKitchen === true;
+
+        if (!map[name]) {
+          map[name] = {
+            productName: name,
+            productCode: code,
+            unitPrice: price,
+            quantity: 0,
+            estimatedRevenue: 0,
+            category: "Đồ uống & Món ăn",
+            sentKitchenQty: 0,
+            unsentKitchenQty: 0,
+            tables: {},
+          };
+        }
+
+        map[name].quantity += qty;
+        map[name].estimatedRevenue += itemTotal;
+        if (isSent) {
+          map[name].sentKitchenQty += qty;
+        } else {
+          map[name].unsentKitchenQty += qty;
+        }
+        map[name].tables[tableLabel] = (map[name].tables[tableLabel] || 0) + qty;
+      });
+    });
+
+    let list = Object.values(map);
+
+    if (productSearch.trim()) {
+      const q = productSearch.toLowerCase();
+      list = list.filter((p) => p.productName.toLowerCase().includes(q) || p.productCode.toLowerCase().includes(q));
+    }
+
+    if (productSortBy === "QTY_DESC") {
+      list.sort((a, b) => b.quantity - a.quantity);
+    } else if (productSortBy === "REV_DESC") {
+      list.sort((a, b) => b.estimatedRevenue - a.estimatedRevenue);
+    } else if (productSortBy === "NAME_ASC") {
+      list.sort((a, b) => a.productName.localeCompare(b.productName));
+    }
+
+    return list;
+  }, [activeTables, productsMap, productSearch, productSortBy]);
+
+  const totalServingQty = useMemo(() => servingProductsList.reduce((s, it) => s + it.quantity, 0), [servingProductsList]);
+  const totalServingRev = useMemo(() => servingProductsList.reduce((s, it) => s + it.estimatedRevenue, 0), [servingProductsList]);
 
   // Handle Export Excel & PDF
   const handleExportExcel = () => {
@@ -746,8 +846,217 @@ export default function EndOfDayReportPage() {
             padding: "20px",
           }}
         >
-          {/* Header toolbar */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+          {/* Section Selector: [ 🍽️ Đang phục vụ ] vs [ 📦 Đã bán ra ] */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <button
+              onClick={() => setProductSection("SERVING")}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "12px",
+                border: productSection === "SERVING" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                background: productSection === "SERVING" ? "var(--primary-light, #FBECEE)" : "var(--bg)",
+                color: productSection === "SERVING" ? "var(--primary)" : "var(--text)",
+                fontWeight: "700",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                transition: "all 0.15s",
+              }}
+            >
+              🍽️ Đang phục vụ ({totalServingQty} phần)
+            </button>
+            <button
+              onClick={() => setProductSection("SOLD")}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "12px",
+                border: productSection === "SOLD" ? "2px solid var(--primary)" : "1px solid var(--border)",
+                background: productSection === "SOLD" ? "var(--primary-light, #FBECEE)" : "var(--bg)",
+                color: productSection === "SOLD" ? "var(--primary)" : "var(--text)",
+                fontWeight: "700",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                transition: "all 0.15s",
+              }}
+            >
+              📦 Đã bán ra ({totalProductQty} phần)
+            </button>
+          </div>
+
+          {productSection === "SERVING" ? (
+            <>
+              {/* Header toolbar for Serving */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, maxWidth: "420px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "var(--bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "10px",
+                      padding: "6px 12px",
+                      width: "100%",
+                    }}
+                  >
+                    <Search size={16} color="#666" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm món đang phục vụ..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        outline: "none",
+                        fontSize: "13px",
+                        width: "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <select
+                    value={productSortBy}
+                    onChange={(e) => setProductSortBy(e.target.value as typeof productSortBy)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "10px",
+                      border: "1px solid var(--border)",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      background: "var(--surface)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="QTY_DESC">Số lượng nhiều nhất</option>
+                    <option value="REV_DESC">Ước tính doanh thu giảm dần</option>
+                    <option value="NAME_ASC">Tên món A-Z</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Stats Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "24px",
+                  padding: "12px 16px",
+                  background: "var(--bg)",
+                  borderRadius: "10px",
+                  marginBottom: "16px",
+                  fontSize: "13px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  Mặt hàng đang phục vụ: <strong>{servingProductsList.length} món</strong>
+                </div>
+                <div>
+                  Tổng sản lượng: <strong style={{ color: "var(--primary)" }}>{totalServingQty} phần</strong>
+                </div>
+                <div>
+                  Doanh thu ước tính: <strong style={{ color: "var(--primary)" }}>{formatVND(totalServingRev)}</strong>
+                </div>
+                <div>
+                  Bàn đang gọi món: <strong>{activeTables.length} bàn</strong>
+                </div>
+              </div>
+
+              {/* Table for Serving */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid var(--border)", color: "var(--subtext)" }}>
+                      <th style={{ padding: "10px 12px" }}>Hạng</th>
+                      <th style={{ padding: "10px 12px" }}>Mã món</th>
+                      <th style={{ padding: "10px 12px" }}>Tên sản phẩm</th>
+                      <th style={{ padding: "10px 12px" }}>Nhóm hàng</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right" }}>Đơn giá</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right", background: "var(--primary-light)", color: "var(--primary)" }}>
+                        Đang phục vụ
+                      </th>
+                      <th style={{ padding: "10px 12px", textAlign: "center" }}>Trạng thái chế biến</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right" }}>Doanh thu ước tính</th>
+                      <th style={{ padding: "10px 12px" }}>Bàn đang gọi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {servingProductsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: "center", padding: "30px", color: "var(--muted)" }}>
+                          Hiện không có món nào đang phục vụ trên bàn
+                        </td>
+                      </tr>
+                    ) : (
+                      servingProductsList.map((p, idx) => (
+                        <tr key={p.productName + '-' + idx} style={{ borderBottom: "1px solid #F0ECE1" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: "700", color: idx < 3 ? "var(--primary)" : "var(--subtext)" }}>
+                            #{idx + 1}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "var(--muted)" }}>
+                            {p.productCode || "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontWeight: "600", color: "var(--text)" }}>{p.productName}</td>
+                          <td style={{ padding: "10px 12px", color: "var(--subtext)" }}>{p.category}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right" }}>{formatVND(p.unitPrice)}</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "800", color: "var(--primary)" }}>
+                            {p.quantity} phần
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                            <div style={{ display: "inline-flex", gap: "6px" }}>
+                              {p.sentKitchenQty > 0 && (
+                                <span style={{ background: "#E8F5E9", color: "#2E7D32", padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
+                                  Đã gửi bếp: {p.sentKitchenQty}
+                                </span>
+                              )}
+                              {p.unsentKitchenQty > 0 && (
+                                <span style={{ background: "#FFF3E0", color: "#E65100", padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
+                                  Chưa gửi: {p.unsentKitchenQty}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700", color: "var(--text)" }}>
+                            {formatVND(p.estimatedRevenue)}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {Object.entries(p.tables).map(([tbl, count]) => (
+                                <span
+                                  key={tbl}
+                                  style={{
+                                    background: "var(--bg)",
+                                    border: "1px solid var(--border)",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    color: "var(--text)",
+                                  }}
+                                >
+                                  {tbl}: <strong>{count}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Header toolbar */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, maxWidth: "420px" }}>
               <div
                 style={{
@@ -1012,6 +1321,8 @@ export default function EndOfDayReportPage() {
               </tbody>
             </table>
           </div>
+            </>
+          )}
         </div>
       )}
 

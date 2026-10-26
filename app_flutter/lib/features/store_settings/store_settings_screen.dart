@@ -66,8 +66,18 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
   }
 
   Future<void> _load() async {
-    final info = await _fb.getStoreInfo();
-    if (!mounted) return;
+    try {
+      final info = await _fb.getStoreInfo();
+      if (!mounted) return;
+      _applyStoreInfo(info);
+    } catch (_) {
+      if (!mounted) return;
+      final fallback = _auth.currentStoreInfo ?? StoreInfoModel(storeCode: _auth.currentStoreCode, storeName: 'POS Trạm');
+      _applyStoreInfo(fallback);
+    }
+  }
+
+  void _applyStoreInfo(StoreInfoModel info) {
     setState(() {
       _info = info;
       _nameCtrl.text = info.storeName;

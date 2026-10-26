@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/analytics_tab.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -19,6 +20,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   final _fb = FirebaseService();
   List<BillModel> _bills = [];
   bool _loading = true;
+  Timer? _safetyTimer;
   int _touchedPieIndex = -1;
   String _period = 'THIS_MONTH'; // 'TODAY', 'YESTERDAY', '7DAYS', 'THIS_MONTH', 'LAST_MONTH', 'ALL'
 
@@ -28,14 +30,28 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     _loadBills();
   }
 
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
+  }
+
   void _loadBills() {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _fb.myBillsStream().listen((b) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _bills = b.where((e) => e.status == 'PAID').toList();
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
   }
 

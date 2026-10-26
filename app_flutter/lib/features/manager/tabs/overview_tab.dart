@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/overview_tab.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -42,11 +43,18 @@ class _OverviewTabState extends State<OverviewTab> {
   List<OnlineOrderModel> _onlineOrders = [];
   List<AuditLogModel> _auditLogs = [];
   bool _loading = true;
+  Timer? _safetyTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
   }
 
   bool get _canViewAudit {
@@ -55,8 +63,16 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   void _loadData() {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _fb.myBillsStream().listen((b) {
+      _safetyTimer?.cancel();
       if (mounted) setState(() { _bills = b; _loading = false; });
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
     _fb.tablesStream().listen((t) {
       if (mounted) setState(() => _tables = t);

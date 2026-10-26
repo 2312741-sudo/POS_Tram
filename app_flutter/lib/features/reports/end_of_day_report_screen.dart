@@ -1,4 +1,5 @@
 // lib/features/reports/end_of_day_report_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -40,6 +41,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   List<CashShiftModel> _shifts = [];
   List<StoreInfoModel> _stores = [];
   bool _loading = true;
+  String? _errorMessage;
+
+  // Stream subscriptions & safety timer
+  Timer? _safetyTimeoutTimer;
+  StreamSubscription<List<BillModel>>? _billsSub;
+  StreamSubscription<List<TableModel>>? _tablesSub;
+  StreamSubscription<List<CashShiftModel>>? _shiftsSub;
 
   // Filter state
   String _selectedDateRange = 'TODAY'; // TODAY, YESTERDAY, 7DAYS, THIS_MONTH, CUSTOM
@@ -48,10 +56,11 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   String _selectedStoreCode = ''; // '' = current or ALL
   String _selectedStaff = 'ALL'; // 'ALL' or staff full name / username
 
-  // Tab 3 (Hàng hoá) search and sort
+  // Tab 3 (Hàng hoá) search, sort, and section
   String _productSearch = '';
   String _sortBy = 'REV_DESC'; // REV_DESC, QTY_DESC, NAME_ASC
   String _productViewMode = 'AMOUNT'; // 'AMOUNT' (Số tiền bán) or 'QUANTITY' (Số lượng bán)
+  String _productSection = 'SERVING'; // 'SERVING' (Đang phục vụ) or 'SOLD' (Đã bán ra)
 
   @override
   void initState() {
@@ -65,13 +74,17 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
   @override
   void dispose() {
+    _safetyTimeoutTimer?.cancel();
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
+    _shiftsSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _loadProducts() async {
     try {
-      final prods = await _fb.getProducts();
+      final prods = await _fb.getProducts(storeCode: _selectedStoreCode);
       if (!mounted) return;
       setState(() {
         _productsMap = {for (final p in prods) if (p.id > 0) p.id: p};
@@ -90,16 +103,82 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     } catch (_) {}
   }
 
+  Future<void> _refreshData() async {
+    await _loadProducts();
+    _loadData();
+  }
+
   void _loadData() {
-    _fb.myBillsStream().listen((b) {
-      if (mounted) setState(() { _bills = b; _loading = false; });
+    _safetyTimeoutTimer?.cancel();
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
+    _shiftsSub?.cancel();
+
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
     });
-    _fb.tablesStream().listen((t) {
-      if (mounted) setState(() => _tables = t);
-    }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
-    _fb.cashShiftsStream().listen((s) {
-      if (mounted) setState(() => _shifts = s);
+
+    // Timeout an toàn phòng ngừa: sau 3.5s nếu stream chưa phát sự kiện thì gọi nạp trực tiếp qua getStoreBills
+    _safetyTimeoutTimer = Timer(const Duration(milliseconds: 3500), () {
+      _fallbackDirectFetch();
     });
+
+    final billsStream = _fb.myBillsStream();
+
+    _billsSub = billsStream.listen(
+      (b) {
+        _safetyTimeoutTimer?.cancel();
+        if (mounted) {
+          setState(() {
+            _bills = b;
+            _loading = false;
+            _errorMessage = null;
+          });
+        }
+      },
+      onError: (Object e) {
+        debugPrint('Lỗi tải hóa đơn: $e');
+        _fallbackDirectFetch();
+      },
+    );
+
+    _tablesSub = _fb.tablesStream().listen(
+      (t) {
+        if (mounted) setState(() => _tables = t);
+      },
+      onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'),
+    );
+
+    _shiftsSub = _fb.cashShiftsStream().listen(
+      (s) {
+        if (mounted) setState(() => _shifts = s);
+      },
+      onError: (Object e) => debugPrint('Lỗi tải ca làm việc: $e'),
+    );
+  }
+
+  Future<void> _fallbackDirectFetch() async {
+    try {
+      final bills = await _fb.getStoreBills(storeCode: _selectedStoreCode);
+      if (mounted) {
+        setState(() {
+          if (_bills.isEmpty && bills.isNotEmpty) {
+            _bills = bills;
+          }
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          if (_bills.isEmpty) {
+            _errorMessage = 'Không thể tải dữ liệu tự động. Vui lòng bấm làm mới để thử lại.';
+          }
+        });
+      }
+    }
   }
 
   // Date range filter helper
@@ -395,7 +474,86 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     return list;
   }
 
-  // ==================== TAB 4: PHÒNG BÀN CALCULATIONS ====================
+  List<Map<String, dynamic>> get _servingProductList {
+    final Map<String, Map<String, dynamic>> productMap = {};
+
+    for (final table in _servingTables) {
+      if (table.currentOrderJson.isEmpty) continue;
+      try {
+        final raw = jsonDecode(table.currentOrderJson);
+        if (raw is! List) continue;
+        for (final it in raw) {
+          if (it is! Map) continue;
+          final name = (it['name'] as String? ?? '').trim();
+          if (name.isEmpty) continue;
+          final productId = (it['id'] ?? it['productId'] ?? 0) as int? ?? 0;
+          final price = (it['price'] as num?)?.toInt() ?? 0;
+          final qty = (it['quantity'] as num?)?.toInt() ?? 1;
+          final isSentKitchen = it['isSentKitchen'] == true;
+
+          int toppingSum = 0;
+          if (it['selectedToppings'] is List) {
+            for (final tp in it['selectedToppings']) {
+              if (tp is Map && tp['price'] != null) {
+                toppingSum += (tp['price'] as num).toInt();
+              }
+            }
+          }
+          final itemTotal = (price + toppingSum) * qty;
+          final tableName = table.zone.isNotEmpty ? '${table.name} (${table.zone})' : table.name;
+
+          if (!productMap.containsKey(name)) {
+            productMap[name] = {
+              'name': name,
+              'code': _codeOf(productId, name),
+              'productId': productId,
+              'unitPrice': price,
+              'quantity': 0,
+              'revenue': 0,
+              'sentKitchenQty': 0,
+              'unsentKitchenQty': 0,
+              'tables': <String, int>{},
+            };
+          }
+
+          productMap[name]!['quantity'] = (productMap[name]!['quantity'] as int) + qty;
+          productMap[name]!['revenue'] = (productMap[name]!['revenue'] as int) + itemTotal;
+          if (isSentKitchen) {
+            productMap[name]!['sentKitchenQty'] = (productMap[name]!['sentKitchenQty'] as int) + qty;
+          } else {
+            productMap[name]!['unsentKitchenQty'] = (productMap[name]!['unsentKitchenQty'] as int) + qty;
+          }
+
+          final tblMap = productMap[name]!['tables'] as Map<String, int>;
+          tblMap[tableName] = (tblMap[tableName] ?? 0) + qty;
+        }
+      } catch (_) {}
+    }
+
+    var list = productMap.values.toList();
+
+    // Filter by search query
+    if (_productSearch.isNotEmpty) {
+      final q = _productSearch.toLowerCase();
+      list = list.where((p) =>
+        (p['name'] as String).toLowerCase().contains(q) ||
+        (p['code'] as String? ?? '').toLowerCase().contains(q)
+      ).toList();
+    }
+
+    // Sort
+    if (_sortBy == 'QTY_DESC') {
+      list.sort((a, b) => (b['quantity'] as int).compareTo(a['quantity'] as int));
+    } else if (_sortBy == 'REV_DESC') {
+      list.sort((a, b) => (b['revenue'] as int).compareTo(a['revenue'] as int));
+    } else if (_sortBy == 'NAME_ASC') {
+      list.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+    } else {
+      list.sort((a, b) => (b['revenue'] as int).compareTo(a['revenue'] as int));
+    }
+
+    return list;
+  }
   List<Map<String, dynamic>> get _tableSalesList {
     final Map<String, Map<String, dynamic>> tableMap = {};
 
@@ -506,7 +664,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                 ),
                 title: Text('${_auth.currentStoreInfo?.storeName ?? _auth.currentStoreCode} (Hiện tại)'),
                 onTap: () {
-                  setState(() => _selectedStoreCode = _auth.currentStoreCode);
+                  final newCode = _auth.currentStoreCode;
+                  if (_selectedStoreCode != newCode) {
+                    setState(() {
+                      _selectedStoreCode = newCode;
+                      _loading = true;
+                    });
+                    _loadProducts();
+                    _loadData();
+                  }
                   Navigator.pop(ctx);
                 },
               ),
@@ -520,7 +686,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   title: Text(s.storeName),
                   subtitle: Text('Mã: ${s.storeCode}'),
                   onTap: () {
-                    setState(() => _selectedStoreCode = s.storeCode);
+                    final newCode = s.storeCode;
+                    if (_selectedStoreCode != newCode) {
+                      setState(() {
+                        _selectedStoreCode = newCode;
+                        _loading = true;
+                      });
+                      _loadProducts();
+                      _loadData();
+                    }
                     Navigator.pop(ctx);
                   },
                 );
@@ -658,7 +832,43 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ]);
       }
 
-      // Sheet 2: Chi tiết theo từng nhân viên nếu chọn Tất cả nhân viên
+      // Sheet 2: Hàng hóa đang phục vụ trên bàn
+      final servingSheet = excel['HangHoaDangPhucVu'];
+      servingSheet.appendRow([TextCellValue('BÁO CÁO HÀNG HÓA ĐANG PHỤC VỤ TRÊN BÀN')]);
+      servingSheet.appendRow([TextCellValue('Chi nhánh: $currentStoreName')]);
+      servingSheet.appendRow([TextCellValue('Thời điểm xuất file: $nowStr')]);
+      servingSheet.appendRow([]);
+      servingSheet.appendRow([
+        TextCellValue('Xếp hạng'),
+        TextCellValue('Mã món'),
+        TextCellValue('Tên món ăn / Đồ uống'),
+        TextCellValue('Đơn giá (VNĐ)'),
+        TextCellValue('Đang phục vụ (phần)'),
+        TextCellValue('Đã gửi bếp (phần)'),
+        TextCellValue('Chưa gửi bếp (phần)'),
+        TextCellValue('Doanh thu ước tính (VNĐ)'),
+        TextCellValue('Bàn đang gọi món'),
+      ]);
+
+      final sList = _servingProductList;
+      for (int i = 0; i < sList.length; i++) {
+        final item = sList[i];
+        final tablesMap = item['tables'] as Map<String, int>? ?? {};
+        final tablesStr = tablesMap.entries.map((e) => '${e.key}: ${e.value}').join('; ');
+        servingSheet.appendRow([
+          DoubleCellValue((i + 1).toDouble()),
+          TextCellValue(item['code'] as String? ?? ''),
+          TextCellValue(item['name'] as String),
+          DoubleCellValue((item['unitPrice'] as int).toDouble()),
+          DoubleCellValue((item['quantity'] as int).toDouble()),
+          DoubleCellValue((item['sentKitchenQty'] as int).toDouble()),
+          DoubleCellValue((item['unsentKitchenQty'] as int).toDouble()),
+          DoubleCellValue((item['revenue'] as int).toDouble()),
+          TextCellValue(tablesStr),
+        ]);
+      }
+
+      // Sheet 3: Chi tiết theo từng nhân viên nếu chọn Tất cả nhân viên
       if (_selectedStaff == 'ALL') {
         final staffSheet = excel['ChiTietTheoNhanVien'];
         staffSheet.appendRow([TextCellValue('CHI TIẾT MÓN BÁN CỦA TỪNG NHÂN VIÊN')]);
@@ -865,6 +1075,11 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Làm mới',
+            onPressed: _refreshData,
+          ),
+          IconButton(
             icon: Icon(Icons.assessment_outlined, color: context.tc.primary),
             tooltip: 'Trung tâm Báo cáo Quản trị',
             onPressed: () {
@@ -1041,16 +1256,44 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTongHopTab(),
-                _buildThuChiTab(),
-                _buildHangHoaTab(),
-                _buildPhongBanTab(),
-              ],
-            ),
+          ? Center(child: CircularProgressIndicator(color: context.tc.primary))
+          : _errorMessage != null && _bills.isEmpty && _tables.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_off_outlined, size: 48, color: context.tc.danger),
+                        const SizedBox(height: 12),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.beVietnamPro(fontSize: 14, color: context.tc.textSecondary),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _refreshData,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Thử lại ngay'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  color: context.tc.primary,
+                  onRefresh: _refreshData,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTongHopTab(),
+                      _buildThuChiTab(),
+                      _buildHangHoaTab(),
+                      _buildPhongBanTab(),
+                    ],
+                  ),
+                ),
     );
   }
 
@@ -1411,12 +1654,391 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     );
   }
 
-  // ==================== TAB 3: HÀNG HÓA (BÁO CÁO HÀNG HÓA BÁN RA) ====================
+  // ==================== TAB 3: HÀNG HÓA (ĐANG PHỤC VỤ & ĐÃ BÁN RA) ====================
   Widget _buildHangHoaTab() {
-    final list = _productSalesList;
-    final totalQty = list.fold<int>(0, (s, it) => s + (it['quantity'] as int));
-    final totalRev = list.fold<int>(0, (s, it) => s + (it['revenue'] as int));
+    final servingList = _servingProductList;
+    final totalServingQty = servingList.fold<int>(0, (s, it) => s + (it['quantity'] as int));
+    final totalServingRev = servingList.fold<int>(0, (s, it) => s + (it['revenue'] as int));
 
+    final soldList = _productSalesList;
+    final totalSoldQty = soldList.fold<int>(0, (s, it) => s + (it['quantity'] as int));
+    final totalSoldRev = soldList.fold<int>(0, (s, it) => s + (it['revenue'] as int));
+
+    return Column(
+      children: [
+        // Section Pills Header: [ 🍽️ Đang phục vụ ] vs [ 📦 Đã bán ra ]
+        Container(
+          color: context.tc.card,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.tc.cardElevated,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (_productSection != 'SERVING') {
+                        setState(() => _productSection = 'SERVING');
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _productSection == 'SERVING' ? context.tc.card : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: _productSection == 'SERVING'
+                            ? const [BoxShadow(color: Color(0x12000000), blurRadius: 4, offset: Offset(0, 1))]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.restaurant_outlined,
+                            size: 16,
+                            color: _productSection == 'SERVING' ? context.tc.primary : context.tc.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Đang phục vụ ($totalServingQty)',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: _productSection == 'SERVING' ? FontWeight.bold : FontWeight.w600,
+                              color: _productSection == 'SERVING' ? context.tc.primary : context.tc.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (_productSection != 'SOLD') {
+                        setState(() => _productSection = 'SOLD');
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _productSection == 'SOLD' ? context.tc.card : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: _productSection == 'SOLD'
+                            ? const [BoxShadow(color: Color(0x12000000), blurRadius: 4, offset: Offset(0, 1))]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 16,
+                            color: _productSection == 'SOLD' ? context.tc.primary : context.tc.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Đã bán ra ($totalSoldQty)',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: _productSection == 'SOLD' ? FontWeight.bold : FontWeight.w600,
+                              color: _productSection == 'SOLD' ? context.tc.primary : context.tc.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Section Content
+        if (_productSection == 'SERVING')
+          Expanded(child: _buildServingProductSection(servingList, totalServingQty, totalServingRev))
+        else
+          Expanded(child: _buildSoldProductSection(soldList, totalSoldQty, totalSoldRev)),
+      ],
+    );
+  }
+
+  Widget _buildServingProductSection(List<Map<String, dynamic>> list, int totalQty, int totalRev) {
+    return Column(
+      children: [
+        // Search & Filter header for Serving
+        Container(
+          color: context.tc.card,
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Tìm món đang phục vụ...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        filled: true,
+                        fillColor: context.tc.cardElevated,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (v) => setState(() => _productSearch = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    initialValue: _sortBy,
+                    tooltip: 'Sắp xếp',
+                    icon: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: context.tc.cardElevated,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.sort, color: context.tc.primary),
+                    ),
+                    onSelected: (val) => setState(() => _sortBy = val),
+                    itemBuilder: (ctx) => const [
+                      PopupMenuItem(value: 'QTY_DESC', child: Text('Số lượng nhiều nhất')),
+                      PopupMenuItem(value: 'REV_DESC', child: Text('Ước tính doanh thu cao nhất')),
+                      PopupMenuItem(value: 'NAME_ASC', child: Text('Tên món A-Z')),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _exportHangHoaExcel,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.bg(const Color(0xFFE8F5E9)),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.file_download_outlined, size: 16, color: Colors.green),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Excel',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: context.ink(Colors.green.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Summary stats row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${list.length} món • ${_servingTables.length} bàn đang gọi',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    'Tổng: $totalQty phần • ${FormatUtils.vnd(totalRev)}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.primary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+
+        // Serving Product List
+        Expanded(
+          child: list.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.restaurant_outlined, size: 50, color: context.tc.textHint),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Hiện không có món nào đang phục vụ trên bàn',
+                        style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final item = list[i];
+                    final qty = item['quantity'] as int;
+                    final rev = item['revenue'] as int;
+                    final sentKitchen = item['sentKitchenQty'] as int;
+                    final unsentKitchen = item['unsentKitchenQty'] as int;
+                    final tablesMap = item['tables'] as Map<String, int>? ?? {};
+
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.tc.card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.tc.borderLight),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x04000000), blurRadius: 4, offset: Offset(0, 1)),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: i < 3 ? context.tc.primary : context.tc.borderLight,
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${i + 1}',
+                                  style: TextStyle(
+                                    color: i < 3 ? Colors.white : context.tc.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      (item['code'] as String? ?? '').isEmpty ? item['name'] : '${item['code']} • ${item['name']}',
+                                      style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      'Đơn giá: ${FormatUtils.vnd(item['unitPrice'])} • Đang phục vụ: $qty phần',
+                                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '$qty phần',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: context.tc.primary,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Ước tính: ${FormatUtils.vnd(rev)}',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+
+                          // Kitchen status badges & Tables breakdown chips
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              if (sentKitchen > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: context.bg(const Color(0xFFE8F5E9)),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.green.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.check_circle_outline, size: 12, color: Colors.green),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Đã gửi bếp: $sentKitchen',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink(Colors.green.shade800)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (unsentKitchen > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: context.bg(const Color(0xFFFFF3E0)),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orange.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.hourglass_top_outlined, size: 12, color: Colors.orange),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Chưa gửi bếp: $unsentKitchen',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink(Colors.orange.shade900)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              for (final e in tablesMap.entries)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: context.tc.cardElevated,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${e.key}: ${e.value} phần',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textPrimary, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSoldProductSection(List<Map<String, dynamic>> list, int totalQty, int totalRev) {
     return Column(
       children: [
         // Search & Filter header

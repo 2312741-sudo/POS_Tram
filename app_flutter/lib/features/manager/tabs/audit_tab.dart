@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/audit_tab.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +21,7 @@ class _AuditTabState extends State<AuditTab> {
   List<AuditLogModel> _logs = [];
   bool _loading = true;
   bool _denied = false;
+  Timer? _safetyTimer;
 
   String _search = '';
   String _categoryFilter = 'ALL'; // 'ALL', 'SUSPICIOUS', 'CANCEL', 'PAYMENT', 'TABLE', 'SHIFT'
@@ -30,6 +32,12 @@ class _AuditTabState extends State<AuditTab> {
     _loadLogs();
   }
 
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
+  }
+
   void _loadLogs() {
     final auth = AuthService();
     if (!(auth.isRootOwner || auth.can(AppPermissions.viewAuditLogs))) {
@@ -38,13 +46,21 @@ class _AuditTabState extends State<AuditTab> {
       _denied = true;
       return;
     }
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _fb.auditLogsStream().listen((list) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _logs = list;
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
   }
 

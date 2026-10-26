@@ -2,6 +2,7 @@
 // Trung tâm Báo cáo Tài chính & Vận hành Chuẩn mực POS Trạm
 // Tuân thủ 100% đặc tả REPORT_SPEC.md (12 Báo cáo, lọc đa chiều, biểu đồ fl_chart, xuất Excel/PDF)
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -82,6 +83,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   bool _loading = true;
   bool _exporting = false;
   String? _errorMessage;
+  Timer? _safetyTimer;
 
   List<BillModel> _allBills = [];
   List<CashShiftModel> _allShifts = [];
@@ -103,6 +105,12 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
     _selectedStoreCode = _auth.currentStoreCode;
     _applyDateRange(DateRangeFilter.today);
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
   }
 
   void _applyDateRange(DateRangeFilter filter) {
@@ -140,6 +148,13 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   }
 
   Future<void> _loadInitialData() async {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _loading) {
+        setState(() => _loading = false);
+      }
+    });
+
     setState(() {
       _loading = true;
       _errorMessage = null;
@@ -151,6 +166,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
       // Listen streams
       _fb.myBillsStream().listen((bills) {
+        _safetyTimer?.cancel();
         if (mounted) {
           setState(() {
             _allBills = bills;
@@ -158,7 +174,10 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           });
         }
       }, onError: (e) {
-        if (mounted) setState(() => _errorMessage = 'Lỗi tải hóa đơn: $e');
+        if (mounted) setState(() {
+          _errorMessage = 'Lỗi tải hóa đơn: $e';
+          _loading = false;
+        });
       });
 
       _fb.cashShiftsStream().listen((shifts) {

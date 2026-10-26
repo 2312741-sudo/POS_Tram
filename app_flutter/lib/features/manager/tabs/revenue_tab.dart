@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/revenue_tab.dart
+import 'dart:async';
 import '../../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,6 +31,7 @@ class _RevenueTabState extends State<RevenueTab> {
   List<BillModel> _bills = [];
   List<TableModel> _tables = [];
   bool _loading = true;
+  Timer? _safetyTimer;
 
   RevenueTabType _tab = RevenueTabType.day;
   int _offset = 0;
@@ -40,14 +42,28 @@ class _RevenueTabState extends State<RevenueTab> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
+  }
+
   void _loadData() {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _fb.myBillsStream().listen((b) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _bills = b;
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
 
     _fb.tablesStream().listen((t) {

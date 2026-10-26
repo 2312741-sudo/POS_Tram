@@ -27,6 +27,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   List<StoreInfoModel> _availableStores = [];
   List<CategoryModel> _categories = [];
   bool _loading = true;
+  Timer? _safetyTimer;
 
   StreamSubscription<List<CategoryModel>>? _catSub;
   StreamSubscription<ItemCatalog>? _catalogSub;
@@ -43,6 +44,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
   @override
   void dispose() {
+    _safetyTimer?.cancel();
     _catSub?.cancel();
     _catalogSub?.cancel();
     _storesSub?.cancel();
@@ -67,18 +69,26 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
   void _subscribeToCategories(String storeCode) {
     setState(() => _loading = true);
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _catSub?.cancel();
     _catalogSub?.cancel();
     _catalogSub = _fb.itemCatalogStream(storeCode: storeCode).listen((c) {
       if (mounted) setState(() => _catalog = c);
     });
     _catSub = _fb.categoriesStream(storeCode: storeCode).listen((c) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _categories = c;
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
   }
 

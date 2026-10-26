@@ -26,6 +26,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       body: StreamBuilder<List<CatalogItemModel>>(
         stream: _inventoryService.catalogItemsStream(),
         builder: (context, catalogSnapshot) {
+          if (catalogSnapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text('Lỗi tải danh mục kho: ${catalogSnapshot.error}', textAlign: TextAlign.center),
+              ),
+            );
+          }
           if (!catalogSnapshot.hasData) return const Center(child: CircularProgressIndicator());
           final catalogItems = catalogSnapshot.data ?? [];
           final catalogMap = {for (var item in catalogItems) item.itemId: item};
@@ -33,12 +41,28 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           return StreamBuilder<List<StockBalanceModel>>(
             stream: _inventoryService.stockBalancesStream(),
             builder: (context, balanceSnapshot) {
+              if (balanceSnapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text('Lỗi tải số dư kho: ${balanceSnapshot.error}', textAlign: TextAlign.center),
+                  ),
+                );
+              }
               if (!balanceSnapshot.hasData) return const Center(child: CircularProgressIndicator());
               final balances = balanceSnapshot.data ?? [];
 
               return StreamBuilder<List<StockEventModel>>(
                 stream: _inventoryService.stockEventsStream(limit: 50),
                 builder: (context, eventsSnapshot) {
+                  if (eventsSnapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text('Lỗi tải biến động kho: ${eventsSnapshot.error}', textAlign: TextAlign.center),
+                      ),
+                    );
+                  }
                   if (!eventsSnapshot.hasData) return const Center(child: CircularProgressIndicator());
                   final events = eventsSnapshot.data ?? [];
 

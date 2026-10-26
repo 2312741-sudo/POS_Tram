@@ -1,4 +1,5 @@
 // lib/features/manager/tabs/bills_tab.dart
+import 'dart:async';
 import '../../../core/permissions/app_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,6 +28,7 @@ class _BillsTabState extends State<BillsTab> {
   List<BillModel> _allBills = [];
   List<TableModel> _tables = [];
   bool _loading = true;
+  Timer? _safetyTimer;
 
   String _search = '';
   String _dateFilter = 'TODAY'; // 'TODAY', 'YESTERDAY', 'WEEK', 'ALL', 'CUSTOM'
@@ -42,14 +44,28 @@ class _BillsTabState extends State<BillsTab> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
+  }
+
   void _loadData() {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _fb.myBillsStream().listen((b) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _allBills = b;
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
 
     _fb.tablesStream().listen((t) {

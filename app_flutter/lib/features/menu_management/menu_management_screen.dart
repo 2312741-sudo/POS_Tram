@@ -39,6 +39,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   List<ProductModel> _products = [];
   List<CategoryModel> _categories = [];
   bool _loading = true;
+  Timer? _safetyTimer;
 
   StreamSubscription<List<ProductModel>>? _prodSub;
   StreamSubscription<List<CategoryModel>>? _catSub;
@@ -56,6 +57,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
   @override
   void dispose() {
+    _safetyTimer?.cancel();
     _prodSub?.cancel();
     _catSub?.cancel();
     _catalogSub?.cancel();
@@ -81,6 +83,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
   void _subscribeToStoreMenu(String storeCode) {
     setState(() => _loading = true);
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) setState(() => _loading = false);
+    });
+
     _prodSub?.cancel();
     _catSub?.cancel();
     _catalogSub?.cancel();
@@ -89,12 +96,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     });
 
     _prodSub = _fb.productsStream(storeCode: storeCode).listen((p) {
+      _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
           _products = p;
           _loading = false;
         });
       }
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
     });
 
     _catSub = _fb.categoriesStream(storeCode: storeCode).listen((c) {
