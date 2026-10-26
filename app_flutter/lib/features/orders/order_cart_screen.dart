@@ -2622,65 +2622,53 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   }),
                   const SizedBox(height: 20),
 
-                  // 5. SAVE BUTTON & CANCEL
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Hủy'),
+                  // 5. SAVE BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.tc.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.tc.primary,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () async {
-                            setState(() {
-                              final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
-                              for (final idx in targetIndices) {
-                                if (idx < _cart.length) {
-                                  _cart[idx] = _cart[idx].copyWith(
-                                    note: noteCtrl.text.trim(),
-                                    selectedToppings: selectedToppings,
-                                    toppingPrice: calcToppingPrice,
-                                    selectedSize: selectedSize,
-                                    sizeExtraPrice: sizeExtra,
-                                    selectedSugar: isDrinkOrTea ? selectedSugar : '',
-                                    selectedIce: isDrinkOrTea ? selectedIce : '',
-                                  );
-                                }
-                              }
-                            });
-
-                            widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
-                            await _fb.saveTable(widget.table).catchError((_) {});
-                            _recalculateDiscounts();
-
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (mounted) {
-                              ScaffoldMessenger.of(this.context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
-                                  backgroundColor: AppColors.success,
-                                  duration: Duration(seconds: 2),
-                                ),
+                      onPressed: () async {
+                        setState(() {
+                          final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
+                          for (final idx in targetIndices) {
+                            if (idx < _cart.length) {
+                              _cart[idx] = _cart[idx].copyWith(
+                                note: noteCtrl.text.trim(),
+                                selectedToppings: selectedToppings,
+                                toppingPrice: calcToppingPrice,
+                                selectedSize: selectedSize,
+                                sizeExtraPrice: sizeExtra,
+                                selectedSugar: isDrinkOrTea ? selectedSugar : '',
+                                selectedIce: isDrinkOrTea ? selectedIce : '',
                               );
                             }
-                          },
-                          child: Text(
-                            'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
+                          }
+                        });
+
+                        widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+                        await _fb.saveTable(widget.table).catchError((_) {});
+                        _recalculateDiscounts();
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
+                              backgroundColor: AppColors.success,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
+                        style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),

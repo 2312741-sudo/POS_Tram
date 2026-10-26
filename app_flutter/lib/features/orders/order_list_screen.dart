@@ -642,17 +642,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Hủy'),
-                      ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 14),
 
                       // Add Button
                       Expanded(
