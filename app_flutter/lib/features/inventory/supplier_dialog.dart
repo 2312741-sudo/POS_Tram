@@ -82,7 +82,10 @@ class _SupplierDialogState extends State<SupplierDialog> {
       await _inventoryService.saveSupplier(newSup);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Lưu nhà cung cấp thành công', style: TextStyle(color: Colors.white)), backgroundColor: context.tc.successLight)
+          SnackBar(
+            content: const Text('Lưu nhà cung cấp thành công', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            backgroundColor: context.tc.success,
+          ),
         );
         Navigator.pop(context);
       }

@@ -39,8 +39,19 @@ class QRCodeScreen extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: _qrData));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Link đã được sao chép vào clipboard!', style: GoogleFonts.beVietnamPro()),
-        backgroundColor: context.tc.cardElevated,
+        backgroundColor: context.tc.primary,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Link đã được sao chép vào clipboard!',
+                style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -225,8 +236,19 @@ class QRCodeScreen extends StatelessWidget {
                     Clipboard.setData(ClipboardData(text: _qrData));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Đã sao chép link!', style: GoogleFonts.beVietnamPro()),
-                        backgroundColor: context.tc.cardElevated,
+                        backgroundColor: context.tc.primary,
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Đã sao chép link!',
+                                style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },

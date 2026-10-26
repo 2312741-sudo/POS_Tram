@@ -74,16 +74,21 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: context.tc.warning.withAlpha(25),
+                        color: context.tc.warningLight,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: context.tc.warning.withAlpha(80)),
+                        border: Border.all(color: context.tc.warning.withAlpha(100)),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.campaign, color: context.tc.warning, size: 20),
+                          Icon(Icons.campaign, color: context.tc.warningInk, size: 20),
                           const SizedBox(width: 10),
-                          Text('Khách gọi nhân viên phục vụ', style: GoogleFonts.beVietnamPro(
-                            color: context.tc.warning, fontWeight: FontWeight.w600)),
+                          Text(
+                            'Khách gọi nhân viên phục vụ',
+                            style: GoogleFonts.beVietnamPro(
+                              color: context.tc.warningInk,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -176,7 +181,28 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                         if (order.firebaseKey != null) {
                           await FirebaseService().updateOnlineOrderStatus(order.firebaseKey!, 'CANCELLED');
                         }
-                        if (context.mounted) Navigator.pop(context);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: context.tc.danger,
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.cancel_outlined, color: Colors.white, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      order.isCallWaiter
+                                          ? 'Đã hủy yêu cầu gọi phục vụ tại bàn ${order.tableName}'
+                                          : 'Đã từ chối đơn hàng online tại bàn ${order.tableName}',
+                                      style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                          Navigator.pop(context);
+                        }
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: context.tc.danger,
@@ -209,22 +235,44 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(
-                                success
-                                    ? 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!'
-                                    : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
-                                style: GoogleFonts.beVietnamPro(),
+                              backgroundColor: success ? context.tc.success : context.tc.danger,
+                              content: Row(
+                                children: [
+                                  Icon(
+                                    success ? Icons.check_circle_outline : Icons.error_outline,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      success
+                                          ? (order.isCallWaiter
+                                              ? 'Đã tiếp nhận yêu cầu gọi phục vụ tại bàn ${order.tableName}!'
+                                              : 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!')
+                                          : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
+                                      style: GoogleFonts.beVietnamPro(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              backgroundColor: success ? context.tc.cardElevated : context.tc.danger,
                             ),
                           );
                           Navigator.pop(context);
                         }
                       },
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: context.tc.primary,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: Text('Xác nhận đơn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                      child: Text(
+                        order.isCallWaiter ? 'Tiếp nhận yêu cầu' : 'Xác nhận đơn',
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ],
@@ -244,22 +292,44 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    Color textColor;
+    Color bgColor;
+    Color borderColor;
     String label;
     switch (status) {
-      case 'CONFIRMED': color = context.tc.success; label = 'Đã xác nhận'; break;
-      case 'CANCELLED': color = context.tc.danger; label = 'Đã hủy'; break;
-      default: color = context.tc.warning; label = 'Đang chờ';
+      case 'CONFIRMED':
+        textColor = context.tc.success;
+        bgColor = context.tc.successLight;
+        borderColor = context.tc.success.withAlpha(80);
+        label = 'Đã xác nhận';
+        break;
+      case 'CANCELLED':
+        textColor = context.tc.danger;
+        bgColor = context.tc.dangerLight;
+        borderColor = context.tc.danger.withAlpha(80);
+        label = 'Đã hủy';
+        break;
+      default:
+        textColor = context.tc.warningInk;
+        bgColor = context.tc.warningLight;
+        borderColor = context.tc.warning.withAlpha(120);
+        label = 'Đang chờ';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withAlpha(30),
+        color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withAlpha(80)),
+        border: Border.all(color: borderColor),
       ),
-      child: Text(label, style: GoogleFonts.beVietnamPro(
-        color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+      child: Text(
+        label,
+        style: GoogleFonts.beVietnamPro(
+          color: textColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 }

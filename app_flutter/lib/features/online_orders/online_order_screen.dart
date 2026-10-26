@@ -61,8 +61,19 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã tiếp nhận yêu cầu gọi phục vụ tại bàn ${order.tableName}!', style: GoogleFonts.beVietnamPro()),
-            backgroundColor: context.tc.cardElevated,
+            backgroundColor: context.tc.success,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Đã tiếp nhận yêu cầu gọi phục vụ tại bàn ${order.tableName}!',
+                    style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }
@@ -78,13 +89,50 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            success
-                ? 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!'
-                : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
-            style: GoogleFonts.beVietnamPro(),
+          backgroundColor: success ? context.tc.success : context.tc.danger,
+          content: Row(
+            children: [
+              Icon(
+                success ? Icons.check_circle_outline : Icons.error_outline,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  success
+                      ? 'Đã duyệt đơn và thêm món vào bàn ${order.tableName}!'
+                      : 'Lỗi duyệt đơn, vui lòng kiểm tra lại bàn',
+                  style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           ),
-          backgroundColor: success ? context.tc.cardElevated : context.tc.danger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleCancel(OnlineOrderModel order) async {
+    await _updateStatus(order, 'CANCELLED');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: context.tc.danger,
+          content: Row(
+            children: [
+              const Icon(Icons.cancel_outlined, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  order.isCallWaiter
+                      ? 'Đã hủy yêu cầu gọi phục vụ tại bàn ${order.tableName}'
+                      : 'Đã từ chối đơn hàng online tại bàn ${order.tableName}',
+                  style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -153,7 +201,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
         order: orders[i],
         showActions: showActions,
         onConfirm: () => _handleConfirm(orders[i]),
-        onCancel: () => _updateStatus(orders[i], 'CANCELLED'),
+        onCancel: () => _handleCancel(orders[i]),
         onTap: () => context.push('/online-order-detail', extra: orders[i]),
       ).animate(delay: (i * 50).ms).fadeIn(duration: 250.ms),
     );
@@ -205,22 +253,25 @@ class _OnlineOrderCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: isCallWaiter ? context.tc.warning.withAlpha(30) : context.tc.primary.withAlpha(30),
+                      color: isCallWaiter ? context.tc.warningLight : context.tc.primaryLight,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isCallWaiter ? context.tc.warning.withAlpha(90) : context.tc.primary.withAlpha(80),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           isCallWaiter ? Icons.campaign_outlined : Icons.restaurant,
-                          color: isCallWaiter ? context.tc.warning : context.tc.primary,
+                          color: isCallWaiter ? context.tc.warningInk : context.tc.primary,
                           size: 14,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           isCallWaiter ? '🔔 Gọi nhân viên' : 'Đặt món',
                           style: GoogleFonts.beVietnamPro(
-                            color: isCallWaiter ? context.tc.warning : context.tc.primary,
+                            color: isCallWaiter ? context.tc.warningInk : context.tc.primary,
                             fontWeight: FontWeight.w700, fontSize: 12,
                           ),
                         ),
@@ -297,9 +348,14 @@ class _OnlineOrderCard extends StatelessWidget {
                       child: ElevatedButton(
                         onPressed: onConfirm,
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: context.tc.primary,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        child: Text('Xác nhận', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                        child: Text(
+                          isCallWaiter ? 'Tiếp nhận' : 'Xác nhận',
+                          style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                   ],

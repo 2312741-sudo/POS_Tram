@@ -174,7 +174,7 @@ class _OverviewTabState extends State<OverviewTab> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.delivery_dining, size: 20, color: context.tc.warning),
+                            Icon(Icons.delivery_dining, size: 20, color: context.tc.warningInk),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(

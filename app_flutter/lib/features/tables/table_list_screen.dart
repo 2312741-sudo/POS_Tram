@@ -400,10 +400,30 @@ class _TableListScreenState extends State<TableListScreen> {
               tooltip: '${_readyOrders.length} đơn bếp đã xong chờ lấy',
               onPressed: () => _showReadyOrdersSheet(context),
             ),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            tooltip: 'Đơn Online',
-            onPressed: () => context.push('/online-orders'),
+          StreamBuilder<List<OnlineOrderModel>>(
+            stream: _fb.onlineOrdersStream(),
+            builder: (context, snapshot) {
+              final pendingCount = (snapshot.data ?? const <OnlineOrderModel>[])
+                  .where((o) => o.status == 'PENDING')
+                  .length;
+              if (pendingCount > 0) {
+                return IconButton(
+                  icon: Badge.count(
+                    count: pendingCount,
+                    backgroundColor: TramColors.brandPrimary,
+                    textColor: Colors.white,
+                    child: const Icon(Icons.notifications_active, color: Colors.amberAccent),
+                  ),
+                  tooltip: '$pendingCount đơn online chờ duyệt',
+                  onPressed: () => context.push('/online-orders'),
+                );
+              }
+              return IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                tooltip: 'Đơn Online',
+                onPressed: () => context.push('/online-orders'),
+              );
+            },
           ),
           if (_auth.canAccessManagerHub)
             Padding(
