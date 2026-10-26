@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/data/models/order_item_model.dart';
 import 'package:tram_flutter/data/models/category_model.dart';
+import 'package:tram_flutter/features/orders/widgets/payment_widgets.dart';
 
 void main() {
   group('Order Topping & Notes Tests', () {
@@ -144,6 +146,31 @@ void main() {
       // Remove preset1
       note = note.replaceAll(', $preset1', '').replaceAll('$preset1, ', '').replaceAll(preset1, '').trim();
       expect(note, 'Nhiều đá');
+    });
+
+    testWidgets('PaymentTotalHeader renders formatted total and triggers onClose callback', (tester) async {
+      bool closed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PaymentTotalHeader(
+              tableName: 'Bàn 01',
+              total: 125000,
+              customerLine: 'Khách hàng: Nguyễn Văn A (0987654321)',
+              onClose: () => closed = true,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Thanh toán • Bàn 01'), findsOneWidget);
+      expect(find.text('125.000 đ'), findsOneWidget);
+      expect(find.text('Khách hàng: Nguyễn Văn A (0987654321)'), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pump();
+      expect(closed, isTrue);
     });
   });
 }

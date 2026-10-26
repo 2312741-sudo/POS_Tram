@@ -12,8 +12,15 @@ class PaymentTotalHeader extends StatelessWidget {
   final String tableName;
   final int total;
   final String? customerLine;
+  final VoidCallback? onClose;
 
-  const PaymentTotalHeader({super.key, required this.tableName, required this.total, this.customerLine});
+  const PaymentTotalHeader({
+    super.key,
+    required this.tableName,
+    required this.total,
+    this.customerLine,
+    this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,20 +34,47 @@ class PaymentTotalHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Thanh toán • $tableName',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.white70),
-          ),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              FormatUtils.vnd(total),
-              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 34, color: Colors.white),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Thanh toán • $tableName',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.white70),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        FormatUtils.vnd(total),
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 34, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onClose != null) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: onClose,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ],
           ),
           if (customerLine != null) ...[
             const SizedBox(height: 4),

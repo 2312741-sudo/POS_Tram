@@ -2385,7 +2385,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                   const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Column(
@@ -2402,9 +2402,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         FormatUtils.vnd(unitPrice),
                         style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 22),
+                        tooltip: 'Đóng',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
@@ -2612,53 +2622,65 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   }),
                   const SizedBox(height: 20),
 
-                  // 5. SAVE BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.tc.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  // 5. SAVE BUTTON & CANCEL
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Hủy'),
                       ),
-                      onPressed: () async {
-                        setState(() {
-                          final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
-                          for (final idx in targetIndices) {
-                            if (idx < _cart.length) {
-                              _cart[idx] = _cart[idx].copyWith(
-                                note: noteCtrl.text.trim(),
-                                selectedToppings: selectedToppings,
-                                toppingPrice: calcToppingPrice,
-                                selectedSize: selectedSize,
-                                sizeExtraPrice: sizeExtra,
-                                selectedSugar: isDrinkOrTea ? selectedSugar : '',
-                                selectedIce: isDrinkOrTea ? selectedIce : '',
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.tc.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () async {
+                            setState(() {
+                              final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
+                              for (final idx in targetIndices) {
+                                if (idx < _cart.length) {
+                                  _cart[idx] = _cart[idx].copyWith(
+                                    note: noteCtrl.text.trim(),
+                                    selectedToppings: selectedToppings,
+                                    toppingPrice: calcToppingPrice,
+                                    selectedSize: selectedSize,
+                                    sizeExtraPrice: sizeExtra,
+                                    selectedSugar: isDrinkOrTea ? selectedSugar : '',
+                                    selectedIce: isDrinkOrTea ? selectedIce : '',
+                                  );
+                                }
+                              }
+                            });
+
+                            widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+                            await _fb.saveTable(widget.table).catchError((_) {});
+                            _recalculateDiscounts();
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
+                                  backgroundColor: AppColors.success,
+                                  duration: Duration(seconds: 2),
+                                ),
                               );
                             }
-                          }
-                        });
-
-                        widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
-                        await _fb.saveTable(widget.table).catchError((_) {});
-                        _recalculateDiscounts();
-
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
-                              backgroundColor: AppColors.success,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                          },
+                          child: Text(
+                            'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
+                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -3511,6 +3533,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      enableDrag: true,
+      isDismissible: true,
       // Tablet: không kéo giãn bảng thanh toán hết chiều ngang
       constraints: const BoxConstraints(maxWidth: 640),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -3616,6 +3640,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       customerLine: _selectedCustomer != null
                           ? 'Khách hàng: ${_selectedCustomer!.fullName} (${_selectedCustomer!.phone})'
                           : null,
+                      onClose: () => Navigator.pop(ctx),
                     ),
                     if (_selectedCustomer != null) ...[
                       const SizedBox(height: 8),
@@ -3822,9 +3847,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Action Buttons: In tạm tính & Thanh toán
+                    // Action Buttons: Đóng & In tạm tính & Thanh toán
                     Row(
                       children: [
+                        IconButton.outlined(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Đóng',
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(48, 56),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           flex: 2,
                           child: OutlinedButton.icon(

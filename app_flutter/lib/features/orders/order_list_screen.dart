@@ -385,6 +385,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      enableDrag: true,
+      isDismissible: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -407,9 +409,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Header: Name & Base Price
+                  // Header: Name & Base Price & Close Button
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Column(
@@ -421,7 +423,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(FormatUtils.vnd(product.price), style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary)),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 22),
+                        tooltip: 'Đóng',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
                     ],
                   ),
                   const Divider(height: 24),
@@ -630,7 +642,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 8),
+
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Hủy'),
+                      ),
+                      const SizedBox(width: 8),
 
                       // Add Button
                       Expanded(
