@@ -3,7 +3,7 @@
 class AppConstants {
   // Firebase
   static const String firebaseDatabaseUrl = 'https://tramapp-36f53-default-rtdb.asia-southeast1.firebasedatabase.app';
-  static const String onlineOrderWebUrl = 'http://localhost:3000';
+  static const String onlineOrderWebUrl = 'https://tramapp-36f53.web.app';
 
   // SharedPreferences keys
   static const String prefUsername = 'USERNAME';

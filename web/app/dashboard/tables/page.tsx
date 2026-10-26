@@ -227,6 +227,10 @@ function TablesPageContent() {
   } | null>(null);
   const [showSetPin, setShowSetPin] = useState(false);
   const [showZoneSetup, setShowZoneSetup] = useState(false);
+  // QR Code Modal (In & chia sẻ mã QR bàn)
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrSelectedTable, setQrSelectedTable] = useState<Table | null>(null);
+  const [qrCopySuccess, setQrCopySuccess] = useState(false);
   // Chế độ Order: chạm vào bàn là mở ngay màn gọi món (bàn trống → mở bàn, bàn có khách → thêm món)
   const orderParam = useSearchParams().get("order");
   const [orderModeOverride, setOrderModeOverride] = useState<boolean | null>(null);
@@ -1132,6 +1136,18 @@ function TablesPageContent() {
               Thiết lập khu vực
             </button>
           )}
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setQrSelectedTable(tables[0] || null);
+              setShowQrModal(true);
+            }}
+            title="Xem và in mã QR gọi món cho các bàn"
+            style={{ display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            <QrCode size={16} />
+            Mã QR bàn
+          </button>
           <button className="btn-primary" onClick={openAdd}>
             <Plus size={16} />
             Thêm bàn mới
@@ -1866,6 +1882,29 @@ function TablesPageContent() {
                           </button>
                         )}
                         <button
+                          onClick={() => {
+                            setQrSelectedTable(t);
+                            setShowQrModal(true);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "8px",
+                            background: "rgba(126, 41, 48, 0.08)",
+                            border: "1px solid rgba(126, 41, 48, 0.2)",
+                            color: "var(--primary)",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                          title="Xem & in mã QR gọi món"
+                        >
+                          <QrCode size={13} />
+                          QR
+                        </button>
+                        <button
                           onClick={() => openEdit(t)}
                           style={{
                             padding: "6px 12px",
@@ -2056,6 +2095,23 @@ function TablesPageContent() {
                               Nhận bàn
                             </button>
                           )}
+                          <button
+                            onClick={() => {
+                              setQrSelectedTable(t);
+                              setShowQrModal(true);
+                            }}
+                            style={{
+                              padding: "6px",
+                              borderRadius: "8px",
+                              background: "rgba(126, 41, 48, 0.08)",
+                              border: "1px solid rgba(126, 41, 48, 0.2)",
+                              color: "var(--primary)",
+                              cursor: "pointer",
+                            }}
+                            title="Xem & in mã QR gọi món"
+                          >
+                            <QrCode size={15} />
+                          </button>
                           <button
                             onClick={() => openEdit(t)}
                             style={{
@@ -2876,6 +2932,199 @@ function TablesPageContent() {
                   Xóa bàn
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Mã QR đặt món tại bàn */}
+      {showQrModal && (
+        <div className="modal-overlay" onClick={() => setShowQrModal(false)}>
+          <div
+            className="modal-content"
+            style={{ maxWidth: "460px", borderRadius: "20px", overflow: "hidden" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "16px 20px",
+                background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "700", fontSize: "16px" }}>
+                <QrCode size={20} />
+                <span>Mã QR Gọi Món Tại Bàn</span>
+              </div>
+              <button
+                onClick={() => setShowQrModal(false)}
+                style={{ background: "none", border: "none", color: "#FFFFFF", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center" }}>
+              {/* Table Selector */}
+              <div style={{ width: "100%" }}>
+                <label style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)", display: "block", marginBottom: "6px" }}>
+                  CHỌN BÀN CẦN XEM / IN MÃ QR:
+                </label>
+                <select
+                  value={qrSelectedTable?.id || ""}
+                  onChange={(e) => {
+                    const found = tables.find((t) => t.id === e.target.value);
+                    if (found) setQrSelectedTable(found);
+                  }}
+                  className="input-field"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "10px" }}
+                >
+                  {tables.map((tbl) => (
+                    <option key={tbl.id} value={tbl.id}>
+                      Bàn {tbl.name} ({tbl.zone})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Printable Standee Card */}
+              {(() => {
+                const activeTbl = qrSelectedTable || tables[0];
+                if (!activeTbl) return <div>Chưa có bàn nào trong hệ thống</div>;
+                const domain = typeof window !== "undefined" ? window.location.origin : "https://tramapp-36f53.web.app";
+                const targetStore = (activeTbl.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "TRAM01")).toUpperCase();
+                const cleanDomain = domain.includes("localhost") ? "https://tramapp-36f53.web.app" : domain;
+                const orderUrl = `${cleanDomain}/order?table=${encodeURIComponent(activeTbl.name)}&zone=${encodeURIComponent(activeTbl.zone)}&store=${encodeURIComponent(targetStore)}`;
+                const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(orderUrl)}`;
+
+                return (
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+                    <div
+                      style={{
+                        width: "100%",
+                        maxWidth: "300px",
+                        background: "#FFFFFF",
+                        border: "2px solid #E6DEC8",
+                        borderRadius: "16px",
+                        padding: "18px",
+                        boxShadow: "0 6px 20px rgba(0,0,0,0.06)",
+                        textAlign: "center",
+                        color: "#1C1A2D",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", letterSpacing: "2px", fontWeight: "800", color: "#7E2930", marginBottom: "4px" }}>
+                        ☕ TRẠM F&amp;B
+                      </div>
+                      <div style={{ fontSize: "20px", fontWeight: "900", color: "#1C1A2D", marginBottom: "2px" }}>
+                        BÀN {activeTbl.name}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#666", marginBottom: "12px", fontWeight: "600" }}>
+                        {activeTbl.zone} • {targetStore}
+                      </div>
+
+                      <div style={{ background: "#F9F6F0", padding: "10px", borderRadius: "12px", display: "inline-block", border: "1px solid #ECE4D0" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={qrImgSrc}
+                          alt={`QR Code ${activeTbl.name}`}
+                          width={180}
+                          height={180}
+                          style={{ display: "block", borderRadius: "6px" }}
+                        />
+                      </div>
+
+                      <div style={{ marginTop: "10px", fontSize: "12px", fontWeight: "700", color: "#7E2930" }}>
+                        📱 Quét mã để xem menu &amp; gọi món
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+                        Đồng bộ tự động vào bàn &amp; bếp
+                      </div>
+                    </div>
+
+                    {/* URL info */}
+                    <div style={{ width: "100%", background: "var(--surface-muted)", padding: "8px 12px", borderRadius: "10px", fontSize: "11px", wordBreak: "break-all" }}>
+                      <span style={{ color: "var(--subtext)" }}>Link: </span>
+                      <a href={orderUrl} target="_blank" rel="noreferrer" style={{ color: "var(--primary)", fontWeight: "600" }}>
+                        {orderUrl}
+                      </a>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ flex: 1, justifyContent: "center", fontSize: "12px" }}
+                        onClick={() => {
+                          navigator.clipboard.writeText(orderUrl);
+                          setQrCopySuccess(true);
+                          setTimeout(() => setQrCopySuccess(false), 2000);
+                        }}
+                      >
+                        {qrCopySuccess ? <Check size={14} /> : <Receipt size={14} />}
+                        {qrCopySuccess ? "Đã chép!" : "Sao chép link"}
+                      </button>
+
+                      <a
+                        href={orderUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary"
+                        style={{ flex: 1, justifyContent: "center", textDecoration: "none", fontSize: "12px" }}
+                      >
+                        <UtensilsCrossed size={14} />
+                        Mở web order
+                      </a>
+                    </div>
+
+                    <button
+                      className="btn-secondary"
+                      style={{ width: "100%", justifyContent: "center", background: "var(--surface)", border: "1.5px solid var(--primary)", color: "var(--primary)", fontWeight: "700", fontSize: "13px" }}
+                      onClick={() => {
+                        const printWindow = window.open("", "_blank");
+                        if (!printWindow) return;
+                        printWindow.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <title>Mã QR Bàn ${activeTbl.name}</title>
+                            <style>
+                              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fff; }
+                              .card { width: 280px; border: 2px solid #7E2930; border-radius: 16px; padding: 24px; text-align: center; }
+                              .brand { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: #7E2930; margin-bottom: 6px; }
+                              .table { font-size: 26px; font-weight: 900; margin-bottom: 4px; }
+                              .zone { font-size: 13px; color: #555; margin-bottom: 16px; font-weight: 600; }
+                              .qr { width: 200px; height: 200px; margin: 0 auto; display: block; }
+                              .guide { margin-top: 16px; font-size: 14px; font-weight: 700; color: #7E2930; }
+                              .sub { font-size: 11px; color: #777; margin-top: 4px; }
+                            </style>
+                          </head>
+                          <body>
+                            <div class="card">
+                              <div class="brand">☕ TRẠM F&B</div>
+                              <div class="table">BÀN ${activeTbl.name}</div>
+                              <div class="zone">${activeTbl.zone} • ${targetStore}</div>
+                              <img src="${qrImgSrc}" class="qr" />
+                              <div class="guide">Quét mã để xem menu & gọi món</div>
+                              <div class="sub">Hân hạnh phục vụ quý khách!</div>
+                            </div>
+                            <script>window.onload = function() { window.print(); window.close(); }<\/script>
+                          </body>
+                          </html>
+                        `);
+                        printWindow.document.close();
+                      }}
+                    >
+                      <Printer size={15} />
+                      In Standee / Sticker QR
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

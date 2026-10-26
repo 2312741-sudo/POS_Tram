@@ -2,6 +2,29 @@
   "database": {
     "rules": "database.rules.json"
   },
+  "hosting": {
+    "public": "web/out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "/order",
+        "destination": "/order.html"
+      },
+      {
+        "source": "/order/**",
+        "destination": "/order.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
   "functions": [
     {
       "source": "functions",

@@ -19,6 +19,7 @@ Thumbs.db
 *.iws
 
 # Node / Next.js
+.firebase/
 node_modules/
 web/node_modules/
 web/.next/
