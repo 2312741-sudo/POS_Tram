@@ -198,29 +198,46 @@ class ChangeDueRow extends StatelessWidget {
   }
 }
 
-/// Ảnh mã VietQR có trạng thái tải & lỗi (trước đây lỗi mạng hiện ảnh vỡ).
+/// Ảnh mã VietQR có trạng thái tải & lỗi và tính năng chạm để phóng to toàn màn hình.
 class VietQrImage extends StatelessWidget {
   final String url;
   final double height;
-  const VietQrImage({super.key, required this.url, this.height = 220});
+  final double? width;
+  final int? amount;
+  final String? bankInfo;
+  final String? orderInfo;
+  final bool enableZoom;
+
+  const VietQrImage({
+    super.key,
+    required this.url,
+    this.height = 280,
+    this.width,
+    this.amount,
+    this.bankInfo,
+    this.orderInfo,
+    this.enableZoom = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
+    final effectiveWidth = width ?? height;
+    final imageWidget = ClipRRect(
       borderRadius: AppRadius.brMd,
       child: Container(
-        color: context.tc.card,
-        padding: const EdgeInsets.all(6),
+        color: Colors.white,
+        padding: const EdgeInsets.all(8),
         child: Image.network(
           url,
           height: height,
+          width: effectiveWidth,
           fit: BoxFit.contain,
           loadingBuilder: (_, child, progress) => progress == null
               ? child
-              : SizedBox(height: height, width: height, child: const Center(child: CircularProgressIndicator())),
+              : SizedBox(height: height, width: effectiveWidth, child: const Center(child: CircularProgressIndicator())),
           errorBuilder: (_, __, ___) => Container(
             height: height,
-            width: height,
+            width: effectiveWidth,
             alignment: Alignment.center,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: context.tc.dangerLight, borderRadius: AppRadius.brMd),
@@ -236,6 +253,198 @@ class VietQrImage extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+
+    if (!enableZoom) return imageWidget;
+
+    return Stack(
+      children: [
+        InkWell(
+          onTap: () => FullScreenQrDialog.show(
+            context,
+            url: url,
+            amount: amount,
+            bankInfo: bankInfo,
+            orderInfo: orderInfo,
+          ),
+          borderRadius: AppRadius.brMd,
+          child: imageWidget,
+        ),
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: InkWell(
+            onTap: () => FullScreenQrDialog.show(
+              context,
+              url: url,
+              amount: amount,
+              bankInfo: bankInfo,
+              orderInfo: orderInfo,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.zoom_in, color: Colors.white, size: 13),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Phóng to',
+                    style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Hộp thoại phóng to mã VietQR toàn màn hình với độ tương phản cao, số tiền to rõ.
+class FullScreenQrDialog extends StatelessWidget {
+  final String url;
+  final int? amount;
+  final String? bankInfo;
+  final String? orderInfo;
+
+  const FullScreenQrDialog({
+    super.key,
+    required this.url,
+    this.amount,
+    this.bankInfo,
+    this.orderInfo,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required String url,
+    int? amount,
+    String? bankInfo,
+    String? orderInfo,
+  }) {
+    return showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => FullScreenQrDialog(
+        url: url,
+        amount: amount,
+        bankInfo: bankInfo,
+        orderInfo: orderInfo,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final qrSize = (size.width * 0.85).clamp(280.0, 360.0);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 10))],
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.qr_code_2, color: Color(0xFF2563EB), size: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Quét mã VietQR',
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              if (amount != null && amount! > 0) ...[
+                Text(
+                  'Số tiền thanh toán',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  FormatUtils.vnd(amount!),
+                  style: GoogleFonts.beVietnamPro(fontSize: 30, fontWeight: FontWeight.w900, color: const Color(0xFF2563EB)),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Ảnh QR cỡ lớn
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                  boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, 4))],
+                ),
+                child: Image.network(
+                  url,
+                  width: qrSize,
+                  height: qrSize,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : SizedBox(width: qrSize, height: qrSize, child: const Center(child: CircularProgressIndicator())),
+                  errorBuilder: (_, __, ___) => SizedBox(
+                    width: qrSize,
+                    height: qrSize,
+                    child: const Center(child: Text('Không tải được mã QR', style: TextStyle(color: Colors.red))),
+                  ),
+                ),
+              ),
+
+              if (bankInfo != null && bankInfo!.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(
+                    bankInfo!,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w700, color: const Color(0xFF334155)),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 14),
+              const PaymentBotWatchingBox(),
+            ],
           ),
         ),
       ),

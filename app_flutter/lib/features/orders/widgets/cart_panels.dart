@@ -22,6 +22,12 @@ class CartHeaderBar extends StatelessWidget {
   final VoidCallback onIncrementGuests;
   final VoidCallback onAddItems;
 
+  /// Chế độ hiển thị dạng cây (Nhánh) hay dạng phẳng (Danh sách)
+  final bool treeViewMode;
+  final ValueChanged<bool>? onToggleTreeViewMode;
+  final int totalQty;
+  final int uniqueProductsCount;
+
   const CartHeaderBar({
     super.key,
     required this.tableName,
@@ -31,50 +37,111 @@ class CartHeaderBar extends StatelessWidget {
     required this.onDecrementGuests,
     required this.onIncrementGuests,
     required this.onAddItems,
+    this.treeViewMode = true,
+    this.onToggleTreeViewMode,
+    this.totalQty = 0,
+    this.uniqueProductsCount = 0,
   });
+
+  Widget _buildToggleBtn(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final fg = isSelected ? context.tc.primaryDark : context.tc.textSecondary;
+    final bg = isSelected ? context.tc.primaryLight : Colors.transparent;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        color: bg,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: fg),
+            const SizedBox(width: 3),
+            Text(
+              title,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 10.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: context.tc.card,
         border: Border(bottom: BorderSide(color: context.tc.borderLight)),
       ),
       child: Row(
         children: [
-          // Bàn + khu vực (co giãn, cắt bớt khi tên dài)
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          // Nút chuyển chế độ xem (Nhánh / Danh sách) siêu gọn
+          if (onToggleTreeViewMode != null) ...[
+            Container(
+              height: 28,
               decoration: BoxDecoration(
-                color: context.tc.primaryLight,
-                borderRadius: AppRadius.brSm,
+                color: context.tc.cardElevated,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: context.tc.borderLight),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.table_restaurant, size: 16, color: context.tc.primaryDark),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      '$tableName • $zone',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.beVietnamPro(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: context.tc.primaryDark,
-                      ),
-                    ),
+                  _buildToggleBtn(
+                    context,
+                    title: 'Nhánh',
+                    icon: Icons.account_tree_outlined,
+                    isSelected: treeViewMode,
+                    onTap: () => onToggleTreeViewMode!(true),
+                  ),
+                  Container(width: 1, height: 14, color: context.tc.borderLight),
+                  _buildToggleBtn(
+                    context,
+                    title: 'Danh sách',
+                    icon: Icons.format_list_bulleted,
+                    isSelected: !treeViewMode,
+                    onTap: () => onToggleTreeViewMode!(false),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 6),
+          ],
 
-          // Số khách (chạm số để nhập nhanh)
+          // Nhãn tổng số phần món
+          if (totalQty > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+              decoration: BoxDecoration(
+                color: context.tc.primaryLight.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                '$totalQty phần',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: context.tc.primaryDark,
+                ),
+              ),
+            ),
+
+          const Spacer(),
+
+          // Số khách (chạm số để nhập nhanh) - nút gọn 28px
           Tooltip(
             message: 'Số khách – chạm để nhập',
             child: QuantityStepper(
@@ -83,19 +150,19 @@ class CartHeaderBar extends StatelessWidget {
               onDecrement: onDecrementGuests,
               onIncrement: onIncrementGuests,
               onTapValue: onEditGuests,
-              buttonSize: 36,
+              buttonSize: 28,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
 
-          // Thêm món
+          // Thêm món (nút gọn gàng)
           FilledButton.icon(
-            icon: const Icon(Icons.add, size: 18),
+            icon: const Icon(Icons.add, size: 16),
             label: const Text('Thêm món'),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              textStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              textStyle: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             onPressed: onAddItems,
           ),
@@ -205,98 +272,109 @@ class CartCustomerBar extends StatelessWidget {
     final c = customer;
     return Material(
       color: context.tc.warningLight,
-      child: InkWell(
-        onTap: c == null ? onLookup : null,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-          child: Row(
-            children: [
-              Icon(Icons.person_pin, color: context.tc.warningInk, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: c == null
-                    ? Text(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Row(
+          children: [
+            Icon(Icons.person_pin, color: context.tc.warningInk, size: 20),
+            const SizedBox(width: 6),
+            Expanded(
+              child: c == null
+                  ? InkWell(
+                      onTap: onLookup,
+                      child: Text(
                         'Chạm để tìm khách & tích điểm',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: context.tc.warningInk),
-                      )
-                    : InkWell(
-                        onTap: onEdit,
-                        borderRadius: BorderRadius.circular(6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${c.fullName} • ${c.phone}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
-                            ),
-                            if (pointsUnknown)
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      'Điểm hiện có: chưa tải được',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.warningInk, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.warningInk),
+                      ),
+                    )
+                  : InkWell(
+                      onTap: onEdit,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${c.fullName} • ${c.phone}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
+                          ),
+                          if (pointsUnknown)
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    'Điểm hiện có: chưa tải được',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.warningInk, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                if (onRetryPoints != null)
+                                  InkWell(
+                                    onTap: onRetryPoints,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      child: Text('Thử lại', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: context.tc.warningInk, decoration: TextDecoration.underline)),
                                     ),
                                   ),
-                                  if (onRetryPoints != null)
-                                    InkWell(
-                                      onTap: onRetryPoints,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        child: Text('Thử lại', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w800, color: context.tc.warningInk, decoration: TextDecoration.underline)),
-                                      ),
-                                    ),
-                                ],
-                              )
-                            else
-                              Text(
-                                'Điểm hiện có: ${c.currentPoints} điểm ${pointsUsed > 0 ? "(-$pointsUsed điểm đã dùng)" : ""}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.w600),
-                              ),
-                            LoyaltyEarnPreview(pointsUnknown: pointsUnknown, pointsBlocked: pointsBlocked, customer: c, pointsUsed: pointsUsed, earnPoints: earnPoints, earnRate: earnRate, tiers: tiers, onConfigure: onConfigureRate, redeemRate: redeemRate),
-                          ],
-                        ),
+                              ],
+                            )
+                          else
+                            Text(
+                              'Điểm: ${c.currentPoints} ${pointsUsed > 0 ? "(-$pointsUsed đã dùng)" : ""} • +$earnPoints điểm',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.success, fontWeight: FontWeight.w600),
+                            ),
+                        ],
                       ),
-              ),
-              if (c != null) ...[
-                if (onEdit != null)
-                  IconButton(
-                    tooltip: 'Sửa thông tin khách',
-                    icon: Icon(Icons.edit_outlined, size: 20, color: context.tc.textSecondary),
-                    onPressed: onEdit,
-                  ),
-                TextButton(
-                  onPressed: onUsePoints,
-                  child: Text(pointsUsed > 0 ? 'Đổi điểm' : 'Dùng điểm'),
-                ),
+                    ),
+            ),
+            if (c != null) ...[
+              if (onEdit != null)
                 IconButton(
-                  tooltip: 'Bỏ chọn khách',
-                  icon: Icon(Icons.close, size: 20, color: context.tc.textSecondary),
-                  onPressed: onClear,
+                  tooltip: 'Sửa thông tin khách',
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                  icon: Icon(Icons.edit_outlined, size: 18, color: context.tc.textSecondary),
+                  onPressed: onEdit,
                 ),
-              ] else
-                TextButton.icon(
-                  onPressed: onLookup,
-                  icon: const Icon(Icons.search, size: 18),
-                  label: const Text('Tìm khách'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: context.tc.warningInk,
-                    minimumSize: const Size(0, 38),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
+              const SizedBox(width: 4),
+              TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w600),
                 ),
-            ],
-          ),
+                onPressed: onUsePoints,
+                child: Text(pointsUsed > 0 ? 'Đổi điểm' : 'Dùng điểm'),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                tooltip: 'Bỏ chọn khách',
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+                icon: Icon(Icons.close, size: 18, color: context.tc.textSecondary),
+                onPressed: onClear,
+              ),
+            ] else
+              TextButton.icon(
+                onPressed: onLookup,
+                icon: const Icon(Icons.search, size: 15),
+                label: const Text('Tìm khách'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: context.tc.warningInk,
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  textStyle: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -304,7 +382,7 @@ class CartCustomerBar extends StatelessWidget {
 }
 
 // ==================== SUMMARY + ACTIONS ====================
-class CartSummaryPanel extends StatelessWidget {
+class CartSummaryPanel extends StatefulWidget {
   final int subTotal;
   final int itemDiscountTotal;
   final List<BillDiscountModel> appliedDiscounts;
@@ -344,160 +422,228 @@ class CartSummaryPanel extends StatelessWidget {
   });
 
   @override
+  State<CartSummaryPanel> createState() => _CartSummaryPanelState();
+}
+
+class _CartSummaryPanelState extends State<CartSummaryPanel> {
+  bool _expandedBreakdown = false;
+
+  @override
   Widget build(BuildContext context) {
-    final hasUnsent = unsentCount > 0;
+    final hasUnsent = widget.unsentCount > 0;
+    final totalPromoDiscount = widget.itemDiscountTotal +
+        widget.appliedDiscounts.fold(0, (sum, d) => sum + d.amount) +
+        widget.pointsDiscount;
+    final hasDiscountsOrVat = totalPromoDiscount > 0 || widget.vatAmount > 0;
 
     final breakdown = <Widget>[
-      AmountRow(label: 'Tổng tiền hàng', value: FormatUtils.vnd(subTotal)),
-      if (itemDiscountTotal > 0)
-        AmountRow(label: '− Giảm giá món', value: '-${FormatUtils.vnd(itemDiscountTotal)}', color: context.tc.success),
-      ...appliedDiscounts.map((d) => AmountRow(
+      AmountRow(label: 'Tổng tiền hàng', value: FormatUtils.vnd(widget.subTotal)),
+      if (widget.itemDiscountTotal > 0)
+        AmountRow(label: '− Giảm giá món', value: '-${FormatUtils.vnd(widget.itemDiscountTotal)}', color: context.tc.success),
+      ...widget.appliedDiscounts.map((d) => AmountRow(
             label: '− ${d.promoCode ?? d.description}',
             value: '-${FormatUtils.vnd(d.amount)}',
             color: context.tc.success,
           )),
-      if (pointsDiscount > 0)
+      if (widget.pointsDiscount > 0)
         AmountRow(
-          label: '− Điểm tích lũy ($pointsUsed điểm)',
-          value: '-${FormatUtils.vnd(pointsDiscount)}',
+          label: '− Điểm tích lũy (${widget.pointsUsed} điểm)',
+          value: '-${FormatUtils.vnd(widget.pointsDiscount)}',
           color: context.tc.success,
         ),
-      if (vatRate > 0) AmountRow(label: 'VAT (${vatRate.toStringAsFixed(0)}%)', value: '+${FormatUtils.vnd(vatAmount)}'),
+      if (widget.vatRate > 0) AmountRow(label: 'VAT (${widget.vatRate.toStringAsFixed(0)}%)', value: '+${FormatUtils.vnd(widget.vatAmount)}'),
     ];
 
     final secondaryStyle = OutlinedButton.styleFrom(
-      minimumSize: const Size(0, 46),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.brMd),
-      textStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.brSm),
+      textStyle: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w600),
     );
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
         color: context.tc.card,
-        border: sidePanel ? Border(left: BorderSide(color: context.tc.borderLight)) : null,
-        boxShadow: sidePanel
+        border: widget.sidePanel ? Border(left: BorderSide(color: context.tc.borderLight)) : null,
+        boxShadow: widget.sidePanel
             ? null
-            : const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, -2))],
+            : const [BoxShadow(color: Color(0x12000000), blurRadius: 8, offset: Offset(0, -2))],
       ),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Chi tiết – giới hạn chiều cao, cuộn được khi nhiều khuyến mãi / màn hình thấp
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: sidePanel ? 360 : 120),
-              child: SingleChildScrollView(
-                child: Column(mainAxisSize: MainAxisSize.min, children: breakdown),
+            // Tablet hoặc khi bấm xem chi tiết: hiện bảng breakdown
+            if (widget.sidePanel || _expandedBreakdown) ...[
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: widget.sidePanel ? 360 : 140),
+                child: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: breakdown),
+                ),
               ),
-            ),
-            const Divider(height: 16),
+              const Divider(height: 12),
+            ],
 
-            // TỔNG THANH TOÁN – to, rõ, đọc được từ xa
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    'TỔNG THANH TOÁN',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 14, color: context.tc.textPrimary, letterSpacing: 0.3),
+            // Dòng thu gọn khi có giảm giá / VAT mà không mở rộng
+            if (!widget.sidePanel && !_expandedBreakdown && hasDiscountsOrVat) ...[
+              InkWell(
+                onTap: () => setState(() => _expandedBreakdown = true),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Tiền gốc: ${FormatUtils.vnd(widget.subTotal)}',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: context.tc.textSecondary),
+                      ),
+                      if (totalPromoDiscount > 0) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '• Giảm: -${FormatUtils.vnd(totalPromoDiscount)}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w700, color: context.tc.success),
+                        ),
+                      ],
+                      if (widget.vatAmount > 0) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '• VAT: +${FormatUtils.vnd(widget.vatAmount)}',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: context.tc.textSecondary),
+                        ),
+                      ],
+                      const Spacer(),
+                      Icon(Icons.keyboard_arrow_down, size: 16, color: context.tc.textSecondary),
+                    ],
                   ),
                 ),
-                Flexible(
-                  flex: 2,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      FormatUtils.vnd(finalTotal),
-                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800, fontSize: 26, color: context.tc.primary),
+              ),
+            ],
+
+            // TỔNG THANH TOÁN – số to rõ nét
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                if (!widget.sidePanel && _expandedBreakdown)
+                  InkWell(
+                    onTap: () => setState(() => _expandedBreakdown = false),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(Icons.keyboard_arrow_up, size: 18, color: context.tc.textSecondary),
+                    ),
+                  ),
+                Text(
+                  'TỔNG THANH TOÁN',
+                  style: GoogleFonts.beVietnamPro(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: context.tc.textPrimary,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const Spacer(),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    FormatUtils.vnd(widget.finalTotal),
+                    style: GoogleFonts.beVietnamPro(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      color: context.tc.primary,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
 
-            // Hàng 1: Khuyến mãi, In tạm tính, Hủy đơn
+            // Thanh nút chức năng siêu gọn (KM, Tạm tính, Hủy đơn) - Chiều cao 32px
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.discount_outlined, size: 18),
+                    icon: const Icon(Icons.discount_outlined, size: 15),
                     label: Text(
-                      appliedDiscounts.isEmpty ? 'Khuyến mãi' : 'KM (${appliedDiscounts.length})',
+                      widget.appliedDiscounts.isEmpty ? 'Khuyến mãi' : 'KM (${widget.appliedDiscounts.length})',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     style: secondaryStyle,
-                    onPressed: onDiscount,
+                    onPressed: widget.onDiscount,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    icon: const Icon(Icons.receipt_long_outlined, size: 15),
                     label: const Text('Tạm tính', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
                       foregroundColor: WidgetStatePropertyAll(context.tc.textPrimary),
-                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.border, width: 1.5)),
+                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.border, width: 1.2)),
                     ),
-                    onPressed: onPrePrint,
+                    onPressed: widget.onPrePrint,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.cancel_outlined, size: 18),
+                    icon: const Icon(Icons.cancel_outlined, size: 15),
                     label: const Text('Hủy đơn', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
                       foregroundColor: WidgetStatePropertyAll(context.tc.danger),
-                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.danger.withValues(alpha: 0.5), width: 1.5)),
+                      side: WidgetStatePropertyAll(BorderSide(color: context.tc.danger.withValues(alpha: 0.4), width: 1.2)),
                     ),
-                    onPressed: onCancel,
+                    onPressed: widget.onCancel,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
-            // Hàng 2: Gửi bếp & THANH TOÁN (nút chính lớn nhất)
+            // Nút hành động chính - Chiều cao 44px
             Row(
               children: [
+                if (hasUnsent) ...[
+                  Expanded(
+                    flex: 4,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.soup_kitchen_outlined, size: 18),
+                      label: Text(
+                        'Gửi bếp (${widget.unsentCount})',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        textStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      onPressed: widget.onSendKitchen,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
-                  flex: 4,
+                  flex: hasUnsent ? 5 : 1,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.soup_kitchen_outlined, size: 20),
+                    icon: Icon(hasUnsent ? Icons.payments_outlined : Icons.check_circle_outline, size: 19),
                     label: Text(
-                      hasUnsent ? 'Gửi bếp ($unsentCount)' : 'Đã gửi bếp',
+                      hasUnsent ? 'THANH TOÁN' : 'THANH TOÁN (${FormatUtils.vnd(widget.finalTotal)})',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 56),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    onPressed: hasUnsent ? onSendKitchen : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 5,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.payments_outlined, size: 22),
-                    label: const Text('THANH TOÁN', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    style: ElevatedButton.styleFrom(
                       backgroundColor: context.tc.primary,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(0, 56),
+                      minimumSize: const Size(0, 44),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      textStyle: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                      textStyle: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3),
                     ),
-                    onPressed: cartEmpty ? null : onPay,
+                    onPressed: widget.cartEmpty ? null : widget.onPay,
                   ),
                 ),
               ],

@@ -3672,7 +3672,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       Center(
                         child: Column(
                           children: [
-                            VietQrImage(url: qrUrl, height: 220),
+                            VietQrImage(
+                              url: qrUrl,
+                              height: 280,
+                              amount: _finalTotal,
+                              bankInfo: '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
@@ -3761,7 +3766,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         Center(
                           child: Column(
                             children: [
-                              VietQrImage(url: qrUrl, height: 180),
+                              VietQrImage(
+                                url: qrUrl,
+                                height: 230,
+                                amount: splitQrAmount,
+                                bankInfo: '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 'Quét mã để chuyển khoản đúng ${FormatUtils.vnd(splitQrAmount)}',
@@ -3862,17 +3872,19 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                       Flexible(child: Text('Đang xử lý...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                                     ],
                                   )
-                                : const Row(
+                                : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
-                                      SizedBox(width: 6),
+                                      const Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
+                                      const SizedBox(width: 6),
                                       Flexible(
                                         child: Text(
-                                          'XÁC NHẬN THU TIỀN',
+                                          paymentMethod == 'TRANSFER_QR'
+                                              ? 'XÁC NHẬN ĐÃ NHẬN TIỀN'
+                                              : 'XÁC NHẬN THU TIỀN',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
                                         ),
                                       ),
                                     ],
@@ -4169,92 +4181,6 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
   }
 
-  Widget _buildCartViewToggleHeader(int uniqueProductsCount) {
-    final totalQty = _cart.fold(0, (s, i) => s + i.quantity);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.tc.cardElevated,
-        border: Border(bottom: BorderSide(color: context.tc.borderLight)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.shopping_bag_outlined, size: 15, color: context.tc.textSecondary),
-          const SizedBox(width: 6),
-          Text(
-            'Món đã chọn ($totalQty phần • $uniqueProductsCount món)',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: context.tc.textSecondary,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            height: 28,
-            decoration: BoxDecoration(
-              color: context.tc.card,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: context.tc.borderLight),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildViewModeButton(
-                  title: 'Nhánh',
-                  icon: Icons.account_tree_outlined,
-                  isSelected: _treeViewMode,
-                  onTap: () => _setTreeViewMode(true),
-                ),
-                Container(width: 1, height: 16, color: context.tc.borderLight),
-                _buildViewModeButton(
-                  title: 'Danh sách',
-                  icon: Icons.format_list_bulleted,
-                  isSelected: !_treeViewMode,
-                  onTap: () => _setTreeViewMode(false),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildViewModeButton({
-    required String title,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final fg = isSelected ? context.tc.primaryDark : context.tc.textSecondary;
-    final bg = isSelected ? context.tc.primaryLight : Colors.transparent;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(5),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        color: bg,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 4),
-            Text(
-              title,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: fg,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -4471,8 +4397,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       onDecrementGuests: _guestCount > 1 ? () => _updateGuestCount(_guestCount - 1) : null,
                       onIncrementGuests: () => _updateGuestCount(_guestCount + 1),
                       onAddItems: _goToAddItems,
+                      treeViewMode: _treeViewMode,
+                      onToggleTreeViewMode: _cart.isNotEmpty ? (v) => _setTreeViewMode(v) : null,
+                      totalQty: _cart.fold(0, (s, i) => s + i.quantity),
+                      uniqueProductsCount: groups.length,
                     ),
-                    if (_cart.isNotEmpty) _buildCartViewToggleHeader(groups.length),
                     Expanded(child: cartList),
                     if (!wide) customerBar,
                     if (!wide) summary,
