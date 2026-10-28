@@ -119,7 +119,7 @@ export default function DashboardAboutPage() {
                   fontWeight: "800",
                 }}
               >
-                Phiên bản 1.0.1
+                Phiên bản 1.0.3
               </span>
             </div>
             <p style={{ margin: 0, color: "var(--subtext)", fontSize: "14px" }}>
@@ -300,12 +300,12 @@ export default function DashboardAboutPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "13px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "10px", borderBottom: "1px dashed var(--border)" }}>
               <span style={{ color: "var(--subtext)" }}>Phiên bản Web Admin:</span>
-              <span style={{ fontWeight: "700", color: "var(--text)" }}>1.0.1</span>
+              <span style={{ fontWeight: "700", color: "var(--text)" }}>1.0.3</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "10px", borderBottom: "1px dashed var(--border)" }}>
               <span style={{ color: "var(--subtext)" }}>Ứng dụng App POS (iOS/Android):</span>
-              <span style={{ fontWeight: "700", color: "var(--text)" }}>1.0.1 (Build 2)</span>
+              <span style={{ fontWeight: "700", color: "var(--text)" }}>1.0.3 (Build 4)</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "10px", borderBottom: "1px dashed var(--border)" }}>
