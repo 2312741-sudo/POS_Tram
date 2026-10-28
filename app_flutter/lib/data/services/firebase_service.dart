@@ -253,6 +253,33 @@ class FirebaseService {
         staffRole: staffRole,
       );
 
+  Future<({BillModel paidBill, TableModel updatedSource, bool synced})> paySplitItemsNow({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required String paymentMethod,
+    String? shiftId,
+    String? staffUid,
+    String? staffUsername,
+    String? staffFullName,
+    String? staffRole,
+    double? pointEarnRate,
+    int? pointRedeemRate,
+  }) =>
+      _orderRepo.paySplitItemsNow(
+        sourceTable: sourceTable,
+        splitItems: splitItems,
+        remainingItems: remainingItems,
+        paymentMethod: paymentMethod,
+        shiftId: shiftId,
+        staffUid: staffUid,
+        staffUsername: staffUsername,
+        staffFullName: staffFullName,
+        staffRole: staffRole,
+        pointEarnRate: pointEarnRate,
+        pointRedeemRate: pointRedeemRate,
+      );
+
   // ==================== BILLS ====================
   Stream<List<BillModel>> billsStream() => _orderRepo.billsStream();
 

@@ -167,16 +167,28 @@ class BillModel {
           .toList();
     }
 
+    final tableName = map['tableName']?.toString() ?? '';
+    final parentBillId = map['parentBillId']?.toString();
+    final createdAt = (map['createdAt'] as num?)?.toInt() ?? 0;
+    int? closedAt = (map['closedAt'] as num?)?.toInt();
+    String status = map['status']?.toString() ?? 'OPEN';
+    final isLegacySplitBill =
+        tableName.contains('(Tách)') || (parentBillId != null && parentBillId.trim().isNotEmpty);
+    if (status == 'OPEN' && isLegacySplitBill) {
+      status = 'PAID';
+      closedAt ??= createdAt > 0 ? createdAt : null;
+    }
+
     return BillModel(
       id: id,
       billCode: billCode,
       orderCode: orderCode,
-      tableName: map['tableName']?.toString() ?? '',
+      tableName: tableName,
       zone: map['zone']?.toString() ?? '',
-      createdAt: (map['createdAt'] as num?)?.toInt() ?? 0,
-      closedAt: (map['closedAt'] as num?)?.toInt(),
+      createdAt: createdAt,
+      closedAt: closedAt,
       cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
-      status: map['status']?.toString() ?? 'OPEN',
+      status: status,
       staffUid: map['staffUid']?.toString(),
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
@@ -190,7 +202,7 @@ class BillModel {
       paymentMethod: map['paymentMethod']?.toString() ?? 'CASH',
       paymentSplits: splits,
       notes: map['notes']?.toString() ?? map['note']?.toString() ?? '',
-      parentBillId: map['parentBillId']?.toString(),
+      parentBillId: parentBillId,
       mergedTableNames: merged,
       pointsUsed: (map['pointsUsed'] as num?)?.toInt() ?? 0,
       pointsDiscount: (map['pointsDiscount'] as num?)?.toInt() ?? 0,

@@ -470,6 +470,12 @@ export function deduplicateBills(rawList: HistoryOrder[]): HistoryOrder[] {
 /** Trạng thái hóa đơn còn đang mở — chưa phải chứng từ đã chốt */
 const OPEN_BILL_STATUSES = new Set(["OPEN", "ACTIVE", "PENDING", "PRE_PRINT"]);
 
+function isLegacySplitBillRecord(rec: Record<string, unknown>): boolean {
+  const tableName = String(rec.tableName || "");
+  const parentBillId = String(rec.parentBillId || "").trim();
+  return tableName.includes("(Tách)") || parentBillId.length > 0;
+}
+
 function hasItems(rec: Record<string, unknown>): boolean {
   if (Array.isArray(rec.items) && rec.items.length > 0) return true;
   return typeof rec.itemsJson === "string" && rec.itemsJson.length > 2;
@@ -481,7 +487,7 @@ function hasItems(rec: Record<string, unknown>): boolean {
  *  - bills/{id}: bản đầy đủ BillModel.toMap() (Flutter) — có items, discounts, paymentSplits...
  * Quy tắc: lấy bills làm nền, history ghi đè (trạng thái hủy/hoàn tiền mới nhất nằm ở history),
  * nhưng nếu history thiếu items thì giữ items/itemsJson của bills. Hóa đơn chỉ có ở bills
- * mà còn đang mở (OPEN/PENDING...) thì bỏ qua để không lẫn vào báo cáo.
+ * mà còn đang mở (OPEN/PENDING...) thì bỏ qua để không lẫn vào báo cáo (trừ hóa đơn tách cũ bị lưu OPEN).
  */
 export function mergeHistoryAndBills(
   history?: Record<string, unknown> | null,
@@ -507,7 +513,19 @@ export function mergeHistoryAndBills(
       result.push([id, hRec]);
     } else if (bRec) {
       const status = String(bRec.status || "").toUpperCase();
-      if (OPEN_BILL_STATUSES.has(status)) continue;
+      if (OPEN_BILL_STATUSES.has(status)) {
+        if (isLegacySplitBillRecord(bRec)) {
+          result.push([
+            id,
+            {
+              ...bRec,
+              status: "PAID",
+              closedAt: bRec.closedAt ?? bRec.createdAt,
+            },
+          ]);
+        }
+        continue;
+      }
       result.push([id, bRec]);
     }
   }
@@ -618,9 +636,13 @@ export function extractBillItems(bill: HistoryOrder): OrderItem[] {
   return [];
 }
 
-/** Trạng thái chuẩn hóa của hóa đơn (thiếu = PAID) */
+/** Trạng thái chuẩn hóa của hóa đơn (thiếu = PAID; hóa đơn tách cũ bị lưu OPEN = PAID) */
 export function billStatusOf(bill: HistoryOrder): string {
-  return String(bill.status || "PAID").toUpperCase();
+  const s = String(bill.status || "PAID").toUpperCase();
+  if (s === "OPEN" && isLegacySplitBillRecord(bill as unknown as Record<string, unknown>)) {
+    return "PAID";
+  }
+  return s;
 }
 
 /** Nhãn trạng thái hiển thị / xuất Excel: PAID → "Hoàn thành", CANCELLED → "Đã hủy" */

@@ -1374,10 +1374,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     };
 
     // 3 chế độ xử lý phần món được tách:
-    // - 'PAY_NOW': Thanh toán trước ngay phần món tách (tạo bàn phụ tạm & mở màn hình thu tiền ngay)
+    // - 'PAY_NOW': Thanh toán trước ngay phần món tách (chốt HĐ PAID ngay, cộng vào doanh thu & xuất hóa đơn)
     // - 'TRANSFER': Chuyển sang bàn trống khác (hoặc tạo bàn phụ mới trên sơ đồ bàn)
     // - 'MERGE': Ghép phần món tách vào bàn đang có khách khác
     String splitAction = 'PAY_NOW';
+    String splitPayMethod = 'CASH';
     String selectedTransferKey = newSplitTableKey;
     String? selectedMergeKey = inUseTables.isNotEmpty ? inUseTables.first.firebaseKey : null;
     bool isSubmitting = false;
@@ -1417,8 +1418,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           String confirmLabel;
           if (splitAction == 'PAY_NOW') {
             confirmLabel = totalSplitParts > 0
-                ? 'Thanh Toán Trước (${FormatUtils.vnd(totalSplitAmount)})'
-                : 'Thanh Toán Trước';
+                ? 'Thanh Toán & Xuất HĐ (${FormatUtils.vnd(totalSplitAmount)})'
+                : 'Thanh Toán & Xuất HĐ';
           } else if (splitAction == 'TRANSFER') {
             final targetLabel = selectedTransferKey == newSplitTableKey
                 ? nextSplitName
@@ -1429,6 +1430,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 inUseTables.where((t) => t.firebaseKey == selectedMergeKey).firstOrNull?.name ?? 'Bàn Khác';
             confirmLabel = 'Ghép Vào $targetLabel';
           }
+
+          final splitQrUrl = (splitAction == 'PAY_NOW' && splitPayMethod == 'TRANSFER_QR' && totalSplitAmount > 0)
+              ? VietQrGenerator.generateImageUrl(
+                  bankId: _storeInfo?.bankId ?? 'MB',
+                  bankAccount: _storeInfo?.bankAccount ?? '0987654321',
+                  accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
+                  amount: totalSplitAmount,
+                  orderInfo: '${_storeInfo?.storeCode ?? "TRAM"}_${widget.table.name}_TACH',
+                )
+              : '';
 
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1622,29 +1633,114 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ),
                           color: splitAction == 'PAY_NOW' ? context.tc.primary.withValues(alpha: 0.06) : null,
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              splitAction == 'PAY_NOW' ? Icons.radio_button_checked : Icons.radio_button_off,
-                              color: splitAction == 'PAY_NOW' ? context.tc.primary : context.tc.textSecondary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Thanh toán trước phần món này',
-                                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13),
+                            Row(
+                              children: [
+                                Icon(
+                                  splitAction == 'PAY_NOW' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                  color: splitAction == 'PAY_NOW' ? context.tc.primary : context.tc.textSecondary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Thanh toán trước phần món này',
+                                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13),
+                                      ),
+                                      Text(
+                                        'Chốt hóa đơn ĐÃ THANH TOÁN ngay, tính vào doanh thu & xuất bill',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                      ),
+                                    ],
                                   ),
-                                  Text(
-                                    'Tách sang đơn riêng ($nextSplitName) và mở ngay màn hình thu tiền',
-                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                ),
+                              ],
+                            ),
+                            if (splitAction == 'PAY_NOW') ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: splitPayMethod == 'CASH'
+                                            ? context.tc.primary.withValues(alpha: 0.14)
+                                            : context.tc.card,
+                                        side: BorderSide(
+                                          color: splitPayMethod == 'CASH' ? context.tc.primary : context.tc.border,
+                                          width: splitPayMethod == 'CASH' ? 1.6 : 1,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      ),
+                                      onPressed: () => setDlgState(() => splitPayMethod = 'CASH'),
+                                      icon: Icon(
+                                        Icons.payments_outlined,
+                                        size: 16,
+                                        color: splitPayMethod == 'CASH' ? context.tc.primary : context.tc.textSecondary,
+                                      ),
+                                      label: Text(
+                                        'Tiền mặt',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          fontWeight: splitPayMethod == 'CASH' ? FontWeight.w700 : FontWeight.w600,
+                                          color: splitPayMethod == 'CASH' ? context.tc.primary : context.tc.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: splitPayMethod == 'TRANSFER_QR'
+                                            ? context.tc.primary.withValues(alpha: 0.14)
+                                            : context.tc.card,
+                                        side: BorderSide(
+                                          color: splitPayMethod == 'TRANSFER_QR' ? context.tc.primary : context.tc.border,
+                                          width: splitPayMethod == 'TRANSFER_QR' ? 1.6 : 1,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      ),
+                                      onPressed: () => setDlgState(() => splitPayMethod = 'TRANSFER_QR'),
+                                      icon: Icon(
+                                        Icons.qr_code_2_outlined,
+                                        size: 16,
+                                        color: splitPayMethod == 'TRANSFER_QR'
+                                            ? context.tc.primary
+                                            : context.tc.textSecondary,
+                                      ),
+                                      label: Text(
+                                        'Chuyển khoản QR',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          fontWeight: splitPayMethod == 'TRANSFER_QR' ? FontWeight.w700 : FontWeight.w600,
+                                          color: splitPayMethod == 'TRANSFER_QR'
+                                              ? context.tc.primary
+                                              : context.tc.textPrimary,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
+                              if (splitPayMethod == 'TRANSFER_QR' && totalSplitAmount > 0) ...[
+                                const SizedBox(height: 8),
+                                Center(
+                                  child: VietQrImage(
+                                    url: splitQrUrl,
+                                    height: 190,
+                                    amount: totalSplitAmount,
+                                    bankInfo:
+                                        '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
+                                  ),
+                                ),
+                              ],
+                            ],
                           ],
                         ),
                       ),
@@ -1855,36 +1951,98 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           return;
                         }
 
-                        TableModel targetTable;
-                        bool mergeIntoTarget = false;
-                        if (splitAction == 'PAY_NOW' ||
-                            (splitAction == 'TRANSFER' && selectedTransferKey == newSplitTableKey)) {
-                          targetTable = TableModel(
-                            name: nextSplitName,
-                            zone: widget.table.zone,
-                            capacity: widget.table.capacity,
-                            isSplitTable: true,
-                          );
-                        } else if (splitAction == 'TRANSFER') {
-                          targetTable = emptyTables.firstWhere(
-                            (t) => t.firebaseKey == selectedTransferKey,
-                            orElse: () => TableModel(
-                              name: nextSplitName,
-                              zone: widget.table.zone,
-                              capacity: widget.table.capacity,
-                              isSplitTable: true,
-                            ),
-                          );
-                        } else {
-                          targetTable = inUseTables.firstWhere((t) => t.firebaseKey == selectedMergeKey);
-                          mergeIntoTarget = true;
-                        }
-
                         final staffName = _auth.currentUser?.fullName ?? 'Thu Ngân';
                         final staffUser = _auth.currentUser?.username ?? 'staff';
                         final staffRole = _auth.currentUser?.roleId ?? 'ROLE_STAFF';
 
                         try {
+                          if (splitAction == 'PAY_NOW') {
+                            if (!await _ensureShiftOpen()) {
+                              if (ctx.mounted) setDlgState(() => isSubmitting = false);
+                              return;
+                            }
+                            String? currentShiftId = _fb.activeShiftCache?.id;
+                            if (currentShiftId == null) {
+                              try {
+                                final shift = await _fb.getCurrentOpenShift();
+                                currentShiftId = shift?.id;
+                              } catch (_) {}
+                            }
+
+                            final res = await _fb.paySplitItemsNow(
+                              sourceTable: widget.table,
+                              splitItems: splitItems,
+                              remainingItems: remainingItems,
+                              paymentMethod: splitPayMethod,
+                              shiftId: currentShiftId,
+                              staffUid: _auth.currentUid,
+                              staffUsername: staffUser,
+                              staffFullName: staffName,
+                              staffRole: staffRole,
+                              pointEarnRate: _storeInfo?.pointEarnRate,
+                              pointRedeemRate: _storeInfo?.pointRedeemRate,
+                            );
+
+                            _fireBackgroundPaymentTasks(
+                              res.paidBill,
+                              splitPayMethod,
+                              shouldPrint: _autoPrintBill,
+                            );
+
+                            if (mounted) {
+                              setState(() {
+                                _cart = remainingItems;
+                              });
+                              _recalculateDiscounts();
+                            }
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (!mounted) return;
+
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '🎉 Đã thanh toán trước $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) • Mã HĐ: ${res.paidBill.billCode}!${_autoPrintBill ? " (Đang in bill)" : ""}',
+                                ),
+                                backgroundColor: AppColors.success,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+
+                            if (remainingItems.isEmpty) {
+                              if (widget.returnToParentOnPay && Navigator.of(this.context).canPop()) {
+                                Navigator.of(this.context).pop(true);
+                              } else {
+                                this.context.go('/tables');
+                              }
+                            }
+                            return;
+                          }
+
+                          TableModel targetTable;
+                          bool mergeIntoTarget = false;
+                          if (splitAction == 'TRANSFER' && selectedTransferKey == newSplitTableKey) {
+                            targetTable = TableModel(
+                              name: nextSplitName,
+                              zone: widget.table.zone,
+                              capacity: widget.table.capacity,
+                              isSplitTable: true,
+                            );
+                          } else if (splitAction == 'TRANSFER') {
+                            targetTable = emptyTables.firstWhere(
+                              (t) => t.firebaseKey == selectedTransferKey,
+                              orElse: () => TableModel(
+                                name: nextSplitName,
+                                zone: widget.table.zone,
+                                capacity: widget.table.capacity,
+                                isSplitTable: true,
+                              ),
+                            );
+                          } else {
+                            targetTable = inUseTables.firstWhere((t) => t.firebaseKey == selectedMergeKey);
+                            mergeIntoTarget = true;
+                          }
+
                           final planned = await _fb.splitTableItems(
                             sourceTable: widget.table,
                             splitItems: splitItems,
@@ -1906,36 +2064,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (!mounted) return;
 
-                          if (splitAction == 'PAY_NOW') {
-                            // Mở ngay màn hình đơn của bàn tách và tự bật bảng Thanh toán
-                            if (remainingItems.isEmpty) {
-                              this.context.pushReplacement('/order-cart', extra: {
-                                'table': planned.updatedTarget,
-                                'products': planned.updatedTarget.currentItems,
-                                'autoOpenCheckout': true,
-                                'returnToParentOnPay': false,
-                              });
-                            } else {
-                              this.context.push('/order-cart', extra: {
-                                'table': planned.updatedTarget,
-                                'products': planned.updatedTarget.currentItems,
-                                'autoOpenCheckout': true,
-                                'returnToParentOnPay': true,
-                              });
-                            }
-                          } else {
-                            final actionVerb = mergeIntoTarget ? 'tách & ghép' : 'tách & chuyển';
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Đã $actionVerb $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) sang bàn ${planned.updatedTarget.name}!',
-                                ),
-                                backgroundColor: AppColors.success,
+                          final actionVerb = mergeIntoTarget ? 'tách & ghép' : 'tách & chuyển';
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Đã $actionVerb $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) sang bàn ${planned.updatedTarget.name}!',
                               ),
-                            );
-                            if (remainingItems.isEmpty) {
-                              this.context.go('/tables');
-                            }
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                          if (remainingItems.isEmpty) {
+                            this.context.go('/tables');
                           }
                         } catch (e) {
                           if (ctx.mounted) {

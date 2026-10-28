@@ -683,6 +683,11 @@ class OrderRepository {
       if (remainingItems.isEmpty && sourceTable.deletedItems.isNotEmpty) {
         target.deletedItemsJson = sourceTable.deletedItemsJson;
       }
+      for (final log in sourceTable.actionLogs) {
+        if (log.action == 'SEND_KITCHEN' || log.action == 'ADD_ITEMS') {
+          target.addActionLog(log);
+        }
+      }
       target.addActionLog(OrderActionLogModel(
         timestamp: now,
         staffUsername: sUser,
@@ -712,6 +717,174 @@ class OrderRepository {
     }
 
     return (updatedSource: source, updatedTarget: target);
+  }
+
+  /// Tính toán hóa đơn ĐÃ THANH TOÁN (`status: 'PAID'`) và trạng thái bàn gốc sau khi
+  /// khách chọn "Thanh toán trước phần món này" (`PAY_NOW`) trong hộp thoại Tách Đơn.
+  static ({BillModel paidBill, TableModel updatedSource}) planPaySplitItemsNow({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required String billCode,
+    required String paymentMethod,
+    String? shiftId,
+    String? staffUid,
+    String? staffUsername,
+    String? staffFullName,
+    int? nowMs,
+  }) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final sUser = (staffUsername != null && staffUsername.trim().isNotEmpty) ? staffUsername.trim() : 'staff';
+    final sName = (staffFullName != null && staffFullName.trim().isNotEmpty) ? staffFullName.trim() : 'Thu Ngân';
+    final splitSummary = splitItems.map((e) => '${e.quantity}x ${e.name}').join(', ');
+    final splitSubTotal = splitItems.fold<int>(0, (sum, item) => sum + item.itemTotal);
+
+    String methodDisplay = 'Tiền mặt';
+    if (paymentMethod == 'TRANSFER_QR') methodDisplay = 'VietQR';
+    if (paymentMethod == 'SPLIT') methodDisplay = 'Hỗn hợp (Tiền mặt + QR)';
+
+    final billLogs = <OrderActionLogModel>[
+      ...sourceTable.actionLogs.where((l) => l.action == 'SEND_KITCHEN' || l.action == 'ADD_ITEMS'),
+      OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'SPLIT_BILL',
+        details: '$sName tách thanh toán trước từ ${sourceTable.name} ($billCode): $splitSummary',
+      ),
+      OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'PAY_BILL',
+        details: '$sName thanh toán trước hóa đơn tách: ${FormatUtils.vnd(splitSubTotal)} ($methodDisplay)',
+      ),
+    ];
+
+    final cleanCode = billCode.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final paidBill = BillModel(
+      id: 'BILL_${now}_$cleanCode',
+      billCode: billCode,
+      orderCode: FormatUtils.orderCode(),
+      tableName: '${sourceTable.name} (Tách)',
+      zone: sourceTable.zone,
+      createdAt: sourceTable.openedAt ?? now,
+      closedAt: now,
+      status: 'PAID',
+      staffUid: staffUid,
+      staffUsername: sUser,
+      staffFullName: sName,
+      items: splitItems,
+      subTotal: splitSubTotal,
+      finalAmount: splitSubTotal,
+      paymentMethod: paymentMethod,
+      notes: 'Tách thanh toán trước từ bàn ${sourceTable.name}',
+      parentBillId: sourceTable.currentBillId ?? sourceTable.name,
+      shiftId: shiftId,
+      actionLogs: billLogs,
+      deletedItems: remainingItems.isEmpty ? sourceTable.deletedItems : const [],
+    );
+
+    final source = TableModel.fromMap(sourceTable.toMap(), sourceTable.firebaseKey);
+    if (remainingItems.isEmpty) {
+      source.clearTable();
+      if (source.isAutoSplit) {
+        source.isSplitTable = true;
+      }
+    } else {
+      source.inUse = true;
+      source.currentOrderJson = jsonEncode(remainingItems.map((e) => e.toMap()).toList());
+      source.clearPrePrint();
+      source.addActionLog(OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'SPLIT_BILL',
+        details: '$sName tách thanh toán trước ($billCode • ${FormatUtils.vnd(splitSubTotal)}): $splitSummary',
+      ));
+    }
+
+    return (paidBill: paidBill, updatedSource: source);
+  }
+
+  /// Tách món và chốt hóa đơn ĐÃ THANH TOÁN (`PAID`) ngay lập tức trong 1 lệnh multi-path
+  /// (`bills/{id}`, `history/{id}`, `tables/{sourceKey}`), đảm bảo tính vào doanh thu và có hóa đơn ngay.
+  Future<({BillModel paidBill, TableModel updatedSource, bool synced})> paySplitItemsNow({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required String paymentMethod,
+    String? shiftId,
+    String? staffUid,
+    String? staffUsername,
+    String? staffFullName,
+    String? staffRole,
+    double? pointEarnRate,
+    int? pointRedeemRate,
+  }) async {
+    final storeCode = _currentStoreCode;
+    final splitBillCode = await allocateBillCode(storeCode: storeCode);
+    final planned = planPaySplitItemsNow(
+      sourceTable: sourceTable,
+      splitItems: splitItems,
+      remainingItems: remainingItems,
+      billCode: splitBillCode,
+      paymentMethod: paymentMethod,
+      shiftId: shiftId,
+      staffUid: staffUid,
+      staffUsername: staffUsername,
+      staffFullName: staffFullName,
+    );
+
+    final storeName = await _resolveStoreName(storeCode);
+    final record = BillRecordBuilder.build(
+      planned.paidBill,
+      storeCode: storeCode,
+      storeName: storeName,
+      guestCount: 1,
+    );
+
+    final synced = await _commitWrite(
+      _root.child('stores/$storeCode').update({
+        'bills/${planned.paidBill.id}': record,
+        'history/${planned.paidBill.id}': record,
+        'tables/${planned.updatedSource.firebaseKey}': planned.updatedSource.toMap(),
+      }),
+      'hóa đơn tách ${planned.paidBill.billCode}',
+    );
+
+    _applyTableState(sourceTable, planned.updatedSource);
+    if (!planned.updatedSource.inUse) {
+      _tryRemoveInactiveSplitTable(planned.updatedSource);
+    }
+
+    final splitSummary = splitItems.map((e) => '${e.quantity}x ${e.name}').join(', ');
+    await _safeLog(AuditLogModel(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      username: staffUsername ?? 'staff',
+      userFullName: staffFullName ?? 'Thu Ngân',
+      userRole: staffRole ?? 'CASHIER',
+      action: 'SPLIT_BILL',
+      targetType: 'BILL',
+      targetId: planned.paidBill.billCode,
+      details:
+          'Tách thanh toán trước từ ${sourceTable.name} (${planned.paidBill.billCode} • ${planned.paidBill.finalAmount}đ): $splitSummary',
+    ));
+
+    unawaited(_runPaymentFollowUps(
+      planned.paidBill,
+      storeCode,
+      const [],
+      synced,
+      pointEarnRate: pointEarnRate,
+      pointRedeemRate: pointRedeemRate,
+    ));
+
+    return (
+      paidBill: planned.paidBill,
+      updatedSource: planned.updatedSource,
+      synced: synced,
+    );
   }
 
   /// Thực thi tách món nguyên tử giữa [sourceTable] và [targetTable] trong 1 lệnh multi-path.

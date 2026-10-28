@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tram_flutter/core/domain/shift_scope.dart';
+import 'package:tram_flutter/core/reports/report_calculator.dart';
 import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/repositories/order_repository.dart';
 
@@ -219,6 +221,111 @@ void main() {
       expect(plannedMerge.updatedTarget.currentItems.length, 1);
       expect(plannedMerge.updatedTarget.currentItems.first.quantity, 3);
       expect(plannedMerge.updatedTarget.currentTotal, 90000);
+    });
+
+    test('Tách đơn Thanh Toán Trước (planPaySplitItemsNow) tạo hóa đơn PAID ngay, có mã HĐ và tính vào doanh thu', () {
+      const now = 1700000120000;
+      final item1 = OrderItemModel(
+        productId: 1,
+        name: 'Trà Đào',
+        price: 30000,
+        quantity: 3,
+      );
+      final item2 = OrderItemModel(
+        productId: 2,
+        name: 'Bạc Xỉu',
+        price: 25000,
+        quantity: 1,
+      );
+
+      final source = TableModel(
+        name: 'Bàn 01',
+        zone: 'Khu A',
+        inUse: true,
+        openedAt: now - 60000,
+        currentBillId: 'HD-SRC-01',
+        currentOrderCode: 'OD-SRC-01',
+        currentOrderJson: jsonEncode([item1.toMap(), item2.toMap()]),
+      )..addActionLog(OrderActionLogModel(
+          timestamp: now - 50000,
+          staffUsername: 'phucvu_a',
+          staffFullName: 'Phục Vụ A',
+          action: 'SEND_KITCHEN',
+          details: 'Gửi bếp',
+        ));
+
+      final (taken1, rest1) = item1.splitQuantity(2);
+      final splitItems = [taken1!]; // 2 Trà Đào = 60.000đ
+      final remainingItems = [rest1!, item2]; // 1 Trà Đào + 1 Bạc Xỉu = 55.000đ
+
+      final res = OrderRepository.planPaySplitItemsNow(
+        sourceTable: source,
+        splitItems: splitItems,
+        remainingItems: remainingItems,
+        billCode: 'HD-261028-0009',
+        paymentMethod: 'CASH',
+        shiftId: 'SHIFT_01',
+        staffUid: 'uid_thungan',
+        staffUsername: 'thungan',
+        staffFullName: 'Thu Ngân',
+        nowMs: now,
+      );
+
+      expect(res.paidBill.status, 'PAID');
+      expect(res.paidBill.billCode, 'HD-261028-0009');
+      expect(res.paidBill.closedAt, now);
+      expect(res.paidBill.subTotal, 60000);
+      expect(res.paidBill.finalAmount, 60000);
+      expect(res.paidBill.tableName, 'Bàn 01 (Tách)');
+      expect(res.paidBill.parentBillId, 'HD-SRC-01');
+      expect(res.updatedSource.inUse, isTrue);
+      expect(res.updatedSource.currentTotal, 55000);
+
+      // Tính vào doanh thu tổng quan (ReportCalculator)
+      final overview = ReportCalculator.calculateOverviewReport([res.paidBill]);
+      expect(overview.paidBillsCount, 1);
+      expect(overview.grossRevenue, 60000);
+      expect(overview.netRevenue, 60000);
+
+      // Cả Thu Ngân lẫn Phục Vụ A (người gửi bếp ban đầu) đều thấy hóa đơn tách trong Lịch sử hóa đơn
+      expect(
+        scopeBills([res.paidBill], uid: 'uid_thungan', username: 'thungan', canViewAll: false).length,
+        1,
+      );
+      expect(
+        scopeBills([res.paidBill], uid: 'uid_pv_a', username: 'phucvu_a', canViewAll: false).length,
+        1,
+      );
+    });
+
+    test('BillModel.fromMap tự động khôi phục các hóa đơn tách cũ bị lưu status OPEN thành PAID để tính doanh thu', () {
+      const createdAt = 1700000000000;
+      final legacySplitBill = BillModel.fromMap({
+        'billCode': 'HD-OLD-SPLIT',
+        'tableName': 'Bàn 02 (Tách)',
+        'zone': 'Tầng 1',
+        'createdAt': createdAt,
+        'status': 'OPEN',
+        'parentBillId': 'Bàn 02',
+        'subTotal': 45000,
+        'finalAmount': 45000,
+        'paymentMethod': 'CASH',
+        'items': [
+          {
+            'productId': 10,
+            'name': 'Cà phê sữa',
+            'price': 45000,
+            'quantity': 1,
+          }
+        ],
+      }, 'BILL_LEGACY_1');
+
+      expect(legacySplitBill.status, 'PAID');
+      expect(legacySplitBill.closedAt, createdAt);
+
+      final overview = ReportCalculator.calculateOverviewReport([legacySplitBill]);
+      expect(overview.paidBillsCount, 1);
+      expect(overview.netRevenue, 45000);
     });
   });
 }

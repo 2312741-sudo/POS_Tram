@@ -91,8 +91,10 @@ class AppRouter {
         path: '/order-cart',
         builder: (_, state) {
           final extra = state.extra as Map;
+          final table = extra['table'] as TableModel;
           return OrderCartScreen(
-            table: extra['table'] as TableModel,
+            key: ValueKey('${table.firebaseKey}_${table.currentBillId ?? ""}'),
+            table: table,
             initialProducts: (extra['products'] as List?)?.cast<OrderItemModel>() ?? const [],
             autoOpenCheckout: extra['autoOpenCheckout'] == true,
             returnToParentOnPay: extra['returnToParentOnPay'] == true,
