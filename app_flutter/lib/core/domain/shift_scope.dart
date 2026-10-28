@@ -57,8 +57,14 @@ bool billOwnedBy(BillModel b, {required String uid, required String username}) {
     return true;
   }
   if (u.isEmpty) return false;
+  for (final it in b.items) {
+    if (_norm(it.orderedBy) == u) return true;
+  }
   for (final l in b.actionLogs) {
-    if ((l.action == 'SEND_KITCHEN' || l.action == 'ADD_ITEMS' || l.action == 'SPLIT_BILL') &&
+    if ((l.action == 'SEND_KITCHEN' ||
+            l.action == 'ADD_ITEMS' ||
+            l.action == 'ADD_ITEM' ||
+            l.action == 'SPLIT_BILL') &&
         _norm(l.staffUsername) == u) {
       return true;
     }

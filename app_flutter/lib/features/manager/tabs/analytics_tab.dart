@@ -21,6 +21,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   List<BillModel> _bills = [];
   bool _loading = true;
   Timer? _safetyTimer;
+  StreamSubscription<List<BillModel>>? _billsSub;
   int _touchedPieIndex = -1;
   String _period = 'THIS_MONTH'; // 'TODAY', 'YESTERDAY', '7DAYS', 'THIS_MONTH', 'LAST_MONTH', 'ALL'
 
@@ -33,16 +34,29 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _billsSub?.cancel();
     super.dispose();
   }
 
   void _loadBills() {
     _safetyTimer?.cancel();
-    _safetyTimer = Timer(const Duration(seconds: 3), () {
+    _billsSub?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      if (_bills.isEmpty) {
+        final fallback = await _fb.getStoreBills();
+        if (mounted && _bills.isEmpty && fallback.isNotEmpty) {
+          setState(() {
+            _bills = _fb.scopeVisibleBills(fallback).where((e) => e.status == 'PAID').toList();
+            _loading = false;
+          });
+          return;
+        }
+      }
       if (mounted && _loading) setState(() => _loading = false);
     });
 
-    _fb.myBillsStream().listen((b) {
+    _billsSub = _fb.myBillsStream().listen((b) {
       _safetyTimer?.cancel();
       if (mounted) {
         setState(() {

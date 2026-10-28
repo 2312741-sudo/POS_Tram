@@ -44,6 +44,10 @@ class _OverviewTabState extends State<OverviewTab> {
   List<AuditLogModel> _auditLogs = [];
   bool _loading = true;
   Timer? _safetyTimer;
+  StreamSubscription<List<BillModel>>? _billsSub;
+  StreamSubscription<List<TableModel>>? _tablesSub;
+  StreamSubscription<List<OnlineOrderModel>>? _onlineOrdersSub;
+  StreamSubscription<List<AuditLogModel>>? _auditLogsSub;
 
   @override
   void initState() {
@@ -54,6 +58,10 @@ class _OverviewTabState extends State<OverviewTab> {
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
+    _onlineOrdersSub?.cancel();
+    _auditLogsSub?.cancel();
     super.dispose();
   }
 
@@ -64,25 +72,41 @@ class _OverviewTabState extends State<OverviewTab> {
 
   void _loadData() {
     _safetyTimer?.cancel();
-    _safetyTimer = Timer(const Duration(seconds: 3), () {
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
+    _onlineOrdersSub?.cancel();
+    _auditLogsSub?.cancel();
+
+    _safetyTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      if (_bills.isEmpty) {
+        final fallback = await _fb.getStoreBills();
+        if (mounted && _bills.isEmpty && fallback.isNotEmpty) {
+          setState(() {
+            _bills = _fb.scopeVisibleBills(fallback);
+            _loading = false;
+          });
+          return;
+        }
+      }
       if (mounted && _loading) setState(() => _loading = false);
     });
 
-    _fb.myBillsStream().listen((b) {
+    _billsSub = _fb.myBillsStream().listen((b) {
       _safetyTimer?.cancel();
       if (mounted) setState(() { _bills = b; _loading = false; });
     }, onError: (_) {
       if (mounted) setState(() => _loading = false);
     });
-    _fb.tablesStream().listen((t) {
+    _tablesSub = _fb.tablesStream().listen((t) {
       if (mounted) setState(() => _tables = t);
     }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
-    _fb.onlineOrdersStream().listen((o) {
+    _onlineOrdersSub = _fb.onlineOrdersStream().listen((o) {
       if (mounted) setState(() => _onlineOrders = o);
     });
     // Nhật ký thao tác chỉ đọc được khi có quyền VIEW_AUDIT_LOGS (rules cũng chặn).
     if (_canViewAudit) {
-      _fb.auditLogsStream().listen((a) {
+      _auditLogsSub = _fb.auditLogsStream().listen((a) {
         if (mounted) setState(() => _auditLogs = a);
       }, onError: (Object e) => debugPrint('Không tải được nhật ký thao tác: $e'));
     }

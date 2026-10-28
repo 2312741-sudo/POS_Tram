@@ -617,8 +617,14 @@ class FirebaseService {
 
   Future<void> openCashShift(CashShiftModel shift) => _reportRepo.openCashShift(shift);
 
+  Stream<List<BillModel>> storeBillsStream({String? storeCode}) =>
+      _reportRepo.storeBillsStream(storeCode: storeCode);
+
   Future<List<BillModel>> getStoreBills({String? storeCode, DateTime? startDate, DateTime? endDate}) =>
       _reportRepo.getStoreBills(storeCode: storeCode, startDate: startDate, endDate: endDate);
+
+  Future<Map<int, ProductModel>> getProductsMap({String? storeCode}) =>
+      _reportRepo.getProductsMap(storeCode: storeCode);
 
   Future<List<BillModel>> getBillsForShift(CashShiftModel shift, {String? storeCode}) =>
       _reportRepo.getBillsForShift(shift, storeCode: storeCode);

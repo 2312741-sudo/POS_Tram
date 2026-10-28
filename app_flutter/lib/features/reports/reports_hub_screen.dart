@@ -84,6 +84,10 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   bool _exporting = false;
   String? _errorMessage;
   Timer? _safetyTimer;
+  StreamSubscription<List<BillModel>>? _billsSub;
+  StreamSubscription<List<CashShiftModel>>? _shiftsSub;
+  StreamSubscription<List<TableModel>>? _tablesSub;
+  StreamSubscription<List<ProductModel>>? _productsSub;
 
   List<BillModel> _allBills = [];
   List<CashShiftModel> _allShifts = [];
@@ -102,7 +106,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   void initState() {
     super.initState();
     _selectedKind = widget.initialReport;
-    _selectedStoreCode = _auth.currentStoreCode;
+    _selectedStoreCode = _auth.currentStoreCode.isNotEmpty ? _auth.currentStoreCode : _fb.currentStoreCode;
     _applyDateRange(DateRangeFilter.today);
     _loadInitialData();
   }
@@ -110,6 +114,10 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _billsSub?.cancel();
+    _shiftsSub?.cancel();
+    _tablesSub?.cancel();
+    _productsSub?.cancel();
     super.dispose();
   }
 
@@ -149,7 +157,23 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
   Future<void> _loadInitialData() async {
     _safetyTimer?.cancel();
-    _safetyTimer = Timer(const Duration(seconds: 4), () {
+    _billsSub?.cancel();
+    _shiftsSub?.cancel();
+    _tablesSub?.cancel();
+    _productsSub?.cancel();
+
+    _safetyTimer = Timer(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+      if (_allBills.isEmpty) {
+        final fallback = await _fb.getStoreBills(storeCode: _selectedStoreCode);
+        if (mounted && _allBills.isEmpty && fallback.isNotEmpty) {
+          setState(() {
+            _allBills = _fb.scopeVisibleBills(fallback);
+            _loading = false;
+          });
+          return;
+        }
+      }
       if (mounted && _loading) {
         setState(() => _loading = false);
       }
@@ -162,14 +186,21 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
     try {
       final stores = await _fb.getAllStores();
-      if (mounted) setState(() => _stores = stores);
+      if (mounted) {
+        setState(() {
+          _stores = stores;
+          if (_selectedStoreCode.isEmpty && stores.isNotEmpty) {
+            _selectedStoreCode = stores.first.storeCode;
+          }
+        });
+      }
 
       // Listen streams
-      _fb.myBillsStream().listen((bills) {
+      _billsSub = _fb.storeBillsStream(storeCode: _selectedStoreCode).listen((bills) {
         _safetyTimer?.cancel();
         if (mounted) {
           setState(() {
-            _allBills = bills;
+            _allBills = _fb.scopeVisibleBills(bills);
             _loading = false;
           });
         }
@@ -180,18 +211,19 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         });
       });
 
-      _fb.cashShiftsStream().listen((shifts) {
+      _shiftsSub = _fb.cashShiftsStream().listen((shifts) {
         if (mounted) setState(() => _allShifts = shifts);
       });
 
-      _fb.tablesStream().listen((t) {
+      _tablesSub = _fb.tablesStream().listen((t) {
         if (mounted) setState(() => _tables = t);
       }, onError: (Object e) => debugPrint('Lỗi tải danh sách bàn: $e'));
 
-      _fb.productsStream(storeCode: _selectedStoreCode).listen((prods) {
+      _productsSub = _fb.productsStream(storeCode: _selectedStoreCode).listen((prods) {
         if (mounted) {
           final map = <int, ProductModel>{};
           for (final p in prods) {
+            if (p.effectiveId > 0) map[p.effectiveId] = p;
             if (p.id > 0) map[p.id] = p;
           }
           setState(() => _productsMap = map);
@@ -711,22 +743,45 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               // Store Dropdown
               Expanded(
                 flex: 2,
-                child: DropdownButtonFormField<String>(
-                  key: ValueKey<Object?>(_selectedStoreCode),
-                  initialValue: _selectedStoreCode,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Cửa hàng',
-                    labelStyle: GoogleFonts.beVietnamPro(fontSize: 12),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  items: _stores.map((s) => DropdownMenuItem(
-                    value: s.storeCode,
-                    child: Text(s.storeName, style: GoogleFonts.beVietnamPro(fontSize: 12), overflow: TextOverflow.ellipsis),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedStoreCode = val);
+                child: Builder(
+                  builder: (context) {
+                    final storeOptions = <StoreInfoModel>[
+                      ..._stores,
+                      if (_selectedStoreCode.isNotEmpty &&
+                          !_stores.any((s) => s.storeCode == _selectedStoreCode))
+                        StoreInfoModel(
+                          storeCode: _selectedStoreCode,
+                          storeName: 'POS Trạm - $_selectedStoreCode',
+                        ),
+                    ];
+                    final effectiveStoreValue = storeOptions.any((s) => s.storeCode == _selectedStoreCode)
+                        ? _selectedStoreCode
+                        : (storeOptions.isNotEmpty ? storeOptions.first.storeCode : null);
+                    return DropdownButtonFormField<String>(
+                      key: ValueKey<Object?>(effectiveStoreValue),
+                      initialValue: effectiveStoreValue,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Cửa hàng',
+                        labelStyle: GoogleFonts.beVietnamPro(fontSize: 12),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: storeOptions.map((s) => DropdownMenuItem(
+                        value: s.storeCode,
+                        child: Text(s.storeName, style: GoogleFonts.beVietnamPro(fontSize: 12), overflow: TextOverflow.ellipsis),
+                      )).toList(),
+                      onChanged: (val) {
+                        if (val != null && val != _selectedStoreCode) {
+                          setState(() {
+                            _selectedStoreCode = val;
+                            _selectedShiftId = 'ALL';
+                            _selectedStaff = 'ALL';
+                          });
+                          _loadInitialData();
+                        }
+                      },
+                    );
                   },
                 ),
               ),

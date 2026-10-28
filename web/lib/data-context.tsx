@@ -1533,7 +1533,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           paymentMethod: paymentMethod,
           status: "PAID",
           timestamp: now,
-          createdAt: table.openedAt ? new Date(table.openedAt).getTime() : now,
+          createdAt: table.openedAt
+            ? (Number(table.openedAt) > 0
+                ? Number(table.openedAt)
+                : (new Date(table.openedAt).getTime() || now))
+            : now,
           closedAt: now,
           cashierName: cashierName,
           staffUsername: "admin_web",
@@ -1691,7 +1695,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           cancelledAt: now,
           cancelledBy: cancellerName,
           timestamp: now,
-          createdAt: table.openedAt ? new Date(table.openedAt).getTime() : now,
+          createdAt: table.openedAt
+            ? (Number(table.openedAt) > 0
+                ? Number(table.openedAt)
+                : (new Date(table.openedAt).getTime() || now))
+            : now,
           closedAt: now,
           cashierName: cancellerName,
           staffUsername: "admin_web",

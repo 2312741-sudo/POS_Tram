@@ -86,8 +86,13 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     try {
       final prods = await _fb.getProducts(storeCode: _selectedStoreCode);
       if (!mounted) return;
+      final map = <int, ProductModel>{};
+      for (final p in prods) {
+        if (p.effectiveId > 0) map[p.effectiveId] = p;
+        if (p.id > 0) map[p.id] = p;
+      }
       setState(() {
-        _productsMap = {for (final p in prods) if (p.id > 0) p.id: p};
+        _productsMap = map;
       });
     } catch (_) {}
   }
@@ -124,7 +129,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       _fallbackDirectFetch();
     });
 
-    final billsStream = _fb.myBillsStream();
+    final billsStream = _selectedStoreCode.isNotEmpty
+        ? _fb.storeBillsStream(storeCode: _selectedStoreCode).map(_fb.scopeVisibleBills)
+        : _fb.myBillsStream();
 
     _billsSub = billsStream.listen(
       (b) {
@@ -164,7 +171,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
       if (mounted) {
         setState(() {
           if (_bills.isEmpty && bills.isNotEmpty) {
-            _bills = bills;
+            _bills = _fb.scopeVisibleBills(bills);
           }
           _loading = false;
         });

@@ -17,6 +17,7 @@ class ReportBillModel extends BillModel {
     required super.createdAt,
     super.closedAt,
     super.status,
+    super.staffUid,
     required super.staffUsername,
     required super.staffFullName,
     required super.items,
@@ -27,6 +28,7 @@ class ReportBillModel extends BillModel {
     super.vatAmount,
     required super.finalAmount,
     super.paymentMethod,
+    super.paymentSplits,
     super.notes,
     super.parentBillId,
     super.mergedTableNames,
@@ -45,6 +47,14 @@ class ReportBillModel extends BillModel {
   });
 
   factory ReportBillModel.fromMap(Map<dynamic, dynamic> map, String id) {
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+    }
+
     final base = BillModel.fromMap(map, id);
     return ReportBillModel(
       id: base.id,
@@ -55,6 +65,7 @@ class ReportBillModel extends BillModel {
       createdAt: base.createdAt,
       closedAt: base.closedAt,
       status: base.status,
+      staffUid: base.staffUid,
       staffUsername: base.staffUsername,
       staffFullName: base.staffFullName,
       items: base.items,
@@ -65,10 +76,11 @@ class ReportBillModel extends BillModel {
       vatAmount: base.vatAmount,
       finalAmount: base.finalAmount,
       paymentMethod: base.paymentMethod,
+      paymentSplits: base.paymentSplits,
       notes: base.notes,
       parentBillId: base.parentBillId,
       mergedTableNames: base.mergedTableNames,
-      pointsUsed: (map['pointsUsed'] as num?)?.toInt() ?? base.pointsUsed,
+      pointsUsed: asInt(map['pointsUsed']) ?? base.pointsUsed,
       pointsDiscount: base.pointsDiscount,
       customerId: base.customerId,
       customerName: base.customerName,
@@ -76,8 +88,8 @@ class ReportBillModel extends BillModel {
       shiftId: base.shiftId,
       actionLogs: base.actionLogs,
       deletedItems: base.deletedItems,
-      guestCount: (map['guestCount'] as num?)?.toInt() ?? 1,
-      refundAmount: (map['refundAmount'] as num?)?.toInt() ?? 0,
+      guestCount: asInt(map['guestCount']) ?? 1,
+      refundAmount: asInt(map['refundAmount']) ?? 0,
       cancelReason: map['cancelReason']?.toString(),
       cancelledAt: base.cancelledAt,
     );
@@ -99,6 +111,7 @@ class ReportBillModel extends BillModel {
       createdAt: base.createdAt,
       closedAt: base.closedAt,
       status: base.status,
+      staffUid: base.staffUid,
       staffUsername: base.staffUsername,
       staffFullName: base.staffFullName,
       items: base.items,
@@ -109,6 +122,7 @@ class ReportBillModel extends BillModel {
       vatAmount: base.vatAmount,
       finalAmount: base.finalAmount,
       paymentMethod: base.paymentMethod,
+      paymentSplits: base.paymentSplits,
       notes: base.notes,
       parentBillId: base.parentBillId,
       mergedTableNames: base.mergedTableNames,

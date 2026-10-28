@@ -15,10 +15,20 @@ class OrderActionLogModel {
   });
 
   factory OrderActionLogModel.fromMap(Map<dynamic, dynamic> map) {
+    int parseTs(Object? v) {
+      if (v == null) return 0;
+      if (v is num) return v.isNaN || v.isInfinite ? 0 : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return 0;
+      final n = int.tryParse(s) ?? num.tryParse(s)?.toInt();
+      if (n != null) return n;
+      return DateTime.tryParse(s)?.millisecondsSinceEpoch ?? 0;
+    }
+
     return OrderActionLogModel(
-      timestamp: (map['timestamp'] as num?)?.toInt() ?? 0,
-      staffUsername: map['staffUsername']?.toString() ?? '',
-      staffFullName: map['staffFullName']?.toString() ?? '',
+      timestamp: parseTs(map['timestamp']),
+      staffUsername: map['staffUsername']?.toString() ?? map['username']?.toString() ?? '',
+      staffFullName: map['staffFullName']?.toString() ?? map['userFullName']?.toString() ?? '',
       action: map['action']?.toString() ?? '',
       details: map['details']?.toString() ?? '',
     );

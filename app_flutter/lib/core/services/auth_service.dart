@@ -33,8 +33,8 @@ class AuthService extends ChangeNotifier {
     _fb.setShiftIdentityProvider(() => (
           uid: _currentUser?.uid ?? '',
           username: _currentUser?.username ?? '',
-          canViewAll: can(AppPermissions.viewAllShifts),
-          canViewAllBills: can(AppPermissions.viewAllBillsHistory),
+          canViewAll: isOwner || isManager || can(AppPermissions.viewAllShifts) || can(AppPermissions.viewReports),
+          canViewAllBills: isOwner || isManager || can(AppPermissions.viewAllBillsHistory) || can(AppPermissions.viewReports),
         ));
   }
 
@@ -102,7 +102,7 @@ class AuthService extends ChangeNotifier {
   /// Kiểm tra người dùng hiện tại có quyền permKey
   bool can(String permissionKey) {
     if (_currentUser == null) return false;
-    return _currentUser!.can(permissionKey, _cachedRoles);
+    return _currentUser!.can(permissionKey, _cachedRoles, _currentStoreInfo?.ownerId);
   }
 
   /// Kiểm tra trạng thái khóa tạm thời
@@ -229,7 +229,7 @@ class AuthService extends ChangeNotifier {
           return false;
         }
         _currentUser = user;
-        refreshRolesAndStoreInfo();
+        await refreshRolesAndStoreInfo();
         notifyListeners();
         return true;
       }
@@ -454,7 +454,7 @@ class AuthService extends ChangeNotifier {
     await prefs.setString(_keyUid, userProfile.uid);
 
     _currentUser = userProfile.copyWith(lastLoginAt: now);
-    refreshRolesAndStoreInfo();
+    await refreshRolesAndStoreInfo();
     notifyListeners();
 
     return _currentUser!;

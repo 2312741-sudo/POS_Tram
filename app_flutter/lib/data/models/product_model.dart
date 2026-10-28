@@ -67,18 +67,47 @@ class ProductModel {
       (imageBase64 != null && imageBase64!.trim().isNotEmpty) ||
       (imageResourceName != null && imageResourceName!.trim().isNotEmpty);
 
+  static int _stablePositiveHash(String s) {
+    final trimmed = s.trim();
+    if (trimmed.isEmpty) return 0;
+    int h = 0;
+    for (int i = 0; i < trimmed.length; i++) {
+      h = ((h * 31) + trimmed.codeUnitAt(i)) & 0x3fffffff;
+    }
+    return h == 0 ? 1 : h;
+  }
+
+  static int? _asInt(Object? v) {
+    if (v == null) return null;
+    if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+  }
+
+  /// Mã số định danh ổn định để làm khóa Map<int, ProductModel> ngay cả khi món tạo từ Web chưa có id nguyên dương.
+  int get effectiveId {
+    if (id > 0) return id;
+    if (dbKey != null && dbKey!.trim().isNotEmpty) return _stablePositiveHash(dbKey!);
+    if (code.trim().isNotEmpty) return _stablePositiveHash(code);
+    if (name.trim().isNotEmpty) return _stablePositiveHash(name);
+    return 0;
+  }
+
   factory ProductModel.fromMap(dynamic val, [String? key]) {
     if (val is Map) {
       final map = Map<dynamic, dynamic>.from(val);
       Map<String, int> sizesMap = {};
       if (map['sizes'] is Map) {
         (map['sizes'] as Map).forEach((k, v) {
-          sizesMap[k.toString()] = (v as num?)?.toInt() ?? 0;
+          sizesMap[k.toString()] = _asInt(v) ?? 0;
         });
       }
       List<String> toppings = [];
       if (map['allowedToppings'] is List) {
-        toppings = List<String>.from(map['allowedToppings']);
+        toppings = (map['allowedToppings'] as List).where((e) => e != null).map((e) => e.toString()).toList();
+      } else if (map['allowedToppings'] is Map) {
+        toppings = (map['allowedToppings'] as Map).values.where((e) => e != null).map((e) => e.toString()).toList();
       }
 
       final cat = map['category']?.toString() ?? 'Khác';
@@ -92,20 +121,26 @@ class ProductModel {
       final bool hasIceSugar = map['hasIceSugarOptions'] == true || (map['hasIceSugarOptions'] == null && isDrink);
       final bool isTop = map['isTopping'] == true || cat.toLowerCase().contains('topping') || cat.toLowerCase() == 'topping';
 
+      final rawId = map['id'];
+      int resolvedId = _asInt(rawId) ?? 0;
+      if (resolvedId <= 0 && rawId != null && rawId.toString().trim().isNotEmpty && rawId.toString().trim() != '0') {
+        resolvedId = _stablePositiveHash(rawId.toString());
+      }
+
       return ProductModel(
-        id: (map['id'] as num?)?.toInt() ?? 0,
+        id: resolvedId,
         name: map['name']?.toString() ?? key ?? '',
         code: map['code']?.toString() ?? '',
-        price: (map['price'] as num?)?.toInt() ?? 0,
-        costPrice: (map['costPrice'] as num?)?.toInt(),
+        price: _asInt(map['price']) ?? 0,
+        costPrice: _asInt(map['costPrice']),
         unit: map['unit']?.toString() ?? 'Phần',
         category: cat,
         imageBase64: map['imageBase64']?.toString(),
         imageResourceName: map['imageResourceName']?.toString(),
         isAvailable: map['isAvailable'] != false,
-        soldOutAt: (map['soldOutAt'] as num?)?.toInt(),
+        soldOutAt: _asInt(map['soldOutAt']),
         soldOutBy: map['soldOutBy']?.toString(),
-        soldOutUntil: (map['soldOutUntil'] as num?)?.toInt(),
+        soldOutUntil: _asInt(map['soldOutUntil']),
         dbKey: key,
         sizes: sizesMap,
         allowedToppings: toppings,

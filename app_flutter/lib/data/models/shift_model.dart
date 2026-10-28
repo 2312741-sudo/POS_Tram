@@ -59,6 +59,24 @@ class CashShiftModel {
        actualCash = actualBalance ?? actualCash;
 
   factory CashShiftModel.fromMap(Map<dynamic, dynamic> map, String id) {
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+    }
+
+    int? asEpochMs(Object? v) {
+      final n = asInt(v);
+      if (n != null && n > 0) return n;
+      if (v is String && v.trim().isNotEmpty) {
+        final dt = DateTime.tryParse(v.trim());
+        if (dt != null) return dt.millisecondsSinceEpoch;
+      }
+      return n;
+    }
+
     return CashShiftModel(
       id: id,
       shiftCode: map['shiftCode']?.toString() ?? id,
@@ -67,16 +85,16 @@ class CashShiftModel {
       staffUid: map['staffUid']?.toString() ?? '',
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
-      openedAt: (map['openedAt'] as num?)?.toInt() ?? 0,
-      closedAt: (map['closedAt'] as num?)?.toInt(),
-      initialCash: (map['initialCash'] as num?)?.toInt() ?? 0,
-      totalCashSales: (map['totalCashSales'] as num?)?.toInt() ?? 0,
-      totalQrSales: (map['totalQrSales'] as num?)?.toInt() ?? 0,
-      totalCardSales: (map['totalCardSales'] as num?)?.toInt() ?? 0,
-      cashIn: (map['cashIn'] as num?)?.toInt() ?? 0,
-      cashOut: (map['cashOut'] as num?)?.toInt() ?? 0,
-      actualCash: (map['actualCash'] as num?)?.toInt(),
-      difference: (map['difference'] as num?)?.toInt(),
+      openedAt: asEpochMs(map['openedAt']) ?? 0,
+      closedAt: asEpochMs(map['closedAt']),
+      initialCash: asInt(map['initialCash']) ?? asInt(map['initialBalance']) ?? 0,
+      totalCashSales: asInt(map['totalCashSales']) ?? asInt(map['cashSales']) ?? 0,
+      totalQrSales: asInt(map['totalQrSales']) ?? asInt(map['qrSales']) ?? 0,
+      totalCardSales: asInt(map['totalCardSales']) ?? asInt(map['cardSales']) ?? 0,
+      cashIn: asInt(map['cashIn']) ?? asInt(map['inAdjustments']) ?? 0,
+      cashOut: asInt(map['cashOut']) ?? asInt(map['outAdjustments']) ?? 0,
+      actualCash: asInt(map['actualCash']) ?? asInt(map['actualBalance']),
+      difference: asInt(map['difference']),
       status: map['status']?.toString() ?? (map['closedAt'] != null ? 'CLOSED' : 'OPEN'),
       notes: map['notes']?.toString() ?? '',
     );

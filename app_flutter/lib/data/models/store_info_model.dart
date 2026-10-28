@@ -62,6 +62,19 @@ class StoreInfoModel {
   bool get isChamCongLinked => chamCongStoreId.isNotEmpty;
 
   factory StoreInfoModel.fromMap(Map<dynamic, dynamic> map, String storeCode) {
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      return int.tryParse(v.toString().trim()) ?? num.tryParse(v.toString().trim())?.toInt();
+    }
+
+    double? asDouble(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toDouble();
+      return double.tryParse(v.toString().trim());
+    }
+
+    final rawVat = asDouble(map['defaultVatRate']) ?? 0.0;
     return StoreInfoModel(
       storeCode: map['storeCode']?.toString() ?? storeCode,
       storeName: map['storeName']?.toString() ?? 'POS Trạm',
@@ -72,15 +85,15 @@ class StoreInfoModel {
       bankId: map['bankId']?.toString() ?? 'MB',
       bankAccount: map['bankAccount']?.toString() ?? '0987654321',
       accountName: map['accountName']?.toString() ?? 'CHU CUA HANG',
-      allowStackPromotions: map['allowStackPromotions'] ?? true,
-      defaultVatRate: ((map['defaultVatRate'] as num?)?.toDouble() ?? 0.0) == 8.0 ? 0.0 : ((map['defaultVatRate'] as num?)?.toDouble() ?? 0.0),
+      allowStackPromotions: map['allowStackPromotions'] != false,
+      defaultVatRate: rawVat == 8.0 ? 0.0 : rawVat,
       kitchenPrinterIp: map['kitchenPrinterIp']?.toString() ?? '192.168.1.200',
       billPrinterIp: map['billPrinterIp']?.toString() ?? '192.168.1.201',
       printerType: map['printerType']?.toString() ?? 'LAN',
-      allowStaffViewShiftDifference: map['allowStaffViewShiftDifference'] ?? true,
-      autoPrintBill: map['autoPrintBill'] ?? true,
-      pointRedeemRate: (map['pointRedeemRate'] as num?)?.toInt() ?? 1000,
-      pointEarnRate: (map['pointEarnRate'] as num?)?.toDouble() ?? 1.0,
+      allowStaffViewShiftDifference: map['allowStaffViewShiftDifference'] != false,
+      autoPrintBill: map['autoPrintBill'] != false,
+      pointRedeemRate: asInt(map['pointRedeemRate']) ?? 1000,
+      pointEarnRate: asDouble(map['pointEarnRate']) ?? 1.0,
       loyaltyTiers: LoyaltyTier.parseList(map['loyaltyTiers']),
       sharedLoyaltyEnabled: map['sharedLoyalty'] is Map && (map['sharedLoyalty'] as Map)['enabled'] == true,
       businessDayStartMinute: BusinessDay.normalize(map['businessDayStartMinute']),

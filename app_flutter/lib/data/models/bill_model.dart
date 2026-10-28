@@ -18,9 +18,14 @@ class PaymentSplitModel {
   });
 
   factory PaymentSplitModel.fromMap(Map<dynamic, dynamic> map) {
+    int asInt(Object? v) {
+      if (v == null) return 0;
+      if (v is num) return v.isNaN || v.isInfinite ? 0 : v.toInt();
+      return int.tryParse(v.toString().trim()) ?? num.tryParse(v.toString().trim())?.toInt() ?? 0;
+    }
     return PaymentSplitModel(
       method: map['method']?.toString() ?? 'CASH',
-      amount: (map['amount'] as num?)?.toInt() ?? 0,
+      amount: asInt(map['amount']),
       note: map['note']?.toString(),
     );
   }
@@ -105,38 +110,99 @@ class BillModel {
     this.deletedItems = const [],
   });
 
+  static int? _asInt(Object? v) {
+    if (v == null) return null;
+    if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+  }
+
+  static double? _asDouble(Object? v) {
+    if (v == null) return null;
+    if (v is num) return v.isNaN || v.isInfinite ? null : v.toDouble();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
+  }
+
+  static int? _asEpochMs(Object? v) {
+    final n = _asInt(v);
+    if (n != null && n > 0) return n;
+    if (v is String && v.trim().isNotEmpty) {
+      final dt = DateTime.tryParse(v.trim());
+      if (dt != null) return dt.millisecondsSinceEpoch;
+    }
+    return n;
+  }
+
+  static List<Map<dynamic, dynamic>> _asMapList(Object? raw) {
+    if (raw == null) return const [];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<dynamic, dynamic>.from(e))
+          .toList();
+    }
+    if (raw is Map) {
+      return raw.values
+          .whereType<Map>()
+          .map((e) => Map<dynamic, dynamic>.from(e))
+          .toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        return _asMapList(decoded);
+      } catch (_) {}
+    }
+    return const [];
+  }
+
+  static String _normalizeStatus(Object? raw) {
+    final s = raw?.toString().trim().toUpperCase() ?? '';
+    if (s.isEmpty || s == 'PENDING') return 'OPEN';
+    if (s == 'COMPLETED' || s == 'CLOSED' || s == 'SUCCESS') return 'PAID';
+    if (s == 'CANCELED') return 'CANCELLED';
+    return s;
+  }
+
   factory BillModel.fromMap(Map<dynamic, dynamic> map, String id) {
-    List<OrderItemModel> items = [];
-    if (map['items'] != null) {
-      if (map['items'] is List) {
-        items = (map['items'] as List).map((e) => OrderItemModel.fromMap(e)).toList();
-      } else if (map['items'] is String) {
-        try {
-          final List list = jsonDecode(map['items']);
-          items = list.map((e) => OrderItemModel.fromMap(e)).toList();
-        } catch (_) {}
-      }
+    final List<OrderItemModel> items = [];
+    final rawItems = map['items'] ?? map['itemsJson'] ?? map['currentOrderJson'];
+    for (final itemMap in _asMapList(rawItems)) {
+      try {
+        items.add(OrderItemModel.fromMap(itemMap));
+      } catch (_) {}
     }
 
-    List<BillDiscountModel> discounts = [];
-    if (map['discounts'] != null) {
-      if (map['discounts'] is List) {
-        discounts = (map['discounts'] as List).map((e) => BillDiscountModel.fromMap(e)).toList();
-      }
+    final List<BillDiscountModel> discounts = [];
+    final rawDiscounts = map['discounts'] ?? map['discountsJson'];
+    for (final discMap in _asMapList(rawDiscounts)) {
+      try {
+        discounts.add(BillDiscountModel.fromMap(discMap));
+      } catch (_) {}
     }
 
     List<String>? merged;
-    if (map['mergedTableNames'] != null && map['mergedTableNames'] is List) {
-      merged = List<String>.from(map['mergedTableNames']);
+    if (map['mergedTableNames'] is List) {
+      merged = (map['mergedTableNames'] as List)
+          .where((e) => e != null)
+          .map((e) => e.toString())
+          .toList();
+    } else if (map['mergedTableNames'] is Map) {
+      merged = (map['mergedTableNames'] as Map)
+          .values
+          .where((e) => e != null)
+          .map((e) => e.toString())
+          .toList();
     }
 
-    List<OrderActionLogModel> actionLogs = [];
-    if (map['actionLogs'] != null && map['actionLogs'] is List) {
-      actionLogs = (map['actionLogs'] as List).map((e) => OrderActionLogModel.fromMap(e)).toList();
-    } else if (map['actionLogsJson'] != null && map['actionLogsJson'] is String && (map['actionLogsJson'] as String).isNotEmpty) {
+    final List<OrderActionLogModel> actionLogs = [];
+    final rawActionLogs = map['actionLogs'] ?? map['actionLogsJson'];
+    for (final logMap in _asMapList(rawActionLogs)) {
       try {
-        final List list = jsonDecode(map['actionLogsJson']);
-        actionLogs = list.map((e) => OrderActionLogModel.fromMap(e)).toList();
+        actionLogs.add(OrderActionLogModel.fromMap(logMap));
       } catch (_) {}
     }
 
@@ -161,23 +227,56 @@ class BillModel {
     }
 
     List<PaymentSplitModel>? splits;
-    if (map['paymentSplits'] != null && map['paymentSplits'] is List) {
-      splits = (map['paymentSplits'] as List)
-          .map((e) => PaymentSplitModel.fromMap(Map<dynamic, dynamic>.from(e as Map)))
-          .toList();
+    final rawSplits = _asMapList(map['paymentSplits']);
+    if (rawSplits.isNotEmpty) {
+      splits = [];
+      for (final spMap in rawSplits) {
+        try {
+          splits.add(PaymentSplitModel.fromMap(spMap));
+        } catch (_) {}
+      }
+      if (splits.isEmpty) splits = null;
     }
 
     final tableName = map['tableName']?.toString() ?? '';
     final parentBillId = map['parentBillId']?.toString();
-    final createdAt = (map['createdAt'] as num?)?.toInt() ?? 0;
-    int? closedAt = (map['closedAt'] as num?)?.toInt();
-    String status = map['status']?.toString() ?? 'OPEN';
+    int? closedAt = _asEpochMs(map['closedAt']);
+    final cancelledAt = _asEpochMs(map['cancelledAt']);
+    final timestampFallback = _asEpochMs(map['timestamp']);
+    final createdAt = _asEpochMs(map['createdAt']) ??
+        timestampFallback ??
+        closedAt ??
+        cancelledAt ??
+        0;
+    String status = _normalizeStatus(map['status']);
+    if (status == 'PAID' && closedAt == null && timestampFallback != null && timestampFallback > 0) {
+      closedAt = timestampFallback;
+    }
     final isLegacySplitBill =
         tableName.contains('(Tách)') || (parentBillId != null && parentBillId.trim().isNotEmpty);
     if (status == 'OPEN' && isLegacySplitBill) {
       status = 'PAID';
       closedAt ??= createdAt > 0 ? createdAt : null;
     }
+
+    final itemsGross = items.fold<int>(0, (s, i) => s + (i.unitPrice * i.quantity));
+    final parsedSubTotal = _asInt(map['subTotal']) ?? _asInt(map['totalAmount']);
+    final subTotal = (parsedSubTotal != null && parsedSubTotal > 0)
+        ? parsedSubTotal
+        : (itemsGross > 0 ? itemsGross : (parsedSubTotal ?? 0));
+    final totalDiscount = _asInt(map['totalDiscount']) ?? _asInt(map['discountAmount']) ?? 0;
+    final vatRate = _asDouble(map['vatRate']) ?? 0.0;
+    final vatAmount = _asInt(map['vatAmount']) ?? 0;
+    final parsedFinalAmount = _asInt(map['finalAmount']) ?? _asInt(map['totalAmount']);
+    final finalAmount = parsedFinalAmount ??
+        ((subTotal - totalDiscount + vatAmount) < 0 ? 0 : (subTotal - totalDiscount + vatAmount));
+
+    final staffUsername = map['staffUsername']?.toString().trim().isNotEmpty == true
+        ? map['staffUsername']!.toString()
+        : (map['username']?.toString() ?? map['createdBy']?.toString() ?? '');
+    final staffFullName = map['staffFullName']?.toString().trim().isNotEmpty == true
+        ? map['staffFullName']!.toString()
+        : (map['cashierName']?.toString() ?? map['creatorName']?.toString() ?? '');
 
     return BillModel(
       id: id,
@@ -187,25 +286,25 @@ class BillModel {
       zone: map['zone']?.toString() ?? '',
       createdAt: createdAt,
       closedAt: closedAt,
-      cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
+      cancelledAt: cancelledAt,
       status: status,
       staffUid: map['staffUid']?.toString(),
-      staffUsername: map['staffUsername']?.toString() ?? '',
-      staffFullName: map['staffFullName']?.toString() ?? '',
+      staffUsername: staffUsername,
+      staffFullName: staffFullName,
       items: items,
-      subTotal: (map['subTotal'] as num?)?.toInt() ?? (map['totalAmount'] as num?)?.toInt() ?? 0,
+      subTotal: subTotal,
       discounts: discounts,
-      totalDiscount: (map['totalDiscount'] as num?)?.toInt() ?? (map['discountAmount'] as num?)?.toInt() ?? 0,
-      vatRate: (map['vatRate'] as num?)?.toDouble() ?? 0.0,
-      vatAmount: (map['vatAmount'] as num?)?.toInt() ?? 0,
-      finalAmount: (map['finalAmount'] as num?)?.toInt() ?? (map['totalAmount'] as num?)?.toInt() ?? 0,
+      totalDiscount: totalDiscount,
+      vatRate: vatRate,
+      vatAmount: vatAmount,
+      finalAmount: finalAmount,
       paymentMethod: map['paymentMethod']?.toString() ?? 'CASH',
       paymentSplits: splits,
       notes: map['notes']?.toString() ?? map['note']?.toString() ?? '',
       parentBillId: parentBillId,
       mergedTableNames: merged,
-      pointsUsed: (map['pointsUsed'] as num?)?.toInt() ?? 0,
-      pointsDiscount: (map['pointsDiscount'] as num?)?.toInt() ?? 0,
+      pointsUsed: _asInt(map['pointsUsed']) ?? 0,
+      pointsDiscount: _asInt(map['pointsDiscount']) ?? 0,
       customerId: map['customerId']?.toString(),
       customerName: map['customerName']?.toString(),
       customerPhone: map['customerPhone']?.toString(),

@@ -314,14 +314,32 @@ class ReportRepository {
 
   // ==================== AUDIT LOGS ====================
   Stream<List<AuditLogModel>> auditLogsStream() {
-    return auditLogsRef.limitToLast(150).onValue.map<List<AuditLogModel>>((event) {
-      if (!event.snapshot.exists || event.snapshot.value == null) return <AuditLogModel>[];
-      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
-      return map.entries
-          .map((e) => AuditLogModel.fromMap(Map<dynamic, dynamic>.from(e.value), logId: e.key.toString()))
-          .toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    }).handleError((_) => <AuditLogModel>[]);
+    return Stream<List<AuditLogModel>>.multi((controller) {
+      final sub = auditLogsRef.limitToLast(150).onValue.listen(
+        (event) {
+          if (controller.isClosed) return;
+          if (!event.snapshot.exists || event.snapshot.value == null || event.snapshot.value is! Map) {
+            controller.add(<AuditLogModel>[]);
+            return;
+          }
+          final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+          final list = <AuditLogModel>[];
+          map.forEach((k, v) {
+            if (v is Map) {
+              try {
+                list.add(AuditLogModel.fromMap(Map<dynamic, dynamic>.from(v), logId: k.toString()));
+              } catch (_) {}
+            }
+          });
+          list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          controller.add(list);
+        },
+        onError: (_) {
+          if (!controller.isClosed) controller.add(<AuditLogModel>[]);
+        },
+      );
+      controller.onCancel = () => sub.cancel();
+    }, isBroadcast: true);
   }
 
   Future<void> logAction(AuditLogModel log) async {
@@ -350,17 +368,11 @@ class ReportRepository {
         _cachedCashShiftsList = <CashShiftModel>[];
         return <CashShiftModel>[];
       }
-      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
-      final list = map.entries
-          .where((e) => e.value is Map)
-          .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-          .where((s) => s.openedAt > 0)
-          .toList()
-        ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+      final list = _parseShifts(event.snapshot.value);
       _cachedCashShiftsList = list;
       if (list.any((s) => s.id == _optimisticOpenShift?.id)) _optimisticOpenShift = null;
       return list;
-    }).handleError((_) => _cachedCashShiftsList ?? <CashShiftModel>[]);
+    });
 
     final broadcast = rawStream.asBroadcastStream();
     _underlyingCashShiftsSub = broadcast.listen((list) {
@@ -374,7 +386,7 @@ class ReportRepository {
       }
       final sub = broadcast.listen(
         (data) => controller.add(scopeVisibleShifts(data)),
-        onError: (err, st) => controller.addError(err, st),
+        onError: (_) => controller.add(scopeVisibleShifts(_cachedCashShiftsList ?? const <CashShiftModel>[])),
         onDone: () => controller.close(),
       );
       controller.onCancel = () {
@@ -386,13 +398,29 @@ class ReportRepository {
   }
 
   List<CashShiftModel> _parseShifts(Object? value) {
-    if (value is! Map) return <CashShiftModel>[];
-    return Map<dynamic, dynamic>.from(value).entries
-        .where((e) => e.value is Map)
-        .map((e) => CashShiftModel.fromMap(Map<dynamic, dynamic>.from(e.value as Map), e.key.toString()))
-        .where((s) => s.openedAt > 0)
-        .toList()
-      ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+    final list = <CashShiftModel>[];
+    if (value is Map) {
+      Map<dynamic, dynamic>.from(value).forEach((k, v) {
+        if (v is Map) {
+          try {
+            final s = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(v), k.toString());
+            if (s.openedAt > 0) list.add(s);
+          } catch (_) {}
+        }
+      });
+    } else if (value is List) {
+      for (int i = 0; i < value.length; i++) {
+        final v = value[i];
+        if (v is Map) {
+          try {
+            final s = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(v), (v['id'] ?? i).toString());
+            if (s.openedAt > 0) list.add(s);
+          } catch (_) {}
+        }
+      }
+    }
+    list.sort((a, b) => b.openedAt.compareTo(a.openedAt));
+    return list;
   }
 
   Future<List<CashShiftModel>> getRecentCashShifts({int limit = 50, bool forceRefresh = false}) async {
@@ -902,36 +930,114 @@ class ReportRepository {
   }
 
   // ==================== REPORT DATA QUERIES ====================
+  final Map<String, List<BillModel>> _cachedStoreBills = {};
+
+  String _resolveStoreCode(String? storeCode) {
+    return (storeCode != null && storeCode.trim().isNotEmpty)
+        ? storeCode.trim().toUpperCase()
+        : _currentStoreCode;
+  }
+
   DatabaseReference _getStoreBillsRef(String? storeCode) {
-    final code = (storeCode != null && storeCode.isNotEmpty) ? storeCode : _currentStoreCode;
+    final code = _resolveStoreCode(storeCode);
     return _root.child('stores').child(code).child('bills');
   }
 
+  DatabaseReference _getStoreHistoryRef(String? storeCode) {
+    final code = _resolveStoreCode(storeCode);
+    return _root.child('stores').child(code).child('history');
+  }
+
   DatabaseReference _getStoreProductsRef(String? storeCode) {
-    final code = (storeCode != null && storeCode.isNotEmpty) ? storeCode : _currentStoreCode;
+    final code = _resolveStoreCode(storeCode);
     return _root.child('stores').child(code).child('products');
   }
 
   Stream<List<BillModel>> storeBillsStream({String? storeCode}) {
-    return _getStoreBillsRef(storeCode).onValue.map<List<BillModel>>((event) {
-      if (!event.snapshot.exists || event.snapshot.value == null) return <BillModel>[];
-      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
-      final list = map.entries
-          .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-          .toList();
-      return ReportCalculator.deduplicateBills(list);
-    }).handleError((_) => <BillModel>[]);
+    final code = _resolveStoreCode(storeCode);
+    final bRef = _getStoreBillsRef(code);
+    final hRef = _getStoreHistoryRef(code);
+
+    return Stream<List<BillModel>>.multi((controller) {
+      final cached = _cachedStoreBills[code];
+      if (cached != null) {
+        controller.add(cached);
+      }
+
+      Object? latestRawBills;
+      Object? latestRawHistory;
+      bool hasBillsSnapshot = false;
+
+      void emitMerged() {
+        if (controller.isClosed) return;
+        try {
+          final merged = ReportCalculator.mergeAndParseBills(latestRawBills, latestRawHistory);
+          if (code.isNotEmpty) {
+            _cachedStoreBills[code] = merged;
+          }
+          controller.add(merged);
+        } catch (_) {
+          controller.add(_cachedStoreBills[code] ?? const <BillModel>[]);
+        }
+      }
+
+      final billsSub = bRef.onValue.listen(
+        (event) {
+          hasBillsSnapshot = true;
+          latestRawBills = event.snapshot.value;
+          emitMerged();
+        },
+        onError: (_) {
+          if (!controller.isClosed) {
+            controller.add(_cachedStoreBills[code] ?? const <BillModel>[]);
+          }
+        },
+      );
+
+      final historySub = hRef.onValue.listen(
+        (event) {
+          latestRawHistory = event.snapshot.value;
+          if (hasBillsSnapshot || latestRawHistory != null) {
+            emitMerged();
+          }
+        },
+        onError: (_) {},
+      );
+
+      controller.onCancel = () {
+        billsSub.cancel();
+        historySub.cancel();
+      };
+    }, isBroadcast: true);
   }
 
   Future<List<BillModel>> getStoreBills({String? storeCode, DateTime? startDate, DateTime? endDate}) async {
+    final code = _resolveStoreCode(storeCode);
     try {
-      final snap = await _getStoreBillsRef(storeCode).get().timeout(const Duration(seconds: 4));
-      if (!snap.exists || snap.value == null) return <BillModel>[];
-      final map = Map<dynamic, dynamic>.from(snap.value as Map);
-      final list = map.entries
-          .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-          .toList();
-      final deduped = ReportCalculator.deduplicateBills(list);
+      Future<Object?> safeGet(DatabaseReference ref) async {
+        try {
+          final snap = await ref.get().timeout(const Duration(seconds: 5));
+          return snap.exists ? snap.value : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final results = await Future.wait<Object?>([
+        safeGet(_getStoreBillsRef(code)),
+        safeGet(_getStoreHistoryRef(code)),
+      ]);
+      final rawBills = results[0];
+      final rawHistory = results[1];
+      List<BillModel> deduped;
+      if (rawBills == null && rawHistory == null && _cachedStoreBills.containsKey(code)) {
+        deduped = _cachedStoreBills[code]!;
+      } else {
+        deduped = ReportCalculator.mergeAndParseBills(rawBills, rawHistory);
+        if (code.isNotEmpty && deduped.isNotEmpty) {
+          _cachedStoreBills[code] = deduped;
+        }
+      }
       if (startDate != null && endDate != null) {
         return deduped.where((b) {
           final dt = ReportDateUtils.billDateTime(b);
@@ -940,7 +1046,14 @@ class ReportRepository {
       }
       return deduped;
     } catch (_) {
-      return <BillModel>[];
+      final fallback = _cachedStoreBills[code] ?? <BillModel>[];
+      if (startDate != null && endDate != null) {
+        return fallback.where((b) {
+          final dt = ReportDateUtils.billDateTime(b);
+          return ReportDateUtils.isInRange(dt, startDate, endDate);
+        }).toList();
+      }
+      return fallback;
     }
   }
 
@@ -952,41 +1065,55 @@ class ReportRepository {
       try {
         final snap = await billsRef.orderByChild('createdAt').startAt(start).endAt(end).get().timeout(const Duration(seconds: 4));
         if (snap.exists && snap.value != null) {
-          final map = Map<dynamic, dynamic>.from(snap.value as Map);
-          final list = map.entries
-              .map((e) => ReportBillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-              .toList();
-          final deduped = ReportCalculator.deduplicateBills(list);
-          return deduped.where((b) => billBelongsToShift(b, shift)).toList();
+          final deduped = ReportCalculator.mergeAndParseBills(snap.value);
+          final matched = deduped.where((b) => billBelongsToShift(b, shift)).toList();
+          if (matched.isNotEmpty) return matched;
         }
-      } catch (_) {
-        final startDt = DateTime.fromMillisecondsSinceEpoch(shift.openedAt);
-        final endDt = DateTime.fromMillisecondsSinceEpoch(shift.closedAt ?? DateTime.now().millisecondsSinceEpoch);
-        final all = await getStoreBills(
-          storeCode: storeCode,
-          startDate: startDt.subtract(const Duration(hours: 1)),
-          endDate: endDt.add(const Duration(hours: 1)),
-        );
-        return all.where((b) => billBelongsToShift(b, shift)).toList();
-      }
+      } catch (_) {}
+      final startDt = DateTime.fromMillisecondsSinceEpoch(shift.openedAt);
+      final endDt = DateTime.fromMillisecondsSinceEpoch(shift.closedAt ?? DateTime.now().millisecondsSinceEpoch);
+      final all = await getStoreBills(
+        storeCode: storeCode,
+        startDate: startDt.subtract(const Duration(hours: 2)),
+        endDate: endDt.add(const Duration(hours: 2)),
+      );
+      return all.where((b) => billBelongsToShift(b, shift)).toList();
     } catch (_) {
       return <BillModel>[];
     }
-    return <BillModel>[];
   }
 
   Future<Map<int, ProductModel>> getProductsMap({String? storeCode}) async {
     try {
-      final snap = await _getStoreProductsRef(storeCode).get().timeout(const Duration(seconds: 3));
+      final snap = await _getStoreProductsRef(storeCode).get().timeout(const Duration(seconds: 4));
       if (!snap.exists || snap.value == null) return <int, ProductModel>{};
-      final map = Map<dynamic, dynamic>.from(snap.value as Map);
       final result = <int, ProductModel>{};
-      map.forEach((k, v) {
-        if (v is Map) {
-          final p = ProductModel.fromMap(v, k.toString());
-          if (p.id > 0) result[p.id] = p;
+      if (snap.value is Map) {
+        final map = Map<dynamic, dynamic>.from(snap.value as Map);
+        map.forEach((k, v) {
+          if (v is Map) {
+            try {
+              final p = ProductModel.fromMap(v, k.toString());
+              final effId = p.effectiveId;
+              if (effId > 0) result[effId] = p;
+              if (p.id > 0) result[p.id] = p;
+            } catch (_) {}
+          }
+        });
+      } else if (snap.value is List) {
+        final list = snap.value as List;
+        for (int i = 0; i < list.length; i++) {
+          final v = list[i];
+          if (v is Map) {
+            try {
+              final p = ProductModel.fromMap(v, i.toString());
+              final effId = p.effectiveId;
+              if (effId > 0) result[effId] = p;
+              if (p.id > 0) result[p.id] = p;
+            } catch (_) {}
+          }
         }
-      });
+      }
       return result;
     } catch (_) {
       return <int, ProductModel>{};

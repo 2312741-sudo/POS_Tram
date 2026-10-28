@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/permissions/app_permissions.dart';
 import 'package:tram_flutter/core/printer/receipt_printer.dart';
+import 'package:tram_flutter/core/reports/report_calculator.dart';
 import 'package:tram_flutter/core/utils/format_utils.dart';
 import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/services/firebase_service.dart';
@@ -716,6 +717,88 @@ void main() {
       int smallSales = 20000;
       smallSales = (smallSales - 50000).clamp(0, 999999999);
       expect(smallSales, equals(0));
+    });
+
+    test('Web Admin & RTDB cross-platform bill/item/product parsing does not throw TypeError', () {
+      // 1. OrderItemModel with string productId (Firebase push key) and string numbers
+      final webItem = OrderItemModel.fromMap({
+        'productId': '-O9xPushKey123',
+        'name': 'Trà Olong Chanh tươi',
+        'price': '20000',
+        'quantity': '2',
+        'sizeExtraPrice': '5000',
+        'toppingPrice': '5000',
+        'selectedToppings': {
+          '0': {'name': 'Thạch dừa', 'price': 5000},
+        },
+        'orderedAt': '1761650000000',
+      });
+      expect(webItem.productId, greaterThan(0));
+      expect(webItem.price, equals(20000));
+      expect(webItem.quantity, equals(2));
+      expect(webItem.unitPrice, equals(30000));
+      expect(webItem.selectedToppings, equals(['Thạch dừa']));
+
+      // 2. Web-closed bill where createdAt was omitted (NaN) and only timestamp + itemsJson exist
+      final rawBills = {
+        'BILL_WEB_1': {
+          'billCode': 'HD-261028-0001',
+          'tableName': 'Bàn 01',
+          'zone': 'Tầng 1',
+          'status': 'completed',
+          'timestamp': 1761650050000,
+          'totalAmount': '60000',
+          'cashierName': 'Quản trị viên Web',
+          'itemsJson': jsonEncode([
+            {
+              'productId': '-O9xPushKey123',
+              'name': 'Trà Olong Chanh tươi',
+              'price': 20000,
+              'quantity': 2,
+              'toppingPrice': 10000,
+            }
+          ]),
+        },
+      };
+      final rawHistory = {
+        'BILL_WEB_2': {
+          'billCode': 'HD-261028-0002',
+          'tableName': 'Bàn 02',
+          'zone': 'Tầng 1',
+          'status': 'PAID',
+          'timestamp': '1761650090000',
+          'finalAmount': 45000,
+          'subTotal': 45000,
+          'items': {
+            '0': {
+              'productId': 'DR20250002',
+              'name': 'Cà phê muối',
+              'price': 45000,
+              'quantity': 1,
+            }
+          },
+        },
+      };
+
+      final merged = ReportCalculator.mergeAndParseBills(rawBills, rawHistory);
+      expect(merged.length, equals(2));
+      final b1 = merged.firstWhere((b) => b.id == 'BILL_WEB_1');
+      expect(b1.status, equals('PAID'));
+      expect(b1.createdAt, equals(1761650050000));
+      expect(b1.closedAt, equals(1761650050000));
+      expect(b1.finalAmount, equals(60000));
+      expect(b1.items.length, equals(1));
+
+      // 3. Product report with Web-created products (missing integer id) does not collapse rows
+      final p1 = ProductModel.fromMap({'name': 'Trà Olong Chanh tươi', 'price': 20000, 'category': 'Trà'}, '-O9xPushKey123');
+      final p2 = ProductModel.fromMap({'name': 'Cà phê muối', 'price': 45000, 'category': 'CAFE'}, 'DR20250002');
+      final productsMap = <int, ProductModel>{
+        p1.effectiveId: p1,
+        p2.effectiveId: p2,
+      };
+      final prodReport = ReportCalculator.calculateProductReport(merged, productsMap: productsMap);
+      expect(prodReport.length, equals(2));
+      expect(prodReport.fold<int>(0, (s, r) => s + r.grossRevenue), equals(105000));
     });
   });
 }

@@ -29,6 +29,8 @@ class _BillsTabState extends State<BillsTab> {
   List<TableModel> _tables = [];
   bool _loading = true;
   Timer? _safetyTimer;
+  StreamSubscription<List<BillModel>>? _billsSub;
+  StreamSubscription<List<TableModel>>? _tablesSub;
 
   String _search = '';
   String _dateFilter = 'TODAY'; // 'TODAY', 'YESTERDAY', 'WEEK', 'ALL', 'CUSTOM'
@@ -47,16 +49,31 @@ class _BillsTabState extends State<BillsTab> {
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
     super.dispose();
   }
 
   void _loadData() {
     _safetyTimer?.cancel();
-    _safetyTimer = Timer(const Duration(seconds: 3), () {
+    _billsSub?.cancel();
+    _tablesSub?.cancel();
+    _safetyTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      if (_allBills.isEmpty) {
+        final fallback = await _fb.getStoreBills();
+        if (mounted && _allBills.isEmpty && fallback.isNotEmpty) {
+          setState(() {
+            _allBills = _fb.scopeVisibleBills(fallback);
+            _loading = false;
+          });
+          return;
+        }
+      }
       if (mounted && _loading) setState(() => _loading = false);
     });
 
-    _fb.myBillsStream().listen((b) {
+    _billsSub = _fb.myBillsStream().listen((b) {
       _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
@@ -68,7 +85,7 @@ class _BillsTabState extends State<BillsTab> {
       if (mounted) setState(() => _loading = false);
     });
 
-    _fb.tablesStream().listen((t) {
+    _tablesSub = _fb.tablesStream().listen((t) {
       if (mounted) {
         setState(() {
           _tables = t;

@@ -47,9 +47,19 @@ class AuditLogModel {
       after = Map<String, dynamic>.from(map['afterState']);
     }
 
+    int parseTs(Object? v) {
+      if (v == null) return 0;
+      if (v is num) return v.isNaN || v.isInfinite ? 0 : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return 0;
+      final n = int.tryParse(s) ?? num.tryParse(s)?.toInt();
+      if (n != null) return n;
+      return DateTime.tryParse(s)?.millisecondsSinceEpoch ?? 0;
+    }
+
     return AuditLogModel(
       logId: logId ?? map['logId']?.toString(),
-      timestamp: (map['timestamp'] as num?)?.toInt() ?? 0,
+      timestamp: parseTs(map['timestamp']),
       username: map['username']?.toString() ?? '',
       userFullName: map['userFullName']?.toString() ?? '',
       userRole: map['userRole']?.toString() ?? '',

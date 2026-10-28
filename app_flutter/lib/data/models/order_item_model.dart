@@ -90,14 +90,74 @@ class OrderItemModel {
                 ((discountAmount > 0 || discountPercent > 0 || discountUnitAmount > 0) ? quantity : 0))
             .clamp(0, quantity < 0 ? 0 : quantity);
 
+  static int _stablePositiveHash(String s) {
+    final trimmed = s.trim();
+    if (trimmed.isEmpty) return 0;
+    int h = 0;
+    for (int i = 0; i < trimmed.length; i++) {
+      h = ((h * 31) + trimmed.codeUnitAt(i)) & 0x3fffffff;
+    }
+    return h == 0 ? 1 : h;
+  }
+
   factory OrderItemModel.fromMap(Map<dynamic, dynamic> map) {
     List<String> toppings = [];
-    if (map['selectedToppings'] is List) {
-      toppings = List<String>.from(map['selectedToppings']);
+    final rawToppings = map['selectedToppings'] ?? map['toppings'];
+    if (rawToppings is List) {
+      for (final e in rawToppings) {
+        if (e == null) continue;
+        if (e is Map) {
+          final name = e['name']?.toString().trim() ?? '';
+          if (name.isNotEmpty) toppings.add(name);
+        } else {
+          final s = e.toString().trim();
+          if (s.isNotEmpty) toppings.add(s);
+        }
+      }
+    } else if (rawToppings is Map) {
+      for (final e in rawToppings.values) {
+        if (e == null) continue;
+        if (e is Map) {
+          final name = e['name']?.toString().trim() ?? '';
+          if (name.isNotEmpty) toppings.add(name);
+        } else {
+          final s = e.toString().trim();
+          if (s.isNotEmpty) toppings.add(s);
+        }
+      }
     }
 
-    int? asInt(Object? v) => v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
-    final quantity = asInt(map['quantity']) ?? 1;
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+    }
+
+    int? asEpochMs(Object? v) {
+      final n = asInt(v);
+      if (n != null) return n;
+      if (v is String && v.trim().isNotEmpty) {
+        final dt = DateTime.tryParse(v.trim());
+        if (dt != null) return dt.millisecondsSinceEpoch;
+      }
+      return null;
+    }
+
+    int resolveProductId(Object? rawPid, Object? rawId) {
+      final parsedPid = asInt(rawPid);
+      if (parsedPid != null && parsedPid > 0) return parsedPid;
+      final parsedId = asInt(rawId);
+      if (parsedId != null && parsedId > 0) return parsedId;
+      final strPid = rawPid?.toString().trim() ?? '';
+      if (strPid.isNotEmpty && strPid != '0') return _stablePositiveHash(strPid);
+      final strId = rawId?.toString().trim() ?? '';
+      if (strId.isNotEmpty && strId != '0') return _stablePositiveHash(strId);
+      return parsedPid ?? parsedId ?? 0;
+    }
+
+    final quantity = asInt(map['quantity']) ?? asInt(map['count']) ?? 1;
     // Ưu tiên tổng giảm đã lưu tường minh; dữ liệu cũ: discountAmount = giảm CẢ DÒNG.
     final storedLineDiscount = asInt(map['lineDiscountTotal']) ?? asInt(map['discountAmount']) ?? 0;
     final percent = asInt(map['discountPercent']) ?? 0;
@@ -107,9 +167,9 @@ class OrderItemModel {
         ((storedLineDiscount > 0 || percent > 0 || unitAmount > 0) ? quantity : 0);
 
     return OrderItemModel(
-      productId: (map['productId'] as num?)?.toInt() ?? (map['id'] as num?)?.toInt() ?? 0,
-      name: map['name']?.toString() ?? '',
-      price: (map['price'] as num?)?.toInt() ?? 0,
+      productId: resolveProductId(map['productId'], map['id']),
+      name: map['name']?.toString() ?? map['productName']?.toString() ?? '',
+      price: asInt(map['price']) ?? asInt(map['unitPrice']) ?? 0,
       quantity: quantity,
       note: map['note']?.toString() ?? '',
       isSentKitchen: map['isSentKitchen'] == true,
@@ -121,16 +181,16 @@ class OrderItemModel {
       discountApprovedBy: map['discountApprovedBy']?.toString() ?? '',
       discountApprovedByName: map['discountApprovedByName']?.toString() ?? '',
       discountApprovalId: map['discountApprovalId']?.toString() ?? '',
-      discountApprovedAt: asInt(map['discountApprovedAt']),
+      discountApprovedAt: asEpochMs(map['discountApprovedAt']),
       selectedSize: map['selectedSize']?.toString() ?? '',
-      sizeExtraPrice: (map['sizeExtraPrice'] as num?)?.toInt() ?? 0,
+      sizeExtraPrice: asInt(map['sizeExtraPrice']) ?? 0,
       selectedSugar: map['selectedSugar']?.toString() ?? '',
       selectedIce: map['selectedIce']?.toString() ?? '',
       selectedToppings: toppings,
-      toppingPrice: (map['toppingPrice'] as num?)?.toInt() ?? 0,
+      toppingPrice: asInt(map['toppingPrice']) ?? 0,
       orderedBy: map['orderedBy']?.toString() ?? '',
       orderedByName: map['orderedByName']?.toString() ?? '',
-      orderedAt: (map['orderedAt'] as num?)?.toInt(),
+      orderedAt: asEpochMs(map['orderedAt']),
     );
   }
 

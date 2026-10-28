@@ -51,25 +51,39 @@ class PromotionModel {
   });
 
   factory PromotionModel.fromMap(Map<dynamic, dynamic> map, String id) {
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+    }
+
+    List<String> asStringList(Object? v) {
+      if (v is List) return v.where((e) => e != null).map((e) => e.toString()).toList();
+      if (v is Map) return v.values.where((e) => e != null).map((e) => e.toString()).toList();
+      return const [];
+    }
+
     return PromotionModel(
       id: id,
       code: map['code']?.toString() ?? '',
       name: map['name']?.toString() ?? '',
       description: map['description']?.toString() ?? '',
       type: map['type']?.toString() ?? 'PERCENT_BILL',
-      value: (map['value'] as num?)?.toInt() ?? 0,
-      maxDiscountAmount: (map['maxDiscountAmount'] as num?)?.toInt() ?? 0,
-      minBillAmount: (map['minBillAmount'] as num?)?.toInt() ?? 0,
+      value: asInt(map['value']) ?? 0,
+      maxDiscountAmount: asInt(map['maxDiscountAmount']) ?? 0,
+      minBillAmount: asInt(map['minBillAmount']) ?? 0,
       targetCategory: map['targetCategory']?.toString(),
-      targetProductId: (map['targetProductId'] as num?)?.toInt(),
-      includedItemIds: List<String>.from(map['includedItemIds'] ?? []),
-      includedGroupIds: List<String>.from(map['includedGroupIds'] ?? []),
-      startDate: (map['startDate'] as num?)?.toInt() ?? 0,
-      endDate: (map['endDate'] as num?)?.toInt() ?? 0,
-      isActive: map['isActive'] ?? true,
-      usageCount: (map['usageCount'] as num?)?.toInt() ?? 0,
-      maxUsage: (map['maxUsage'] as num?)?.toInt() ?? 0,
-      requireStaffNote: map['requireStaffNote'] ?? false,
+      targetProductId: asInt(map['targetProductId']),
+      includedItemIds: asStringList(map['includedItemIds']),
+      includedGroupIds: asStringList(map['includedGroupIds']),
+      startDate: asInt(map['startDate']) ?? 0,
+      endDate: asInt(map['endDate']) ?? 0,
+      isActive: map['isActive'] != false,
+      usageCount: asInt(map['usageCount']) ?? 0,
+      maxUsage: asInt(map['maxUsage']) ?? 0,
+      requireStaffNote: map['requireStaffNote'] == true,
     );
   }
 
@@ -245,18 +259,26 @@ class BillDiscountModel {
       return (v == null || v.isEmpty) ? null : v;
     }
 
+    int? asInt(Object? v) {
+      if (v == null) return null;
+      if (v is num) return v.isNaN || v.isInfinite ? null : v.toInt();
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s) ?? num.tryParse(s)?.toInt();
+    }
+
     return BillDiscountModel(
       promoId: map['promoId']?.toString(),
       promoCode: map['promoCode']?.toString(),
       description: map['description']?.toString() ?? '',
-      amount: (map['amount'] as num?)?.toInt() ?? 0,
+      amount: asInt(map['amount']) ?? 0,
       staffNote: map['staffNote']?.toString(),
       campaignId: str('campaignId'),
       campaignName: str('campaignName'),
       programCode: str('programCode'),
       campaignType: str('campaignType'),
       voucherCode: str('voucherCode'),
-      comboCount: (map['comboCount'] as num?)?.toInt(),
+      comboCount: asInt(map['comboCount']),
     );
   }
 

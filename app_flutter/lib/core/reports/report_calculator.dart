@@ -36,17 +36,148 @@ class ReportCalculator {
     return map.values.toList();
   }
 
+  static Map<String, Map<dynamic, dynamic>> _extractRawBillMap(Object? raw) {
+    final result = <String, Map<dynamic, dynamic>>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (v is Map) {
+          final m = Map<dynamic, dynamic>.from(v);
+          final id = (m['id']?.toString().trim().isNotEmpty == true)
+              ? m['id'].toString().trim()
+              : k.toString().trim();
+          if (id.isNotEmpty) {
+            result[id] = m;
+          }
+        }
+      });
+    } else if (raw is List) {
+      for (int i = 0; i < raw.length; i++) {
+        final v = raw[i];
+        if (v is Map) {
+          final m = Map<dynamic, dynamic>.from(v);
+          final id = (m['id']?.toString().trim().isNotEmpty == true)
+              ? m['id'].toString().trim()
+              : i.toString();
+          if (id.isNotEmpty) {
+            result[id] = m;
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Hợp nhất dữ liệu từ nhánh `bills` và `history` (tương thích Web Admin & Mobile POS),
+  /// đồng thời bọc try/catch từng bản ghi để 1 hóa đơn lỗi dữ liệu không làm sập toàn bộ danh sách.
+  static List<BillModel> mergeAndParseBills(Object? rawBills, [Object? rawHistory]) {
+    final billsMap = _extractRawBillMap(rawBills);
+    final historyMap = _extractRawBillMap(rawHistory);
+    final mergedRaw = <String, Map<dynamic, dynamic>>{...billsMap};
+
+    const preserveIfMissingKeys = [
+      'items',
+      'itemsJson',
+      'currentOrderJson',
+      'discounts',
+      'discountsJson',
+      'actionLogs',
+      'actionLogsJson',
+      'deletedItems',
+      'deletedItemsJson',
+      'paymentSplits',
+      'createdAt',
+      'closedAt',
+      'cancelledAt',
+      'staffUid',
+      'staffUsername',
+      'staffFullName',
+      'shiftId',
+      'guestCount',
+      'subTotal',
+      'totalDiscount',
+      'vatRate',
+      'vatAmount',
+      'finalAmount',
+      'pointsUsed',
+      'pointsDiscount',
+      'parentBillId',
+      'mergedTableNames',
+      'billCode',
+      'orderCode',
+    ];
+
+    historyMap.forEach((id, hMap) {
+      if (!mergedRaw.containsKey(id)) {
+        mergedRaw[id] = hMap;
+      } else {
+        final bMap = mergedRaw[id]!;
+        final combined = <dynamic, dynamic>{...bMap, ...hMap};
+        for (final key in preserveIfMissingKeys) {
+          final hVal = hMap[key];
+          final isMissingInHistory = hVal == null ||
+              (hVal is String && hVal.trim().isEmpty) ||
+              (hVal is List && hVal.isEmpty) ||
+              (hVal is Map && hVal.isEmpty) ||
+              (key == 'createdAt' && hVal == 0);
+          if (isMissingInHistory && bMap[key] != null) {
+            combined[key] = bMap[key];
+          }
+        }
+        final bStatus = bMap['status']?.toString().trim().toUpperCase() ?? '';
+        final hStatus = hMap['status']?.toString().trim().toUpperCase() ?? '';
+        final bIsFinal = bStatus == 'PAID' ||
+            bStatus == 'COMPLETED' ||
+            bStatus == 'CANCELLED' ||
+            bStatus == 'CANCELED' ||
+            bStatus == 'REFUNDED';
+        final hIsFinal = hStatus == 'PAID' ||
+            hStatus == 'COMPLETED' ||
+            hStatus == 'CANCELLED' ||
+            hStatus == 'CANCELED' ||
+            hStatus == 'REFUNDED';
+        if (bIsFinal && !hIsFinal) {
+          combined['status'] = bMap['status'];
+        }
+        mergedRaw[id] = combined;
+      }
+    });
+
+    final parsed = <BillModel>[];
+    mergedRaw.forEach((id, map) {
+      try {
+        parsed.add(ReportBillModel.fromMap(map, id));
+      } catch (_) {}
+    });
+
+    final deduped = deduplicateBills(parsed);
+    deduped.sort((a, b) {
+      final cmp = b.reportTimeMs.compareTo(a.reportTimeMs);
+      if (cmp != 0) return cmp;
+      return b.createdAt.compareTo(a.createdAt);
+    });
+    return deduped;
+  }
+
   /// Tìm ProductModel theo productId hoặc tên món
   static ProductModel? findProduct(
     OrderItemModel item,
     Map<int, ProductModel>? productsMap,
   ) {
-    if (productsMap == null) return null;
-    if (productsMap.containsKey(item.productId)) {
+    if (productsMap == null || productsMap.isEmpty) return null;
+    if (item.productId > 0 && productsMap.containsKey(item.productId)) {
       return productsMap[item.productId];
     }
+    final targetName = item.name.trim().toLowerCase();
     for (final p in productsMap.values) {
+      if (item.productId > 0 && (p.id == item.productId || p.effectiveId == item.productId)) {
+        return p;
+      }
       if (p.name == item.name || (p.code.isNotEmpty && p.code == item.name)) {
+        return p;
+      }
+      if (targetName.isNotEmpty &&
+          (p.name.trim().toLowerCase() == targetName ||
+              (p.code.isNotEmpty && p.code.trim().toLowerCase() == targetName))) {
         return p;
       }
     }
@@ -56,11 +187,20 @@ class ReportCalculator {
   /// Mã món (SKU) hiện tại trong danh mục: tra theo id rồi theo tên (danh mục nạp lại có thể đổi id).
   /// Không có thì trả rỗng (không lấy tên món làm mã).
   static String resolveProductCode(int productId, String name, Map<int, ProductModel>? productsMap) {
-    if (productsMap == null) return '';
-    final byId = productsMap[productId];
-    if (byId != null && byId.code.trim().isNotEmpty) return byId.code.trim();
+    if (productsMap == null || productsMap.isEmpty) return '';
+    if (productId > 0) {
+      final byId = productsMap[productId];
+      if (byId != null && byId.code.trim().isNotEmpty) return byId.code.trim();
+    }
+    final targetName = name.trim().toLowerCase();
     for (final p in productsMap.values) {
-      if (p.name == name && p.code.trim().isNotEmpty) return p.code.trim();
+      if (productId > 0 && (p.id == productId || p.effectiveId == productId) && p.code.trim().isNotEmpty) {
+        return p.code.trim();
+      }
+      if ((p.name == name || (targetName.isNotEmpty && p.name.trim().toLowerCase() == targetName)) &&
+          p.code.trim().isNotEmpty) {
+        return p.code.trim();
+      }
     }
     return '';
   }
@@ -399,19 +539,24 @@ class ReportCalculator {
     Map<String, int>? toppingCosts,
   }) {
     final paidBills = deduplicateBills(rawBills).where((b) => b.status == 'PAID');
-    final Map<int, _ProdAccumulator> accMap = {};
+    final Map<String, _ProdAccumulator> accMap = {};
 
     for (final b in paidBills) {
       for (final it in b.items) {
         final p = findProduct(it, productsMap);
-        final prodId = (p != null && p.id > 0) ? p.id : it.productId;
-        final prodCode = resolveProductCode(it.productId, it.name, productsMap);
+        final prodId = (p != null && p.id > 0)
+            ? p.id
+            : (it.productId > 0 ? it.productId : (p != null ? p.effectiveId : 0));
+        final prodCode = resolveProductCode(prodId, it.name, productsMap);
         final prodName = (p != null && p.name.isNotEmpty) ? p.name : it.name;
         final category = (p != null && p.category.isNotEmpty) ? p.category : 'Khác';
         final unit = (p != null && p.unit.isNotEmpty) ? p.unit : 'Ly';
         final basePrice = (p != null && p.price > 0) ? p.price : it.price;
+        final accKey = prodId > 0
+            ? 'id:$prodId'
+            : 'name:${prodName.trim().toLowerCase()}';
 
-        accMap.putIfAbsent(prodId, () => _ProdAccumulator(
+        accMap.putIfAbsent(accKey, () => _ProdAccumulator(
           productId: prodId,
           productCode: prodCode,
           productName: prodName,
@@ -420,7 +565,7 @@ class ReportCalculator {
           basePrice: basePrice,
         ));
 
-        final acc = accMap[prodId]!;
+        final acc = accMap[accKey]!;
         final lineCost = getLineCostPrice(it, productsMap: productsMap, toppingCosts: toppingCosts);
         final lineGross = it.unitPrice * it.quantity;
 
@@ -453,7 +598,11 @@ class ReportCalculator {
     }).toList();
 
     // Sắp xếp theo productId tăng dần mặc định
-    list.sort((a, b) => a.productId.compareTo(b.productId));
+    list.sort((a, b) {
+      final cmp = a.productId.compareTo(b.productId);
+      if (cmp != 0) return cmp;
+      return a.productName.compareTo(b.productName);
+    });
     return list;
   }
 

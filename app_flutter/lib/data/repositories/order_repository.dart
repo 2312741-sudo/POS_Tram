@@ -7,6 +7,8 @@ import '../../core/domain/deleted_items.dart';
 import '../../core/domain/item_options.dart';
 import '../../core/domain/menu_copy.dart';
 import '../../core/domain/zone_plan.dart';
+import '../../core/reports/report_calculator.dart';
+import '../../core/reports/report_models.dart';
 import '../../core/utils/format_utils.dart';
 import '../models/app_models.dart';
 import '../services/inventory_service.dart';
@@ -962,22 +964,87 @@ class OrderRepository {
   }
 
   // ==================== BILLS ====================
+  final Map<String, List<BillModel>> _cachedBillsByStore = {};
+
   Stream<List<BillModel>> billsStream() {
-    return billsRef.onValue.map<List<BillModel>>((event) {
-      if (!event.snapshot.exists || event.snapshot.value == null) return <BillModel>[];
-      final map = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
-      return map.entries
-          .map((e) => BillModel.fromMap(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    }).handleError((_) => <BillModel>[]);
+    final storeCode = _currentStoreCode;
+    final bRef = billsRef;
+    final hRef = storeCode.isNotEmpty
+        ? _root.child('stores').child(storeCode).child('history')
+        : null;
+
+    return Stream<List<BillModel>>.multi((controller) {
+      final cached = _cachedBillsByStore[storeCode];
+      if (cached != null) {
+        controller.add(cached);
+      }
+
+      Object? latestRawBills;
+      Object? latestRawHistory;
+      bool hasBillsSnapshot = false;
+
+      void emitMerged() {
+        if (controller.isClosed) return;
+        try {
+          final merged = ReportCalculator.mergeAndParseBills(latestRawBills, latestRawHistory);
+          if (storeCode.isNotEmpty) {
+            _cachedBillsByStore[storeCode] = merged;
+          }
+          controller.add(merged);
+        } catch (_) {
+          controller.add(_cachedBillsByStore[storeCode] ?? const <BillModel>[]);
+        }
+      }
+
+      final billsSub = bRef.onValue.listen(
+        (event) {
+          hasBillsSnapshot = true;
+          latestRawBills = event.snapshot.value;
+          emitMerged();
+        },
+        onError: (_) {
+          if (!controller.isClosed) {
+            controller.add(_cachedBillsByStore[storeCode] ?? const <BillModel>[]);
+          }
+        },
+      );
+
+      final historySub = hRef?.onValue.listen(
+        (event) {
+          latestRawHistory = event.snapshot.value;
+          if (hasBillsSnapshot || latestRawHistory != null) {
+            emitMerged();
+          }
+        },
+        onError: (_) {},
+      );
+
+      controller.onCancel = () {
+        billsSub.cancel();
+        historySub?.cancel();
+      };
+    }, isBroadcast: true);
   }
 
   Future<BillModel?> getBill(String billId) async {
     try {
       final snap = await billsRef.child(billId).get().timeout(const Duration(seconds: 2));
-      if (!snap.exists || snap.value == null) return null;
-      return BillModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), billId);
+      if (snap.exists && snap.value is Map) {
+        return ReportBillModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), billId);
+      }
+      if (_currentStoreCode.isNotEmpty) {
+        final hSnap = await _root
+            .child('stores')
+            .child(_currentStoreCode)
+            .child('history')
+            .child(billId)
+            .get()
+            .timeout(const Duration(seconds: 2));
+        if (hSnap.exists && hSnap.value is Map) {
+          return ReportBillModel.fromMap(Map<dynamic, dynamic>.from(hSnap.value as Map), billId);
+        }
+      }
+      return null;
     } catch (_) {
       return null;
     }
