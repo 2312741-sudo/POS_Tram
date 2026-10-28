@@ -627,6 +627,143 @@ class OrderRepository {
     ));
   }
 
+  /// Tính toán trạng thái 2 bàn sau khi tách một phần (hoặc toàn bộ) món từ [sourceTable] sang [targetTable]:
+  /// - Nếu [mergeIntoTarget] == true (ghép vào bàn đang có khách): cộng dồn [splitItems] vào [targetTable]
+  ///   bằng [OrderLineMerger.merge], giữ nguyên mã hóa đơn của [targetTable].
+  /// - Nếu [mergeIntoTarget] == false (thanh toán trước / chuyển sang bàn trống khác / tạo bàn tách mới "Bàn X (2)"):
+  ///   mở [targetTable] với [splitItems] và cấp mã Hóa Đơn / Mã Đơn mới độc lập.
+  /// - Cập nhật [sourceTable] với [remainingItems] (nếu hết món thì dọn sạch [sourceTable]).
+  static ({TableModel updatedSource, TableModel updatedTarget}) planSplitTableItems({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required TableModel targetTable,
+    required bool mergeIntoTarget,
+    String? staffUsername,
+    String? staffName,
+    int? nowMs,
+  }) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final sUser = (staffUsername != null && staffUsername.trim().isNotEmpty) ? staffUsername.trim() : 'staff';
+    final sName = (staffName != null && staffName.trim().isNotEmpty) ? staffName.trim() : 'Nhân viên';
+    final splitSummary = splitItems.map((e) => '${e.quantity}x ${e.name}').join(', ');
+
+    final target = TableModel.fromMap(targetTable.toMap(), targetTable.firebaseKey);
+    target.clearOrderingLock();
+    if (target.isAutoSplit) {
+      target.isSplitTable = true;
+    }
+
+    if (mergeIntoTarget) {
+      final combined = OrderLineMerger.merge(target.currentItems, splitItems);
+      target.inUse = true;
+      target.currentOrderJson = jsonEncode(combined.map((e) => e.toMap()).toList());
+      target.clearPrePrint();
+      target.openedAt ??= sourceTable.openedAt ?? now;
+      target.guestCount ??= 2;
+      target.ensureCodes();
+      if (remainingItems.isEmpty && sourceTable.deletedItems.isNotEmpty) {
+        target.deletedItemsJson = DeletedItemsLogic.append(target.deletedItemsJson, sourceTable.deletedItems);
+      }
+      target.adoptCustomerIfNone(sourceTable);
+      target.addActionLog(OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'SPLIT_MERGE_TABLE',
+        details: '$sName tách & ghép từ ${sourceTable.name} vào ${target.name}: $splitSummary',
+      ));
+    } else {
+      target.inUse = true;
+      target.currentOrderJson = jsonEncode(splitItems.map((e) => e.toMap()).toList());
+      target.clearPrePrint();
+      target.openedAt = sourceTable.openedAt ?? now;
+      target.guestCount ??= 1;
+      target.regenerateCodes();
+      if (remainingItems.isEmpty && sourceTable.deletedItems.isNotEmpty) {
+        target.deletedItemsJson = sourceTable.deletedItemsJson;
+      }
+      target.addActionLog(OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'SPLIT_BILL',
+        details: '$sName tách từ ${sourceTable.name} sang ${target.name} (${target.currentBillId}): $splitSummary',
+      ));
+    }
+
+    final source = TableModel.fromMap(sourceTable.toMap(), sourceTable.firebaseKey);
+    if (remainingItems.isEmpty) {
+      source.clearTable();
+      if (source.isAutoSplit) {
+        source.isSplitTable = true;
+      }
+    } else {
+      source.inUse = true;
+      source.currentOrderJson = jsonEncode(remainingItems.map((e) => e.toMap()).toList());
+      source.clearPrePrint();
+      source.addActionLog(OrderActionLogModel(
+        timestamp: now,
+        staffUsername: sUser,
+        staffFullName: sName,
+        action: 'SPLIT_BILL',
+        details: '$sName tách sang ${target.name} (${target.currentBillId ?? ""}): $splitSummary',
+      ));
+    }
+
+    return (updatedSource: source, updatedTarget: target);
+  }
+
+  /// Thực thi tách món nguyên tử giữa [sourceTable] và [targetTable] trong 1 lệnh multi-path.
+  Future<({TableModel updatedSource, TableModel updatedTarget})> splitTableItems({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required TableModel targetTable,
+    required bool mergeIntoTarget,
+    String? staffUsername,
+    String? staffName,
+    String? staffRole,
+  }) async {
+    final planned = planSplitTableItems(
+      sourceTable: sourceTable,
+      splitItems: splitItems,
+      remainingItems: remainingItems,
+      targetTable: targetTable,
+      mergeIntoTarget: mergeIntoTarget,
+      staffUsername: staffUsername,
+      staffName: staffName,
+    );
+
+    await _commitWrite(
+      tablesRef.update({
+        planned.updatedTarget.firebaseKey: planned.updatedTarget.toMap(),
+        planned.updatedSource.firebaseKey: planned.updatedSource.toMap(),
+      }),
+      'tách món từ ${sourceTable.name} sang ${targetTable.name}',
+    );
+
+    _applyTableState(sourceTable, planned.updatedSource);
+    _applyTableState(targetTable, planned.updatedTarget);
+    if (!planned.updatedSource.inUse) {
+      _tryRemoveInactiveSplitTable(planned.updatedSource);
+    }
+
+    final splitSummary = splitItems.map((e) => '${e.quantity}x ${e.name}').join(', ');
+    await _safeLog(AuditLogModel(
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      username: staffUsername ?? 'staff',
+      userFullName: staffName ?? 'Nhân viên',
+      userRole: staffRole ?? 'STAFF',
+      action: 'SPLIT_BILL',
+      targetType: 'TABLE',
+      targetId: '${sourceTable.name} -> ${planned.updatedTarget.name}',
+      details: 'Tách từ ${sourceTable.name} sang ${planned.updatedTarget.name} (${planned.updatedTarget.currentBillId ?? ""}): $splitSummary',
+    ));
+
+    return planned;
+  }
+
   Future<void> reserveTable({
     required TableModel table,
     required String customerName,

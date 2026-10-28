@@ -43,8 +43,16 @@ import '../../widgets/manager_pin_dialogs.dart';
 class OrderCartScreen extends StatefulWidget {
   final TableModel table;
   final List<OrderItemModel> initialProducts;
+  final bool autoOpenCheckout;
+  final bool returnToParentOnPay;
 
-  const OrderCartScreen({super.key, required this.table, this.initialProducts = const []});
+  const OrderCartScreen({
+    super.key,
+    required this.table,
+    this.initialProducts = const [],
+    this.autoOpenCheckout = false,
+    this.returnToParentOnPay = false,
+  });
 
   @override
   State<OrderCartScreen> createState() => _OrderCartScreenState();
@@ -158,6 +166,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (mounted) setState(() => _isShiftOpen = ok);
       if (!ok && mounted) {
         await _ensureShiftOpen();
+      }
+      if (widget.autoOpenCheckout && mounted && _cart.isNotEmpty) {
+        await _showPaymentSheet();
       }
     });
   }
@@ -1326,145 +1337,617 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       return;
     }
 
-    final Map<int, int> splitQty = {};
-    for (final item in _cart) {
-      splitQty[item.productId] = 0;
+    if (_cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đơn hàng đang trống, không có món để tách!')),
+      );
+      return;
+    }
+
+    List<TableModel> allTables = [];
+    try {
+      allTables = await _fb.tablesStream().first.timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    if (!mounted) return;
+
+    final emptyTables = allTables
+        .where((t) => !t.inUse && !t.isReserved && t.firebaseKey != widget.table.firebaseKey && !t.isAutoSplit)
+        .toList();
+    final inUseTables = allTables
+        .where((t) => t.inUse && t.firebaseKey != widget.table.firebaseKey)
+        .toList();
+
+    final activeNamesInZone = <String>{
+      widget.table.name,
+      ...allTables
+          .where((t) =>
+              t.zone.trim().toLowerCase() == widget.table.zone.trim().toLowerCase() &&
+              (t.inUse || t.isReserved || t.isActivelyOrdering()))
+          .map((t) => t.name),
+    };
+    final nextSplitName = TableModel.nextSplitTableName(widget.table.baseName, activeNamesInZone);
+    const String newSplitTableKey = '__NEW_SPLIT_TABLE__';
+
+    // Theo dõi số lượng tách theo từng dòng (index) thay vì productId (tránh trùng các dòng khác topping/note)
+    final Map<int, int> splitQty = {
+      for (int i = 0; i < _cart.length; i++) i: 0,
+    };
+
+    // 3 chế độ xử lý phần món được tách:
+    // - 'PAY_NOW': Thanh toán trước ngay phần món tách (tạo bàn phụ tạm & mở màn hình thu tiền ngay)
+    // - 'TRANSFER': Chuyển sang bàn trống khác (hoặc tạo bàn phụ mới trên sơ đồ bàn)
+    // - 'MERGE': Ghép phần món tách vào bàn đang có khách khác
+    String splitAction = 'PAY_NOW';
+    String selectedTransferKey = newSplitTableKey;
+    String? selectedMergeKey = inUseTables.isNotEmpty ? inUseTables.first.firebaseKey : null;
+    bool isSubmitting = false;
+
+    String itemOptionSummary(OrderItemModel item) {
+      final parts = <String>[
+        if (item.selectedSize.trim().isNotEmpty) 'Size ${item.selectedSize}',
+        if (item.selectedSugar.trim().isNotEmpty) item.selectedSugar,
+        if (item.selectedIce.trim().isNotEmpty) item.selectedIce,
+        if (item.selectedToppings.isNotEmpty) '+${item.selectedToppings.join(", ")}',
+        if (item.note.trim().isNotEmpty) '"${item.note.trim()}"',
+      ];
+      return parts.join(' • ');
     }
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) {
+          int totalSplitParts = 0;
+          int totalSplitAmount = 0;
+          for (int i = 0; i < _cart.length; i++) {
+            final q = splitQty[i] ?? 0;
+            if (q > 0) {
+              totalSplitParts += q;
+              final (taken, _) = _cart[i].splitQuantity(q);
+              if (taken != null) {
+                totalSplitAmount += taken.itemTotal;
+              }
+            }
+          }
+
+          final bool canSubmit = totalSplitParts > 0 &&
+              !isSubmitting &&
+              (splitAction != 'MERGE' || selectedMergeKey != null);
+
+          String confirmLabel;
+          if (splitAction == 'PAY_NOW') {
+            confirmLabel = totalSplitParts > 0
+                ? 'Thanh Toán Trước (${FormatUtils.vnd(totalSplitAmount)})'
+                : 'Thanh Toán Trước';
+          } else if (splitAction == 'TRANSFER') {
+            final targetLabel = selectedTransferKey == newSplitTableKey
+                ? nextSplitName
+                : (emptyTables.where((t) => t.firebaseKey == selectedTransferKey).firstOrNull?.name ?? 'Bàn mới');
+            confirmLabel = 'Chuyển Sang $targetLabel';
+          } else {
+            final targetLabel =
+                inUseTables.where((t) => t.firebaseKey == selectedMergeKey).firstOrNull?.name ?? 'Bàn Khác';
+            confirmLabel = 'Ghép Vào $targetLabel';
+          }
+
           return AlertDialog(
-            title: Text('Tách Hóa Đơn - ${widget.table.name}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
+            contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+            title: Row(
+              children: [
+                Icon(Icons.call_split, color: context.tc.primary, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tách Đơn / Tách Món • ${widget.table.name}',
+                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Đóng',
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
             content: SizedBox(
-              width: 450,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Chọn số lượng món muốn tách sang hóa đơn mới:', style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
-                  const SizedBox(height: 12),
-                  ..._cart.map((item) {
-                    final curr = splitQty[item.productId] ?? 0;
-                    return ListTile(
-                      dense: true,
-                      title: Text(item.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                      subtitle: Text('Tổng có: ${item.quantity} | Tách: $curr'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline),
-                            onPressed: curr > 0 ? () => setDlgState(() => splitQty[item.productId] = curr - 1) : null,
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '1. Chọn số lượng món cần tách:',
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
                           ),
-                          Text('$curr', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline),
-                            onPressed: curr < item.quantity ? () => setDlgState(() => splitQty[item.productId] = curr + 1) : null,
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            setDlgState(() {
+                              final allSelected = _cart.asMap().entries.every((e) => (splitQty[e.key] ?? 0) == e.value.quantity);
+                              for (int i = 0; i < _cart.length; i++) {
+                                splitQty[i] = allSelected ? 0 : _cart[i].quantity;
+                              }
+                            });
+                          },
+                          child: Text(
+                            _cart.asMap().entries.every((e) => (splitQty[e.key] ?? 0) == e.value.quantity)
+                                ? 'Bỏ chọn hết'
+                                : 'Chọn tất cả',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 230),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: context.tc.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _cart.length,
+                        separatorBuilder: (_, __) => Divider(height: 1, color: context.tc.borderLight),
+                        itemBuilder: (_, idx) {
+                          final item = _cart[idx];
+                          final curr = splitQty[idx] ?? 0;
+                          final opts = itemOptionSummary(item);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.name,
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: curr > 0 ? context.tc.primary : context.tc.textPrimary,
+                                        ),
+                                      ),
+                                      if (opts.isNotEmpty)
+                                        Text(
+                                          opts,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                        ),
+                                      Text(
+                                        '${FormatUtils.vnd(item.unitPrice)} • Có: ${item.quantity} | Tách: $curr',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 11.5,
+                                          fontWeight: curr > 0 ? FontWeight.w700 : FontWeight.w500,
+                                          color: curr > 0 ? context.tc.primary : context.tc.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: const Icon(Icons.remove_circle_outline, size: 22),
+                                      onPressed: curr > 0
+                                          ? () => setDlgState(() => splitQty[idx] = curr - 1)
+                                          : null,
+                                    ),
+                                    SizedBox(
+                                      width: 24,
+                                      child: Text(
+                                        '$curr',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(
+                                        Icons.add_circle_outline,
+                                        size: 22,
+                                        color: curr < item.quantity ? context.tc.primary : null,
+                                      ),
+                                      onPressed: curr < item.quantity
+                                          ? () => setDlgState(() => splitQty[idx] = curr + 1)
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.tc.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Đã chọn tách: $totalSplitParts phần',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            FormatUtils.vnd(totalSplitAmount),
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: context.tc.primary,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '2. Chọn cách xử lý phần món tách ra:',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    // Lựa chọn 1: Thanh toán trước
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => setDlgState(() => splitAction = 'PAY_NOW'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: splitAction == 'PAY_NOW' ? context.tc.primary : context.tc.border,
+                            width: splitAction == 'PAY_NOW' ? 1.8 : 1,
+                          ),
+                          color: splitAction == 'PAY_NOW' ? context.tc.primary.withValues(alpha: 0.06) : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              splitAction == 'PAY_NOW' ? Icons.radio_button_checked : Icons.radio_button_off,
+                              color: splitAction == 'PAY_NOW' ? context.tc.primary : context.tc.textSecondary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Thanh toán trước phần món này',
+                                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13),
+                                  ),
+                                  Text(
+                                    'Tách sang đơn riêng ($nextSplitName) và mở ngay màn hình thu tiền',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Lựa chọn 2: Chuyển sang bàn trống khác / Tạo bàn tách mới
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => setDlgState(() => splitAction = 'TRANSFER'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: splitAction == 'TRANSFER' ? context.tc.primary : context.tc.border,
+                            width: splitAction == 'TRANSFER' ? 1.8 : 1,
+                          ),
+                          color: splitAction == 'TRANSFER' ? context.tc.primary.withValues(alpha: 0.06) : null,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  splitAction == 'TRANSFER' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                  color: splitAction == 'TRANSFER' ? context.tc.primary : context.tc.textSecondary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Chuyển sang bàn khác / Tạo bàn tách mới',
+                                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13),
+                                      ),
+                                      Text(
+                                        'Giữ thành đơn độc lập trên bàn mới hoặc bàn trống khác',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (splitAction == 'TRANSFER') ...[
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                initialValue: selectedTransferKey,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Chọn bàn chuyển đến',
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                ),
+                                items: [
+                                  DropdownMenuItem(
+                                    value: newSplitTableKey,
+                                    child: Text(
+                                      '➕ Tạo bàn tách mới: $nextSplitName (${widget.table.zone})',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                    ),
+                                  ),
+                                  ...emptyTables.map(
+                                    (t) => DropdownMenuItem(
+                                      value: t.firebaseKey,
+                                      child: Text(
+                                        '🪑 ${t.name} (${t.zone} • Bàn trống)',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDlgState(() => selectedTransferKey = val);
+                                  }
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Lựa chọn 3: Ghép vào bàn đang có khách
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: inUseTables.isNotEmpty ? () => setDlgState(() => splitAction = 'MERGE') : null,
+                      child: Opacity(
+                        opacity: inUseTables.isNotEmpty ? 1.0 : 0.55,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: splitAction == 'MERGE' ? context.tc.primary : context.tc.border,
+                              width: splitAction == 'MERGE' ? 1.8 : 1,
+                            ),
+                            color: splitAction == 'MERGE' ? context.tc.primary.withValues(alpha: 0.06) : null,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    splitAction == 'MERGE' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    color: splitAction == 'MERGE' ? context.tc.primary : context.tc.textSecondary,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Ghép vào bàn đang có khách khác',
+                                          style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13),
+                                        ),
+                                        Text(
+                                          inUseTables.isNotEmpty
+                                              ? 'Cộng dồn các món đã chọn vào hóa đơn của bàn khác'
+                                              : 'Hiện không có bàn nào khác đang có khách để ghép',
+                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (splitAction == 'MERGE' && inUseTables.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  initialValue: selectedMergeKey,
+                                  isExpanded: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Chọn bàn có khách muốn ghép vào',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  ),
+                                  items: inUseTables
+                                      .map(
+                                        (t) => DropdownMenuItem(
+                                          value: t.firebaseKey,
+                                          child: Text(
+                                            '🔗 ${t.name} (${t.zone} • ${t.currentItems.length} món • ${FormatUtils.vnd(t.currentTotal)})',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setDlgState(() => selectedMergeKey = val);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
-              ElevatedButton(
-                onPressed: () async {
-                  final List<OrderItemModel> splitItems = [];
-                  final List<OrderItemModel> remainingItems = [];
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Hủy'),
+              ),
+              ElevatedButton.icon(
+                style: dialogActionStyle(background: context.tc.primary),
+                icon: Icon(
+                  splitAction == 'PAY_NOW'
+                      ? Icons.payments_outlined
+                      : (splitAction == 'MERGE' ? Icons.call_merge : Icons.swap_horiz),
+                  size: 18,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  confirmLabel,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                onPressed: !canSubmit
+                    ? null
+                    : () async {
+                        setDlgState(() => isSubmitting = true);
+                        final List<OrderItemModel> splitItems = [];
+                        final List<OrderItemModel> remainingItems = [];
 
-                  for (final item in _cart) {
-                    final sQty = splitQty[item.productId] ?? 0;
-                    // Chia số phần được giảm & tổng giảm giữa 2 phần (không nhân đôi giảm giá)
-                    final (taken, rest) = item.splitQuantity(sQty);
-                    if (taken != null) splitItems.add(taken);
-                    if (rest != null) remainingItems.add(rest);
-                  }
+                        for (int i = 0; i < _cart.length; i++) {
+                          final sQty = splitQty[i] ?? 0;
+                          final (taken, rest) = _cart[i].splitQuantity(sQty);
+                          if (taken != null) splitItems.add(taken);
+                          if (rest != null) remainingItems.add(rest);
+                        }
 
-                  if (splitItems.isEmpty) return;
+                        if (splitItems.isEmpty) {
+                          setDlgState(() => isSubmitting = false);
+                          return;
+                        }
 
-                  final newBill = BillModel(
-                    id: 'BILL_${DateTime.now().millisecondsSinceEpoch}',
-                    billCode: FormatUtils.billCode(),
-                    orderCode: FormatUtils.orderCode(),
-                    tableName: '${widget.table.name} (Tách)',
-                    zone: widget.table.zone,
-                    createdAt: DateTime.now().millisecondsSinceEpoch,
-                    staffUid: _auth.currentUid,
-                    staffUsername: _auth.currentUser?.username ?? 'staff',
-                    staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
-                    items: splitItems,
-                    subTotal: splitItems.fold(0, (s, i) => s + i.itemTotal),
-                    finalAmount: splitItems.fold(0, (s, i) => s + i.itemTotal),
-                    parentBillId: widget.table.name,
-                  );
-                  final splitSummary = splitItems.map((e) => '${e.quantity}x ${e.name}').join(', ');
-                  final staffName = _auth.currentUser?.fullName ?? 'Thu Ngân';
-                  final staffUser = _auth.currentUser?.username ?? 'staff';
-                  final staffRole = _auth.currentUser?.roleId ?? 'ROLE_STAFF';
+                        TableModel targetTable;
+                        bool mergeIntoTarget = false;
+                        if (splitAction == 'PAY_NOW' ||
+                            (splitAction == 'TRANSFER' && selectedTransferKey == newSplitTableKey)) {
+                          targetTable = TableModel(
+                            name: nextSplitName,
+                            zone: widget.table.zone,
+                            capacity: widget.table.capacity,
+                            isSplitTable: true,
+                          );
+                        } else if (splitAction == 'TRANSFER') {
+                          targetTable = emptyTables.firstWhere(
+                            (t) => t.firebaseKey == selectedTransferKey,
+                            orElse: () => TableModel(
+                              name: nextSplitName,
+                              zone: widget.table.zone,
+                              capacity: widget.table.capacity,
+                              isSplitTable: true,
+                            ),
+                          );
+                        } else {
+                          targetTable = inUseTables.firstWhere((t) => t.firebaseKey == selectedMergeKey);
+                          mergeIntoTarget = true;
+                        }
 
-                  widget.table.addActionLog(OrderActionLogModel(
-                    timestamp: DateTime.now().millisecondsSinceEpoch,
-                    staffUsername: staffUser,
-                    staffFullName: staffName,
-                    action: 'SPLIT_BILL',
-                    details: '$staffName tách sang đơn mới ${newBill.billCode}: $splitSummary',
-                  ));
+                        final staffName = _auth.currentUser?.fullName ?? 'Thu Ngân';
+                        final staffUser = _auth.currentUser?.username ?? 'staff';
+                        final staffRole = _auth.currentUser?.roleId ?? 'ROLE_STAFF';
 
-                  await _fb.logAction(AuditLogModel(
-                    timestamp: DateTime.now().millisecondsSinceEpoch,
-                    username: staffUser,
-                    userFullName: staffName,
-                    userRole: staffRole,
-                    action: 'SPLIT_BILL',
-                    targetType: 'TABLE',
-                    targetId: widget.table.name,
-                    details: 'Tách từ ${widget.table.name} sang đơn mới ${newBill.billCode} các món: $splitSummary',
-                  ));
+                        try {
+                          final planned = await _fb.splitTableItems(
+                            sourceTable: widget.table,
+                            splitItems: splitItems,
+                            remainingItems: remainingItems,
+                            targetTable: targetTable,
+                            mergeIntoTarget: mergeIntoTarget,
+                            staffUsername: staffUser,
+                            staffName: staffName,
+                            staffRole: staffRole,
+                          );
 
-                  // Tách hết món: món đã xóa của đơn đi theo hóa đơn mới.
-                  if (remainingItems.isEmpty) newBill.deletedItems = widget.table.deletedItems;
-                  await _fb.saveBill(newBill);
+                          if (mounted) {
+                            setState(() {
+                              _cart = remainingItems;
+                            });
+                            _recalculateDiscounts();
+                          }
 
-                  if (remainingItems.isEmpty) {
-                    widget.table.inUse = false;
-                    widget.table.currentOrderJson = '';
-                    widget.table.openedAt = null;
-                    widget.table.guestCount = null;
-                    widget.table.currentBillId = null;
-                    widget.table.actionLogsJson = null;
-                    widget.table.deletedItemsJson = null;
-                    await _fb.saveTable(widget.table);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(
-                          content: Text('Đã tách toàn bộ món sang hóa đơn ${newBill.billCode}! Bàn đã được dọn.'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
-                      this.context.go('/tables');
-                    }
-                  } else {
-                    setState(() => _cart = remainingItems);
-                    widget.table.currentOrderJson = jsonEncode(remainingItems.map((e) => e.toMap()).toList());
-                    await _fb.saveTable(widget.table);
-                    _recalculateDiscounts();
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(
-                          content: Text('Đã tách thành công hóa đơn ${newBill.billCode}!'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text('Tách Hóa Đơn'),
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (!mounted) return;
+
+                          if (splitAction == 'PAY_NOW') {
+                            // Mở ngay màn hình đơn của bàn tách và tự bật bảng Thanh toán
+                            if (remainingItems.isEmpty) {
+                              this.context.pushReplacement('/order-cart', extra: {
+                                'table': planned.updatedTarget,
+                                'products': planned.updatedTarget.currentItems,
+                                'autoOpenCheckout': true,
+                                'returnToParentOnPay': false,
+                              });
+                            } else {
+                              this.context.push('/order-cart', extra: {
+                                'table': planned.updatedTarget,
+                                'products': planned.updatedTarget.currentItems,
+                                'autoOpenCheckout': true,
+                                'returnToParentOnPay': true,
+                              });
+                            }
+                          } else {
+                            final actionVerb = mergeIntoTarget ? 'tách & ghép' : 'tách & chuyển';
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Đã $actionVerb $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) sang bàn ${planned.updatedTarget.name}!',
+                                ),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                            if (remainingItems.isEmpty) {
+                              this.context.go('/tables');
+                            }
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            setDlgState(() => isSubmitting = false);
+                          }
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              SnackBar(content: Text('Lỗi khi tách đơn: $e'), backgroundColor: AppColors.danger),
+                            );
+                          }
+                        }
+                      },
               ),
             ],
           );
@@ -3498,7 +3981,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               duration: const Duration(seconds: 3),
             ),
           );
-          context.go('/tables');
+          if (widget.returnToParentOnPay && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop(true);
+          } else {
+            context.go('/tables');
+          }
         }
 
         _fireBackgroundPaymentTasks(bill, paymentMethod, shouldPrint: _autoPrintBill);

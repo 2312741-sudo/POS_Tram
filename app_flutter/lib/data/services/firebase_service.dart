@@ -232,6 +232,27 @@ class FirebaseService {
   Future<void> transferTable(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) =>
       _orderRepo.transferTable(sourceTable, targetTable, staffName: staffName, staffUsername: staffUsername);
 
+  Future<({TableModel updatedSource, TableModel updatedTarget})> splitTableItems({
+    required TableModel sourceTable,
+    required List<OrderItemModel> splitItems,
+    required List<OrderItemModel> remainingItems,
+    required TableModel targetTable,
+    required bool mergeIntoTarget,
+    String? staffUsername,
+    String? staffName,
+    String? staffRole,
+  }) =>
+      _orderRepo.splitTableItems(
+        sourceTable: sourceTable,
+        splitItems: splitItems,
+        remainingItems: remainingItems,
+        targetTable: targetTable,
+        mergeIntoTarget: mergeIntoTarget,
+        staffUsername: staffUsername,
+        staffName: staffName,
+        staffRole: staffRole,
+      );
+
   // ==================== BILLS ====================
   Stream<List<BillModel>> billsStream() => _orderRepo.billsStream();
 

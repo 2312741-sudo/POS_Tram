@@ -151,5 +151,74 @@ void main() {
       expect(normalized.any((t) => t.name == 'Mang về' && t.inUse), isTrue);
       expect(normalized.any((t) => t.name == 'Mang về (2)' && !t.inUse), isTrue);
     });
+
+    test('planSplitTableItems: Hỗ trợ đủ 3 chế độ Tách đơn (Thanh toán trước / Chuyển bàn trống / Ghép vào bàn có khách) mà không bao giờ mất món', () {
+      const now = 1700000000000;
+      final item1 = OrderItemModel(productId: 1, name: 'Trà Đào', price: 30000, quantity: 3);
+      final item2 = OrderItemModel(productId: 2, name: 'Bạc Xỉu', price: 25000, quantity: 1);
+
+      final source = TableModel(
+        name: 'Bàn 01',
+        zone: 'Khu A',
+        inUse: true,
+        currentBillId: 'HD-SRC-01',
+        currentOrderCode: 'OD-SRC-01',
+        currentOrderJson: jsonEncode([item1.toMap(), item2.toMap()]),
+      );
+
+      // Tách 1 phần Trà Đào ra khỏi 3 phần Trà Đào
+      final (taken1, rest1) = item1.splitQuantity(1);
+      final splitItems = [taken1!];
+      final remainingItems = [rest1!, item2];
+
+      // 1. Tách để Thanh toán trước hoặc Tạo bàn tách mới (Bàn 01 (2))
+      final splitTarget = TableModel(name: 'Bàn 01 (2)', zone: 'Khu A', isSplitTable: true);
+      final plannedSplit = OrderRepository.planSplitTableItems(
+        sourceTable: source,
+        splitItems: splitItems,
+        remainingItems: remainingItems,
+        targetTable: splitTarget,
+        mergeIntoTarget: false,
+        staffUsername: 'thungan',
+        staffName: 'Thu Ngân',
+        nowMs: now,
+      );
+
+      expect(plannedSplit.updatedSource.inUse, isTrue);
+      expect(plannedSplit.updatedSource.currentTotal, 2 * 30000 + 25000);
+      expect(plannedSplit.updatedTarget.inUse, isTrue);
+      expect(plannedSplit.updatedTarget.isSplitTable, isTrue);
+      expect(plannedSplit.updatedTarget.currentTotal, 30000);
+      expect(plannedSplit.updatedTarget.currentBillId, isNot(equals('HD-SRC-01')));
+
+      // 2. Tách và Ghép vào bàn đang có khách khác (Bàn 03 đang có sẵn 2 Trà Đào)
+      final existingOnBan03 = OrderItemModel(productId: 1, name: 'Trà Đào', price: 30000, quantity: 2);
+      final ban03 = TableModel(
+        name: 'Bàn 03',
+        zone: 'Khu A',
+        inUse: true,
+        currentBillId: 'HD-BAN03',
+        currentOrderCode: 'OD-BAN03',
+        currentOrderJson: jsonEncode([existingOnBan03.toMap()]),
+      );
+
+      final plannedMerge = OrderRepository.planSplitTableItems(
+        sourceTable: source,
+        splitItems: splitItems,
+        remainingItems: remainingItems,
+        targetTable: ban03,
+        mergeIntoTarget: true,
+        staffUsername: 'thungan',
+        staffName: 'Thu Ngân',
+        nowMs: now,
+      );
+
+      expect(plannedMerge.updatedTarget.inUse, isTrue);
+      expect(plannedMerge.updatedTarget.currentBillId, 'HD-BAN03');
+      // 2 Trà Đào cũ + 1 Trà Đào tách sang = 3 Trà Đào (90.000đ)
+      expect(plannedMerge.updatedTarget.currentItems.length, 1);
+      expect(plannedMerge.updatedTarget.currentItems.first.quantity, 3);
+      expect(plannedMerge.updatedTarget.currentTotal, 90000);
+    });
   });
 }

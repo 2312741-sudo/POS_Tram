@@ -94,6 +94,8 @@ class AppRouter {
           return OrderCartScreen(
             table: extra['table'] as TableModel,
             initialProducts: (extra['products'] as List?)?.cast<OrderItemModel>() ?? const [],
+            autoOpenCheckout: extra['autoOpenCheckout'] == true,
+            returnToParentOnPay: extra['returnToParentOnPay'] == true,
           );
         },
       ),
