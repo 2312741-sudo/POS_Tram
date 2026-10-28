@@ -152,6 +152,194 @@ class OrderRepository {
   }
 
   // ==================== TABLES ====================
+  /// Chuẩn hóa danh sách bàn hiển thị trên sơ đồ bàn:
+  /// 1. Gộp các khóa trùng cùng (zone, name) — ưu tiên bàn đang có khách hoặc đang được gọi món.
+  /// 2. Tự động ẩn các bàn tách tạm (`isAutoSplit`, VD: "Bàn 01 (2)", "Mang về (2)") khi đã trống
+  ///    (`!inUse && !isReserved && !isActivelyOrdering`), giúp sơ đồ bàn luôn gọn gàng.
+  /// 3. Với bàn "Mang về" gốc: nếu tất cả các ô "Mang về" hiện có đều đang bận (`inUse` hoặc đang order),
+  ///    tự động hiển thị sẵn 1 ô trống kế tiếp ("Mang về (2)", "Mang về (3)"...) để nhân viên khác
+  ///    luôn có thể bấm tạo đơn mang về độc lập ngay lập tức mà không bao giờ gộp nhầm đơn.
+  static List<TableModel> normalizeTablesList(Iterable<TableModel> rawTables, {int? nowMs}) {
+    final byName = <String, TableModel>{};
+    for (final t in rawTables) {
+      final k = '${t.zone.trim()}\u0000${t.name.trim()}';
+      final cur = byName[k];
+      if (cur == null) {
+        byName[k] = t;
+      } else {
+        final curBusy = cur.inUse || cur.isActivelyOrdering(nowMs: nowMs);
+        final tBusy = t.inUse || t.isActivelyOrdering(nowMs: nowMs);
+        if (!curBusy && tBusy) {
+          byName[k] = t;
+        }
+      }
+    }
+
+    // Ẩn các bàn tách tự động đã hoàn tất (trống, không đặt trước, không ai đang chọn món)
+    final visible = byName.values
+        .where((t) => !(t.isAutoSplit && !t.inUse && !t.isReserved && !t.isActivelyOrdering(nowMs: nowMs)))
+        .toList();
+
+    // Với mỗi bàn Mang về gốc: nếu mọi bàn cùng nhóm (Mang về, Mang về (2)...) đều đang bận,
+    // tự động thêm 1 ô Mang về (k) trống sẵn sàng cho khách tiếp theo.
+    final takeawayBases = visible.where((t) => !t.isAutoSplit && t.isTakeaway).toList();
+    for (final base in takeawayBases) {
+      final group = visible.where((t) =>
+          t.zone.trim().toLowerCase() == base.zone.trim().toLowerCase() &&
+          t.baseName.toLowerCase() == base.baseName.toLowerCase());
+      final hasFreeSlot = group.any((t) => !t.inUse && !t.isReserved && !t.isActivelyOrdering(nowMs: nowMs));
+      if (!hasFreeSlot) {
+        final existingNamesInZone = visible
+            .where((t) => t.zone.trim().toLowerCase() == base.zone.trim().toLowerCase())
+            .map((t) => t.name);
+        final nextName = TableModel.nextSplitTableName(base.baseName, existingNamesInZone);
+        visible.add(TableModel(
+          name: nextName,
+          zone: base.zone,
+          capacity: base.capacity,
+          isSplitTable: true,
+        ));
+      }
+    }
+
+    return visible..sort(compareTables);
+  }
+
+  /// Giải quyết xung đột ngay khi nhân viên bấm vào bàn trống để bắt đầu gọi món (Kết hợp Phương án 1 + 2):
+  /// - Nếu bàn thật sự đang trống và chưa có nhân viên nào khác đang mở menu chọn món:
+  ///   Khóa/đánh dấu `orderingBy` cho nhân viên này và giữ nguyên bàn.
+  /// - Nếu bàn vừa bị nhân viên khác bấm vào trước đó (`isActivelyOrdering`) hoặc vừa có đơn (`inUse`):
+  ///   Tự động tạo một không gian bàn riêng (VD: "Bàn 01 (2)", "Mang về (2)") với mã hóa đơn & mã đơn riêng biệt.
+  static ({TableModel targetTable, bool wasSplit, String? occupiedBy}) resolveTableForNewOrder(
+    TableModel requestedTable,
+    Iterable<TableModel> allTablesInStore, {
+    required String staffUsername,
+    required String staffName,
+    int? nowMs,
+  }) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final cleanUser = staffUsername.trim().isEmpty ? 'staff' : staffUsername.trim();
+    final cleanName = staffName.trim().isEmpty ? cleanUser : staffName.trim();
+
+    TableModel? latest;
+    for (final t in allTablesInStore) {
+      if (t.firebaseKey == requestedTable.firebaseKey ||
+          (t.zone.trim().toLowerCase() == requestedTable.zone.trim().toLowerCase() &&
+              t.name.trim().toLowerCase() == requestedTable.name.trim().toLowerCase())) {
+        if (latest == null || (!latest.inUse && t.inUse) || (!latest.isActivelyOrdering(nowMs: now) && t.isActivelyOrdering(nowMs: now))) {
+          latest = t;
+        }
+      }
+    }
+
+    final current = latest ?? requestedTable;
+    final bool busyWithOrder = current.inUse && current.currentItems.isNotEmpty;
+    final bool busyOrdering = current.isActivelyOrdering(excludeUsername: cleanUser, nowMs: now);
+
+    if (busyWithOrder || busyOrdering) {
+      final activeNamesInZone = <String>{
+        current.name,
+        ...allTablesInStore
+            .where((t) =>
+                t.zone.trim().toLowerCase() == current.zone.trim().toLowerCase() &&
+                (t.inUse || t.isReserved || t.isActivelyOrdering(nowMs: now)))
+            .map((t) => t.name),
+      };
+      final splitName = TableModel.nextSplitTableName(current.baseName, activeNamesInZone);
+      final splitTable = TableModel(
+        name: splitName,
+        zone: current.zone,
+        capacity: current.capacity,
+        isSplitTable: true,
+        openedAt: now,
+        guestCount: (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 2,
+        orderingBy: cleanUser,
+        orderingByName: cleanName,
+        orderingAt: now,
+      )..regenerateCodes();
+
+      final occupiedBy = busyOrdering
+          ? (current.orderingByName ?? current.orderingBy ?? 'nhân viên khác')
+          : 'đơn đang phục vụ';
+      return (targetTable: splitTable, wasSplit: true, occupiedBy: occupiedBy);
+    }
+
+    final claimed = TableModel.fromMap(current.toMap(), current.firebaseKey);
+    claimed.openedAt ??= now;
+    if (claimed.guestCount == null || claimed.guestCount! <= 0) {
+      claimed.guestCount = (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 2;
+    }
+    claimed.orderingBy = cleanUser;
+    claimed.orderingByName = cleanName;
+    claimed.orderingAt = now;
+    claimed.ensureCodes();
+    return (targetTable: claimed, wasSplit: false, occupiedBy: null);
+  }
+
+  /// Giải quyết xung đột tại thời điểm lưu đơn mới (phòng trường hợp 2 máy bấm vào cùng 1 bàn
+  /// ở đúng cùng 1 mili-giây hoặc khi mất mạng tạm thời):
+  /// Nếu phát hiện trên server bàn đó đã có đơn của người khác (`remote.inUse` với `currentBillId` khác
+  /// `sessionBillId` của phiên hiện tại), tuyệt đối KHÔNG ghi đè và KHÔNG gộp chung đơn, mà tự động
+  /// tách đơn mới này sang không gian bàn riêng ("Bàn X (2)", "Mang về (2)") với mã đơn độc lập!
+  static ({TableModel tableToSave, bool wasSplit}) resolveConcurrentOrderSave(
+    TableModel localTable,
+    Iterable<TableModel> remoteTablesInStore, {
+    required String? sessionBillId,
+    required bool isNewOrderSession,
+    int? nowMs,
+  }) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final copy = TableModel.fromMap(localTable.toMap(), localTable.firebaseKey);
+    copy.clearOrderingLock();
+
+    if (!isNewOrderSession || !copy.inUse || copy.currentItems.isEmpty) {
+      return (tableToSave: copy, wasSplit: false);
+    }
+
+    TableModel? remote;
+    for (final t in remoteTablesInStore) {
+      if (t.firebaseKey == copy.firebaseKey ||
+          (t.zone.trim().toLowerCase() == copy.zone.trim().toLowerCase() &&
+              t.name.trim().toLowerCase() == copy.name.trim().toLowerCase())) {
+        if (remote == null || (!remote.inUse && t.inUse)) {
+          remote = t;
+        }
+      }
+    }
+
+    final effectiveSessionBillId = (sessionBillId != null && sessionBillId.trim().isNotEmpty)
+        ? sessionBillId.trim()
+        : copy.currentBillId?.trim();
+
+    final bool hasRemoteCollision = remote != null &&
+        remote.inUse &&
+        remote.currentItems.isNotEmpty &&
+        remote.currentBillId != null &&
+        remote.currentBillId!.trim().isNotEmpty &&
+        effectiveSessionBillId != null &&
+        remote.currentBillId!.trim() != effectiveSessionBillId;
+
+    if (!hasRemoteCollision) {
+      return (tableToSave: copy, wasSplit: false);
+    }
+
+    final activeNamesInZone = <String>{
+      copy.name,
+      ...remoteTablesInStore
+          .where((t) =>
+              t.zone.trim().toLowerCase() == copy.zone.trim().toLowerCase() &&
+              (t.inUse || t.isReserved || t.isActivelyOrdering(nowMs: now)))
+          .map((t) => t.name),
+    };
+    final splitName = TableModel.nextSplitTableName(copy.baseName, activeNamesInZone);
+    final map = copy.toMap();
+    map['name'] = splitName;
+    map['isSplitTable'] = true;
+    final forked = TableModel.fromMap(map, '${copy.zone}_$splitName');
+    forked.regenerateCodes();
+    return (tableToSave: forked, wasSplit: true);
+  }
+
   /// Danh sách bàn realtime. DB trống -> danh sách rỗng (bàn mẫu chỉ được tạo khi khởi tạo
   /// cửa hàng). Lỗi (VD: không có quyền) được đẩy ra stream để UI hiển thị, không trả bàn giả.
   Stream<List<TableModel>> tablesStream() {
@@ -161,26 +349,139 @@ class OrderRepository {
           event.snapshot.value,
           (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
         );
-        // Cùng khu + tên (khóa cũ/trùng) chỉ hiện một bàn — ưu tiên bàn đang dùng
-        final byName = <String, TableModel>{};
-        for (final t in list) {
-          final k = '${t.zone.trim()}\u0000${t.name.trim()}';
-          final cur = byName[k];
-          if (cur == null || (!cur.inUse && t.inUse)) byName[k] = t;
-        }
-        return byName.values.toList()..sort(compareTables);
+        return normalizeTablesList(list);
       }
       return <TableModel>[];
     });
   }
 
+  void _tryRemoveInactiveSplitTable(TableModel table) {
+    if (table.isAutoSplit && !table.inUse && !table.isReserved && !table.isActivelyOrdering()) {
+      unawaited(tablesRef.child(table.firebaseKey).remove().catchError((_) {}));
+    }
+  }
+
   /// Lưu bàn. Lỗi thật được ném ra ([DataWriteException]); nếu mất mạng thì dữ liệu được
   /// giữ cục bộ và tự đồng bộ sau (không ném lỗi).
   Future<void> saveTable(TableModel table) async {
+    if (table.inUse && table.currentItems.isNotEmpty) {
+      table.clearOrderingLock();
+    }
+    if (table.isAutoSplit) {
+      table.isSplitTable = true;
+    }
     await _commitWrite(
       tablesRef.child(table.firebaseKey).set(table.toMap()),
       'bàn ${table.name}',
     );
+    _tryRemoveInactiveSplitTable(table);
+  }
+
+  /// Khóa bàn tạm thời khi nhân viên bấm vào bàn trống, hoặc tự động tách sang bàn phụ
+  /// ("Bàn 01 (2)", "Mang về (2)") nếu bàn vừa có nhân viên khác đang chọn món / vừa có đơn.
+  Future<({TableModel targetTable, bool wasSplit, String? occupiedBy})> claimOrSplitTableForOrdering(
+    TableModel requestedTable, {
+    Iterable<TableModel>? knownTables,
+    required String staffUsername,
+    required String staffName,
+  }) async {
+    List<TableModel> latestTables = knownTables?.toList() ?? <TableModel>[];
+    try {
+      final snap = await tablesRef.get().timeout(const Duration(milliseconds: 1200));
+      if (snap.exists && snap.value != null) {
+        latestTables = _parseList<TableModel>(
+          snap.value,
+          (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
+        );
+      }
+    } catch (_) {
+      // Nếu mạng chậm/offline, dùng danh sách bàn đã biết từ stream
+    }
+
+    final res = resolveTableForNewOrder(
+      requestedTable,
+      latestTables,
+      staffUsername: staffUsername,
+      staffName: staffName,
+    );
+
+    unawaited(
+      tablesRef.child(res.targetTable.firebaseKey).set(res.targetTable.toMap()).catchError((_) {}),
+    );
+    return res;
+  }
+
+  /// Nhả khóa đang chọn món khi nhân viên thoát màn hình chọn món mà không chọn món nào.
+  Future<void> releaseTableOrderingClaim(TableModel table, {String? staffUsername}) async {
+    if (table.inUse && table.currentItems.isNotEmpty) return;
+    try {
+      final snap = await tablesRef.child(table.firebaseKey).get().timeout(const Duration(milliseconds: 1200));
+      if (snap.exists && snap.value is Map) {
+        final remote = TableModel.fromMap(snap.value as Map, table.firebaseKey);
+        if (remote.inUse && remote.currentItems.isNotEmpty) {
+          return; // Đã có đơn thật trên bàn, không xóa!
+        }
+        if (staffUsername != null &&
+            staffUsername.isNotEmpty &&
+            remote.orderingBy != null &&
+            remote.orderingBy!.isNotEmpty &&
+            remote.orderingBy != staffUsername) {
+          return; // Khóa đang thuộc về nhân viên khác
+        }
+      }
+    } catch (_) {}
+
+    table.clearTable();
+    if (table.isAutoSplit) {
+      table.isSplitTable = true;
+    }
+    unawaited(
+      tablesRef.child(table.firebaseKey).set(table.toMap()).then((_) {
+        _tryRemoveInactiveSplitTable(table);
+      }).catchError((_) {}),
+    );
+  }
+
+  /// Lưu đơn hàng của bàn một cách an toàn: nếu là lượt mở bàn mới (`isNewOrderSession == true`)
+  /// mà bàn trên Firebase đã bị một nhân viên khác lưu đơn trước đó (khác `sessionBillId`),
+  /// tự động tách đơn mới sang không gian bàn riêng ("Bàn X (2)", "Mang về (2)") để giữ cả 2 đơn độc lập.
+  Future<({TableModel savedTable, bool wasSplit})> saveTableOrderSafe(
+    TableModel table, {
+    required String? sessionBillId,
+    required bool isNewOrderSession,
+  }) async {
+    if (!isNewOrderSession || !table.inUse || table.currentItems.isEmpty) {
+      await saveTable(table);
+      return (savedTable: table, wasSplit: false);
+    }
+
+    List<TableModel> remoteTables = <TableModel>[];
+    try {
+      final snap = await tablesRef.get().timeout(_readTimeout);
+      if (snap.exists && snap.value != null) {
+        remoteTables = _parseList<TableModel>(
+          snap.value,
+          (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
+        );
+      }
+    } catch (_) {}
+
+    final resolved = resolveConcurrentOrderSave(
+      table,
+      remoteTables,
+      sessionBillId: sessionBillId,
+      isNewOrderSession: isNewOrderSession,
+    );
+
+    // Nếu đơn bị tách sang bàn mới (VD: Bàn 01 (2)), nhả khóa orderingBy trên bàn gốc nếu còn
+    if (resolved.wasSplit) {
+      await saveTable(resolved.tableToSave);
+      return (savedTable: resolved.tableToSave, wasSplit: true);
+    }
+
+    _applyTableState(table, resolved.tableToSave);
+    await saveTable(table);
+    return (savedTable: table, wasSplit: false);
   }
 
   Future<void> deleteTable(TableModel table) async {
@@ -207,6 +508,10 @@ class OrderRepository {
     dst.customerPhone = src.customerPhone;
     dst.note = src.note;
     dst.discountsJson = src.discountsJson;
+    dst.isSplitTable = src.isSplitTable;
+    dst.orderingBy = src.orderingBy;
+    dst.orderingByName = src.orderingByName;
+    dst.orderingAt = src.orderingAt;
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
@@ -254,6 +559,7 @@ class OrderRepository {
     );
     _applyTableState(targetTable, target);
     _applyTableState(sourceTable, source);
+    _tryRemoveInactiveSplitTable(source);
 
     await _safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -307,6 +613,7 @@ class OrderRepository {
     );
     _applyTableState(targetTable, target);
     _applyTableState(sourceTable, source);
+    _tryRemoveInactiveSplitTable(source);
 
     await _safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
@@ -502,6 +809,7 @@ class OrderRepository {
       rethrow;
     }
     table.clearTable();
+    _tryRemoveInactiveSplitTable(cleared);
 
     unawaited(_runPaymentFollowUps(
       bill,
@@ -828,6 +1136,7 @@ class OrderRepository {
       'hủy hóa đơn bàn ${table.name}',
     );
     table.clearTable();
+    _tryRemoveInactiveSplitTable(cleared);
 
     await _safeLog(AuditLogModel(
       timestamp: now,
@@ -1679,14 +1988,14 @@ class OrderRepository {
     }
   }
 
-  int compareTables(TableModel a, TableModel b) {
+  static int compareTables(TableModel a, TableModel b) {
     if (a.zone != b.zone) {
       return a.zone.toLowerCase().compareTo(b.zone.toLowerCase());
     }
     return compareNatural(a.name, b.name);
   }
 
-  int compareNatural(String a, String b) {
+  static int compareNatural(String a, String b) {
     final regex = RegExp(r'(\d+)|(\D+)');
     final matchesA = regex.allMatches(a).map((m) => m.group(0)!).toList();
     final matchesB = regex.allMatches(b).map((m) => m.group(0)!).toList();

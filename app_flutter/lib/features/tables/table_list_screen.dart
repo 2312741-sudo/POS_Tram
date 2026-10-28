@@ -622,7 +622,7 @@ class _TableListScreenState extends State<TableListScreen> {
                           final table = list[index];
                           return TableCard(
                             table: table,
-                            onTap: () => _onTableTap(table),
+                            onTap: () => _onTableTap(table, allTables: allTables),
                             onLongPress: () {
                               if (table.inUse) {
                                 _showInUseTableActionsDialog(table, allTables);
@@ -653,10 +653,10 @@ class _TableListScreenState extends State<TableListScreen> {
     );
   }
 
-  Future<void> _onTableTap(TableModel table) async {
+  Future<void> _onTableTap(TableModel table, {List<TableModel>? allTables, bool forceSplitNewOrder = false}) async {
     final bool inUse = table.inUse;
     final bool isReserved = table.isReserved;
-    if (isReserved) {
+    if (isReserved && !forceSplitNewOrder) {
       _showReservationActionsDialog(table);
       return;
     }
@@ -695,8 +695,9 @@ class _TableListScreenState extends State<TableListScreen> {
     }
     if (!mounted) return;
 
-    // 2. NẾU BÀN ĐANG CÓ KHÁCH (ĐANG SỬ DỤNG): VÀO THẲNG MÀN HÌNH ĐƠN HÀNG (ORDER CART)
-    if (inUse) {
+    // 2. NẾU BÀN ĐANG CÓ KHÁCH (ĐANG SỬ DỤNG) VÀ KHÔNG PHẢI TẠO ĐƠN TÁCH MỚI:
+    //    VÀO THẲNG MÀN HÌNH ĐƠN HÀNG (ORDER CART)
+    if (inUse && !forceSplitNewOrder) {
       context.push('/order-cart', extra: {
         'table': table,
         'products': table.currentItems,
@@ -704,17 +705,36 @@ class _TableListScreenState extends State<TableListScreen> {
       return;
     }
 
-    // 3. NẾU BÀN TRỐNG: VÀO THẲNG MÀN HÌNH CHỌN MÓN (XOÁ POPUP NHẬP SỐ KHÁCH)
-    table.openedAt ??= DateTime.now().millisecondsSinceEpoch;
-    if (table.guestCount == null || table.guestCount! <= 0) {
-      table.guestCount = 2; // Số khách mặc định, nhân viên có thể sửa trong màn hình đơn
+    // 3. KẾT HỢP PHƯƠNG ÁN 1 + 2:
+    //    - Đánh dấu khóa tạm trên bàn trống ngay khi bấm vào.
+    //    - Nếu 2 nhân viên cùng bấm vào 1 bàn hoặc bấm tạo đơn mới khi bàn đang bận,
+    //      tự động tách ra không gian bàn riêng (VD: "Bàn 01 (2)", "Mang về (2)") và mã đơn riêng!
+    final staffUser = _auth.currentUser?.username ?? 'staff';
+    final staffName = _auth.currentUser?.fullName ?? 'Nhân Viên';
+    final res = await _fb.claimOrSplitTableForOrdering(
+      table,
+      knownTables: allTables,
+      staffUsername: staffUser,
+      staffName: staffName,
+    );
+    if (!mounted) return;
+
+    if (res.wasSplit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '⚡ ${table.baseName} đang có ${res.occupiedBy ?? "đơn khác"} → Đã tự động tạo không gian bàn riêng ${res.targetTable.name}!',
+          ),
+          backgroundColor: TramColors.brandPrimary,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
-    table.ensureCodes();
-    context.push('/order-list', extra: table);
+    context.push('/order-list', extra: res.targetTable);
   }
 
   Future<void> _onTableMenuSelected(String val, TableModel table, List<TableModel> allTables) async {
-    if (val == 'TRANSFER' || val == 'MERGE') {
+    if (val == 'TRANSFER' || val == 'MERGE' || val == 'SPLIT_NEW_ORDER') {
       final openShift = _fb.activeShiftCache ?? await _fb.getCurrentOpenShift();
       if (openShift == null || !openShift.isOpen) {
         if (mounted) {
@@ -735,7 +755,9 @@ class _TableListScreenState extends State<TableListScreen> {
     }
     if (!mounted) return;
 
-    if (val == 'NOTE') {
+    if (val == 'SPLIT_NEW_ORDER') {
+      await _onTableTap(table, allTables: allTables, forceSplitNewOrder: true);
+    } else if (val == 'NOTE') {
       _showTableNoteDialog(table);
     } else if (val == 'QR') {
       context.push('/qr-code', extra: {'tableName': table.name, 'tableZone': table.zone});
@@ -1189,6 +1211,15 @@ class _TableListScreenState extends State<TableListScreen> {
                   onTap: () {
                     Navigator.pop(ctx);
                     context.push('/order-list', extra: table);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.call_split, color: context.tc.primary),
+                  title: Text('Tạo đơn tách bàn mới (${table.baseName} (2))', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Tạo không gian bàn riêng và hóa đơn riêng cho nhóm khách khác'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _onTableTap(table, allTables: allTables, forceSplitNewOrder: true);
                   },
                 ),
                 ListTile(

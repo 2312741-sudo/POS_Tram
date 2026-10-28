@@ -37,6 +37,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
   bool _loading = false;
   bool _isShiftOpen = false;
   final _searchCtrl = TextEditingController();
+  String? _sessionBillId;
+  bool _startedAsNewOrder = false;
 
   @override
   void initState() {
@@ -45,8 +47,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _products = _fb.defaultProducts;
     _categories = _fb.defaultCategories;
     _loadData();
+    _startedAsNewOrder = !widget.isAddingMore && widget.table.currentItems.isEmpty;
     // Ensure table has both Bill Code (Mã hóa đơn) and Order Code (Mã đặt món)
     widget.table.ensureCodes();
+    _sessionBillId = widget.table.currentBillId;
     // Carry over existing order items from table
     _cart = List.from(widget.table.currentItems);
 
@@ -736,14 +740,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            // If cart is empty, return table to completely EMPTY state
+            // Nếu chưa chọn món nào khi thoát:
+            // - Với phiên mở bàn mới (_startedAsNewOrder): chỉ nhả khóa orderingBy an toàn
+            //   (tránh ghi đè nếu đồng nghiệp vừa lưu đơn trên bàn này).
+            // - Nếu đã chọn món: dùng saveTableOrderSafe để tự tách bàn nếu trùng lúc lưu.
             if (_cart.isEmpty) {
-              widget.table.clearTable();
+              if (_startedAsNewOrder) {
+                _fb.releaseTableOrderingClaim(
+                  widget.table,
+                  staffUsername: _auth.currentUser?.username,
+                );
+              } else {
+                widget.table.clearTable();
+                _fb.saveTable(widget.table).catchError(_saveErrorHandler());
+              }
             } else {
               widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
               widget.table.inUse = true;
+              _fb
+                  .saveTableOrderSafe(
+                    widget.table,
+                    sessionBillId: _sessionBillId,
+                    isNewOrderSession: _startedAsNewOrder,
+                  )
+                  .catchError((Object e) {
+                _saveErrorHandler()(e);
+                return (savedTable: widget.table, wasSplit: false);
+              });
             }
-            _fb.saveTable(widget.table).catchError(_saveErrorHandler());
             Navigator.of(context).pop(_cart);
           },
         ),
@@ -848,13 +872,38 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       // Cập nhật giỏ hàng tạm thời vào bàn
                       widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
                       widget.table.inUse = true;
-                      _fb.saveTable(widget.table).catchError(_saveErrorHandler());
 
                       if (widget.isAddingMore) {
+                        _fb.saveTable(widget.table).catchError(_saveErrorHandler());
                         Navigator.of(context).pop(_cart);
                       } else {
+                        TableModel targetTable = widget.table;
+                        bool wasSplit = false;
+                        try {
+                          final res = await _fb.saveTableOrderSafe(
+                            widget.table,
+                            sessionBillId: _sessionBillId,
+                            isNewOrderSession: _startedAsNewOrder,
+                          );
+                          targetTable = res.savedTable;
+                          wasSplit = res.wasSplit;
+                        } catch (e) {
+                          _saveErrorHandler()(e);
+                        }
+                        if (!context.mounted) return;
+                        if (wasSplit) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '⚡ ${widget.table.baseName} vừa có đơn khác → Đã tự động tách sang ${targetTable.name} (${targetTable.currentBillId})!',
+                              ),
+                              backgroundColor: AppColors.primary,
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        }
                         context.pushReplacement('/order-cart', extra: {
-                          'table': widget.table,
+                          'table': targetTable,
                           'products': _cart,
                         });
                       }

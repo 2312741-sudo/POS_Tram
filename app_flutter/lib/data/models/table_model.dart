@@ -55,6 +55,17 @@ class TableModel {
   /// Giúp treo đơn qua giờ combo không bị mất khuyến mãi đã chọn trước đó.
   String? discountsJson;
 
+  /// Đánh dấu không gian bàn tách tự động (VD: "Bàn 01 (2)", "Mang về (2)") khi 2 nhân viên
+  /// cùng order hoặc tách đơn độc lập trên cùng bàn/mang về. Tự động ẩn/dọn khi thanh toán/hủy.
+  bool isSplitTable;
+
+  /// Trạng thái khóa tạm khi nhân viên đang mở màn hình chọn món cho bàn trống (Option 2).
+  String? orderingBy;
+  String? orderingByName;
+  int? orderingAt;
+
+  static const int orderingLockTtlMs = 180000; // 3 phút tự nhả khóa nếu thoát đột ngột
+
   TableModel({
     required this.name,
     required this.zone,
@@ -80,6 +91,10 @@ class TableModel {
     this.customerPhone,
     this.note,
     this.discountsJson,
+    this.isSplitTable = false,
+    this.orderingBy,
+    this.orderingByName,
+    this.orderingAt,
   }) : _currentOrderJson = currentOrderJson;
 
   /// Danh sách ưu đãi khuyến mãi / voucher đã áp dụng trên bàn
@@ -236,6 +251,18 @@ class TableModel {
     final rawIsReserved = map['isReserved'];
     final isReserved = rawIsReserved == true || rawIsReserved?.toString().toLowerCase() == 'true';
 
+    final rawIsSplit = map['isSplitTable'];
+    final isSplitTable = rawIsSplit == true || rawIsSplit == 1 || rawIsSplit?.toString().toLowerCase() == 'true';
+
+    int? orderingAt;
+    if (map['orderingAt'] != null) {
+      if (map['orderingAt'] is num) {
+        orderingAt = (map['orderingAt'] as num).toInt();
+      } else {
+        orderingAt = int.tryParse(map['orderingAt'].toString());
+      }
+    }
+
     return TableModel(
       name: name,
       zone: zone,
@@ -261,6 +288,10 @@ class TableModel {
       customerPhone: nz(map['customerPhone']),
       note: nz(map['note']),
       discountsJson: nz(map['discountsJson']),
+      isSplitTable: isSplitTable,
+      orderingBy: nz(map['orderingBy']),
+      orderingByName: nz(map['orderingByName']),
+      orderingAt: orderingAt,
     );
   }
 
@@ -289,7 +320,70 @@ class TableModel {
     if (hasCustomer) 'customerId': customerId,
     if (hasCustomer && customerName != null) 'customerName': customerName,
     if (hasCustomer && customerPhone != null) 'customerPhone': customerPhone,
+    if (isSplitTable || isAutoSplit) 'isSplitTable': true,
+    if (orderingBy != null && orderingBy!.isNotEmpty) 'orderingBy': orderingBy,
+    if (orderingByName != null && orderingByName!.isNotEmpty) 'orderingByName': orderingByName,
+    if (orderingAt != null) 'orderingAt': orderingAt,
   };
+
+  /// Kiểm tra xem bàn trống này có đang được một nhân viên (khác [excludeUsername]) mở menu chọn món không.
+  bool isActivelyOrdering({String? excludeUsername, int? nowMs, int ttlMs = orderingLockTtlMs}) {
+    if (inUse) return false;
+    final by = orderingBy?.trim();
+    if (by == null || by.isEmpty) return false;
+    if (excludeUsername != null && excludeUsername.trim().isNotEmpty && by == excludeUsername.trim()) {
+      return false;
+    }
+    final at = orderingAt;
+    if (at == null || at <= 0) return false;
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    return (now - at).abs() <= ttlMs;
+  }
+
+  void clearOrderingLock() {
+    orderingBy = null;
+    orderingByName = null;
+    orderingAt = null;
+  }
+
+  /// Lấy tên bàn gốc (bỏ hậu tố tách bàn như " (2)", " (3)").
+  static String extractBaseName(String rawName) {
+    return rawName.trim().replaceFirst(RegExp(r'\s*\(\d+\)\s*$'), '').trim();
+  }
+
+  String get baseName => extractBaseName(name);
+
+  /// Bàn tách tự động (VD: "Bàn 01 (2)", "Mang về (2)") — chỉ tồn tại khi đang có đơn/đang order.
+  bool get isAutoSplit => isSplitTable || RegExp(r'\s\(\d+\)\s*$').hasMatch(name.trim());
+
+  /// Kiểm tra có phải bàn Mang về hay không.
+  bool get isTakeaway {
+    final n = name.toLowerCase();
+    final z = zone.toLowerCase();
+    return n.contains('mang về') ||
+        n.contains('mang ve') ||
+        z.contains('mang về') ||
+        z.contains('mang ve');
+  }
+
+  /// Cấp tên bàn tách tiếp theo chưa bị chiếm dụng trong khu vực:
+  /// VD: base = "Bàn 01" -> "Bàn 01 (2)", "Bàn 01 (3)", ...
+  /// VD: base = "Mang về" -> "Mang về (2)", "Mang về (3)", ...
+  static String nextSplitTableName(String baseName, Iterable<String> activeNamesInZone) {
+    final cleanBase = extractBaseName(baseName);
+    final occupied = activeNamesInZone.map((s) => s.trim().toLowerCase()).toSet();
+    int idx = 2;
+    while (occupied.contains('$cleanBase ($idx)'.toLowerCase())) {
+      idx++;
+    }
+    return '$cleanBase ($idx)';
+  }
+
+  /// Cấp mới hoàn toàn bộ mã Hóa Đơn (HD-...) và Mã Đặt Món (OD-...) cho không gian bàn tách mới.
+  void regenerateCodes() {
+    currentBillId = FormatUtils.billCode();
+    currentOrderCode = FormatUtils.orderCode();
+  }
 
   List<OrderActionLogModel> get actionLogs {
     if (actionLogsJson == null || actionLogsJson!.isEmpty) return [];
@@ -365,6 +459,7 @@ class TableModel {
     deletedItemsJson = null;
     discountsJson = null;
     note = null;
+    clearOrderingLock();
     clearPrePrint();
     clearCustomer();
   }

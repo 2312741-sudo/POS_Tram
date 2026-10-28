@@ -227,7 +227,14 @@ class TableCard extends StatelessWidget {
       }
     } else {
       lines.add(Text(table.zone, maxLines: 1, overflow: TextOverflow.ellipsis, style: small));
-      if (table.capacity > 0) {
+      if (table.isActivelyOrdering()) {
+        lines.add(Text(
+          '✍️ Đang chọn món: ${table.orderingByName ?? table.orderingBy}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: context.tc.warningInk),
+        ));
+      } else if (table.capacity > 0) {
         lines.add(Text('${table.capacity} chỗ', maxLines: 1, overflow: TextOverflow.ellipsis, style: small));
       }
     }
@@ -274,13 +281,18 @@ class TableCard extends StatelessWidget {
         ],
       );
     }
+    final bool activelyOrdering = !inUse && !isReserved && table.isActivelyOrdering();
     return Text(
-      isReserved ? 'Chạm để nhận bàn' : 'Giữ để đặt trước',
+      isReserved
+          ? 'Chạm để nhận bàn'
+          : (activelyOrdering ? 'Chạm để tách bàn mới' : 'Giữ để đặt trước'),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: GoogleFonts.beVietnamPro(
         fontSize: 11,
-        color: isReserved ? style.ink : context.tc.textSecondary,
+        color: isReserved
+            ? style.ink
+            : (activelyOrdering ? context.tc.warningInk : context.tc.textSecondary),
         fontStyle: FontStyle.italic,
       ),
     );
@@ -297,6 +309,7 @@ class TableCard extends StatelessWidget {
         if (!inUse && !isReserved)
           _menuItem('RESERVE', Icons.bookmark_add_outlined, 'Đặt trước bàn này', tc.warningInk),
         if (inUse) ...[
+          _menuItem('SPLIT_NEW_ORDER', Icons.call_split, 'Tạo đơn tách bàn mới (${table.baseName} (2))', tc.primary),
           _menuItem('TRANSFER', Icons.swap_horiz, 'Chuyển sang bàn khác', context.ink(TramColors.managerAccent)),
           _menuItem('MERGE', Icons.call_merge, 'Ghép vào bàn khác', tc.warning),
           _menuItem('CANCEL_BILL', Icons.cancel_outlined, 'Hủy hóa đơn', tc.danger, danger: true),

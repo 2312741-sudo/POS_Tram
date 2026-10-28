@@ -197,6 +197,33 @@ class FirebaseService {
 
   Future<void> saveTable(TableModel table) => _orderRepo.saveTable(table);
 
+  Future<({TableModel targetTable, bool wasSplit, String? occupiedBy})> claimOrSplitTableForOrdering(
+    TableModel requestedTable, {
+    Iterable<TableModel>? knownTables,
+    required String staffUsername,
+    required String staffName,
+  }) =>
+      _orderRepo.claimOrSplitTableForOrdering(
+        requestedTable,
+        knownTables: knownTables,
+        staffUsername: staffUsername,
+        staffName: staffName,
+      );
+
+  Future<void> releaseTableOrderingClaim(TableModel table, {String? staffUsername}) =>
+      _orderRepo.releaseTableOrderingClaim(table, staffUsername: staffUsername);
+
+  Future<({TableModel savedTable, bool wasSplit})> saveTableOrderSafe(
+    TableModel table, {
+    required String? sessionBillId,
+    required bool isNewOrderSession,
+  }) =>
+      _orderRepo.saveTableOrderSafe(
+        table,
+        sessionBillId: sessionBillId,
+        isNewOrderSession: isNewOrderSession,
+      );
+
   Future<void> deleteTable(TableModel table) => _orderRepo.deleteTable(table);
 
   Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) =>
