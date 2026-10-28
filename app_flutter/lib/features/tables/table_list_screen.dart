@@ -444,12 +444,6 @@ class _TableListScreenState extends State<TableListScreen> {
                 ),
                 onPressed: () => context.go('/manager-hub'),
               ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.dashboard_outlined),
-              tooltip: 'Tổng quan / Báo cáo',
-              onPressed: () => context.push('/dashboard'),
             ),
         ],
       ),
