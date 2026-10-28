@@ -177,7 +177,6 @@ function TablesPageContent() {
   const canSendKitchenFromWeb = hasPermission(user, "SEND_KITCHEN");
   // Quản lý / chủ quán có thể tự đặt PIN duyệt
   const canSetApprovalPin = !!user && canUserApprove({ ...user }, "DISCOUNT_ITEM") && hasPermission(user, "MANAGE_MANAGER_PIN");
-  const canDeleteItem = hasPermission(user, "DELETE_ITEM");
   const loading = ctxLoading && tables.length === 0;
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TableStatus>("ALL");
