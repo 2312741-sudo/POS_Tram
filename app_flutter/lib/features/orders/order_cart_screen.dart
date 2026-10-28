@@ -361,9 +361,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         removeQty: qty,
       );
 
-  /// Cổng hủy món đã gửi bếp: quyền CANCEL_KITCHEN_ITEM hoặc Quản lý duyệt bằng PIN.
+  /// Cổng hủy món đã gửi bếp: quyền CANCEL_KITCHEN_ITEM hoặc quyền DELETE_ITEM (nhân viên được xóa món trong bàn),
+  /// hoặc Quản lý duyệt bằng PIN.
   Future<bool> _ensureCanCancelKitchenItem(OrderItemModel item) async {
-    if (!item.isSentKitchen || _auth.can(AppPermissions.cancelKitchenItem)) return true;
+    if (!item.isSentKitchen || _auth.can(AppPermissions.cancelKitchenItem) || _auth.can(AppPermissions.deleteItem)) return true;
     final approval = await showManagerApprovalDialog(
       context,
       action: ManagerApprovalAction.cancelKitchenItem,
@@ -789,7 +790,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
 
     final hasKitchen = _cart.any((i) => i.isSentKitchen);
-    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem)) {
+    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem) && !_auth.can(AppPermissions.deleteItem)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚠️ Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
@@ -2982,6 +2983,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           int calcToppingPrice = 0;
@@ -2992,55 +2994,80 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           final int totalPrice = unitPrice * item.quantity;
 
           return Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-            child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              decoration: BoxDecoration(
+                color: context.tc.card,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
+                  // 1. PINNED HEADER (Drag handle, Name, Price, Close)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Chỉnh sửa: ${item.name}',
-                              style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Chỉnh sửa: ${item.name}',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    'Đơn giá gốc: ${FormatUtils.vnd(item.price)} • Số lượng: x${item.quantity}',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
+                                  ),
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Text(
-                              'Đơn giá gốc: ${FormatUtils.vnd(item.price)} • Số lượng: x${item.quantity}',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
+                              FormatUtils.vnd(unitPrice),
+                              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 22),
+                              tooltip: 'Đóng',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => Navigator.pop(ctx),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        FormatUtils.vnd(unitPrice),
-                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 22),
-                        tooltip: 'Đóng',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
+                        const Divider(height: 20),
+                      ],
+                    ),
                   ),
-                  const Divider(height: 24),
+
+                  // 2. SCROLLABLE OPTIONS BODY
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
 
                   // 1. SIZE SELECTION (if original product has sizes)
                   if (hasSizes) ...[
@@ -3242,53 +3269,74 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       }).toList(),
                     );
                   }),
-                  const SizedBox(height: 20),
-
-                  // 5. SAVE BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.tc.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                      onPressed: () async {
-                        setState(() {
-                          final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
-                          for (final idx in targetIndices) {
-                            if (idx < _cart.length) {
-                              _cart[idx] = _cart[idx].copyWith(
-                                note: noteCtrl.text.trim(),
-                                selectedToppings: selectedToppings,
-                                toppingPrice: calcToppingPrice,
-                                selectedSize: selectedSize,
-                                sizeExtraPrice: sizeExtra,
-                                selectedSugar: isDrinkOrTea ? selectedSugar : '',
-                                selectedIce: isDrinkOrTea ? selectedIce : '',
+                    ),
+                  ),
+
+                  // 3. PINNED BOTTOM ACTION BAR
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    decoration: BoxDecoration(
+                      color: context.tc.card,
+                      border: Border(top: BorderSide(color: context.tc.borderLight)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, -3),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.tc.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () async {
+                            setState(() {
+                              final targetIndices = (syncIndices != null && syncIndices.isNotEmpty) ? syncIndices : [index];
+                              for (final idx in targetIndices) {
+                                if (idx < _cart.length) {
+                                  _cart[idx] = _cart[idx].copyWith(
+                                    note: noteCtrl.text.trim(),
+                                    selectedToppings: selectedToppings,
+                                    toppingPrice: calcToppingPrice,
+                                    selectedSize: selectedSize,
+                                    sizeExtraPrice: sizeExtra,
+                                    selectedSugar: isDrinkOrTea ? selectedSugar : '',
+                                    selectedIce: isDrinkOrTea ? selectedIce : '',
+                                  );
+                                }
+                              }
+                            });
+
+                            widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+                            await _fb.saveTable(widget.table).catchError((_) {});
+                            _recalculateDiscounts();
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
+                                  backgroundColor: AppColors.success,
+                                  duration: Duration(seconds: 2),
+                                ),
                               );
                             }
-                          }
-                        });
-
-                        widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
-                        await _fb.saveTable(widget.table).catchError((_) {});
-                        _recalculateDiscounts();
-
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
-                              backgroundColor: AppColors.success,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                          },
+                          child: Text(
+                            'Lưu thay đổi • ${FormatUtils.vnd(totalPrice)}',
+                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        ),
                       ),
                     ),
                   ),

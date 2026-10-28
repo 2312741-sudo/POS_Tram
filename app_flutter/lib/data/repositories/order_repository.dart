@@ -15,6 +15,7 @@ import '../services/inventory_service.dart';
 import '../services/campaign_service.dart';
 import '../services/loyalty_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/permissions/app_permissions.dart';
 import 'seed_data.dart';
 
 class OrderRepository {
@@ -1535,6 +1536,14 @@ class OrderRepository {
     required String staffFullName,
     required String staffRole,
   }) async {
+    final role = staffRole.toUpperCase();
+    final isStaff = role == 'ROLE_STAFF' || role == 'STAFF' || role == 'CASHIER' || role == 'WAITER';
+    final auth = AuthService();
+    final hasCancelBill = auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill);
+    if (isStaff && !hasCancelBill) {
+      throw StateError('Tài khoản nhân viên không có quyền hủy hóa đơn đã thanh toán.');
+    }
+
     final storeCode = _currentStoreCode;
     final now = DateTime.now().millisecondsSinceEpoch;
     final cancelLog = OrderActionLogModel(
@@ -1598,6 +1607,14 @@ class OrderRepository {
     required String staffFullName,
     required String staffRole,
   }) async {
+    final role = staffRole.toUpperCase();
+    final isStaff = role == 'ROLE_STAFF' || role == 'STAFF' || role == 'CASHIER' || role == 'WAITER';
+    final auth = AuthService();
+    final hasCancelBill = auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill);
+    if (isStaff && !hasCancelBill) {
+      throw StateError('Tài khoản nhân viên không có quyền xóa hóa đơn đã thanh toán.');
+    }
+
     final now = DateTime.now().millisecondsSinceEpoch;
 
     await _commitWrite(

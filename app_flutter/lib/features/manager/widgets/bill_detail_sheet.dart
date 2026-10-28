@@ -314,18 +314,20 @@ class BillDetailSheet extends StatelessWidget {
             ),
             child: Row(
               children: [
-                IconButton(
-                  tooltip: bill.status == 'CANCELLED' ? 'Xóa vĩnh viễn' : 'Hủy hóa đơn',
-                  style: IconButton.styleFrom(
-                    backgroundColor: context.bg(Colors.red.shade50),
-                    foregroundColor: context.tc.danger,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.all(12),
+                if (auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill)) ...[
+                  IconButton(
+                    tooltip: bill.status == 'CANCELLED' ? 'Xóa vĩnh viễn' : 'Hủy hóa đơn',
+                    style: IconButton.styleFrom(
+                      backgroundColor: context.bg(Colors.red.shade50),
+                      foregroundColor: context.tc.danger,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.all(12),
+                    ),
+                    icon: Icon(bill.status == 'CANCELLED' ? Icons.delete_forever : Icons.cancel_outlined),
+                    onPressed: () => _confirmCancelOrDeleteBill(context, bill, auth, fb),
                   ),
-                  icon: Icon(bill.status == 'CANCELLED' ? Icons.delete_forever : Icons.cancel_outlined),
-                  onPressed: () => _confirmCancelOrDeleteBill(context, bill, auth, fb),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -629,10 +631,11 @@ class BillDetailSheet extends StatelessWidget {
     AuthService auth,
     FirebaseService fb,
   ) async {
-    if (!auth.can(AppPermissions.cancelBill)) {
+    final canCancel = auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill);
+    if (!canCancel) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Bạn không có quyền hủy hoặc xóa hóa đơn!'),
+          content: Text('Tài khoản nhân viên không được phép hủy hoặc xóa hóa đơn đã thanh toán!'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -742,7 +745,7 @@ class BillDetailSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Đóng'),
             ),
-            if (bill.status != 'CANCELLED')
+            if (bill.status != 'CANCELLED' && (auth.isRootOwner || auth.isOwner || auth.can(AppPermissions.cancelBill)))
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.tc.danger,

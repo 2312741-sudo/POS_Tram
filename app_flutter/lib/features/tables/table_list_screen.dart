@@ -1271,7 +1271,7 @@ class _TableListScreenState extends State<TableListScreen> {
     }
 
     final hasKitchen = table.currentItems.any((i) => i.isSentKitchen);
-    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem)) {
+    if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem) && !_auth.can(AppPermissions.deleteItem)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

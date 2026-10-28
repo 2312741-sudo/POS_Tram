@@ -391,7 +391,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       isScrollControlled: true,
       enableDrag: true,
       isDismissible: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           int toppingPrice = 0;
@@ -402,45 +402,84 @@ class _OrderListScreenState extends State<OrderListScreen> {
           final int totalPrice = unitPrice * quantity;
 
           return Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-            child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              decoration: BoxDecoration(
+                color: context.tc.card,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: context.tc.border, borderRadius: BorderRadius.circular(2))),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Header: Name & Base Price & Close Button
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
+                  // 1. PINNED HEADER (Drag handle, Name, SKU, Price, Close)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: context.tc.border,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(product.name, style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold)),
-                            if (product.code.isNotEmpty)
-                              Text('SKU: ${product.code} • ${product.category}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product.name,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.bold),
+                                  ),
+                                  if (product.code.isNotEmpty)
+                                    Text(
+                                      'SKU: ${product.code} • ${product.category}',
+                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              FormatUtils.vnd(product.price),
+                              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 22),
+                              tooltip: 'Đóng',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(FormatUtils.vnd(product.price), style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold, color: context.tc.primary)),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 22),
-                        tooltip: 'Đóng',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
+                        const Divider(height: 20),
+                      ],
+                    ),
                   ),
-                  const Divider(height: 24),
+
+                  // 2. SCROLLABLE OPTIONS BODY (Size, Sugar, Ice, Toppings, Note)
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
 
                   // 1. SIZE SELECTION (KiotViet Size)
                   if (hasSizes) ...[
@@ -621,93 +660,114 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       }).toList(),
                     );
                   }),
-                  const SizedBox(height: 20),
-
-                  // 5. QUANTITY & ADD BUTTON
-                  Row(
-                    children: [
-                      // Quantity Stepper
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: context.tc.border),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove, size: 18),
-                              onPressed: quantity > 1 ? () => setModalState(() => quantity--) : null,
-                            ),
-                            Text('$quantity', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold)),
-                            IconButton(
-                              icon: const Icon(Icons.add, size: 18),
-                              onPressed: () => setModalState(() => quantity++),
-                            ),
-                          ],
-                        ),
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                      const SizedBox(width: 14),
+                    ),
+                  ),
 
-                      // Add Button
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.tc.primary,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  // 3. PINNED BOTTOM ACTION BAR (Cố định, luôn hiển thị đầy đủ Stepper + Thêm vào đơn)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    decoration: BoxDecoration(
+                      color: context.tc.card,
+                      border: Border(top: BorderSide(color: context.tc.borderLight)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, -3),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Row(
+                        children: [
+                          // Quantity Stepper
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: context.tc.border),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove, size: 18),
+                                  onPressed: quantity > 1 ? () => setModalState(() => quantity--) : null,
+                                ),
+                                Text('$quantity', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold)),
+                                IconButton(
+                                  icon: const Icon(Icons.add, size: 18),
+                                  onPressed: () => setModalState(() => quantity++),
+                                ),
+                              ],
+                            ),
                           ),
-                          onPressed: () {
-                            final staffUser = _auth.currentUser?.username ?? 'staff';
-                            final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
-                            final now = DateTime.now().millisecondsSinceEpoch;
+                          const SizedBox(width: 14),
 
-                            final newItem = OrderItemModel(
-                              productId: product.id,
-                              name: product.name,
-                              price: product.price,
-                              quantity: quantity,
-                              selectedSize: hasSizes ? selectedSize : '',
-                              sizeExtraPrice: sizeExtra,
-                              selectedSugar: hasIceSugar ? selectedSugar : '',
-                              selectedIce: hasIceSugar ? selectedIce : '',
-                              selectedToppings: selectedToppings,
-                              toppingPrice: toppingPrice,
-                              note: noteCtrl.text.trim(),
-                              orderedBy: staffUser,
-                              orderedByName: staffName,
-                              orderedAt: now,
-                            );
+                          // Add Button
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: context.tc.primary,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () {
+                                final staffUser = _auth.currentUser?.username ?? 'staff';
+                                final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+                                final now = DateTime.now().millisecondsSinceEpoch;
 
-                            setState(() {
-                              final existingIdx = _cart.indexWhere((i) =>
-                                  !i.isSentKitchen &&
-                                  !i.hasDiscount &&
-                                  i.productId == newItem.productId &&
-                                  i.name == newItem.name &&
-                                  i.selectedSize == newItem.selectedSize &&
-                                  i.selectedSugar == newItem.selectedSugar &&
-                                  i.selectedIce == newItem.selectedIce &&
-                                  i.selectedToppings.join(',') == newItem.selectedToppings.join(',') &&
-                                  i.note == newItem.note);
-
-                              if (existingIdx >= 0) {
-                                _cart[existingIdx] = _cart[existingIdx].copyWith(
-                                  quantity: _cart[existingIdx].quantity + quantity,
+                                final newItem = OrderItemModel(
+                                  productId: product.id,
+                                  name: product.name,
+                                  price: product.price,
+                                  quantity: quantity,
+                                  selectedSize: hasSizes ? selectedSize : '',
+                                  sizeExtraPrice: sizeExtra,
+                                  selectedSugar: hasIceSugar ? selectedSugar : '',
+                                  selectedIce: hasIceSugar ? selectedIce : '',
+                                  selectedToppings: selectedToppings,
+                                  toppingPrice: toppingPrice,
+                                  note: noteCtrl.text.trim(),
+                                  orderedBy: staffUser,
+                                  orderedByName: staffName,
+                                  orderedAt: now,
                                 );
-                              } else {
-                                _cart.add(newItem);
-                              }
-                            });
 
-                            Navigator.pop(ctx);
-                          },
-                          child: Text(
-                            'Thêm vào đơn • ${FormatUtils.vnd(totalPrice)}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                                setState(() {
+                                  final existingIdx = _cart.indexWhere((i) =>
+                                      !i.isSentKitchen &&
+                                      !i.hasDiscount &&
+                                      i.productId == newItem.productId &&
+                                      i.name == newItem.name &&
+                                      i.selectedSize == newItem.selectedSize &&
+                                      i.selectedSugar == newItem.selectedSugar &&
+                                      i.selectedIce == newItem.selectedIce &&
+                                      i.selectedToppings.join(',') == newItem.selectedToppings.join(',') &&
+                                      i.note == newItem.note);
+
+                                  if (existingIdx >= 0) {
+                                    _cart[existingIdx] = _cart[existingIdx].copyWith(
+                                      quantity: _cart[existingIdx].quantity + quantity,
+                                    );
+                                  } else {
+                                    _cart.add(newItem);
+                                  }
+                                });
+
+                                Navigator.pop(ctx);
+                              },
+                              child: Text(
+                                'Thêm vào đơn • ${FormatUtils.vnd(totalPrice)}',
+                                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),

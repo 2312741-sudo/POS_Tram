@@ -168,6 +168,7 @@ function TablesPageContent() {
   // giảm số lượng món đã gửi bếp cần CANCEL_KITCHEN_ITEM.
   const canDiscountItem = hasPermission(user, "DISCOUNT_ITEM");
   const canCancelKitchenItem = hasPermission(user, "CANCEL_KITCHEN_ITEM");
+  const canDeleteItem = hasPermission(user, "DELETE_ITEM");
   // Giống Flutter: chuyển bàn = CHANGE_TABLE ("Đổi bàn / Chuyển khu vực"), gộp bàn = MERGE_SPLIT_TABLE
   const canTransferTable = hasPermission(user, "CHANGE_TABLE");
   const canMergeTable = hasPermission(user, "MERGE_SPLIT_TABLE");
@@ -873,7 +874,7 @@ function TablesPageContent() {
       setLineSaving(false);
       if (!err) setRemovalTarget(null);
     };
-    if (sent && !canCancelKitchenItem) {
+    if (sent && !canCancelKitchenItem && !canDeleteItem) {
       requestManagerPin(table, "CANCEL_KITCHEN_ITEM", `Xóa ${removeQty} x "${String(line.name ?? "")}" tại ${table.name}`, (a) => {
         void commit(a);
       });

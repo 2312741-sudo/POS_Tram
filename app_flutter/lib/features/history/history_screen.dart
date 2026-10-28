@@ -425,21 +425,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Hủy / Xóa hóa đơn button
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: context.tc.danger,
+              // Hủy / Xóa hóa đơn button (Chỉ Chủ quán hoặc tài khoản có quyền CANCEL_BILL)
+              if (_auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill))
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.tc.danger,
+                  ),
+                  icon: Icon(
+                    isCancelled ? Icons.delete_forever : Icons.cancel_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    isCancelled ? 'Xóa hóa đơn' : 'Hủy hóa đơn',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () => _showCancelOrDeleteBillDialog(context, bill),
                 ),
-                icon: Icon(
-                  isCancelled ? Icons.delete_forever : Icons.cancel_outlined,
-                  size: 16,
-                ),
-                label: Text(
-                  isCancelled ? 'Xóa hóa đơn' : 'Hủy hóa đơn',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                onPressed: () => _showCancelOrDeleteBillDialog(context, bill),
-              ),
 
               // Reprint button
               OutlinedButton.icon(
@@ -483,10 +484,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _showCancelOrDeleteBillDialog(BuildContext context, BillModel bill) async {
-    if (!_auth.can(AppPermissions.cancelBill)) {
+    final canCancel = _auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill);
+    if (!canCancel) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Bạn không có quyền hủy hoặc xóa hóa đơn!'),
+          content: Text('Tài khoản nhân viên không được phép hủy hoặc xóa hóa đơn đã thanh toán!'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -597,7 +599,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Đóng'),
             ),
-            if (bill.status != 'CANCELLED')
+            if (bill.status != 'CANCELLED' && (_auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill)))
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.tc.danger,
