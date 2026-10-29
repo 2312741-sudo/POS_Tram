@@ -57,25 +57,21 @@ const UNIFIED_ROLES = [
   {
     id: ROLE_OWNER,
     name: "Chủ Quán (Toàn quyền)",
-    icon: "👑",
     desc: "Toàn quyền quản trị tất cả chi nhánh và phân quyền",
   },
   {
     id: ROLE_MANAGER,
     name: MANAGER_ROLE_LABEL,
-    icon: "⭐",
     desc: "Điều hành ca, bán hàng, kho, khuyến mãi, két tiền, chiết khấu, báo cáo",
   },
   {
     id: ROLE_STAFF,
     name: `${STAFF_ROLE_LABEL} (${STAFF_ROLE_DESCRIPTION})`,
-    icon: "🍽️",
     desc: "Mở bàn, gọi món gửi bếp, tính tiền, in hóa đơn, áp dụng khuyến mãi",
   },
   {
     id: ROLE_KITCHEN,
     name: KITCHEN_ROLE_LABEL,
-    icon: "🍳",
     desc: "Xem màn hình bếp KDS, cập nhật trạng thái chế biến",
   },
 ];
@@ -591,7 +587,7 @@ export default function UsersPage() {
     if (role === ROLE_OWNER) {
       return (
         <span className="badge badge-danger" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-          👑 Chủ Quán
+          Chủ Quán
         </span>
       );
     }
@@ -608,20 +604,20 @@ export default function UsersPage() {
             gap: "4px",
           }}
         >
-          ⭐ {MANAGER_ROLE_LABEL}
+          {MANAGER_ROLE_LABEL}
         </span>
       );
     }
     if (role === ROLE_KITCHEN) {
       return (
         <span className="badge badge-warning" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-          🍳 {KITCHEN_ROLE_LABEL}
+          {KITCHEN_ROLE_LABEL}
         </span>
       );
     }
     return (
       <span className="badge badge-info" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-        🍽️ {STAFF_ROLE_LABEL}
+        {STAFF_ROLE_LABEL}
       </span>
     );
   };
@@ -647,7 +643,7 @@ export default function UsersPage() {
         }}
       >
         <div>
-          <h1 className="section-title">Quản lý Tài khoản & Phân quyền 👥</h1>
+          <h1 className="section-title">Quản lý Tài khoản & Phân quyền</h1>
           <p className="section-subtitle">
             Hệ thống xác thực Firebase Authentication &amp; Phân quyền đa chi nhánh ({currentUsers.length} tài khoản)
           </p>
@@ -682,7 +678,7 @@ export default function UsersPage() {
               color: currentStoreCode === "ALL" ? "#FFFFFF" : "var(--subtext)",
             }}
           >
-            🌐 Tất cả chi nhánh ({Object.values(usersMap).reduce((acc, l) => acc + l.length, 0)} NV)
+            Tất cả chi nhánh ({Object.values(usersMap).reduce((acc, l) => acc + l.length, 0)} NV)
           </button>
           {storesList.map((s) => {
             const isSelected = currentStoreCode === s.storeCode;
@@ -704,7 +700,7 @@ export default function UsersPage() {
                   color: isSelected ? "#FFFFFF" : "var(--subtext)",
                 }}
               >
-                🏪 {s.storeName} ({count} NV)
+                {s.storeName} ({count} NV)
               </button>
             );
           })}
@@ -819,7 +815,7 @@ export default function UsersPage() {
               <option value="ALL">Tất cả vai trò</option>
               {UNIFIED_ROLES.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.icon} {r.name}
+                  {r.name}
                 </option>
               ))}
             </select>
@@ -919,7 +915,7 @@ export default function UsersPage() {
                     )}
                     {u.mustChangePassword && u.authProvider !== "chamcong" && (
                       <div style={{ fontSize: "10px", color: "var(--warning)", fontWeight: "600", marginTop: "2px" }}>
-                        ⚡ Cần đổi MK lần đầu
+                        Cần đổi MK lần đầu
                       </div>
                     )}
                   </td>
@@ -933,7 +929,7 @@ export default function UsersPage() {
                         borderColor: "var(--border)",
                       }}
                     >
-                      🏪 {u.storeName || u.storeCode}
+                      {u.storeName || u.storeCode}
                     </span>
                   </td>
                   <td>{getRoleBadge(u.roleId || u.role)}</td>
@@ -1283,7 +1279,7 @@ export default function UsersPage() {
                 >
                   {storesList.map((s) => (
                     <option key={s.storeCode} value={s.storeCode}>
-                      🏪 {s.storeName} ({s.storeCode})
+                      {s.storeName} ({s.storeCode})
                     </option>
                   ))}
                 </select>
@@ -1330,7 +1326,7 @@ export default function UsersPage() {
                               gap: "6px",
                             }}
                           >
-                            <span>{r.icon}</span> {r.name}
+                            {r.name}
                           </div>
                           <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{r.desc}</div>
                         </div>

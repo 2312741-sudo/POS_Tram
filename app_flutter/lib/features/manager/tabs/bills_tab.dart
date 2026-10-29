@@ -368,7 +368,7 @@ class _BillsTabState extends State<BillsTab> {
                     children: [
                       _buildZoneChip('Tất cả phòng/bàn', 'ALL'),
                       const SizedBox(width: 8),
-                      _buildZoneChip('🥡 Mang về', 'MANG_VE'),
+                      _buildZoneChip('Mang về', 'MANG_VE'),
                       ..._availableZones.map((z) => Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: _buildZoneChip(z, z),
@@ -447,9 +447,9 @@ class _BillsTabState extends State<BillsTab> {
                             const SizedBox(width: 8),
                             _buildPaymentChip('Tất cả HTTT', 'ALL'),
                             const SizedBox(width: 6),
-                            _buildPaymentChip('💵 Tiền mặt', 'CASH'),
+                            _buildPaymentChip('Tiền mặt', 'CASH'),
                             const SizedBox(width: 6),
-                            _buildPaymentChip('🏦 VietQR', 'TRANSFER'),
+                            _buildPaymentChip('VietQR', 'TRANSFER'),
                           ],
                         ),
                       ),
@@ -835,8 +835,8 @@ class _BillsTabState extends State<BillsTab> {
                       ),
                       child: Text(
                         isCancelled
-                            ? '🚫 Đã hủy'
-                            : (isCash ? '💵 Tiền mặt' : '🏦 VietQR'),
+                            ? 'Đã hủy'
+                            : (isCash ? 'Tiền mặt' : 'VietQR'),
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,

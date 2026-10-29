@@ -139,7 +139,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
       i++;
       final plan = _plans[t];
       if (plan == null) {
-        _results.add('❌ $t: ${_planErrors[t] ?? 'không dựng được kế hoạch'}');
+        _results.add('$t: ${_planErrors[t] ?? 'không dựng được kế hoạch'}');
         continue;
       }
       try {
@@ -154,9 +154,9 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
             if (mounted) setState(() => _progress = 'Đang sao chép sang $t ($i/${_targets.length}) — lô $d/$total');
           },
         );
-        _results.add('✅ $t: tạo ${plan.created + plan.duplicated} • ghi đè ${plan.overwritten} • bỏ qua ${plan.skipped}');
+        _results.add('$t: tạo ${plan.created + plan.duplicated} • ghi đè ${plan.overwritten} • bỏ qua ${plan.skipped}');
       } catch (e) {
-        _results.add('❌ $t: $e');
+        _results.add('$t: $e');
       }
     }
     if (!mounted) return;
@@ -237,7 +237,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
                 value: e.value.every((p) => _pickedKeys.contains(p.key)),
-                title: Text('📂 ${e.key} (${e.value.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
+                title: Text('${e.key} (${e.value.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
                 onChanged: (v) => setState(() {
                   for (final p in e.value) {
                     v == true ? _pickedKeys.add(p.key) : _pickedKeys.remove(p.key);
@@ -288,7 +288,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('🏪 ${_label(t)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(_label(t), style: const TextStyle(fontWeight: FontWeight.w700)),
               if (_planErrors.containsKey(t))
                 Text('Không đọc được chi nhánh đích: ${_planErrors[t]}', style: const TextStyle(color: Colors.red))
               else if (_plans[t] != null)

@@ -197,7 +197,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Phân Tích Chuyên Sâu 📈',
+                'Phân Tích Chuyên Sâu',
                 style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
               ),
               Text(

@@ -232,7 +232,7 @@ void main() {
       expect(find.text('#1'), findsOneWidget);
       expect(find.text('#2'), findsOneWidget);
       expect(find.text('Ghi chú: Mang về'), findsOneWidget);
-      expect(find.textContaining('🎁 Giảm KM: -10.000 đ'), findsOneWidget);
+      expect(find.textContaining('Giảm KM: -10.000 đ'), findsOneWidget);
 
       // Bấm nút tăng số lượng của nhánh 1
       final steppers = find.byIcon(Icons.add);

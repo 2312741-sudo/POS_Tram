@@ -185,7 +185,7 @@ export default function RevenuePage() {
       {/* Top Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="section-title">Báo cáo Doanh thu 💰</h1>
+          <h1 className="section-title">Báo cáo Doanh thu</h1>
           <p className="section-subtitle">
             Phân tích doanh thu & đối soát tài chính theo kỳ (Chuẩn hóa UTC+7 & Báo cáo số 2/7)
           </p>

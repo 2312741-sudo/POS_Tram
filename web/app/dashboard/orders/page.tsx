@@ -21,6 +21,9 @@ import {
   Banknote,
   Trash2,
   XCircle,
+  Check,
+  ChefHat,
+  FileText,
 } from "lucide-react";
 import { businessDayStartFor } from "@/lib/business-day";
 import { nowMs } from "@/lib/kitchen";
@@ -209,12 +212,12 @@ export default function OrdersPage() {
   const getPaymentBadge = (method?: string) => {
     const m = (method || "").toLowerCase();
     if (m.includes("cash") || m.includes("tiền mặt")) {
-      return <span className="badge badge-success">💵 Tiền mặt</span>;
+      return <span className="badge badge-success">Tiền mặt</span>;
     }
     if (m.includes("transfer") || m.includes("chuyển")) {
-      return <span className="badge badge-info">🏦 Chuyển khoản</span>;
+      return <span className="badge badge-info">Chuyển khoản</span>;
     }
-    return <span className="badge badge-warning">💳 {method || "N/A"}</span>;
+    return <span className="badge badge-warning">{method || "N/A"}</span>;
   };
 
   if (loading) {
@@ -230,7 +233,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 className="section-title">Lịch sử Giao dịch & Hóa đơn 🧾</h1>
+          <h1 className="section-title">Lịch sử Giao dịch & Hóa đơn</h1>
           <p className="section-subtitle">
             Quản lý {filtered.length} hóa đơn, chi tiết món theo người nhận order & lịch sử thao tác
           </p>
@@ -324,7 +327,7 @@ export default function OrdersPage() {
             <div>
               <div style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)" }}>{formatVND(takeawayRevenue)}</div>
               <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--subtext)" }}>
-                🥡 Mang về {filterZone === "Mang về" ? "(Đang lọc)" : ""}
+                Mang về {filterZone === "Mang về" ? "(Đang lọc)" : ""}
               </div>
               <div style={{ fontSize: "11px", color: "var(--muted)" }}>{takeawayCount} hóa đơn mang về</div>
             </div>
@@ -377,7 +380,7 @@ export default function OrdersPage() {
             onChange={(e) => { setDatePreset(e.target.value as typeof datePreset); setPage(1); }}
             style={{ width: "auto", minWidth: "160px" }}
           >
-            <option value="ALL">📅 Tất cả thời gian</option>
+            <option value="ALL">Tất cả thời gian</option>
             <option value="TODAY">Hôm nay</option>
             <option value="YESTERDAY">Hôm qua</option>
             <option value="7DAYS">7 ngày qua</option>
@@ -402,9 +405,9 @@ export default function OrdersPage() {
             onChange={(e) => { setFilterZone(e.target.value); setFilterTable(""); setPage(1); }}
             style={{ width: "auto", minWidth: "185px" }}
           >
-            <option value="">📍 Tất cả phòng / khu vực</option>
+            <option value="">Tất cả phòng / khu vực</option>
             {availableZones.map((z) => (
-              <option key={z} value={z}>{z === "Mang về" ? "🥡 Mang về" : `📍 ${z}`}</option>
+              <option key={z} value={z}>{z === "Mang về" ? "Mang về" : `${z}`}</option>
             ))}
           </select>
 
@@ -414,7 +417,7 @@ export default function OrdersPage() {
             onChange={(e) => { setFilterTable(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "140px" }}
           >
-            <option value="">🍽️ Tất cả bàn</option>
+            <option value="">Tất cả bàn</option>
             {availableTables.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
@@ -426,9 +429,9 @@ export default function OrdersPage() {
             onChange={(e) => { setFilterMethod(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "175px" }}
           >
-            <option value="">💳 Tất cả phương thức</option>
-            <option value="cash">💵 Tiền mặt</option>
-            <option value="transfer">📱 Chuyển khoản</option>
+            <option value="">Tất cả phương thức</option>
+            <option value="cash">Tiền mặt</option>
+            <option value="transfer">Chuyển khoản</option>
           </select>
 
           <select
@@ -437,9 +440,9 @@ export default function OrdersPage() {
             onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "165px" }}
           >
-            <option value="">🏷️ Trạng thái: Tất cả</option>
-            <option value="PAID">✅ Hoàn thành</option>
-            <option value="CANCELLED">❌ Đã hủy</option>
+            <option value="">Trạng thái: Tất cả</option>
+            <option value="PAID">Hoàn thành</option>
+            <option value="CANCELLED">Đã hủy</option>
           </select>
           {(search || filterDate || filterMethod || filterStatus || filterZone || filterTable) && (
             <button className="btn-secondary" onClick={() => { setSearch(""); setFilterDate(""); setFilterMethod(""); setFilterStatus(""); setFilterZone(""); setFilterTable(""); setPage(1); }}>
@@ -981,7 +984,7 @@ export default function OrdersPage() {
                             marginTop: "2px",
                           }}
                         >
-                          {isPay ? "✓" : isSendKitchen ? "🍽️" : "📝"}
+                          {isPay ? <Check size={14} /> : isSendKitchen ? <ChefHat size={14} /> : <FileText size={14} />}
                         </div>
 
                         {/* Content */}

@@ -208,7 +208,7 @@ export default function StoresManagementPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 className="section-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            Hệ thống Multi-Store & Quản lý Chi nhánh 🏪
+            Hệ thống Multi-Store & Quản lý Chi nhánh
           </h1>
           <p className="section-subtitle">
             Mở rộng và kiểm soát chuỗi nhiều cửa hàng trên một nền tảng vận hành đồng bộ theo hệ sinh thái POS Trạm.
@@ -281,7 +281,7 @@ export default function StoresManagementPage() {
             {ecoStats.totalTables} <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--subtext)" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--warning)", marginTop: "4px", fontWeight: "600" }}>
-            ⚡ {ecoStats.totalInUse} bàn đang có khách ngồi
+            {ecoStats.totalInUse} bàn đang có khách ngồi
           </div>
         </div>
 
@@ -291,7 +291,7 @@ export default function StoresManagementPage() {
             <Building2 size={20} style={{ color: "var(--primary)" }} />
           </div>
           <div style={{ fontSize: "18px", fontWeight: "800", color: "var(--primary)", marginTop: "8px" }}>
-            {currentStoreCode === "ALL" ? "🌐 Toàn hệ thống" : `🏪 ${currentStoreCode}`}
+            {currentStoreCode === "ALL" ? "Toàn hệ thống" : `${currentStoreCode}`}
           </div>
           <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
             {currentStoreCode === "ALL" ? "Xem dữ liệu tổng hợp" : (stores.find(s => s.storeCode === currentStoreCode)?.storeName || "Chi nhánh đã chọn")}
@@ -339,7 +339,7 @@ export default function StoresManagementPage() {
                 fontWeight: currentStoreCode === "ALL" ? "700" : "500",
               }}
             >
-              🌐 Xem toàn hệ thống
+              Xem toàn hệ thống
             </button>
           </div>
         </div>
@@ -394,7 +394,7 @@ export default function StoresManagementPage() {
                         border: `1px solid ${isActive ? "#A3D9D2" : "#FCA5A5"}`,
                       }}
                     >
-                      {isActive ? "🟢 Đang hoạt động" : "⏸️ Tạm dừng"}
+                      {isActive ? "Đang hoạt động" : "Tạm dừng"}
                     </span>
                   </div>
                   <h3 style={{ fontSize: "17px", fontWeight: "800", color: "var(--text)", marginTop: "8px", lineHeight: 1.3 }}>
@@ -542,7 +542,7 @@ export default function StoresManagementPage() {
 
             {actionError && (
               <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
-                ⚠️ {actionError}
+                {actionError}
               </div>
             )}
 
@@ -747,7 +747,7 @@ export default function StoresManagementPage() {
 
             {actionError && (
               <div style={{ background: "var(--danger-bg)", color: "var(--danger)", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", marginBottom: "16px" }}>
-                ⚠️ {actionError}
+                {actionError}
               </div>
             )}
 

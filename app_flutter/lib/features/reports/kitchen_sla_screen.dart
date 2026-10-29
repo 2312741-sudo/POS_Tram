@@ -623,7 +623,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                                   Padding(
                                                     padding: const EdgeInsets.only(top: 4),
                                                     child: Text(
-                                                      '⚡ Có tách xong phần nước/bánh trước',
+                                                      'Có tách xong phần nước/bánh trước',
                                                       style: GoogleFonts.beVietnamPro(
                                                         fontSize: 11,
                                                         color: Colors.blue.shade700,

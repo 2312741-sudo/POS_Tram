@@ -229,7 +229,7 @@ export default function ProductSalesReportPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <h1 style={{ fontSize: "22px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
-                Báo cáo hàng hoá & Hiệu suất món ăn 🍹
+                Báo cáo hàng hoá & Hiệu suất món ăn
               </h1>
               <span
                 style={{
@@ -526,7 +526,7 @@ export default function ProductSalesReportPage() {
                   cursor: "pointer",
                 }}
               >
-                <option value="ALL">📁 Tất cả nhóm hàng</option>
+                <option value="ALL">Tất cả nhóm hàng</option>
                 {categories.map((c) => (
                   <option key={c.id || c.name} value={c.name}>
                     {c.name}

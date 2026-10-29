@@ -71,7 +71,7 @@ function findServiceAccountKey() {
 
 const saKeyPath = findServiceAccountKey();
 if (!saKeyPath) {
-  console.error("❌ KHÔNG TÌM THẤY SERVICE ACCOUNT KEY!");
+  console.error("KHÔNG TÌM THẤY SERVICE ACCOUNT KEY!");
   console.error("Vui lòng tải khóa service account từ Firebase Console (Cài đặt dự án -> Tài khoản dịch vụ -> Tạo khóa riêng tư mới),");
   console.error("lưu vào thư mục gốc dự án với tên 'service-account.json',");
   console.error("hoặc truyền qua cờ: --service-account=path/to/key.json");
@@ -86,11 +86,11 @@ const databaseURL =
   `https://${projectId}-default-rtdb.asia-southeast1.firebasedatabase.app`;
 
 console.log("================================================================");
-console.log(`🚀 POS TRẠM - SCRIPT MIGRATE TÀI KHOẢN NGƯỜI DÙNG CŨ`);
+console.log(`POS TRẠM - SCRIPT MIGRATE TÀI KHOẢN NGƯỜI DÙNG CŨ`);
 console.log(`Dự án Firebase:  ${projectId}`);
 console.log(`Database URL:    ${databaseURL}`);
 console.log(`Service Account: ${saKeyPath}`);
-console.log(`Chế độ chạy:     ${isApply ? "⚠️  --apply (GHI DỮ LIỆU THẬT)" : "🛡️  DRY-RUN (CHỈ KIỂM TRA, KHÔNG GHI)"}`);
+console.log(`Chế độ chạy:     ${isApply ? " --apply (GHI DỮ LIỆU THẬT)" : " DRY-RUN (CHỈ KIỂM TRA, KHÔNG GHI)"}`);
 console.log("================================================================");
 
 // -----------------------------------------------------------------------------
@@ -140,7 +140,7 @@ function generateRandomPassword(length = 8) {
 async function run() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
-  console.log("\n🔍 1. Đang đọc dữ liệu người dùng từ Realtime Database...");
+  console.log("\n1. Đang đọc dữ liệu người dùng từ Realtime Database...");
 
   // Đọc danh sách stores
   const storesSnap = await db.ref("stores").once("value");
@@ -182,7 +182,7 @@ async function run() {
     });
   }
 
-  console.log(`📌 Tìm thấy tổng cộng ${candidates.length} bản ghi người dùng trên hệ thống.`);
+  console.log(`Tìm thấy tổng cộng ${candidates.length} bản ghi người dùng trên hệ thống.`);
 
   // Lập kế hoạch di chuyển
   const plan = [];
@@ -197,7 +197,7 @@ async function run() {
     const cleanUser = normalizeUsername(username);
 
     if (!cleanUser) {
-      console.warn(`⚠️  Bỏ qua bản ghi tại ${item.path}: Không xác định được username.`);
+      console.warn(` Bỏ qua bản ghi tại ${item.path}: Không xác định được username.`);
       skippedCount++;
       continue;
     }
@@ -227,11 +227,11 @@ async function run() {
     });
   }
 
-  console.log(`\n📋 Kế hoạch di chuyển: ${plan.length} tài khoản cần xử lý (Bỏ qua: ${skippedCount}).\n`);
+  console.log(`\nKế hoạch di chuyển: ${plan.length} tài khoản cần xử lý (Bỏ qua: ${skippedCount}).\n`);
 
   // In danh sách tóm tắt
   for (const p of plan) {
-    const flag = p.hasPlainPassword ? "⚠️ CÓ PASSWORD THÔ" : "✅ KHÔNG CÓ PASSWORD THÔ";
+    const flag = p.hasPlainPassword ? "CÓ PASSWORD THÔ" : "KHÔNG CÓ PASSWORD THÔ";
     console.log(
       ` - [${p.item.storeCode}] @${p.cleanUser.padEnd(15)} -> Email: ${p.syntheticEmail.padEnd(35)} ` +
       `| Mật khẩu: ${p.passAction === "KEPT_OLD" ? "(Giữ cũ >= 6 ký tự)" : "(Sinh mới 8 ký tự)"} | ${flag}`
@@ -241,13 +241,13 @@ async function run() {
   // Nếu là DRY-RUN, dừng lại ở đây
   if (isDryRun) {
     console.log("\n================================================================");
-    console.log("🛡️  KẾT QUẢ CHẠY THỬ (DRY-RUN)");
+    console.log(" KẾT QUẢ CHẠY THỬ (DRY-RUN)");
     console.log(` - Tổng tài khoản quét được:    ${candidates.length}`);
     console.log(` - Tài khoản sẽ di chuyển:      ${plan.length}`);
     console.log(` - Tài khoản sinh mật khẩu mới:  ${plan.filter((x) => x.passAction === "GENERATED_NEW").length}`);
     console.log(` - Bỏ qua:                      ${skippedCount}`);
     console.log("\nChưa có thay đổi nào được ghi vào Firebase.");
-    console.log("👉 Để áp dụng thật, chạy lại lệnh với cờ: --apply");
+    console.log("Để áp dụng thật, chạy lại lệnh với cờ: --apply");
     console.log("   npm run apply -- --service-account=path/to/key.json");
     console.log("================================================================\n");
     process.exit(0);
@@ -256,11 +256,11 @@ async function run() {
   // ---------------------------------------------------------------------------
   // 6. THỰC HIỆN GHI DỮ LIỆU (--apply)
   // ---------------------------------------------------------------------------
-  console.log("\n⚠️  ĐANG Ở CHẾ ĐỘ --apply. BẮT ĐẦU QUÁ TRÌNH DI CHUYỂN...\n");
+  console.log("\n ĐANG Ở CHẾ ĐỘ --apply. BẮT ĐẦU QUÁ TRÌNH DI CHUYỂN...\n");
 
   // BƯỚC 6.1: SAO LƯU DỮ LIỆU TRƯỚC KHI THỰC HIỆN
   const backupFilePath = path.join(outputDir, `backup_pre_migration_${timestamp}.json`);
-  console.log(`💾 1. Đang tạo bản sao lưu dữ liệu tại: ${backupFilePath}`);
+  console.log(`1. Đang tạo bản sao lưu dữ liệu tại: ${backupFilePath}`);
 
   const backupData = {
     timestamp: new Date().toISOString(),
@@ -268,7 +268,7 @@ async function run() {
     rootUsers: rootUsersData,
   };
   fs.writeFileSync(backupFilePath, JSON.stringify(backupData, null, 2), "utf-8");
-  console.log("✅ Bản sao lưu JSON đã được lưu an toàn.\n");
+  console.log("Bản sao lưu JSON đã được lưu an toàn.\n");
 
   // BƯỚC 6.2: DI CHUYỂN TỪNG TÀI KHOẢN
   const csvRecords = [];
@@ -349,16 +349,16 @@ async function run() {
       });
 
       successCount++;
-      console.log(`✅ Thành công (UID: ${newUid})`);
+      console.log(`Thành công (UID: ${newUid})`);
     } catch (err) {
       errorCount++;
-      console.log(`❌ Thất bại: ${err.message}`);
+      console.log(`Thất bại: ${err.message}`);
     }
   }
 
   // BƯỚC 6.3: XUẤT FILE CSV MẬT KHẨU TẠM
   const csvFilePath = path.join(outputDir, `migrated_users_${timestamp}.csv`);
-  console.log(`\n📄 3. Đang xuất danh sách mật khẩu tạm tại: ${csvFilePath}`);
+  console.log(`\n3. Đang xuất danh sách mật khẩu tạm tại: ${csvFilePath}`);
 
   const csvHeader = "Chi nhánh,Tên đăng nhập,Họ và tên,Vai trò,Email Firebase Auth,Mật khẩu tạm,Ghi chú\n";
   const csvRows = csvRecords
@@ -369,18 +369,18 @@ async function run() {
     .join("\n");
 
   fs.writeFileSync(csvFilePath, "\uFEFF" + csvHeader + csvRows, "utf-8"); // UTF-8 BOM cho Excel
-  console.log("✅ File CSV mật khẩu đã được tạo thành công.");
+  console.log("File CSV mật khẩu đã được tạo thành công.");
 
   // TỔNG KẾT
   console.log("\n================================================================");
-  console.log("🎉 HOÀN TẤT DI CHUYỂN TÀI KHOẢN NGƯỜI DÙNG");
+  console.log("HOÀN TẤT DI CHUYỂN TÀI KHOẢN NGƯỜI DÙNG");
   console.log(` - Tổng số tài khoản cần xử lý: ${plan.length}`);
   console.log(` - Di chuyển thành công:        ${successCount}`);
   console.log(` - Bỏ qua:                      ${skippedCount}`);
   console.log(` - Thất bại:                    ${errorCount}`);
   console.log(` - Bản sao lưu JSON:            ${backupFilePath}`);
   console.log(` - File CSV mật khẩu tạm:       ${csvFilePath}`);
-  console.log("\n⚠️  LƯU Ý QUAN TRỌNG:");
+  console.log("\n LƯU Ý QUAN TRỌNG:");
   console.log("1. Gửi file CSV mật khẩu tạm cho nhân viên có mật khẩu được sinh mới.");
   console.log("2. Sau khi kiểm tra hệ thống hoạt động ổn định, vui lòng XÓA file");
   console.log("   service-account.json và file CSV để bảo mật.");
@@ -390,6 +390,6 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error("💥 Lỗi ngoài dự tính khi chạy script migrate:", err);
+  console.error("Lỗi ngoài dự tính khi chạy script migrate:", err);
   process.exit(1);
 });

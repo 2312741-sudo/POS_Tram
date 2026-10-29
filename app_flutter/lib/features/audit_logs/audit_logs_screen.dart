@@ -344,12 +344,12 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                   Text('DỮ LIỆU THAY ĐỔI (SNAPSHOT DIFF):', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.textSecondary)),
                   const SizedBox(height: 8),
                   if (log.beforeState != null) ...[
-                    Text('🔴 Trước khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                    Text('Trước khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
                     Text(const JsonEncoder.withIndent('  ').convert(log.beforeState), style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
                     const SizedBox(height: 6),
                   ],
                   if (log.afterState != null) ...[
-                    Text('🟢 Sau khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.success)),
+                    Text('Sau khi đổi:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.success)),
                     Text(const JsonEncoder.withIndent('  ').convert(log.afterState), style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
                   ],
                 ],

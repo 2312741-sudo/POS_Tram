@@ -525,7 +525,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             if (_cart.length == 1) ...[
               const SizedBox(height: 10),
               Text(
-                '💡 Đây là món cuối cùng. Xóa xong bàn sẽ tự động về trạng thái TRỐNG.',
+                'Đây là món cuối cùng. Xóa xong bàn sẽ tự động về trạng thái TRỐNG.',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.primary, fontStyle: FontStyle.italic),
               ),
             ],
@@ -794,7 +794,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (hasKitchen && !_auth.can(AppPermissions.cancelBill) && !_auth.can(AppPermissions.cancelKitchenItem) && !_auth.can(AppPermissions.deleteItem)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
+          content: Text('Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -887,7 +887,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '⚠️ Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
+                    'Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.ink(Colors.red.shade700), fontStyle: FontStyle.italic),
                   ),
                 ],
@@ -1321,7 +1321,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đã gửi ${unsentItems.length} món đến Bếp thành công! 🍽️'),
+          content: Text('Đã gửi ${unsentItems.length} món đến Bếp thành công!'),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 2),
         ),
@@ -1808,7 +1808,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   DropdownMenuItem(
                                     value: newSplitTableKey,
                                     child: Text(
-                                      '➕ Tạo bàn tách mới: $nextSplitName (${widget.table.zone})',
+                                      'Tạo bàn tách mới: $nextSplitName (${widget.table.zone})',
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                                     ),
@@ -1817,7 +1817,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     (t) => DropdownMenuItem(
                                       value: t.firebaseKey,
                                       child: Text(
-                                        '🪑 ${t.name} (${t.zone} • Bàn trống)',
+                                        '${t.name} (${t.zone} • Bàn trống)',
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontSize: 13),
                                       ),
@@ -1897,7 +1897,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                         (t) => DropdownMenuItem(
                                           value: t.firebaseKey,
                                           child: Text(
-                                            '🔗 ${t.name} (${t.zone} • ${t.currentItems.length} món • ${FormatUtils.vnd(t.currentTotal)})',
+                                            '${t.name} (${t.zone} • ${t.currentItems.length} món • ${FormatUtils.vnd(t.currentTotal)})',
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(fontSize: 13),
                                           ),
@@ -2008,7 +2008,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             ScaffoldMessenger.of(this.context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  '🎉 Đã thanh toán trước $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) • Mã HĐ: ${res.paidBill.billCode}!${_autoPrintBill ? " (Đang in bill)" : ""}',
+                                  'Đã thanh toán trước $totalSplitParts phần (${FormatUtils.vnd(totalSplitAmount)}) • Mã HĐ: ${res.paidBill.billCode}!${_autoPrintBill ? " (Đang in bill)" : ""}',
                                 ),
                                 backgroundColor: AppColors.success,
                                 duration: const Duration(seconds: 3),
@@ -3334,7 +3334,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(this.context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Đã cập nhật ghi chú & tùy chọn món thành công! ✨'),
+                                  content: Text('Đã cập nhật ghi chú & tùy chọn món thành công!'),
                                   backgroundColor: AppColors.success,
                                   duration: Duration(seconds: 2),
                                 ),
@@ -3842,7 +3842,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                       String sub = '${c.typeDisplay} • ${describeCampaignBenefit(c)}';
                       if (!c.isStackable) {
-                        sub += ' • 🔒 Độc quyền';
+                        sub += ' • Độc quyền';
                       } else if (c.effectiveMaxCampaignsPerOrder < 999) {
                         sub += ' • Tối đa ${c.effectiveMaxCampaignsPerOrder} CTKM/đơn';
                       }
@@ -3865,7 +3865,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       }
 
                       if (!inSchedule) {
-                        sub = '${c.typeDisplay} • ⏰ Ngoài thời gian áp dụng (${c.schedule.summary()})';
+                        sub = '${c.typeDisplay} • Ngoài thời gian áp dụng (${c.schedule.summary()})';
                       }
 
                       return CheckboxListTile(
@@ -4174,8 +4174,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         if (ctx.mounted) Navigator.pop(ctx);
         if (mounted) {
           final successMsg = matchedNote != null
-              ? '⚡ $matchedNote! Đã tự động chốt đơn (${bill.billCode}) & bàn ${widget.table.name}! 🎉${_autoPrintBill ? " (Đang in bill)" : ""}'
-              : 'Thanh toán thành công ${widget.table.name}: ${FormatUtils.vnd(bill.finalAmount)}! 🎉${_autoPrintBill ? " (Đang in bill)" : " (Không in bill)"}';
+              ? '$matchedNote! Đã tự động chốt đơn (${bill.billCode}) & bàn ${widget.table.name}!${_autoPrintBill ? " (Đang in bill)" : ""}'
+              : 'Thanh toán thành công ${widget.table.name}: ${FormatUtils.vnd(bill.finalAmount)}!${_autoPrintBill ? " (Đang in bill)" : " (Không in bill)"}';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(successMsg),
@@ -4697,7 +4697,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Chức năng order & thanh toán đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
+            content: Text('Chức năng order & thanh toán đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
             backgroundColor: AppColors.warningInk,
             duration: Duration(seconds: 3),
           ),
@@ -4950,7 +4950,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               _saveAutoPrintSetting(newVal);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(newVal ? '🖨️ Đã BẬT tự động in bill khi thanh toán' : '🚫 Đã TẮT in bill khi thanh toán (chỉ chốt đơn, không in giấy)'),
+                  content: Text(newVal ? 'Đã BẬT tự động in bill khi thanh toán' : 'Đã TẮT in bill khi thanh toán (chỉ chốt đơn, không in giấy)'),
                   duration: const Duration(seconds: 2),
                   backgroundColor: newVal ? AppColors.success : AppColors.warningInk,
                 ),

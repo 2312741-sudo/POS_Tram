@@ -452,7 +452,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
           ).animate(onPlay: (c) => c.repeat(reverse: true))
             .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 2.seconds),
           const SizedBox(height: 24),
-          Text('Tất cả đơn đã xong! 🎉', style: GoogleFonts.beVietnamPro(
+          Text('Tất cả đơn đã xong!', style: GoogleFonts.beVietnamPro(
             color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700,
           )),
           const SizedBox(height: 8),
@@ -727,7 +727,7 @@ class _KitchenOrderCard extends StatelessWidget {
                             border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                           ),
                           child: Text(
-                            '⚙️ ${item.optionsSummary}',
+                            'Tuỳ chọn: ${item.optionsSummary}',
                             style: GoogleFonts.beVietnamPro(
                               color: Colors.amber.shade200,
                               fontSize: 12,
@@ -742,7 +742,7 @@ class _KitchenOrderCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(left: 16),
                         child: Text(
-                          '📝 Lưu ý: ${item.note}',
+                          'Lưu ý: ${item.note}',
                           style: GoogleFonts.beVietnamPro(
                             color: Colors.orange.shade300,
                             fontSize: 12,
@@ -756,7 +756,7 @@ class _KitchenOrderCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(left: 16),
                         child: Text(
-                          '👤 Order bởi: ${item.orderedByName}',
+                          'Order bởi: ${item.orderedByName}',
                           style: GoogleFonts.beVietnamPro(
                             color: Colors.white54,
                             fontSize: 11,

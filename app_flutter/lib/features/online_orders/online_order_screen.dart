@@ -269,7 +269,7 @@ class _OnlineOrderCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          isCallWaiter ? '🔔 Gọi nhân viên' : 'Đặt món',
+                          isCallWaiter ? 'Gọi nhân viên' : 'Đặt món',
                           style: GoogleFonts.beVietnamPro(
                             color: isCallWaiter ? context.tc.warningInk : context.tc.primary,
                             fontWeight: FontWeight.w700, fontSize: 12,

@@ -663,8 +663,8 @@ class CartTreeGroupCard extends StatelessWidget {
                             Flexible(
                               child: Text(
                                 promo.isGift
-                                    ? '🎁 Món tặng (100%): ${promo.campaignName}'
-                                    : '🎁 Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
+                                    ? 'Món tặng (100%): ${promo.campaignName}'
+                                    : 'Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 10.5,
                                   color: const Color(0xFFC2410C),

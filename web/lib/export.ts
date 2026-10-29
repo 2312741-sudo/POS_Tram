@@ -301,7 +301,7 @@ export function buildStandardReportHtml(opts: ExportReportOptions): string {
 
   <div class="no-print" style="text-align: center; margin-top: 30px;">
     <button onclick="window.print()" style="padding: 10px 24px; font-size: 14px; font-weight: 700; background: #7E2930; color: white; border: none; border-radius: 8px; cursor: pointer;">
-      🖨️ In / Lưu PDF ngay
+      In / Lưu PDF ngay
     </button>
   </div>
 

@@ -172,7 +172,7 @@ export default function InventoryReportPage() {
   }, [stockBalances, catalogMap]);
 
   if (loading) {
-    return <div style={{ padding: "60px", textAlign: "center", color: "var(--muted)" }}>⏳ Đang tải báo cáo...</div>;
+    return <div style={{ padding: "60px", textAlign: "center", color: "var(--muted)" }}>Đang tải báo cáo...</div>;
   }
 
   // Chưa có chi nhánh hợp lệ -> không đọc/ghi mặc định vào chi nhánh khác

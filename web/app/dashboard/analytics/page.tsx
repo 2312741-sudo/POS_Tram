@@ -295,10 +295,10 @@ export default function AnalyticsPage() {
                   cursor: "pointer",
                 }}
               >
-                <option value="ALL">🌐 Tất cả chi nhánh</option>
+                <option value="ALL">Tất cả chi nhánh</option>
                 {stores.map((s) => (
                   <option key={s.storeCode} value={s.storeCode}>
-                    🏪 {s.storeCode} - {s.storeName}
+                    {s.storeCode} - {s.storeName}
                   </option>
                 ))}
               </select>
@@ -450,10 +450,10 @@ export default function AnalyticsPage() {
         }}
       >
         {[
-          { id: "OVERVIEW", label: "📊 20 Chỉ số Quản trị", icon: Layers },
-          { id: "HOURLY", label: "⏰ Phân bổ 24 Khung giờ", icon: Clock },
-          { id: "STAFF", label: "👥 Năng suất Nhân viên", icon: Users },
-          { id: "PRODUCTS", label: "🍵 Mặt hàng & Thanh toán", icon: BarChart2 },
+          { id: "OVERVIEW", label: "20 Chỉ số Quản trị", icon: Layers },
+          { id: "HOURLY", label: "Phân bổ 24 Khung giờ", icon: Clock },
+          { id: "STAFF", label: "Năng suất Nhân viên", icon: Users },
+          { id: "PRODUCTS", label: "Mặt hàng & Thanh toán", icon: BarChart2 },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (

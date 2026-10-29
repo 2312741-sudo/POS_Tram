@@ -27,14 +27,14 @@ class CartItemCard extends StatelessWidget {
   final String? kitchenBadgeLabel;
 
   /// Nội dung nhãn giảm giá của dòng món, gồm số phần được giảm
-  /// (VD: "🏷️ Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
+  /// (VD: "Giảm 10% × 2/5 món (-8.000 đ): Khách quen").
   static String discountLabel(OrderItemModel item) {
     final reason = item.discountReason.isNotEmpty ? ': ${item.discountReason}' : '';
     final desc = item.discountDescription(FormatUtils.vnd);
     if (item.discountMode == 'FIXED') {
-      return '🏷️ Giảm -${FormatUtils.vnd(item.lineDiscountTotal)}$reason';
+      return 'Giảm -${FormatUtils.vnd(item.lineDiscountTotal)}$reason';
     }
-    return '🏷️ $desc (-${FormatUtils.vnd(item.lineDiscountTotal)})$reason';
+    return '$desc (-${FormatUtils.vnd(item.lineDiscountTotal)})$reason';
   }
 
   const CartItemCard({
@@ -230,8 +230,8 @@ class CartItemCard extends StatelessWidget {
                         Flexible(
                           child: Text(
                             promo.isGift
-                                ? '🎁 Món tặng (100%): ${promo.campaignName}'
-                                : '🎁 Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
+                                ? 'Món tặng (100%): ${promo.campaignName}'
+                                : 'Giảm KM: -${FormatUtils.vnd(promo.discountAmount)} (${promo.campaignName})',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 11,
                               color: const Color(0xFFC2410C),

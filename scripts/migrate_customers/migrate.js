@@ -74,8 +74,8 @@ const saKeyPath = findServiceAccountKey();
 
 if (!saKeyPath && !isEmulator) {
   console.log("================================================================================");
-  console.log(`🛡️  POS TRẠM - SCRIPT MIGRATE KHÁCH HÀNG CRM (DRY-RUN / HƯỚNG DẪN)`);
-  console.log(`Chế độ: ${isApply ? "⚠️  --apply" : "🛡️  DRY-RUN (Mặc định)"}`);
+  console.log(` POS TRẠM - SCRIPT MIGRATE KHÁCH HÀNG CRM (DRY-RUN / HƯỚNG DẪN)`);
+  console.log(`Chế độ: ${isApply ? " --apply" : " DRY-RUN (Mặc định)"}`);
   console.log("================================================================================");
   console.log("ℹ️  CHƯA PHÁT HIỆN SERVICE ACCOUNT KEY.");
   console.log("   Để kết nối database (chạy thử hoặc áp dụng), cung cấp khóa theo 1 trong các cách:");
@@ -83,7 +83,7 @@ if (!saKeyPath && !isEmulator) {
   console.log("   2. Lưu file với tên 'service-account.json' ở thư mục gốc repo");
   console.log("   3. Hoặc truyền cờ: node migrate.js --service-account=path/to/key.json");
   console.log("   4. Hoặc xuất biến môi trường: export GOOGLE_APPLICATION_CREDENTIALS=path/to/key.json");
-  console.log("\n✅ Cú pháp và tệp script đã sẵn sàng, an toàn 100%.");
+  console.log("\nCú pháp và tệp script đã sẵn sàng, an toàn 100%.");
   process.exit(0);
 }
 
@@ -113,11 +113,11 @@ const db = admin.database();
 // -----------------------------------------------------------------------------
 async function runMigration() {
   console.log("================================================================================");
-  console.log(`🚀 POS TRẠM - SCRIPT MIGRATE KHÁCH HÀNG CRM: /kmt_customers -> stores/${customStore}/customers`);
+  console.log(`POS TRẠM - SCRIPT MIGRATE KHÁCH HÀNG CRM: /kmt_customers -> stores/${customStore}/customers`);
   console.log(`Dự án Firebase:  ${projectId}`);
   console.log(`Database URL:    ${databaseURL}`);
   console.log(`Chi nhánh đích:  ${customStore}`);
-  console.log(`Chế độ:          ${isApply ? "⚠️  --apply (GHI DỮ LIỆU THẬT)" : "🛡️  DRY-RUN (CHỈ KIỂM TRA, KHÔNG GHI)"}`);
+  console.log(`Chế độ:          ${isApply ? " --apply (GHI DỮ LIỆU THẬT)" : " DRY-RUN (CHỈ KIỂM TRA, KHÔNG GHI)"}`);
   console.log("================================================================================\n");
 
   // 1. Đọc node gốc /kmt_customers

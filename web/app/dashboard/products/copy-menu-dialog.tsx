@@ -225,7 +225,7 @@ export default function CopyMenuDialog({
                         <div key={cat}>
                           <label style={{ ...labelStyle, fontWeight: 700 }}>
                             <input type="checkbox" checked={items.every((i) => picked.has(i.key))} onChange={() => toggleGroup(items)} />
-                            📂 {cat} ({items.length})
+                            {cat} ({items.length})
                           </label>
                           <div style={{ marginLeft: "24px", display: "flex", flexDirection: "column", gap: "2px" }}>
                             {items.map((p) => (
@@ -282,7 +282,7 @@ export default function CopyMenuDialog({
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {plans.map((tp) => (
                   <div key={tp.targetStore} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "12px" }}>
-                    <div style={{ fontWeight: 700, marginBottom: "6px" }}>🏪 {storeLabel(tp.targetStore)}</div>
+                    <div style={{ fontWeight: 700, marginBottom: "6px" }}>{storeLabel(tp.targetStore)}</div>
                     {tp.error ? (
                       <div style={{ color: "var(--danger)", fontSize: "13px" }}>Không đọc được chi nhánh đích: {tp.error}</div>
                     ) : (
@@ -321,7 +321,7 @@ export default function CopyMenuDialog({
                 {results.map((r) => (
                   <div key={r.targetStore} style={{ border: `1px solid ${r.ok ? "var(--border)" : "var(--danger)"}`, borderRadius: "10px", padding: "12px", fontSize: "13px" }}>
                     <div style={{ fontWeight: 700 }}>
-                      {r.ok ? "✅" : <AlertCircle size={14} style={{ display: "inline", color: "var(--danger)" }} />} {storeLabel(r.targetStore)}
+                      {r.ok ? <Check size={14} style={{ display: "inline", color: "var(--success)" }} /> : <AlertCircle size={14} style={{ display: "inline", color: "var(--danger)" }} />} {storeLabel(r.targetStore)}
                     </div>
                     {r.ok ? (
                       <div>Đã tạo/bản sao {r.created} • ghi đè {r.overwritten} • bỏ qua {r.skipped}</div>

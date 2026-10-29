@@ -846,7 +846,7 @@ export default function EndOfDayReportPage() {
             padding: "20px",
           }}
         >
-          {/* Section Selector: [ 🍽️ Đang phục vụ ] vs [ 📦 Đã bán ra ] */}
+          {/* Section Selector: [ Đang phục vụ ] vs [ Đã bán ra ] */}
           <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
             <button
               onClick={() => setProductSection("SERVING")}
@@ -865,7 +865,7 @@ export default function EndOfDayReportPage() {
                 transition: "all 0.15s",
               }}
             >
-              🍽️ Đang phục vụ ({totalServingQty} phần)
+              Đang phục vụ ({totalServingQty} phần)
             </button>
             <button
               onClick={() => setProductSection("SOLD")}
@@ -884,7 +884,7 @@ export default function EndOfDayReportPage() {
                 transition: "all 0.15s",
               }}
             >
-              📦 Đã bán ra ({totalProductQty} phần)
+              Đã bán ra ({totalProductQty} phần)
             </button>
           </div>
 
@@ -1109,7 +1109,7 @@ export default function EndOfDayReportPage() {
                     transition: "all 0.15s",
                   }}
                 >
-                  💰 Số tiền bán
+                  Số tiền bán
                 </button>
                 <button
                   onClick={() => {
@@ -1130,7 +1130,7 @@ export default function EndOfDayReportPage() {
                     transition: "all 0.15s",
                   }}
                 >
-                  📦 Số lượng bán
+                  Số lượng bán
                 </button>
               </div>
 
@@ -1160,10 +1160,10 @@ export default function EndOfDayReportPage() {
                     cursor: "pointer",
                   }}
                 >
-                  <option value="ALL">👤 Tất cả nhân viên</option>
+                  <option value="ALL">Tất cả nhân viên</option>
                   {availableStaffList.map((st) => (
                     <option key={st} value={st}>
-                      👤 {st}
+                      {st}
                     </option>
                   ))}
                 </select>

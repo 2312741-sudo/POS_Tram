@@ -1673,7 +1673,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
     return Column(
       children: [
-        // Section Pills Header: [ 🍽️ Đang phục vụ ] vs [ 📦 Đã bán ra ]
+        // Section Pills Header: [ Đang phục vụ ] vs [ Đã bán ra ]
         Container(
           color: context.tc.card,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),

@@ -571,14 +571,14 @@ export default function KitchenSlaPage() {
               className={`btn ${activeTab === "orders" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setActiveTab("orders")}
             >
-              📋 Theo Đơn Hàng ({summary.orders.length})
+              Theo Đơn Hàng ({summary.orders.length})
             </button>
             <button
               type="button"
               className={`btn ${activeTab === "items" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setActiveTab("items")}
             >
-              🍲 Chi Tiết Từng Món ({summary.items.length})
+              Chi Tiết Từng Món ({summary.items.length})
             </button>
           </div>
 

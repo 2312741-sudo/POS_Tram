@@ -619,9 +619,9 @@ class BillDetailSheet extends StatelessWidget {
 
   String _paymentMethodText(String method) {
     final m = method.toLowerCase();
-    if (m.contains('cash') || m.contains('tiền mặt')) return '💵 Tiền mặt';
-    if (m.contains('transfer') || m.contains('chuyển') || m.contains('qr')) return '🏦 Chuyển khoản (VietQR)';
-    if (m.contains('card') || m.contains('thẻ')) return '💳 Thẻ ngân hàng';
+    if (m.contains('cash') || m.contains('tiền mặt')) return 'Tiền mặt';
+    if (m.contains('transfer') || m.contains('chuyển') || m.contains('qr')) return 'Chuyển khoản (VietQR)';
+    if (m.contains('card') || m.contains('thẻ')) return 'Thẻ ngân hàng';
     return method;
   }
 

@@ -273,7 +273,7 @@ export function buildOrderReceiptHtml(order: ReceiptOrder, timeStr: string): str
             Phương thức: ${e(order.paymentMethod || "Tiền mặt")}
           </div>
           <div class="footer">
-            <p>Cảm ơn quý khách và hẹn gặp lại! ✨</p>
+            <p>Cảm ơn quý khách và hẹn gặp lại!</p>
           </div>
           <script>
             window.onload = function() { window.print(); }

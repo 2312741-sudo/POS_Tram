@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, Settings, Store } from "lucide-react";
+import { CheckCircle2, Clock, CreditCard, Receipt, Settings, Store } from "lucide-react";
 import { nowMs } from "@/lib/kitchen";
 import { useDashboardData, type StoreItem } from "@/lib/data-context";
 import { useAuth, canAccessRoute } from "@/lib/auth";
@@ -151,7 +151,7 @@ function SettingsForm({ store }: { store: StoreItem }) {
         </>
       ))}
 
-      {section("Thanh toán chuyển khoản (VietQR)", <span>💳</span>, (
+      {section("Thanh toán chuyển khoản (VietQR)", <CreditCard size={18} />, (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <div>
@@ -166,7 +166,7 @@ function SettingsForm({ store }: { store: StoreItem }) {
         </>
       ))}
 
-      {section("Tùy chọn bán hàng", <span>🧾</span>, (
+      {section("Tùy chọn bán hàng", <Receipt size={18} />, (
         <>
           <div style={{ maxWidth: 200 }}>
             <label style={label}>VAT mặc định (%)</label>

@@ -99,11 +99,11 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const getRoleLabel = () => {
     if (!user) return "Nhân viên";
     if (user.isRootOwner || isOwnerRoleId(user.roleId || user.role)) {
-      return "👑 CHỦ QUÁN";
+      return "CHỦ QUÁN";
     }
     const r = normalizeRoleId(user.roleId || user.role);
-    if (r === ROLE_MANAGER) return `⭐ ${MANAGER_ROLE_LABEL.toUpperCase()}`;
-    return `👤 ${(r === ROLE_KITCHEN ? KITCHEN_ROLE_LABEL : STAFF_ROLE_LABEL).toUpperCase()}`;
+    if (r === ROLE_MANAGER) return MANAGER_ROLE_LABEL.toUpperCase();
+    return (r === ROLE_KITCHEN ? KITCHEN_ROLE_LABEL : STAFF_ROLE_LABEL).toUpperCase();
   };
 
   // Lọc danh mục hiển thị theo quyền người dùng (RBAC)

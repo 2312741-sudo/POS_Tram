@@ -417,7 +417,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        user.isRootOwner ? '👑 Chủ Quán' : (role?.name ?? user.roleId),
+                                        user.isRootOwner ? 'Chủ Quán' : (role?.name ?? user.roleId),
                                         style: GoogleFonts.beVietnamPro(
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,

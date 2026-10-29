@@ -190,7 +190,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="section-title" style={{ fontSize: "24px" }}>
-          Tổng quan Hoạt động 📊
+          Tổng quan Hoạt động
         </h1>
         <p className="section-subtitle">
           {format(today, "EEEE, dd MMMM yyyy", { locale: vi })} • Hệ thống POS Trạm
@@ -280,7 +280,7 @@ export default function DashboardPage() {
         <div className="card" style={{ padding: "20px" }}>
           <div style={{ marginBottom: "16px" }}>
             <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)" }}>
-              Món bán chạy 🔥
+              Món bán chạy
             </h2>
             <p style={{ fontSize: "12px", color: "var(--subtext)" }}>Theo số lượng bán ra</p>
           </div>

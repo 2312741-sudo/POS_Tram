@@ -57,7 +57,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   SEND_KITCHEN: {
     label: "Gửi báo bếp",
-    shortLabel: "🍳 Gửi bếp",
+    shortLabel: "Gửi bếp",
     icon: ChefHat,
     color: "#0D9488",
     bg: "#CCFBF1",
@@ -66,7 +66,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   PAY_BILL: {
     label: "Thanh toán hóa đơn",
-    shortLabel: "💳 Thanh toán",
+    shortLabel: "Thanh toán",
     icon: CreditCard,
     color: "#7E2930",
     bg: "#FBECEE",
@@ -75,7 +75,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   PAYMENT: {
     label: "Thanh toán hóa đơn",
-    shortLabel: "💳 Thanh toán",
+    shortLabel: "Thanh toán",
     icon: CreditCard,
     color: "#7E2930",
     bg: "#FBECEE",
@@ -84,7 +84,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   MERGE_TABLE: {
     label: "Ghép bàn",
-    shortLabel: "🔀 Gộp bàn",
+    shortLabel: "Gộp bàn",
     icon: GitMerge,
     color: "#D97706",
     bg: "#FEF3C7",
@@ -93,7 +93,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   TRANSFER_TABLE: {
     label: "Chuyển bàn",
-    shortLabel: "🔄 Chuyển bàn",
+    shortLabel: "Chuyển bàn",
     icon: ArrowRightLeft,
     color: "#0284C7",
     bg: "#E0F2FE",
@@ -102,7 +102,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   SPLIT_BILL: {
     label: "Tách hóa đơn",
-    shortLabel: "✂️ Tách đơn",
+    shortLabel: "Tách đơn",
     icon: Scissors,
     color: "#4F46E5",
     bg: "#EEF2FF",
@@ -111,7 +111,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   CANCEL_ITEM: {
     label: "Hủy / Bỏ bớt món",
-    shortLabel: "❌ Bỏ món",
+    shortLabel: "Bỏ món",
     icon: XCircle,
     color: "#E11D48",
     bg: "#FFE4E6",
@@ -120,7 +120,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   DELETE_ITEM: {
     label: "Xóa món khỏi đơn",
-    shortLabel: "🗑️ Xóa món",
+    shortLabel: "Xóa món",
     icon: Trash2,
     color: "#BE123C",
     bg: "#FFE4E6",
@@ -129,7 +129,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   CANCEL_KITCHEN_ITEM: {
     label: "Hủy món đã gửi bếp",
-    shortLabel: "⚠️ Hủy món bếp",
+    shortLabel: "Hủy món bếp",
     icon: AlertTriangle,
     color: "#DC2626",
     bg: "#FEE2E2",
@@ -138,7 +138,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   CANCEL_ORDER: {
     label: "Hủy cả đơn hàng",
-    shortLabel: "🚫 Hủy đơn",
+    shortLabel: "Hủy đơn",
     icon: AlertTriangle,
     color: "#DC2626",
     bg: "#FEE2E2",
@@ -147,7 +147,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   OPEN_SHIFT: {
     label: "Mở ca làm việc",
-    shortLabel: "💰 Mở ca két",
+    shortLabel: "Mở ca két",
     icon: Wallet,
     color: "#059669",
     bg: "#D1FAE5",
@@ -156,7 +156,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   CLOSE_SHIFT: {
     label: "Chốt két / Đóng ca",
-    shortLabel: "🔒 Chốt két ca",
+    shortLabel: "Chốt két ca",
     icon: Wallet,
     color: "#059669",
     bg: "#D1FAE5",
@@ -165,7 +165,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   LOGIN: {
     label: "Đăng nhập POS",
-    shortLabel: "🔑 Đăng nhập",
+    shortLabel: "Đăng nhập",
     icon: LogIn,
     color: "#475569",
     bg: "#F1F5F9",
@@ -174,7 +174,7 @@ const ACTION_CONFIGS: Record<string, ActionConfig> = {
   },
   LOGOUT: {
     label: "Đăng xuất POS",
-    shortLabel: "🚪 Đăng xuất",
+    shortLabel: "Đăng xuất",
     icon: LogOut,
     color: "#64748B",
     bg: "#F8FAFC",
@@ -220,13 +220,13 @@ function extractTarget(log: AuditLogItem): { label: string; isTable: boolean } {
 }
 
 function getRoleName(role?: string): string {
-  if (!role) return `👤 ${STAFF_ROLE_LABEL}`;
+  if (!role) return `${STAFF_ROLE_LABEL}`;
   const r = role.toUpperCase();
-  if (r.includes("BẾP")) return "🍳 Bếp";
+  if (r.includes("BẾP")) return "Bếp";
   const n = normalizeRoleId(role);
-  if (n === ROLE_OWNER || n === ROLE_MANAGER) return "👑 Quản lý";
-  if (n === ROLE_KITCHEN) return "🍳 Bếp";
-  return `👤 ${STAFF_ROLE_LABEL}`;
+  if (n === ROLE_OWNER || n === ROLE_MANAGER) return "Quản lý";
+  if (n === ROLE_KITCHEN) return "Bếp";
+  return `${STAFF_ROLE_LABEL}`;
 }
 
 const PAGE_SIZE = 25;
@@ -379,7 +379,7 @@ export default function AuditPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 className="section-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            Kiểm soát Hệ thống & Nhật ký Thao tác 🔍
+            Kiểm soát Hệ thống & Nhật ký Thao tác
           </h1>
           <p className="section-subtitle">
             Theo dõi chi tiết từng thao tác: nhập món, gửi bếp, thanh toán, ghép bàn, tách hóa đơn, hủy món theo thời gian thực.
@@ -692,7 +692,7 @@ export default function AuditPage() {
             onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "200px" }}
           >
-            <option value="">⚙️ Tất cả loại hành động</option>
+            <option value="">Tất cả loại hành động</option>
             {uniqueActions.map((a) => {
               const meta = getActionMeta(a);
               return (
@@ -710,7 +710,7 @@ export default function AuditPage() {
             onChange={(e) => { setFilterUser(e.target.value); setPage(1); }}
             style={{ width: "auto", minWidth: "180px" }}
           >
-            <option value="">👤 Tất cả nhân viên</option>
+            <option value="">Tất cả nhân viên</option>
             {uniqueUsers.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
 

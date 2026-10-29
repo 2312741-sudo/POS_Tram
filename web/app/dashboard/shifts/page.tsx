@@ -257,10 +257,10 @@ function ShiftsContent() {
                 cursor: "pointer",
               }}
             >
-              <option value="ALL">🌐 Tất cả chi nhánh</option>
+              <option value="ALL">Tất cả chi nhánh</option>
               {stores.map((s) => (
                 <option key={s.storeCode} value={s.storeCode}>
-                  🏪 {s.storeCode} - {s.storeName}
+                  {s.storeCode} - {s.storeName}
                 </option>
               ))}
             </select>
@@ -648,7 +648,7 @@ function ShiftsContent() {
             {/* Promotional Breakdown for Shift (Module 4) */}
             <div style={{ marginTop: "14px", padding: "12px", background: "var(--primary-light)", borderRadius: "10px", border: "1px solid #F5D5D8" }}>
               <div style={{ fontSize: "12px", fontWeight: "800", color: "var(--primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                <span>🏷️ KHUYẾN MÃI & GIẢM GIÁ TRONG CA</span>
+                <span>KHUYẾN MÃI & GIẢM GIÁ TRONG CA</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
                 <SlipLine

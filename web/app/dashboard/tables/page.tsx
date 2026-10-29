@@ -491,7 +491,7 @@ function TablesPageContent() {
         pointRedeemRate: loy.rates.redeemRate,
       });
       if (res.success) {
-        setCheckoutToast(`✅ Đã thanh toán hóa đơn ${res.billCode || res.billId} và trả bàn ${t.name} thành công!`);
+        setCheckoutToast(`Đã thanh toán hóa đơn ${res.billCode || res.billId} và trả bàn ${t.name} thành công!`);
         setTimeout(() => setCheckoutToast(null), 5000);
         // Tích điểm SAU khi hóa đơn PAID (máy chủ tính từ finalAmount); lỗi → hàng đợi thử lại, không im lặng
         if (res.customerId && res.billId) {
@@ -590,7 +590,7 @@ function TablesPageContent() {
     try {
       const res = await cancelActiveTable(t, reason.trim());
       if (res.success) {
-        setCheckoutToast(`✅ Đã hủy đơn bàn ${t.name} và trả bàn trống thành công!`);
+        setCheckoutToast(`Đã hủy đơn bàn ${t.name} và trả bàn trống thành công!`);
         setTimeout(() => setCheckoutToast(null), 5000);
         setSelectedTableForOrder(null);
       } else {
@@ -644,7 +644,7 @@ function TablesPageContent() {
         reservationDeposit: 0,
       };
       await writeTableFields(table, payload);
-      setCheckoutToast(`✅ Đã nhận khách vào ${table.name}!`);
+      setCheckoutToast(`Đã nhận khách vào ${table.name}!`);
       setTimeout(() => setCheckoutToast(null), 4000);
     } catch (e) {
       alert("Lỗi nhận bàn: " + errorMessage(e));
@@ -984,8 +984,8 @@ function TablesPageContent() {
     setSelectedTableForOrder(target);
     setCheckoutToast(
       kind === "TRANSFER"
-        ? `✅ Đã chuyển toàn bộ món từ ${source.name} sang ${target.name}!`
-        : `✅ Đã gộp hóa đơn của ${source.name} vào ${target.name}!`
+        ? `Đã chuyển toàn bộ món từ ${source.name} sang ${target.name}!`
+        : `Đã gộp hóa đơn của ${source.name} vào ${target.name}!`
     );
     setTimeout(() => setCheckoutToast(null), 5000);
   };
@@ -1007,7 +1007,7 @@ function TablesPageContent() {
           role="alert"
           style={{ background: "var(--warning-bg, #FFF4E5)", border: "1.5px solid var(--warning, #F59E0B)", borderRadius: "12px", padding: "12px 18px", color: "var(--text)", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
         >
-          <span>⚠ {loyaltyWarn}</span>
+          <span>{loyaltyWarn}</span>
           <button onClick={() => setLoyaltyWarn(null)} aria-label="Đóng" style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text)" }}>
             <X size={16} />
           </button>
@@ -1045,7 +1045,7 @@ function TablesPageContent() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 className="section-title">Sơ đồ Phòng / Bàn 🪑</h1>
+          <h1 className="section-title">Sơ đồ Phòng / Bàn</h1>
           <p className="section-subtitle">
             Hệ sinh thái POS Trạm • Đồng bộ trực tiếp với ứng dụng phục vụ
           </p>
@@ -1188,7 +1188,7 @@ function TablesPageContent() {
                 {statusCounts.AWAITING_PAYMENT} bàn chờ thanh toán (đã in tạm tính)
               </span>
             ) : (
-              "🔴 Đã gửi bếp & đang phục vụ"
+              "Đã gửi bếp & đang phục vụ"
             )}
           </div>
         </div>
@@ -1207,7 +1207,7 @@ function TablesPageContent() {
             {statusCounts.EMPTY} <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--success)" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--success)", marginTop: "4px", fontWeight: "600" }}>
-            🟢 Sẵn sàng nhận khách mới
+            Sẵn sàng nhận khách mới
           </div>
         </div>
 
@@ -1237,7 +1237,7 @@ function TablesPageContent() {
             {statusCounts.RESERVED} <span style={{ fontSize: "14px", fontWeight: "600", color: "#B45309" }}>bàn</span>
           </div>
           <div style={{ fontSize: "12px", color: "#B45309", marginTop: "4px", fontWeight: "600" }}>
-            🟡 Đã có khách hẹn
+            Đã có khách hẹn
           </div>
         </div>
       </div>
@@ -1387,7 +1387,6 @@ function TablesPageContent() {
               color: "var(--subtext)",
             }}
           >
-            <div style={{ fontSize: "48px", marginBottom: "12px" }}>🪑</div>
             <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
               Không tìm thấy bàn nào
             </div>
@@ -2016,16 +2015,16 @@ function TablesPageContent() {
                       <td>
                         {t.inUse ? (
                           <div style={{ fontSize: "13px" }}>
-                            <div>👥 {t.guestCount || 1} khách</div>
+                            <div>{t.guestCount || 1} khách</div>
                             <div style={{ fontSize: "11px", color: "var(--subtext)" }}>
-                              ⏱ {getElapsedMinutes(t.openedAt)} phút
+                              {getElapsedMinutes(t.openedAt)} phút
                             </div>
                           </div>
                         ) : t.isReserved ? (
                           <div style={{ fontSize: "12px", color: "#B45309" }}>
-                            <div style={{ fontWeight: "700" }}>👤 {t.reservationCustomer || "Khách hẹn"}</div>
+                            <div style={{ fontWeight: "700" }}>{t.reservationCustomer || "Khách hẹn"}</div>
                             <div style={{ fontSize: "11px", color: "#78350F" }}>
-                              {t.reservationTime ? `⏰ ${t.reservationTime}` : ""} {t.reservationPhone ? `• 📞 ${t.reservationPhone}` : ""}
+                              {t.reservationTime ? `${t.reservationTime}` : ""} {t.reservationPhone ? `• ${t.reservationPhone}` : ""}
                             </div>
                           </div>
                         ) : (
@@ -2216,7 +2215,7 @@ function TablesPageContent() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.2)", borderRadius: "8px", padding: "2px 8px" }}>
-                    <span style={{ fontSize: "12px" }}>👥 Số khách:</span>
+                    <span style={{ fontSize: "12px" }}>Số khách:</span>
                     <button
                       type="button"
                       onClick={() => handleUpdateGuestCount(selectedTableForOrder, Math.max(1, (selectedTableForOrder.guestCount || 1) - 1))}
@@ -2238,7 +2237,7 @@ function TablesPageContent() {
                     </button>
                   </div>
                   <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)" }}>
-                    ⏱ Đã ngồi: <strong>{getElapsedMinutes(selectedTableForOrder.openedAt)} phút</strong>
+                    Đã ngồi: <strong>{getElapsedMinutes(selectedTableForOrder.openedAt)} phút</strong>
                   </div>
                 </div>
               </div>
@@ -2281,7 +2280,7 @@ function TablesPageContent() {
                       marginBottom: "12px",
                     }}
                   >
-                    🖨 Đã in tạm tính lúc {new Date(at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                    Đã in tạm tính lúc {new Date(at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
                     {selectedTableForOrder.prePrintedBy ? ` bởi ${selectedTableForOrder.prePrintedBy}` : ""} — sửa món sẽ hủy trạng thái chờ thanh toán.
                   </div>
                 );
@@ -2916,7 +2915,6 @@ function TablesPageContent() {
         <div className="modal-overlay" onClick={() => setDeleteId(null)}>
           <div className="modal-content" style={{ maxWidth: "380px" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: "28px", textAlign: "center" }}>
-              <div style={{ fontSize: "44px", marginBottom: "14px" }}>🗑️</div>
               <h2 style={{ fontSize: "18px", fontWeight: "800", color: "var(--text)", marginBottom: "8px" }}>
                 Xác nhận xóa bàn
               </h2>
@@ -3018,7 +3016,7 @@ function TablesPageContent() {
                       }}
                     >
                       <div style={{ fontSize: "11px", letterSpacing: "2px", fontWeight: "800", color: "#7E2930", marginBottom: "4px" }}>
-                        ☕ TRẠM F&amp;B
+                        TRẠM F&amp;B
                       </div>
                       <div style={{ fontSize: "20px", fontWeight: "900", color: "#1C1A2D", marginBottom: "2px" }}>
                         BÀN {activeTbl.name}
@@ -3039,7 +3037,7 @@ function TablesPageContent() {
                       </div>
 
                       <div style={{ marginTop: "10px", fontSize: "12px", fontWeight: "700", color: "#7E2930" }}>
-                        📱 Quét mã để xem menu &amp; gọi món
+                        Quét mã để xem menu &amp; gọi món
                       </div>
                       <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
                         Đồng bộ tự động vào bàn &amp; bếp
@@ -3105,7 +3103,7 @@ function TablesPageContent() {
                           </head>
                           <body>
                             <div class="card">
-                              <div class="brand">☕ TRẠM F&B</div>
+                              <div class="brand">TRẠM F&B</div>
                               <div class="table">BÀN ${activeTbl.name}</div>
                               <div class="zone">${activeTbl.zone} • ${targetStore}</div>
                               <img src="${qrImgSrc}" class="qr" />

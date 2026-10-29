@@ -272,7 +272,7 @@ class _TableListScreenState extends State<TableListScreen> {
     if ((shift == null || !shift.isOpen) && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
+          content: Text('Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
           backgroundColor: TramColors.warningInk,
           duration: Duration(seconds: 4),
         ),
@@ -636,8 +636,8 @@ class _TableListScreenState extends State<TableListScreen> {
                   if (calls.isEmpty) return const SizedBox.shrink();
                   final firstCall = calls.first;
                   final title = calls.length == 1
-                      ? '📢 BẾP GỌI NHÂN VIÊN (${firstCall.fromName})'
-                      : '📢 BẾP GỌI NHÂN VIÊN (${calls.length} YÊU CẦU)';
+                      ? 'BẾP GỌI NHÂN VIÊN (${firstCall.fromName})'
+                      : 'BẾP GỌI NHÂN VIÊN (${calls.length} YÊU CẦU)';
                   final message = calls.length == 1
                       ? firstCall.message
                       : '${firstCall.fromName}: "${firstCall.message}" + ${calls.length - 1} yêu cầu khác';
@@ -807,7 +807,7 @@ class _TableListScreenState extends State<TableListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
+            content: Text('Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
             backgroundColor: TramColors.warningInk,
             duration: Duration(seconds: 3),
           ),
@@ -854,7 +854,7 @@ class _TableListScreenState extends State<TableListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '⚡ ${table.baseName} đang có ${res.occupiedBy ?? "đơn khác"} → Đã tự động tạo không gian bàn riêng ${res.targetTable.name}!',
+            '${table.baseName} đang có ${res.occupiedBy ?? "đơn khác"} → Đã tự động tạo không gian bàn riêng ${res.targetTable.name}!',
           ),
           backgroundColor: TramColors.brandPrimary,
           duration: const Duration(seconds: 3),
@@ -871,7 +871,7 @@ class _TableListScreenState extends State<TableListScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('⚠️ Chức năng thao tác đơn đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
+              content: Text('Chức năng thao tác đơn đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
               backgroundColor: TramColors.warningInk,
             ),
           );
@@ -993,7 +993,7 @@ class _TableListScreenState extends State<TableListScreen> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('⚠️ Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
+                      content: Text('Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca để bắt đầu.'),
                       backgroundColor: TramColors.warningInk,
                       duration: Duration(seconds: 3),
                     ),
@@ -1393,7 +1393,7 @@ class _TableListScreenState extends State<TableListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Chức năng hủy đơn bị khóa! Vui lòng mở ca trước.'),
+            content: Text('Chức năng hủy đơn bị khóa! Vui lòng mở ca trước.'),
             backgroundColor: TramColors.warningInk,
           ),
         );
@@ -1406,7 +1406,7 @@ class _TableListScreenState extends State<TableListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
+            content: Text('Bạn không có quyền hủy hóa đơn đã gửi bếp! Vui lòng liên hệ Quản Lý.'),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -1515,7 +1515,7 @@ class _TableListScreenState extends State<TableListScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '⚠️ Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
+                    'Sau khi xác nhận, toàn bộ món sẽ bị hủy và bàn sẽ trở về trạng thái TRỐNG.',
                     style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.danger, fontStyle: FontStyle.italic),
                   ),
                 ],

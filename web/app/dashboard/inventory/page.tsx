@@ -1246,7 +1246,7 @@ export default function InventoryPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
-            📦 Kho hàng & Nguyên vật liệu
+            Kho hàng & Nguyên vật liệu
           </h1>
           <p style={{ fontSize: "14px", color: "var(--subtext)", margin: "4px 0 0" }}>
             Quản lý danh mục hàng hóa, tồn kho, nhập/xuất và nhà cung cấp
@@ -1451,7 +1451,7 @@ export default function InventoryPage() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>⏳ Đang tải dữ liệu...</div>
+        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>Đang tải dữ liệu...</div>
       ) : (
         <>
           {activeTab === "catalog" && <CatalogTable items={filteredCatalog} balanceMap={balanceMap} onEdit={openEditItem} />}
@@ -1569,17 +1569,17 @@ export default function InventoryPage() {
         <Modal
           title={
             docModalType === "PURCHASE_RECEIPT"
-              ? "📥 Tạo phiếu nhập kho"
+              ? "Tạo phiếu nhập kho"
               : docModalType === "INTERNAL_USE"
-              ? "📤 Tạo phiếu xuất kho"
-              : "🗑️ Tạo phiếu xuất hủy"
+              ? "Tạo phiếu xuất kho"
+              : "Tạo phiếu xuất hủy"
           }
           onClose={() => setShowDocModal(false)}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {docError && (
               <div style={{ padding: "10px 14px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "8px", fontSize: "13px" }}>
-                ⚠️ {docError}
+                {docError}
               </div>
             )}
 
@@ -1833,7 +1833,7 @@ export default function InventoryPage() {
       {/* ==================== MODAL XEM CHI TIẾT PHIẾU KHO ==================== */}
       {viewingDoc && (
         <Modal
-          title={`📄 Chi tiết phiếu: ${viewingDoc.documentCode}`}
+          title={`Chi tiết phiếu: ${viewingDoc.documentCode}`}
           onClose={() => setViewingDoc(null)}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -2239,7 +2239,7 @@ export default function InventoryPage() {
                       </span>
                       {parsedRows.filter((r) => !r.isValid).length > 0 && (
                         <span style={{ fontSize: "12px", background: "var(--danger-bg)", color: "var(--danger)", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
-                          ⚠ {parsedRows.filter((r) => !r.isValid).length} lỗi
+                          {parsedRows.filter((r) => !r.isValid).length} lỗi
                         </span>
                       )}
                     </div>
@@ -2367,7 +2367,6 @@ function CatalogTable({
   if (items.length === 0)
     return (
       <EmptyState
-        icon="📦"
         text="Chưa có hàng hóa nào"
         sub="Bấm 'Thêm hàng' hoặc 'Nhập Excel' để tải dữ liệu nguyên vật liệu và công cụ dụng cụ."
       />
@@ -2454,7 +2453,6 @@ function StockTable({
   if (items.length === 0)
     return (
       <EmptyState
-        icon="📊"
         text="Chưa có hàng theo dõi tồn kho"
         sub="Tạo hàng hóa và bật 'Quản lý tồn kho' để xem tại đây."
       />
@@ -2493,7 +2491,6 @@ function StockTable({
                     fontWeight: belowMin ? "700" : "400",
                   }}
                 >
-                  {belowMin && "⚠️ "}
                   {onHand}
                 </td>
                 <td style={{ ...tdStyle, textAlign: "right", color: reserved > 0 ? "#f59e0b" : "var(--muted)" }}>{reserved}</td>
@@ -2531,7 +2528,7 @@ function DocumentsTable({
   onSelectDoc?: (doc: InventoryDocItem) => void;
 }) {
   if (docs.length === 0)
-    return <EmptyState icon="📋" text="Chưa có phiếu kho nào" sub="Bấm nút Nhập kho / Xuất kho / Huỷ kho phía trên để tạo phiếu." />;
+    return <EmptyState text="Chưa có phiếu kho nào" sub="Bấm nút Nhập kho / Xuất kho / Huỷ kho phía trên để tạo phiếu." />;
   return (
     <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2594,7 +2591,7 @@ function SuppliersTable({
   onEdit: (s: SupplierItem) => void;
 }) {
   if (suppliers.length === 0)
-    return <EmptyState icon="🏪" text="Chưa có nhà cung cấp" sub="Bấm 'Thêm NCC' để thêm nhà cung cấp đầu tiên." />;
+    return <EmptyState text="Chưa có nhà cung cấp" sub="Bấm 'Thêm NCC' để thêm nhà cung cấp đầu tiên." />;
   return (
     <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2645,10 +2642,9 @@ function SuppliersTable({
 }
 
 // ==================== UI HELPERS ====================
-function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: string }) {
+function EmptyState({ text, sub }: { text: string; sub: string }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
-      <div style={{ fontSize: "48px", marginBottom: "12px" }}>{icon}</div>
       <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text)" }}>{text}</div>
       <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>{sub}</div>
     </div>

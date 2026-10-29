@@ -491,7 +491,7 @@ function OrderContent() {
                 fontSize: "20px",
               }}
             >
-              ☕
+              <Coffee size={20} />
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

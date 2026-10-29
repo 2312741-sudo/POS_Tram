@@ -128,10 +128,10 @@ function HeaderBar({ onOpenMenu }: { onOpenMenu: () => void }) {
               cursor: "pointer",
             }}
           >
-            {canSwitchStore && <option value="ALL">🌐 Tất cả chi nhánh (Toàn hệ thống)</option>}
+            {canSwitchStore && <option value="ALL">Tất cả chi nhánh (Toàn hệ thống)</option>}
             {stores.filter((s) => canSwitchStore || s.storeCode === lockedStore).map((s) => (
               <option key={s.storeCode} value={s.storeCode}>
-                🏪 {s.storeCode} - {s.storeName}
+                {s.storeCode} - {s.storeName}
               </option>
             ))}
           </select>

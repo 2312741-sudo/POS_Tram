@@ -174,7 +174,7 @@ class TableCard extends StatelessWidget {
         style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: style.ink),
       ));
       final sub = [
-        if ((table.reservationTime ?? '').isNotEmpty) '🕒 ${table.reservationTime}',
+        if ((table.reservationTime ?? '').isNotEmpty) 'Giờ hẹn ${table.reservationTime}',
         if ((table.reservationPhone ?? '').isNotEmpty) table.reservationPhone!,
       ].join(' • ');
       if (sub.isNotEmpty) {
@@ -194,8 +194,8 @@ class TableCard extends StatelessWidget {
           : ((table.currentOrderCode != null && table.currentOrderCode!.isNotEmpty) ? 'Đơn: ${table.currentOrderCode}' : null);
       final meta = [
         table.zone,
-        if (table.guestCount != null && table.guestCount! > 0) '👥 ${table.guestCount}',
-        if (table.durationInUse != null) '⏱ ${table.durationInUse!.inMinutes}p',
+        if (table.guestCount != null && table.guestCount! > 0) '${table.guestCount} khách',
+        if (table.durationInUse != null) '${table.durationInUse!.inMinutes} phút',
       ].join(' • ');
       lines.add(Text(
         meta,
@@ -209,7 +209,7 @@ class TableCard extends StatelessWidget {
       if (table.hasCustomer) {
         final who = (table.customerName ?? '').isNotEmpty ? table.customerName! : (table.customerPhone ?? 'Khách tích điểm');
         lines.add(Text(
-          '👤 $who',
+          'Khách: $who',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),
@@ -219,7 +219,7 @@ class TableCard extends StatelessWidget {
         final at = DateTime.fromMillisecondsSinceEpoch(table.prePrintedAt!);
         final hhmm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
         lines.add(Text(
-          '🧾 Đã in tạm tính $hhmm',
+          'Đã in tạm tính $hhmm',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),
@@ -229,7 +229,7 @@ class TableCard extends StatelessWidget {
       lines.add(Text(table.zone, maxLines: 1, overflow: TextOverflow.ellipsis, style: small));
       if (table.isActivelyOrdering()) {
         lines.add(Text(
-          '✍️ Đang chọn món: ${table.orderingByName ?? table.orderingBy}',
+          'Đang chọn món: ${table.orderingByName ?? table.orderingBy}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: context.tc.warningInk),
@@ -242,7 +242,7 @@ class TableCard extends StatelessWidget {
     final note = (table.note ?? '').trim();
     if (note.isNotEmpty) {
       lines.add(Text(
-        '📝 $note',
+        'Ghi chú: $note',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: small.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: style.ink),

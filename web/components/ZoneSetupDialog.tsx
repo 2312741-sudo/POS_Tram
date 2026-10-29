@@ -255,7 +255,8 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
             <div key={z} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div>
-                  <strong>{pinnedSet.has(z) ? "📌 " : ""}{z}</strong>
+                  <strong>{z}</strong>
+                  {pinnedSet.has(z) && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--subtext)" }}>đã ghim</span>}
                   <span style={{ marginLeft: 8, fontSize: 12, color: "var(--subtext)" }}>{n} bàn</span>
                   {hasBusy && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--danger, #B3261E)" }}>đang có bàn dùng</span>}
                 </div>

@@ -292,7 +292,7 @@ class _RevenueTabState extends State<RevenueTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Báo Cáo Doanh Thu 💰',
+                    'Báo Cáo Doanh Thu',
                     style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: context.tc.textPrimary),
                   ),
                   Text(

@@ -112,7 +112,7 @@ export default function NoteCatalogPage() {
                 background: storeCode === s.storeCode ? "var(--primary)" : "var(--surface)", color: storeCode === s.storeCode ? "#fff" : "var(--subtext)",
               }}
             >
-              🏪 {s.storeName}
+              {s.storeName}
             </button>
           ))}
         </div>

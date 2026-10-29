@@ -81,7 +81,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
+            content: Text('Chức năng order đang bị khóa! Vui lòng khai báo tiền két đầu ca.'),
             backgroundColor: AppColors.warningInk,
             duration: Duration(seconds: 3),
           ),
@@ -955,7 +955,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                '⚡ ${widget.table.baseName} vừa có đơn khác → Đã tự động tách sang ${targetTable.name} (${targetTable.currentBillId})!',
+                                '${widget.table.baseName} vừa có đơn khác → Đã tự động tách sang ${targetTable.name} (${targetTable.currentBillId})!',
                               ),
                               backgroundColor: AppColors.primary,
                               duration: const Duration(seconds: 3),

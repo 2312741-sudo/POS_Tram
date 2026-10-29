@@ -42,12 +42,12 @@ export default function DashboardAboutPage() {
   };
 
   const getRoleBadge = () => {
-    if (user?.isRootOwner) return { text: "👑 Chủ Quán (Root Owner)", bg: "var(--primary-light)", color: "var(--primary)" };
+    if (user?.isRootOwner) return { text: "Chủ Quán (Root Owner)", bg: "var(--primary-light)", color: "var(--primary)" };
     const role = (user?.roleId || user?.role || "").toUpperCase();
-    if (role.includes("OWNER")) return { text: "👑 Chủ Quán", bg: "var(--primary-light)", color: "var(--primary)" };
-    if (role.includes("MANAGER")) return { text: "⭐ Quản Lý Chi Nhánh", bg: "var(--info-bg)", color: "var(--info)" };
-    if (role.includes("KITCHEN")) return { text: "👨‍🍳 Bếp / Pha Chế", bg: "var(--warning-bg)", color: "var(--warning)" };
-    return { text: "👤 Nhân Viên Vận Hành", bg: "var(--surface-muted)", color: "var(--text)" };
+    if (role.includes("OWNER")) return { text: "Chủ Quán", bg: "var(--primary-light)", color: "var(--primary)" };
+    if (role.includes("MANAGER")) return { text: "Quản Lý Chi Nhánh", bg: "var(--info-bg)", color: "var(--info)" };
+    if (role.includes("KITCHEN")) return { text: "Bếp / Pha Chế", bg: "var(--warning-bg)", color: "var(--warning)" };
+    return { text: "Nhân Viên Vận Hành", bg: "var(--surface-muted)", color: "var(--text)" };
   };
 
   const roleBadge = getRoleBadge();

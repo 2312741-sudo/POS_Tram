@@ -437,7 +437,7 @@ export default function PromotionsPage() {
   const renderVoucherCodeInputs = () => (
     <div>
       <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-        {([["LIST", "📋 Dán danh sách mã"], ["RANDOM", "⚡ Sinh mã ngẫu nhiên"]] as const).map(([mode, label]) => {
+        {([["LIST", "Dán danh sách mã"], ["RANDOM", "Sinh mã ngẫu nhiên"]] as const).map(([mode, label]) => {
           const on = voucherForm.mode === mode;
           return (
             <button key={mode} type="button" onClick={() => setVoucherForm({ ...voucherForm, mode })}
@@ -459,7 +459,7 @@ export default function PromotionsPage() {
             style={{ ...inputStyle, fontFamily: "monospace", resize: "vertical" }} />
           {voucherPreview && voucherForm.codesText.trim() && (
             <div style={{ fontSize: "12px", marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              <span style={{ color: "#15803d", fontWeight: 600 }}>✔ {voucherPreview.codes.length} mã mới</span>
+              <span style={{ color: "#15803d", fontWeight: 600 }}>{voucherPreview.codes.length} mã mới</span>
               {voucherPreview.duplicateInInput.length > 0 && <span style={{ color: "#a16207" }}>Lặp trong danh sách: {voucherPreview.duplicateInInput.join(", ")}</span>}
               {voucherPreview.existing.length > 0 && <span style={{ color: "var(--danger)" }}>Đã tồn tại: {voucherPreview.existing.join(", ")}</span>}
               {voucherPreview.invalid.length > 0 && <span style={{ color: "var(--danger)" }}>Sai định dạng: {voucherPreview.invalid.join(", ")}</span>}
@@ -495,7 +495,7 @@ export default function PromotionsPage() {
       <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <div>
           <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text)", margin: 0 }}>
-            🎉 Quản lý Khuyến mãi
+            Quản lý Khuyến mãi
           </h1>
           <p style={{ fontSize: "14px", color: "var(--subtext)", margin: "4px 0 0" }}>
             Tạo và quản lý các chương trình khuyến mãi, voucher
@@ -557,7 +557,7 @@ export default function PromotionsPage() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>⏳ Đang tải dữ liệu...</div>
+        <div style={{ textAlign: "center", padding: "60px", color: "var(--muted)" }}>Đang tải dữ liệu...</div>
       ) : (
         <>
           {activeTab === "campaigns" && (
@@ -588,7 +588,7 @@ export default function PromotionsPage() {
               </div>
 
               {filteredCampaigns.length === 0 ? (
-                <EmptyState icon="🎁" text="Chưa có chương trình khuyến mãi" sub="Bấm 'Thêm KM' để tạo mới." />
+                <EmptyState text="Chưa có chương trình khuyến mãi" sub="Bấm 'Thêm KM' để tạo mới." />
               ) : (
                 <div style={{ borderRadius: "12px", border: "1px solid var(--border)", overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -616,24 +616,24 @@ export default function PromotionsPage() {
                               <div style={{ fontWeight: "600", fontSize: "14px", color: "var(--text)", marginBottom: "4px" }}>{cam.name}</div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                                 {cam.requireStaffNote && (
-                                  <span style={badgeStyle("#d97706")}>📝 Ghi chú NV</span>
+                                  <span style={badgeStyle("#d97706")}>Ghi chú NV</span>
                                 )}
                                 {cam.birthdayOnly && (
-                                  <span style={badgeStyle("#db2777")}>🎂 Sinh nhật khách</span>
+                                  <span style={badgeStyle("#db2777")}>Sinh nhật khách</span>
                                 )}
                                 {cam.blockPoints && (
-                                  <span style={badgeStyle("#7c3aed")}>🚫 Không tích điểm</span>
+                                  <span style={badgeStyle("#7c3aed")}>Không tích điểm</span>
                                 )}
                                 {cam.stackingMode === "DISABLED" ? (
-                                  <span style={badgeStyle("#dc2626")}>🔒 Độc quyền (Không cộng dồn)</span>
+                                  <span style={badgeStyle("#dc2626")}>Độc quyền (Không cộng dồn)</span>
                                 ) : cam.maxCampaignsPerOrder && cam.maxCampaignsPerOrder > 0 ? (
                                   <span style={badgeStyle("#059669")}>Tối đa {cam.maxCampaignsPerOrder} CTKM/đơn</span>
                                 ) : null}
                                 {cam.includedItemIds && cam.includedItemIds.length > 0 && (
-                                  <span style={badgeStyle("#2563eb")}>📦 {cam.includedItemIds.length} món</span>
+                                  <span style={badgeStyle("#2563eb")}>{cam.includedItemIds.length} món</span>
                                 )}
                                 {cam.includedGroupIds && cam.includedGroupIds.length > 0 && (
-                                  <span style={badgeStyle("#0891b2")}>📁 {cam.includedGroupIds.length} nhóm</span>
+                                  <span style={badgeStyle("#0891b2")}>{cam.includedGroupIds.length} nhóm</span>
                                 )}
                               </div>
                             </td>
@@ -655,13 +655,13 @@ export default function PromotionsPage() {
 
                                 {cam.schedule.daysOfWeek && cam.schedule.daysOfWeek.length > 0 && (
                                   <div style={{ color: "#15803d", fontWeight: "600" }}>
-                                    📅 {cam.schedule.daysOfWeek.length === 7 ? "Mỗi ngày" : cam.schedule.daysOfWeek.map(d => d === 7 ? "CN" : `T${d + 1}`).join(", ")}
+                                    {cam.schedule.daysOfWeek.length === 7 ? "Mỗi ngày" : cam.schedule.daysOfWeek.map(d => d === 7 ? "CN" : `T${d + 1}`).join(", ")}
                                   </div>
                                 )}
 
                                 {cam.schedule.timeSlots && cam.schedule.timeSlots.length > 0 && (
                                   <div style={{ color: "#7c3aed", fontWeight: "600" }}>
-                                    ⏰ {cam.schedule.timeSlots.map(s => `${s.startTime}-${s.endTime}`).join(", ")}
+                                    {cam.schedule.timeSlots.map(s => `${s.startTime}-${s.endTime}`).join(", ")}
                                   </div>
                                 )}
                               </div>
@@ -725,7 +725,7 @@ export default function PromotionsPage() {
             <div>
               {/* Kiểm tra mã nhanh (tra toàn cửa hàng) */}
               <div style={{ background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "12px", padding: "12px 14px", marginBottom: "16px" }}>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>🔎 Kiểm tra mã</div>
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>Kiểm tra mã</div>
                 <form onSubmit={(e) => { e.preventDefault(); void handleCheckCode(); }} style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <input value={checkCode} onChange={(e) => { setCheckCode(e.target.value.toUpperCase()); setCheckResult(null); }}
                     placeholder="Nhập mã voucher, VD: TRAM8K2D"
@@ -739,7 +739,7 @@ export default function PromotionsPage() {
                     background: checkResult.ok ? "var(--success-bg)" : "var(--danger-bg)",
                     color: checkResult.ok ? "#15803d" : "var(--danger)",
                   }}>
-                    {checkResult.ok ? "✅ " : "⛔ "}{checkResult.message}
+                    {checkResult.message}
                   </div>
                 )}
               </div>
@@ -829,7 +829,7 @@ export default function PromotionsPage() {
                   </div>
                 </>
               ) : (
-                <EmptyState icon="🎫" text="Chọn chương trình" sub="Vui lòng chọn chương trình khuyến mãi có phát hành mã để xem chi tiết." />
+                <EmptyState text="Chọn chương trình" sub="Vui lòng chọn chương trình khuyến mãi có phát hành mã để xem chi tiết." />
               )}
             </div>
           )}
@@ -854,7 +854,7 @@ export default function PromotionsPage() {
             {/* Chi nhánh áp dụng */}
             <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "10px 14px" }}>
               <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)", marginBottom: "6px" }}>
-                🏢 Chi nhánh áp dụng
+                Chi nhánh áp dụng
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>
@@ -894,7 +894,7 @@ export default function PromotionsPage() {
             
             {/* 1. Cấu hình Ưu đãi & Giảm giá */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "var(--primary)" }}>🎁 Cấu hình Ưu đãi & Giảm giá</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "var(--primary)" }}>Cấu hình Ưu đãi & Giảm giá</div>
               {campaignForm.campaignType === "BILLDISCOUNT" && (
                 <div className="grid-stack-sm" style={benefitBox}>
                   <div style={{ gridColumn: "1 / -1", fontSize: "12px", color: "var(--subtext)" }}>
@@ -953,7 +953,7 @@ export default function PromotionsPage() {
                 <div className="grid-stack-sm" style={benefitBox}>
                   <div style={{ gridColumn: "1 / -1" }}>
                     <GroupMultiPicker
-                      label={`📁 Nhóm món mua X (${campaignForm.buyGroupIds.length}) — mọi món trong nhóm đều tính là X`}
+                      label={`Nhóm món mua X (${campaignForm.buyGroupIds.length}) — mọi món trong nhóm đều tính là X`}
                       color="#1e40af"
                       categories={categories}
                       selected={campaignForm.buyGroupIds}
@@ -962,7 +962,7 @@ export default function PromotionsPage() {
                     />
                     <div style={{ height: "10px" }} />
                     <ItemMultiPicker
-                      label={`🛒 Món mua X (${campaignForm.buyItemIds.length}) *`}
+                      label={`Món mua X (${campaignForm.buyItemIds.length}) *`}
                       color="#1e40af"
                       products={products}
                       selected={campaignForm.buyItemIds}
@@ -993,14 +993,14 @@ export default function PromotionsPage() {
             {/* 2. Phạm vi áp dụng món & nhóm hàng — chỉ cho Đồng giá (Giảm giá đơn hàng áp dụng toàn bộ hóa đơn) */}
             {campaignForm.campaignType === "ITEMPRICERULE" && (
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1e3a8a" }}>📦 Phạm vi áp dụng món / nhóm hàng</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#1e3a8a" }}>Phạm vi áp dụng món / nhóm hàng</div>
               <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>
                 Nếu để trống cả 2 mục, ưu đãi sẽ được áp dụng cho toàn bộ menu.
               </div>
 
               {/* Nhóm hàng */}
               <div style={{ marginBottom: "12px", background: "var(--surface-muted)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                <label style={{ ...labelStyle, color: "#1e40af" }}>📁 Nhóm hàng áp dụng ({campaignForm.includedGroupIds.length})</label>
+                <label style={{ ...labelStyle, color: "#1e40af" }}>Nhóm hàng áp dụng ({campaignForm.includedGroupIds.length})</label>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
                   <select
                     style={{ ...inputStyle, flex: 1 }}
@@ -1030,7 +1030,7 @@ export default function PromotionsPage() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                     {campaignForm.includedGroupIds.map(g => (
                       <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--info-bg)", color: "#1e40af", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
-                        📁 {g}
+                        {g}
                         <button
                           type="button"
                           onClick={() => setCampaignForm(prev => ({ ...prev, includedGroupIds: prev.includedGroupIds.filter(x => x !== g) }))}
@@ -1046,7 +1046,7 @@ export default function PromotionsPage() {
 
               {/* Món hàng */}
               <ItemMultiPicker
-                label={`📦 Món hàng áp dụng (${campaignForm.includedItemIds.length})`}
+                label={`Món hàng áp dụng (${campaignForm.includedItemIds.length})`}
                 color="#b45309"
                 products={products}
                 selected={campaignForm.includedItemIds}
@@ -1058,7 +1058,7 @@ export default function PromotionsPage() {
 
             {/* 3. Lịch trình, Ngày trong tuần & Happy Hours */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#065f46" }}>⏰ Lịch trình & Khung giờ áp dụng (Happy hours)</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px", color: "#065f46" }}>Lịch trình & Khung giờ áp dụng (Happy hours)</div>
             </div>
             <FormField label="Ngày bắt đầu" value={campaignForm.startDate} onChange={(v) => setCampaignForm({ ...campaignForm, startDate: v })} type="datetime-local" />
             <FormField label="Ngày kết thúc" value={campaignForm.endDate} onChange={(v) => setCampaignForm({ ...campaignForm, endDate: v })} type="datetime-local" />
@@ -1067,7 +1067,7 @@ export default function PromotionsPage() {
             <div style={{ gridColumn: "1 / -1", background: "var(--success-bg)", padding: "12px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
                 <label style={{ ...labelStyle, color: "#166534", margin: 0 }}>
-                  📅 Ngày áp dụng trong tuần: {campaignForm.daysOfWeek.length === 0 || campaignForm.daysOfWeek.length === 7 ? "Tất cả các ngày (T2 - CN)" : `${campaignForm.daysOfWeek.length} ngày đã chọn`}
+                  Ngày áp dụng trong tuần: {campaignForm.daysOfWeek.length === 0 || campaignForm.daysOfWeek.length === 7 ? "Tất cả các ngày (T2 - CN)" : `${campaignForm.daysOfWeek.length} ngày đã chọn`}
                 </label>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <button
@@ -1147,7 +1147,7 @@ export default function PromotionsPage() {
               <div style={{ display: "flex", flexWrap: "wrap", rowGap: "8px", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <div>
                   <label style={{ ...labelStyle, color: "#6b21a8", margin: 0 }}>
-                    ⏰ Khung giờ Happy Hours ({campaignForm.timeSlots.length})
+                    Khung giờ Happy Hours ({campaignForm.timeSlots.length})
                   </label>
                   <div style={{ fontSize: "12px", color: "#7c3aed" }}>
                     Chương trình chỉ áp dụng trong các khung giờ này (để trống nếu áp dụng cả ngày).
@@ -1237,7 +1237,7 @@ export default function PromotionsPage() {
 
             {/* 4. Hạn mức */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>💰 Hạn mức</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Hạn mức</div>
             </div>
             <FormField label="Ngân sách (VND)" value={campaignForm.budgetMoney} onChange={(v) => setCampaignForm({ ...campaignForm, budgetMoney: v })} type="number" />
             <FormField label="Giới hạn lượt dùng" value={campaignForm.maxUses} onChange={(v) => setCampaignForm({ ...campaignForm, maxUses: v })} type="number" />
@@ -1249,7 +1249,7 @@ export default function PromotionsPage() {
                   onChange={(e) => setCampaignForm({ ...campaignForm, birthdayOnly: e.target.checked })}
                   style={{ marginTop: "3px", width: "16px", height: "16px" }} />
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🎂 Chỉ áp dụng đúng ngày sinh nhật khách</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>Chỉ áp dụng đúng ngày sinh nhật khách</div>
                   <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
                     Tại app POS: gắn khách có ngày sinh trùng hôm nay thì tự áp dụng; khách khác (hoặc đơn chưa gắn khách) không dùng được.
                   </div>
@@ -1260,7 +1260,7 @@ export default function PromotionsPage() {
                   onChange={(e) => setCampaignForm({ ...campaignForm, blockPoints: e.target.checked })}
                   style={{ marginTop: "3px", width: "16px", height: "16px" }} />
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🚫 Khóa tích điểm</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>Khóa tích điểm</div>
                   <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
                     Đơn dùng chương trình này không được tích điểm (vẫn gắn được thông tin khách vào đơn).
                   </div>
@@ -1279,7 +1279,7 @@ export default function PromotionsPage() {
                 />
                 <div>
                   <div style={{ fontSize: "13px", fontWeight: "700", color: "#854d0e" }}>
-                    📝 Bắt buộc nhân viên nhập ghi chú/lý do khi áp dụng mã tại POS
+                    Bắt buộc nhân viên nhập ghi chú/lý do khi áp dụng mã tại POS
                   </div>
                   <div style={{ fontSize: "12px", color: "#a16207", marginTop: "2px" }}>
                     Khi bật tính năng này, màn hình thu ngân/POS sẽ hiển thị hộp thoại bắt buộc nhập lý do sử dụng ưu đãi trước khi thêm vào hóa đơn. Ghi chú sẽ được lưu vào lịch sử hóa đơn.
@@ -1291,7 +1291,7 @@ export default function PromotionsPage() {
             {/* 5b. Quy tắc cộng dồn & Giới hạn số CTKM trên 1 đơn */}
             <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px 14px", marginTop: "4px", display: "grid", gap: "10px" }}>
               <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>
-                🛡️ Quy tắc cộng dồn & Giới hạn áp dụng trong 1 đơn
+                Quy tắc cộng dồn & Giới hạn áp dụng trong 1 đơn
               </div>
               <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
                 <input
@@ -1305,7 +1305,7 @@ export default function PromotionsPage() {
                 />
                 <div>
                   <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
-                    {campaignForm.stackingMode !== "DISABLED" ? "Cho phép cộng dồn với CTKM khác trong cùng đơn" : "🔒 Áp dụng độc quyền (Không cho phép cộng dồn)"}
+                    {campaignForm.stackingMode !== "DISABLED" ? "Cho phép cộng dồn với CTKM khác trong cùng đơn" : "Áp dụng độc quyền (Không cho phép cộng dồn)"}
                   </div>
                   <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "2px" }}>
                     {campaignForm.stackingMode !== "DISABLED"
@@ -1338,7 +1338,7 @@ export default function PromotionsPage() {
 
             {/* 6. Cài đặt khác */}
             <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #eee", paddingTop: "12px", marginTop: "4px" }}>
-              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>⚙️ Cài đặt khác</div>
+              <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Cài đặt khác</div>
             </div>
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: "24px", flexWrap: "wrap" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }}>
@@ -1358,7 +1358,7 @@ export default function PromotionsPage() {
             {campaignForm.hasCodes && (
               <div style={{ gridColumn: "1 / -1", background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: "8px", padding: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>🎫 Mã voucher của chương trình</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>Mã voucher của chương trình</div>
                   {editingCampaign && (
                     <button type="button" onClick={() => { setShowCampaignModal(false); setSelectedVoucherCampaign(editingCampaign.campaignId); setActiveTab("vouchers"); }}
                       style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", color: "var(--primary)", fontWeight: 600 }}>
@@ -1438,7 +1438,7 @@ function ItemMultiPicker({ label, color, products, selected, onChange, emptyText
             const prod = products.find(p => String(p.id) === String(id));
             return (
               <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--warning-bg)", color: "#92400e", borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
-                📦 {prod ? prod.name : id}
+                {prod ? prod.name : id}
                 <button type="button" aria-label={`Bỏ ${prod ? prod.name : id}`} onClick={() => onChange(selected.filter(x => x !== id))}
                   style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}>×</button>
               </span>
@@ -1480,7 +1480,7 @@ function GroupMultiPicker({ label, color, categories, selected, onChange, emptyT
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
           {selected.map((g) => (
             <span key={g} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "var(--info-bg)", color, borderRadius: "16px", fontSize: "12px", fontWeight: "600" }}>
-              📁 {g}
+              {g}
               <button type="button" onClick={() => onChange(selected.filter((x) => x !== g))}
                 style={{ border: "none", background: "none", cursor: "pointer", color, fontWeight: "bold", fontSize: "14px", lineHeight: 1 }}>×</button>
             </span>
@@ -1505,7 +1505,7 @@ function RewardEditor({ form, setForm, products, categories, title }: {
     <>
       <div style={{ gridColumn: "1 / -1" }}>
         <GroupMultiPicker
-          label={`📁 Nhóm món được tặng/giảm (${form.rewardGroupIds.length}) — chọn nhóm để tránh thiếu món`}
+          label={`Nhóm món được tặng/giảm (${form.rewardGroupIds.length}) — chọn nhóm để tránh thiếu món`}
           color="#b45309"
           categories={categories}
           selected={form.rewardGroupIds}
@@ -1514,7 +1514,7 @@ function RewardEditor({ form, setForm, products, categories, title }: {
         />
         <div style={{ height: "10px" }} />
         <ItemMultiPicker
-          label={`🎁 ${title} (${form.rewardItemIds.length}) *`}
+          label={`${title} (${form.rewardItemIds.length}) *`}
           color="#b45309"
           products={products}
           selected={form.rewardItemIds}
@@ -1542,10 +1542,9 @@ function RewardEditor({ form, setForm, products, categories, title }: {
   );
 }
 
-function EmptyState({ icon, text, sub }: { icon: string; text: string; sub: string }) {
+function EmptyState({ text, sub }: { text: string; sub: string }) {
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
-      <div style={{ fontSize: "48px", marginBottom: "12px" }}>{icon}</div>
       <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text)" }}>{text}</div>
       <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>{sub}</div>
     </div>

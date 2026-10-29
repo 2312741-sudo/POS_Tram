@@ -226,7 +226,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '👑 Tài khoản Chủ Quán Tối Cao (Sovereign Owner). Không thể thay đổi vai trò hoặc hạ quyền.',
+                                  'Tài khoản Chủ Quán Tối Cao (Sovereign Owner). Không thể thay đổi vai trò hoặc hạ quyền.',
                                   style: TextStyle(color: context.ink(Colors.brown), fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -648,7 +648,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (user.isRootOwner) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('👑 Không thể khóa tài khoản Chủ Quán Tối Cao!'),
+          content: Text('Không thể khóa tài khoản Chủ Quán Tối Cao!'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -902,7 +902,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (user.isRootOwner) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('👑 Không thể xóa tài khoản Chủ Quán Tối Cao!'),
+          content: Text('Không thể xóa tài khoản Chủ Quán Tối Cao!'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -1069,7 +1069,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             border: Border.all(color: Colors.amber.shade400, width: 0.8),
                                           ),
                                           child: Text(
-                                            '👑 Chủ Quán Tối Cao',
+                                            'Chủ Quán Tối Cao',
                                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.ink(Colors.brown)),
                                           ),
                                         ),
@@ -1109,7 +1109,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
-                                            '⚠️ Chưa đổi MK',
+                                            'Chưa đổi MK',
                                             style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: context.tc.warningInk),
                                           ),
                                         ),
@@ -1144,7 +1144,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
-                                            '🌟 ${user.customPermissions.length} quyền riêng biệt',
+                                            '${user.customPermissions.length} quyền riêng biệt',
                                             style: GoogleFonts.beVietnamPro(
                                               fontSize: 10,
                                               color: context.tc.primaryDark,
