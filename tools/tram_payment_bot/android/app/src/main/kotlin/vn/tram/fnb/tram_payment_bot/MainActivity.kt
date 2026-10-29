@@ -74,6 +74,28 @@ class MainActivity : FlutterActivity() {
                     val code = prefs.getString("default_store_code", "TRAM01") ?: "TRAM01"
                     result.success(code)
                 }
+                "setBankMapping" -> {
+                    val packageName = call.argument<String>("packageName")
+                    val storeCode = call.argument<String>("storeCode")
+                    if (!packageName.isNullOrBlank() && !storeCode.isNullOrBlank()) {
+                        val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
+                        prefs.edit().putString("bank_map_$packageName", storeCode).apply()
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "getBankMappings" -> {
+                    val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
+                    val all = prefs.all
+                    val mappings = mutableMapOf<String, String>()
+                    for ((k, v) in all) {
+                        if (k.startsWith("bank_map_") && v is String) {
+                            mappings[k.removePrefix("bank_map_")] = v
+                        }
+                    }
+                    result.success(mappings)
+                }
                 "sendTestPayment" -> {
                     val storeCode = call.argument<String>("storeCode") ?: "TRAM01"
                     val amount = (call.argument<Number>("amount") ?: 30000).toLong()

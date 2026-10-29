@@ -281,10 +281,17 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: ['TRAM01', 'TRAM02', 'TRAM03'].map((code) {
+                    runSpacing: 8,
+                    children: ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'].map((code) {
                       final isSelected = _selectedStoreCode == code;
                       return ChoiceChip(
-                        label: Text(code == 'TRAM01' ? 'Quán 1 ($code)' : code == 'TRAM02' ? 'Quán 2 ($code)' : 'Quán 3 ($code)'),
+                        label: Text(code == 'TRAM01'
+                            ? 'Quán 1 ($code)'
+                            : code == 'TRAM02'
+                                ? 'Quán 2 ($code)'
+                                : code == 'TRAM03'
+                                    ? 'Quán 3 ($code)'
+                                    : 'Quán 4 ($code)'),
                         selected: isSelected,
                         selectedColor: const Color(0xFF7E2930).withOpacity(0.15),
                         labelStyle: TextStyle(

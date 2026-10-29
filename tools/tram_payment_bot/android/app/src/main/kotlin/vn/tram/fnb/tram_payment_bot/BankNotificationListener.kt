@@ -127,11 +127,16 @@ class BankNotificationListener : NotificationListenerService() {
         val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
         val defaultStore = prefs.getString("default_store_code", "TRAM01") ?: "TRAM01"
 
-        // Tự động nhận diện chi nhánh nếu trong nội dung hoặc toàn bộ thông báo có mã chi nhánh
+        // 1. Tự động nhận diện chi nhánh từ nội dung chuyển khoản / toàn bộ thông báo (TRAM01, TRAM02, TRAM03, TRAM04, TRAM05...)
+        val tramCodeMatch = Regex("""(?i)\b(tram\d{1,4})\b""").find(fullContent)
+        val detectedStoreCode = tramCodeMatch?.value?.uppercase()
+
+        // 2. Tra cứu cấu hình gán theo Ngân hàng -> Chi nhánh (VD: MB Bank -> TRAM01, VCB -> TRAM02, TCB -> TRAM03, ACB -> TRAM04)
+        val bankMappedStore = prefs.getString("bank_map_$packageName", null)
+
         val storeCode = when {
-            extractedContent.contains("TRAM01", ignoreCase = true) || fullContent.contains("TRAM01", ignoreCase = true) -> "TRAM01"
-            extractedContent.contains("TRAM02", ignoreCase = true) || fullContent.contains("TRAM02", ignoreCase = true) -> "TRAM02"
-            extractedContent.contains("TRAM03", ignoreCase = true) || fullContent.contains("TRAM03", ignoreCase = true) -> "TRAM03"
+            detectedStoreCode != null -> detectedStoreCode
+            !bankMappedStore.isNullOrBlank() -> bankMappedStore
             else -> defaultStore
         }
 
