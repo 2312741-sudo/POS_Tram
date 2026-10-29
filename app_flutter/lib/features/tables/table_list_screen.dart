@@ -17,6 +17,7 @@ import '../../widgets/common_widgets.dart';
 import '../../widgets/theme_mode_selector.dart';
 import 'widgets/table_card.dart';
 import 'widgets/ready_kitchen_orders_banner.dart';
+import '../../data/models/staff_call_model.dart';
 
 class TableListScreen extends StatefulWidget {
   const TableListScreen({super.key});
@@ -152,6 +153,100 @@ class _TableListScreenState extends State<TableListScreen> {
       context: context,
       onPickUp: _handlePickUpKitchenOrder,
       onPickUpAll: _handlePickUpAllKitchenOrders,
+    );
+  }
+
+  void _showStaffCallsModal(BuildContext context, List<StaffCallModel> calls) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.campaign, color: Colors.red, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Yêu cầu gọi từ Bếp (${calls.length})',
+                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.done_all, size: 18),
+                    label: const Text('Tiếp nhận tất cả'),
+                    onPressed: () async {
+                      for (final c in calls) {
+                        if (c.firebaseKey != null) {
+                          await _fb.ackStaffCall(c.firebaseKey!);
+                        }
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+              const Divider(),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: calls.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, index) {
+                    final c = calls[index];
+                    final dt = DateTime.fromMillisecondsSinceEpoch(c.createdAt);
+                    final timeStr =
+                        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.red.shade100,
+                        child: const Icon(Icons.soup_kitchen, color: Colors.red),
+                      ),
+                      title: Text(
+                        c.message,
+                        style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '${c.fromName} • $timeStr',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey),
+                      ),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: TramColors.success,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          minimumSize: const Size(0, 32),
+                        ),
+                        child: const Text('Tiếp nhận'),
+                        onPressed: () async {
+                          if (c.firebaseKey != null) {
+                            await _fb.ackStaffCall(c.firebaseKey!);
+                          }
+                          if (calls.length <= 1 && ctx.mounted) {
+                            Navigator.pop(ctx);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -532,6 +627,48 @@ class _TableListScreenState extends State<TableListScreen> {
                   onPickUp: _handlePickUpKitchenOrder,
                   onViewAll: () => _showReadyOrdersSheet(context),
                 ),
+
+              // Banner Bếp gọi nhân viên hỗ trợ / phục vụ
+              StreamBuilder<List<StaffCallModel>>(
+                stream: _fb.pendingStaffCallsStream(),
+                builder: (context, snap) {
+                  final calls = snap.data ?? const <StaffCallModel>[];
+                  if (calls.isEmpty) return const SizedBox.shrink();
+                  final firstCall = calls.first;
+                  final title = calls.length == 1
+                      ? '📢 BẾP GỌI NHÂN VIÊN (${firstCall.fromName})'
+                      : '📢 BẾP GỌI NHÂN VIÊN (${calls.length} YÊU CẦU)';
+                  final message = calls.length == 1
+                      ? firstCall.message
+                      : '${firstCall.fromName}: "${firstCall.message}" + ${calls.length - 1} yêu cầu khác';
+                  return InfoBanner(
+                    solid: true,
+                    tone: BannerTone.danger,
+                    icon: Icons.campaign,
+                    title: title,
+                    message: message,
+                    actionLabel: calls.length > 1 ? 'Xem tất cả' : 'Tiếp nhận',
+                    actionIcon: Icons.check_circle_outline,
+                    onAction: () async {
+                      if (calls.length == 1) {
+                        if (firstCall.firebaseKey != null) {
+                          await _fb.ackStaffCall(firstCall.firebaseKey!);
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã tiếp nhận yêu cầu từ bếp'),
+                              backgroundColor: TramColors.success,
+                            ),
+                          );
+                        }
+                      } else {
+                        _showStaffCallsModal(context, calls);
+                      }
+                    },
+                  );
+                },
+              ),
 
               // Zone filter chips
               Container(
@@ -1526,7 +1663,9 @@ class _TableListScreenState extends State<TableListScreen> {
               CashShiftDialog.show(context);
             },
           ),
-          if (_auth.can(AppPermissions.viewCashShifts) || _auth.can(AppPermissions.viewReports))
+          if (_auth.can(AppPermissions.viewShiftHandover) ||
+              _auth.can(AppPermissions.viewAllShifts) ||
+              _auth.can(AppPermissions.viewReports))
           ListTile(
             leading: Icon(Icons.receipt_long, color: context.tc.primary),
             title: const Text('Phiếu Bàn Giao Ca'),
@@ -1545,6 +1684,13 @@ class _TableListScreenState extends State<TableListScreen> {
             leading: const Icon(Icons.soup_kitchen),
             title: const Text('Màn hình Bếp / KDS'),
             onTap: () => _navigateTo('/kitchen'),
+          ),
+          if (_auth.can(AppPermissions.viewReports))
+          ListTile(
+            leading: Icon(Icons.speed, color: context.tc.warning),
+            title: const Text('Báo Cáo Tốc Độ Phục Vụ (SOS / Bếp)'),
+            subtitle: const Text('Thời gian chế biến món, SLA & trễ đơn'),
+            onTap: () => _navigateTo('/kitchen-sla'),
           ),
           if (_auth.can(AppPermissions.viewOnlineOrders))
           ListTile(

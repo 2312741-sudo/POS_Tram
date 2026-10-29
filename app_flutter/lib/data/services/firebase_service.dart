@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/app_models.dart';
+import '../models/staff_call_model.dart';
 import '../repositories/seed_data.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/order_repository.dart';
@@ -569,6 +570,18 @@ class FirebaseService {
       );
 
   Future<void> markKitchenOrderDone(String key) => _orderRepo.markKitchenOrderDone(key);
+
+  Future<void> markKitchenOrderGroupDone(KitchenOrderModel order, String group) =>
+      _orderRepo.markKitchenOrderGroupDone(order, group);
+
+  Future<void> callStaff({String message = ''}) => _orderRepo.callStaff(message: message);
+
+  Stream<List<StaffCallModel>> pendingStaffCallsStream() => _orderRepo.pendingStaffCallsStream();
+
+  Future<void> ackStaffCall(String key) => _orderRepo.ackStaffCall(key);
+
+  Future<List<KitchenOrderModel>> kitchenOrdersInRange({String? storeCode, required int fromMs, required int toMs}) =>
+      _orderRepo.kitchenOrdersInRange(storeCode: storeCode, fromMs: fromMs, toMs: toMs);
 
   Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) =>
       _orderRepo.markKitchenOrderPickedUp(key, pickedUpBy: pickedUpBy);

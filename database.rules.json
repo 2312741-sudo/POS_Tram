@@ -319,6 +319,12 @@
             }
           }
         },
+        "staff_calls": {
+          ".read": "auth != null && root.child('userIndex').child(auth.uid).child($storeCode).val() === true && root.child('stores').child($storeCode).child('users').child(auth.uid).exists() && root.child('stores').child($storeCode).child('users').child(auth.uid).child('isActive').val() !== false",
+          "$callId": {
+            ".write": "auth != null && root.child('userIndex').child(auth.uid).child($storeCode).val() === true && root.child('stores').child($storeCode).child('users').child(auth.uid).exists() && root.child('stores').child($storeCode).child('users').child(auth.uid).child('isActive').val() !== false"
+          }
+        },
         "online_orders": {
           ".read": "true",
           "$orderId": {

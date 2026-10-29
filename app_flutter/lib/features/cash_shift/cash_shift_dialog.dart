@@ -96,7 +96,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: _canViewDifference ? 3 : 2, vsync: this);
     // Instant cache-first initialization to prevent UI lag
     final cached = _fb.activeShiftCache;
     if (cached != null && cached.isOpen && (cached.storeCode.isEmpty || cached.storeCode == _auth.currentStoreCode)) {
@@ -588,10 +588,11 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           unselectedLabelColor: context.tc.textSecondary,
           indicatorColor: context.tc.primary,
           labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(text: 'Tổng Quan'),
-            Tab(text: 'Thu / Chi Két'),
-            Tab(text: 'Chốt Ca'),
+          tabs: [
+            // Nhân viên (không có VIEW_SHIFT_HANDOVER) không thấy tab Tổng Quan
+            if (_canViewDifference) const Tab(text: 'Tổng Quan'),
+            const Tab(text: 'Thu / Chi Két'),
+            const Tab(text: 'Chốt Ca'),
           ],
         ),
         const SizedBox(height: 16),
@@ -600,7 +601,8 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           child: TabBarView(
             controller: _tabController,
             children: [
-              // TAB 1: Tổng quan số dư két
+              // TAB 1: Tổng quan số dư két (chỉ người có VIEW_SHIFT_HANDOVER)
+              if (_canViewDifference)
               SingleChildScrollView(
                 child: Column(
                   children: [

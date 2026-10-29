@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
 import '../../core/domain/item_options.dart';
+import '../../core/domain/kitchen_sla.dart';
+import '../models/staff_call_model.dart';
 import '../../core/domain/menu_copy.dart';
 import '../../core/domain/zone_plan.dart';
 import '../../core/reports/report_calculator.dart';
@@ -2224,11 +2226,23 @@ class OrderRepository {
     final staffUser = orderedBy ?? currentUser?.username;
     final staffName = orderedByName ?? currentUser?.fullName;
 
+    // Gắn nhóm bếp (nước/bánh) cho từng món để bếp có thể xong từng phần. Lỗi → không gắn (xong cả đơn).
+    Map<int, String> categoryById = {};
+    try {
+      categoryById = {for (final p in await getProducts()) p.id: p.category};
+    } catch (_) {}
+    final kitchenItems = unsent.map((e) {
+      final m = e.toMap();
+      final cat = categoryById[e.productId];
+      if (cat != null) m['kitchenGroup'] = kitchenGroupOfCategory(cat);
+      return m;
+    }).toList();
+
     final kitchenOrder = KitchenOrderModel(
       tableName: table.name,
       orderCode: table.currentOrderCode,
       billCode: table.currentBillId,
-      itemsJson: jsonEncode(unsent.map((e) => e.toMap()).toList()),
+      itemsJson: jsonEncode(kitchenItems),
       timestamp: DateTime.now().millisecondsSinceEpoch,
       note: note,
       orderedBy: staffUser,
@@ -2250,6 +2264,103 @@ class OrderRepository {
       'doneAt': now,
       'pickedUp': false,
     });
+  }
+
+  /// Bếp xong MỘT NHÓM (nước/bánh) của phiếu: tách phần đã xong thành phiếu mới (isDone, doneAt, cùng
+  /// timestamp/batchId) nên luồng "món đã xong chờ lấy" của nhân viên dùng lại nguyên; phiếu gốc chỉ còn
+  /// phần chưa xong. Nếu phiếu không có đủ 2 nhóm → xong cả phiếu. Ghi nguyên tử bằng multi-path update.
+  Future<void> markKitchenOrderGroupDone(KitchenOrderModel order, String group) async {
+    final key = order.firebaseKey;
+    if (key == null) return;
+    final List raw;
+    try {
+      raw = jsonDecode(order.itemsJson) as List;
+    } catch (_) {
+      return markKitchenOrderDone(key);
+    }
+    final doneItems = <dynamic>[];
+    final restItems = <dynamic>[];
+    for (final e in raw) {
+      (e is Map && e['kitchenGroup']?.toString() == group ? doneItems : restItems).add(e);
+    }
+    if (doneItems.isEmpty || restItems.isEmpty) return markKitchenOrderDone(key);
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newKey = kitchenOrdersRef.push().key ?? now.toString();
+    final batch = order.batchId ?? key;
+    final donePart = order.copyWith(
+      itemsJson: jsonEncode(doneItems),
+      isDone: true,
+      doneAt: now,
+      pickedUp: false,
+      batchId: batch,
+      itemGroup: group,
+    );
+    await _commitWrite(
+      kitchenOrdersRef.update({
+        '$key/itemsJson': jsonEncode(restItems),
+        '$key/batchId': batch,
+        newKey: donePart.toMap(),
+      }),
+      'xong một phần phiếu bếp bàn ${order.tableName}',
+    );
+  }
+
+  // ==================== GỌI NHÂN VIÊN (BẾP → PHỤC VỤ) ====================
+  DatabaseReference staffCallsRefFor([String? storeCode]) {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    return _root.child('stores').child(sc).child('staff_calls');
+  }
+
+  Future<void> callStaff({String message = ''}) async {
+    final user = AuthService().currentUser;
+    final call = StaffCallModel(
+      message: message.trim(),
+      fromName: user?.fullName ?? user?.username ?? 'Bếp',
+      fromUsername: user?.username,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    final ref = staffCallsRefFor().push();
+    await _commitWrite(ref.set(call.toMap()), 'gọi nhân viên');
+  }
+
+  /// Các lời gọi chưa ai xác nhận trong [maxAge] gần nhất, mới nhất trước.
+  Stream<List<StaffCallModel>> pendingStaffCallsStream({Duration maxAge = const Duration(hours: 2)}) {
+    return staffCallsRefFor().onValue.map<List<StaffCallModel>>((event) {
+      final v = event.snapshot.value;
+      if (!event.snapshot.exists || v is! Map) return <StaffCallModel>[];
+      final cutoff = DateTime.now().millisecondsSinceEpoch - maxAge.inMilliseconds;
+      return v.entries
+          .where((e) => e.value is Map)
+          .map((e) => StaffCallModel.fromMap(Map<dynamic, dynamic>.from(e.value as Map), key: e.key.toString()))
+          .where((c) => !c.acknowledged && c.createdAt >= cutoff)
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }).handleError((_) => <StaffCallModel>[]);
+  }
+
+  Future<void> ackStaffCall(String key, {String? by}) async {
+    final user = AuthService().currentUser;
+    await _commitWrite(
+      staffCallsRefFor().child(key).update({
+        'ackAt': DateTime.now().millisecondsSinceEpoch,
+        'ackBy': by ?? user?.fullName ?? user?.username ?? 'Nhân viên',
+      }),
+      'xác nhận gọi nhân viên',
+    );
+  }
+
+  /// Phiếu bếp của một cửa hàng gửi trong [fromMs, toMs] (cho báo cáo SLA). Dữ liệu cũ thiếu trường vẫn parse được.
+  Future<List<KitchenOrderModel>> kitchenOrdersInRange({String? storeCode, required int fromMs, required int toMs}) async {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    final ref = _root.child('stores').child(sc).child('kitchen_orders');
+    final snap = await ref.orderByChild('timestamp').startAt(fromMs).endAt(toMs).get();
+    final v = snap.value;
+    if (!snap.exists || v is! Map) return [];
+    return v.entries
+        .where((e) => e.value is Map)
+        .map((e) => KitchenOrderModel.fromMap(Map<dynamic, dynamic>.from(e.value as Map), key: e.key.toString()))
+        .toList();
   }
 
   Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) async {

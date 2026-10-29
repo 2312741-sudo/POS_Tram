@@ -133,6 +133,10 @@ class BankNotificationListener : NotificationListenerService() {
 
         // 2. Tra cứu cấu hình gán theo Ngân hàng -> Chi nhánh (VD: MB Bank -> TRAM01, VCB -> TRAM02, TCB -> TRAM03, ACB -> TRAM04)
         val bankMappedStore = prefs.getString("bank_map_$packageName", null)
+            ?: if (packageName == "com.vcb.digibank") prefs.getString("bank_map_com.VCB", null)
+               else if (packageName == "com.techcombank") prefs.getString("bank_map_vn.com.techcombank.bb.app", null)
+               else if (packageName == "com.agribank.emobilebanking") prefs.getString("bank_map_com.vnpay.Agribank", null)
+               else null
 
         val storeCode = when {
             detectedStoreCode != null -> detectedStoreCode

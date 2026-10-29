@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../auth/delete_account_dialog.dart';
 import 'sold_out_actions.dart';
 import 'sold_out_sheet.dart';
+import '../../core/domain/kitchen_sla.dart';
+import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
@@ -31,6 +33,8 @@ class _KitchenScreenState extends State<KitchenScreen> {
   StreamSubscription<List<KitchenOrderModel>>? _sub;
   // Đơn vừa vuốt "Xong" – ẩn ngay để Dismissible không còn trong cây widget
   final Set<String> _pendingDone = {};
+  // Đang xong một phần (key|nhóm) – chặn bấm đúp
+  final Set<String> _pendingGroup = {};
 
   @override
   void initState() {
@@ -90,6 +94,63 @@ class _KitchenScreenState extends State<KitchenScreen> {
     }
   }
 
+  Future<void> _markGroupDone(KitchenOrderModel order, String group) async {
+    final key = order.firebaseKey;
+    if (key == null) return;
+    final guard = '$key|$group';
+    if (!_pendingGroup.add(guard)) return;
+    try {
+      await _fb.markKitchenOrderGroupDone(order, group);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không cập nhật được đơn: $e'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      _pendingGroup.remove(guard);
+    }
+  }
+
+  bool get _canCallStaff =>
+      AuthService().can(AppPermissions.viewKitchen) || AuthService().can(AppPermissions.sendKitchen);
+
+  Future<void> _callStaff() async {
+    final note = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gọi nhân viên'),
+        content: TextField(
+          controller: note,
+          maxLength: 120,
+          decoration: const InputDecoration(hintText: 'Nội dung (không bắt buộc)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Gọi')),
+        ],
+      ),
+    );
+    final message = note.text;
+    note.dispose();
+    if (ok != true) return;
+    try {
+      await _fb.callStaff(message: message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã gọi nhân viên'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không gọi được nhân viên: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visibleOrders;
@@ -128,9 +189,9 @@ class _KitchenScreenState extends State<KitchenScreen> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.kitchenCard,
-        border: const Border(bottom: BorderSide(color: AppColors.kitchenCardBorder)),
+        border: Border(bottom: BorderSide(color: AppColors.kitchenCardBorder)),
       ),
       child: Row(
         children: [
@@ -175,6 +236,21 @@ class _KitchenScreenState extends State<KitchenScreen> {
               ],
             ),
           ),
+          if (_canCallStaff)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: OutlinedButton.icon(
+                onPressed: _callStaff,
+                icon: const Icon(Icons.campaign_outlined, size: 18),
+                label: const Text('Gọi nhân viên'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: AppColors.kitchenCardBorder),
+                ),
+              ),
+            ),
           if (canToggleAvailability())
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -283,6 +359,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
               key: ValueKey(orders[i].firebaseKey ?? '${orders[i].tableName}_${orders[i].timestamp}'),
               order: orders[i],
               onDone: () => _markDone(orders[i]),
+              onGroupDone: (g) => _markGroupDone(orders[i], g),
             ).animate(delay: (i * 50).ms).fadeIn(duration: 300.ms).slideX(begin: 0.1, end: 0);
 
         if (cols == 1) {
@@ -322,8 +399,9 @@ class _KitchenScreenState extends State<KitchenScreen> {
 class _KitchenOrderCard extends StatelessWidget {
   final KitchenOrderModel order;
   final VoidCallback onDone;
+  final void Function(String group) onGroupDone;
 
-  const _KitchenOrderCard({super.key, required this.order, required this.onDone});
+  const _KitchenOrderCard({super.key, required this.order, required this.onDone, required this.onGroupDone});
 
   Color _timerColor(Duration d) {
     if (d.inMinutes < 5) return AppColors.success;
@@ -336,6 +414,9 @@ class _KitchenOrderCard extends StatelessWidget {
     final waiting = order.waitingTime;
     final timerColor = _timerColor(waiting);
     final items = order.items;
+    final groups = order.itemGroups;
+    // Có cả nước lẫn bánh → cho xong từng phần
+    final canSplit = order.groupsPresent.length >= 2;
 
     final tName = order.tableName.trim();
     final tableDisplayName = tName.toLowerCase().startsWith('bàn') || tName.toLowerCase().contains('mang')
@@ -426,7 +507,10 @@ class _KitchenOrderCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Items list
-              ...items.map((item) => Container(
+              ...items.asMap().entries.map((entry) {
+                final item = entry.value;
+                final grp = entry.key < groups.length ? groups[entry.key] : null;
+                return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
@@ -449,6 +533,10 @@ class _KitchenOrderCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        if (canSplit && grp != null) ...[
+                          Text(kitchenGroupLabel(grp), style: GoogleFonts.beVietnamPro(color: Colors.white54, fontSize: 11)),
+                          const SizedBox(width: 6),
+                        ],
                         Expanded(
                           child: Text(
                             item.name,
@@ -528,16 +616,39 @@ class _KitchenOrderCard extends StatelessWidget {
                     ],
                   ],
                 ),
-              )),
+              );
+              }),
 
               const SizedBox(height: 12),
+              if (canSplit) ...[
+                Row(
+                  children: [
+                    for (final g in [kKitchenGroupDrink, kKitchenGroupFood]) ...[
+                      if (g != kKitchenGroupDrink) const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => onGroupDone(g),
+                          icon: Icon(g == kKitchenGroupDrink ? Icons.local_cafe_outlined : Icons.cake_outlined, size: 18),
+                          label: Text('Xong ${kitchenGroupLabel(g).toLowerCase()}'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.success,
+                            side: const BorderSide(color: AppColors.success),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               // Done button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: onDone,
                   icon: const Icon(Icons.check_circle_outline),
-                  label: Text('Đã xong', style: GoogleFonts.beVietnamPro(
+                  label: Text(canSplit ? 'Xong cả đơn' : 'Đã xong', style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w700, fontSize: 15,
                   )),
                   style: ElevatedButton.styleFrom(

@@ -23,6 +23,8 @@ export default function MyShiftPage() {
   const storeCode = currentStoreCode !== "ALL" && currentStoreCode ? currentStoreCode : user?.storeCode || stores[0]?.storeCode || "";
   const actor: ShiftActor = { uid: user?.uid || "", username: user?.username || "", fullName: user?.fullName, role: user?.roleId || user?.role };
   const canManage = hasPermission(user, "MANAGE_CASH_SHIFT");
+  // Tổng quan két / số kỳ vọng / chênh lệch: chỉ Chủ/Quản lý (hoặc được cấp quyền); Nhân viên kiểm đếm mù
+  const canViewOverview = hasPermission(user, "VIEW_SHIFT_HANDOVER") || hasPermission(user, "VIEW_ALL_SHIFTS") || hasPermission(user, "VIEW_REPORTS");
 
   const mine = useMemo(
     () => cashShifts.filter((s) => (s.storeCode || storeCode) === storeCode && shiftOwnedBy(s, { uid: actor.uid, username: actor.username })),
@@ -84,7 +86,7 @@ export default function MyShiftPage() {
     if (!open) return;
     if (actualCash.trim() === "") return setError("Vui lòng nhập số tiền mặt kiểm đếm thực tế trong két");
     const v = Number(actualCash.replace(/[^0-9]/g, ""));
-    if (!confirm(`Chốt ca với ${formatVND(v)} tiền mặt thực tế (hệ thống ghi nhận ${formatVND(expectedCash(open))})?`)) return;
+    if (!confirm(`Chốt ca với ${formatVND(v)} tiền mặt thực tế ${canViewOverview ? `(hệ thống ghi nhận ${formatVND(expectedCash(open))})` : ""}?`)) return;
     return run(() => buildCloseShift({ storeCode, actor, shift: open, actualCash: v, notes, now: nowMs() }), "Đã chốt ca. Cảm ơn bạn!");
   };
 
@@ -133,7 +135,7 @@ export default function MyShiftPage() {
             </div>
             <span style={{ background: "var(--success-bg)", color: "#137333", borderRadius: 14, padding: "4px 12px", fontSize: 12, fontWeight: 700, alignSelf: "flex-start" }}>ĐANG MỞ</span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+          {canViewOverview && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
             {stat("Tiền đầu ca", formatVND(open.initialCash || 0))}
             {stat("Bán tiền mặt", formatVND(open.totalCashSales || 0))}
             {stat("Bán chuyển khoản/QR", formatVND(open.totalQrSales || 0))}
@@ -141,13 +143,13 @@ export default function MyShiftPage() {
             {stat("Thu thêm / Chi vặt", `${formatVND(open.cashIn || 0)} / ${formatVND(open.cashOut || 0)}`)}
             {stat("Tổng doanh số ca", formatVND(totalRevenue(open)), "var(--primary)")}
             {stat("Tiền mặt dự kiến trong két", formatVND(expectedCash(open)), "#137333")}
-          </div>
+          </div>}
 
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>Chốt ca / két</div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>Tiền mặt thực tế kiểm đếm (VNĐ)</label>
             <input style={{ ...input, margin: "6px 0 6px" }} inputMode="numeric" value={actualCash} onChange={(e) => setActualCash(e.target.value)} placeholder="0" />
-            {actualNum !== null && (
+            {canViewOverview && actualNum !== null && (
               <div style={{ fontSize: 13, marginBottom: 8, color: actualNum - expectedCash(open) === 0 ? "#137333" : "#B3261E", fontWeight: 700 }}>
                 Chênh lệch: {actualNum - expectedCash(open) > 0 ? "+" : ""}{formatVND(actualNum - expectedCash(open))}
                 {actualNum - expectedCash(open) === 0 ? " (khớp)" : actualNum - expectedCash(open) > 0 ? " (thừa)" : " (thiếu)"}
@@ -171,7 +173,7 @@ export default function MyShiftPage() {
                 <th style={{ padding: "6px 8px" }}>Ca</th>
                 <th style={{ padding: "6px 8px" }}>Mở / Chốt</th>
                 <th style={{ padding: "6px 8px", textAlign: "right" }}>Doanh số</th>
-                <th style={{ padding: "6px 8px", textAlign: "right" }}>Chênh lệch</th>
+                {canViewOverview && <th style={{ padding: "6px 8px", textAlign: "right" }}>Chênh lệch</th>}
               </tr>
             </thead>
             <tbody>
@@ -180,7 +182,7 @@ export default function MyShiftPage() {
                   <td style={{ padding: "6px 8px", fontFamily: "monospace" }}>{s.shiftCode}</td>
                   <td style={{ padding: "6px 8px" }}>{fmtTime(s.openedAt)} → {fmtTime(s.closedAt)}</td>
                   <td style={{ padding: "6px 8px", textAlign: "right" }}>{formatVND(totalRevenue(s))}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: (s.difference || 0) === 0 ? "#137333" : "#B3261E" }}>{formatVND(s.difference || 0)}</td>
+                  {canViewOverview && <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: (s.difference || 0) === 0 ? "#137333" : "#B3261E" }}>{formatVND(s.difference || 0)}</td>}
                 </tr>
               ))}
             </tbody>

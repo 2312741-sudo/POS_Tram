@@ -34,6 +34,7 @@ import '../../features/promotions/voucher_management_screen.dart';
 import '../../features/reports/inventory_report_screen.dart';
 import '../../features/reports/promotion_report_screen.dart';
 import '../../features/reports/reports_hub_screen.dart';
+import '../../features/reports/kitchen_sla_screen.dart';
 import '../../features/printer/printer_settings_screen.dart';
 import '../../features/crm/customer_management_screen.dart';
 import '../../features/about/about_app_screen.dart';
@@ -179,6 +180,10 @@ class AppRouter {
       GoRoute(
         path: '/reports-hub',
         builder: (context, state) => const ReportsHubScreen(),
+      ),
+      GoRoute(
+        path: '/kitchen-sla',
+        builder: (context, state) => const KitchenSlaScreen(),
       ),
       GoRoute(
         path: '/about-app',

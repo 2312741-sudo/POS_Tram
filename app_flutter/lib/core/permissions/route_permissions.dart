@@ -39,6 +39,7 @@ class RoutePermissions {
     '/dashboard': [AppPermissions.viewReports],
     '/reports-hub': [AppPermissions.viewReports],
     '/end-of-day-report': [AppPermissions.viewReports],
+    '/kitchen-sla': [AppPermissions.viewReports],
     // Phiếu bàn giao ca: Chủ/Quản lý (hoặc tài khoản được cấp) — Nhân viên mặc định KHÔNG vào được
     '/cash-shifts': [AppPermissions.viewShiftHandover, AppPermissions.viewAllShifts, AppPermissions.viewReports],
     '/customers': [AppPermissions.viewCustomers, AppPermissions.viewReports],
