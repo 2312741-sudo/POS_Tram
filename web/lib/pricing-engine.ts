@@ -286,6 +286,18 @@ export function lineMatchesTarget(l: PricingLine, target: string): boolean {
   return false;
 }
 
+/** Khóa so khớp NHÓM món: bỏ dấu, không phân biệt hoa/thường, gộp khoảng trắng. Khớp PricingLineItem.normGroup (Dart). */
+export function normGroup(s: string): string {
+  return stripAccents(s.replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()).replace(/\s+/g, " ");
+}
+
+export function groupIn(groupId: string | null | undefined, groups: Iterable<string>): boolean {
+  if (groupId == null) return false;
+  const n = normGroup(groupId);
+  for (const g of groups) if (normGroup(g) === n) return true;
+  return false;
+}
+
 export function lineMatchesAnyTarget(l: PricingLine, targets: Iterable<string>): boolean {
   for (const t of targets) {
     if (lineMatchesTarget(l, t)) return true;
@@ -427,7 +439,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     if (l.isGift) return false;
     if (lineMatchesAnyTarget(l, c.excludedItemIds)) return false;
     if (c.includedItemIds.length === 0 && c.includedGroupIds.length === 0) return true;
-    return lineMatchesAnyTarget(l, c.includedItemIds) || (l.groupId != null && c.includedGroupIds.includes(l.groupId));
+    return lineMatchesAnyTarget(l, c.includedItemIds) || groupIn(l.groupId, c.includedGroupIds);
   };
 
   const rewardUnitsOnLine = (line: PricingLine, units: number, mode: string, value: number, campaignId: string, tierId: string): number => {
@@ -523,8 +535,8 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         const rewardIds = new Set(cond.rewardItemIds);
         const buyGroups = new Set(cond.buyGroupIds ?? []);
         const rewardGroups = new Set(cond.rewardGroupIds ?? []);
-        const isBuy = (l: PricingLine) => lineMatchesAnyTarget(l, buyIds) || (l.groupId != null && buyGroups.has(l.groupId));
-        const isReward = (l: PricingLine) => lineMatchesAnyTarget(l, rewardIds) || (l.groupId != null && rewardGroups.has(l.groupId));
+        const isBuy = (l: PricingLine) => lineMatchesAnyTarget(l, buyIds) || groupIn(l.groupId, buyGroups);
+        const isReward = (l: PricingLine) => lineMatchesAnyTarget(l, rewardIds) || groupIn(l.groupId, rewardGroups);
         const buyQty = cond.requiredBuyQty;
         const rewardQty = cond.rewardQty;
         if ((buyIds.size === 0 && buyGroups.size === 0) || (rewardIds.size === 0 && rewardGroups.size === 0) || buyQty <= 0 || rewardQty <= 0) {
@@ -605,7 +617,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       }
       const units = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1;
       const candidates = input.lines.filter(
-        (l) => !l.isGift && (lineMatchesAnyTarget(l, rewardIds) || (l.groupId != null && rewardGroups.has(l.groupId))) && !lineMatchesAnyTarget(l, campaign.excludedItemIds),
+        (l) => !l.isGift && (lineMatchesAnyTarget(l, rewardIds) || groupIn(l.groupId, rewardGroups)) && !lineMatchesAnyTarget(l, campaign.excludedItemIds),
       );
       if (candidates.length === 0) {
         addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", "Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng");

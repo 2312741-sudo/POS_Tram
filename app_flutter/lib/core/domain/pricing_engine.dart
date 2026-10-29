@@ -100,6 +100,11 @@ class PricingLineItem {
     return result;
   }
 
+  /// Khóa so khớp NHÓM món: bỏ dấu, không phân biệt hoa/thường, gộp khoảng trắng
+  /// (tên nhóm gõ khác dấu/khoảng trắng giữa web và app vẫn khớp).
+  static String normGroup(String s) =>
+      stripAccents(s.replaceAll(RegExp(r'[\u0300-\u036f]'), '').trim().toLowerCase()).replaceAll(RegExp(r'\s+'), ' ');
+
   /// Kiểm tra xem dòng món này có khớp với định danh [target] hay không.
   /// [target] có thể là: numeric productId, tên món, mã SKU món, hoặc database key RTDB.
   bool matchesTarget(String target) {
@@ -248,8 +253,8 @@ PriceQuoteModel calculatePrice({
 
   bool matchGroup(String? itemGroup, Set<String> targetGroups) {
     if (itemGroup == null || targetGroups.isEmpty) return false;
-    final itemNorm = itemGroup.trim().toLowerCase();
-    return targetGroups.any((g) => g.trim().toLowerCase() == itemNorm);
+    final itemNorm = PricingLineItem.normGroup(itemGroup);
+    return targetGroups.any((g) => PricingLineItem.normGroup(g) == itemNorm);
   }
 
   bool inScope(CampaignModel c, PricingLineItem l) {

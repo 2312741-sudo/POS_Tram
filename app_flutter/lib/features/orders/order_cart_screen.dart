@@ -3848,7 +3848,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       }
                       if (isCombo) {
                         if (!hasWater) {
-                          sub += ' • Chưa có nước trong đơn (chọn nước trước)';
+                          sub += ' • Chưa có nước trong đơn (chọn nước trước)${CartCampaignPricing.comboMissHint(c, cart: _cart, products: _products)}';
                         } else if (needsCakes) {
                           sub += ' • Đơn có ${combo.buyUnits} nước → Bấm để chọn tối đa ${combo.remainingRewardUnits} món giảm giá';
                         } else {

@@ -166,3 +166,18 @@ describe("Combo nước + bánh: mỗi món độc lập, không tự thêm", ()
     expect(r.lineBenefits).toHaveLength(1);
   });
 });
+
+describe("so khớp nhóm món chịu khác biệt dấu / hoa thường / khoảng trắng", () => {
+  const c = parseCampaign("G", { campaignType: "BUYXGETY", active: true, buyConditions: [{ conditionId: "C", buyItemIds: [], buyGroupIds: ["TRÀ TRÁI CÂY"], requiredBuyQty: 1, rewardItemIds: ["BANH"], rewardQty: 1, benefitMode: "FIXED", value: 10000, multiplyByBundle: true }] } as never);
+  const run = (g: string) => calculatePrice({ branchId: "B", nowMs: 1000, lines: [line("1", "N", 1, 45000, g), line("2", "BANH", 1, 30000, "BÁNH")] }, [c]).totalPromotionDiscount;
+  it("khớp dù khác hoa/thường, khoảng trắng thừa, dấu dạng tổ hợp (NFD)", () => {
+    expect(run("TRÀ TRÁI CÂY")).toBe(10000);
+    expect(run("Trà Trái Cây")).toBe(10000);
+    expect(run("  trà  trái cây ")).toBe(10000);
+    expect(run("TRÀ TRÁI CÂY".normalize("NFD"))).toBe(10000);
+    expect(run("Tra trai cay")).toBe(10000);
+  });
+  it("nhóm khác tên thì không khớp", () => {
+    expect(run("TRÀ SỮA")).toBe(0);
+  });
+});

@@ -141,8 +141,8 @@ class CartCampaignPricing {
     bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
       if (l.matchesAnyTarget(ids)) return true;
       if (l.groupId == null || groups.isEmpty) return false;
-      final gNorm = l.groupId!.trim().toLowerCase();
-      return groups.any((g) => g.trim().toLowerCase() == gNorm);
+      final gNorm = PricingLineItem.normGroup(l.groupId!);
+      return groups.any((g) => PricingLineItem.normGroup(g) == gNorm);
     }
 
     List<ProductModel> pick(Set<String> ids, Set<String> groups) => products
@@ -150,7 +150,7 @@ class CartCampaignPricing {
             !p.isTopping &&
             p.isAvailable &&
             !c.excludedItemIds.any((ex) => p.matchesTarget(ex)) &&
-            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
+            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => PricingLineItem.normGroup(g) == PricingLineItem.normGroup(p.category))))
         .toList();
 
     final type = c.campaignType.toUpperCase().replaceAll('_', '');
@@ -218,8 +218,8 @@ class CartCampaignPricing {
     bool matches(PricingLineItem l, Set<String> ids, Set<String> groups) {
       if (l.matchesAnyTarget(ids)) return true;
       if (l.groupId == null || groups.isEmpty) return false;
-      final gNorm = l.groupId!.trim().toLowerCase();
-      return groups.any((g) => g.trim().toLowerCase() == gNorm);
+      final gNorm = PricingLineItem.normGroup(l.groupId!);
+      return groups.any((g) => PricingLineItem.normGroup(g) == gNorm);
     }
 
     List<ProductModel> pick(Set<String> ids, Set<String> groups) => products
@@ -227,7 +227,7 @@ class CartCampaignPricing {
             !p.isTopping &&
             p.isAvailable &&
             !c.excludedItemIds.any((ex) => p.matchesTarget(ex)) &&
-            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => g.trim().toLowerCase() == p.category.trim().toLowerCase())))
+            (ids.any((id) => p.matchesTarget(id)) || groups.any((g) => PricingLineItem.normGroup(g) == PricingLineItem.normGroup(p.category))))
         .toList();
 
     if (type == 'BUYXGETY') {
@@ -273,6 +273,23 @@ class CartCampaignPricing {
       }
     }
     return null;
+  }
+
+  /// Gợi ý chẩn đoán khi combo báo "chưa có nước": nhóm/món chương trình cần mua và nhóm của các món đang trong đơn
+  static String comboMissHint(
+    CampaignModel c, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+  }) {
+    if (c.buyConditions.isEmpty) return '';
+    final cond = c.buyConditions.first;
+    final need = <String>[
+      if (cond.buyGroupIds.isNotEmpty) 'nhóm ${cond.buyGroupIds.join(" / ")}',
+      if (cond.buyItemIds.isNotEmpty) '${cond.buyItemIds.length} món chỉ định',
+    ];
+    if (need.isEmpty) return '';
+    final have = lines(cart, products).map((l) => '${l.itemName ?? l.itemId} [${l.groupId ?? "?"}]').toList();
+    return '\n   Cần: ${need.join(" + ")}${have.isEmpty ? "" : "\n   Đơn có: ${have.join(", ")}"}';
   }
 
   /// Bản ghi giảm giá lưu vào bill.discounts (giữ promoId/promoCode cho tương thích + trường mới cho báo cáo)
