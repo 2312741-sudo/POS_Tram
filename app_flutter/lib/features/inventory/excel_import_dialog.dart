@@ -779,13 +779,31 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
       }
 
       for (final branch in targetBranches) {
-        for (final r in validRows) {
-          final existingItem = widget.existingItems.cast<CatalogItemModel?>().firstWhere(
-            (ci) => ci?.sku?.toLowerCase() == r.sku.toLowerCase(),
-            orElse: () => null,
-          );
+        // Đọc danh mục hàng thực tế của chi nhánh để chống trùng lặp chính xác
+        final branchItems = await _inventoryService.getCatalogItemsForBranch(branch);
+        final Map<String, CatalogItemModel> skuMap = {};
+        final Map<String, CatalogItemModel> nameMap = {};
+        for (final item in branchItems) {
+          final s = item.sku?.trim().toUpperCase();
+          if (s != null && s.isNotEmpty) skuMap[s] = item;
+          final n = item.name.trim().toLowerCase();
+          if (n.isNotEmpty) nameMap[n] = item;
+        }
 
-          final itemId = existingItem?.itemId ?? _inventoryService.generateItemId();
+        for (final r in validRows) {
+          final normSku = r.sku.trim().toUpperCase();
+          final normName = r.name.trim().toLowerCase();
+          final existingItem = (normSku.isNotEmpty ? skuMap[normSku] : null) ?? nameMap[normName];
+
+          final String itemId;
+          if (existingItem != null) {
+            itemId = existingItem.itemId;
+          } else if (normSku.isNotEmpty) {
+            final cleanSku = normSku.replaceAll(RegExp(r'[.#$\[\]/]'), '_');
+            itemId = 'ITM_$cleanSku';
+          } else {
+            itemId = _inventoryService.generateItemId();
+          }
 
           final item = CatalogItemModel(
             itemId: itemId,
@@ -810,6 +828,10 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             createdAt: existingItem?.createdAt ?? now,
             updatedAt: now,
           );
+
+          // Đăng ký vào map để nếu trong file Excel có nhiều dòng trùng SKU thì sẽ cập nhật cùng itemId
+          if (normSku.isNotEmpty) skuMap[normSku] = item;
+          if (normName.isNotEmpty) nameMap[normName] = item;
 
           await _inventoryService.saveCatalogItemToBranch(branch, item);
 

@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   X,
   ArrowLeft,
+  Layers,
 } from "lucide-react";
 import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
@@ -1162,9 +1163,35 @@ export default function InventoryPage() {
           : [targetStoreCode];
 
       for (const branch of targetBranches) {
+        // Đọc danh mục hàng thực tế từ RTDB của chi nhánh đang xét để chống trùng lặp chính xác
+        const branchSnap = await get(ref(db, `stores/${branch}/catalog_items`));
+        const branchItemsVal = (branchSnap.val() || {}) as Record<string, any>;
+
+        const branchSkuMap = new Map<string, { itemId: string; createdAt?: number }>();
+        const branchNameMap = new Map<string, { itemId: string; createdAt?: number }>();
+
+        Object.values(branchItemsVal).forEach((item: any) => {
+          if (item?.sku) {
+            branchSkuMap.set(String(item.sku).trim().toUpperCase(), { itemId: item.itemId, createdAt: item.createdAt });
+          }
+          if (item?.name) {
+            branchNameMap.set(String(item.name).trim().toLowerCase(), { itemId: item.itemId, createdAt: item.createdAt });
+          }
+        });
+
         for (const r of validRows) {
-          const existingItem = catalogItems.find((ci) => ci.sku.toLowerCase() === r.sku.toLowerCase());
-          const itemId = existingItem?.itemId || `ITM_${now}_${Math.random().toString(36).slice(2, 6)}`;
+          const normSku = (r.sku || "").trim().toUpperCase();
+          const normName = (r.name || "").trim().toLowerCase();
+
+          const existing = (normSku ? branchSkuMap.get(normSku) : null) || branchNameMap.get(normName);
+          const cleanSkuForId = normSku.replace(/[.#$\[\]\/]/g, "_");
+          const itemId =
+            existing?.itemId ||
+            (cleanSkuForId ? `ITM_${cleanSkuForId}` : `ITM_${now}_${Math.random().toString(36).slice(2, 6)}`);
+
+          // Đăng ký ngay vào map để nếu trong file Excel có các dòng trùng SKU thì sẽ ghi đè cùng 1 itemId
+          if (normSku) branchSkuMap.set(normSku, { itemId, createdAt: existing?.createdAt || now });
+          if (normName) branchNameMap.set(normName, { itemId, createdAt: existing?.createdAt || now });
 
           const itemData = {
             itemId,
@@ -1186,7 +1213,7 @@ export default function InventoryPage() {
             weightUnit: r.weightUnit || "",
             location: r.location || "",
             brand: r.brand || "",
-            createdAt: existingItem?.createdAt || now,
+            createdAt: existing?.createdAt || now,
             updatedAt: now,
             version: 1,
           };
@@ -1223,6 +1250,61 @@ export default function InventoryPage() {
       alert("Lỗi khi nhập dữ liệu: " + (errorMessage(e) || String(e)));
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  // ==================== DỌN DẸP HÀNG TRÙNG LẶP ====================
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+
+  const handleDeduplicateCatalog = async () => {
+    const canManageCatalog = user?.isRootOwner || isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner);
+    if (!canManageCatalog) {
+      alert("Chỉ Chủ quán hoặc Quản lý mới có quyền thực hiện thao tác này.");
+      return;
+    }
+
+    const branchName = stores.find((s) => s.storeCode === targetStoreCode)?.storeName || targetStoreCode;
+    const confirmMsg = `Bạn có chắc chắn muốn dọn dẹp hàng trùng lặp cho "${branchName}"?\n\nHệ thống sẽ kiểm tra toàn bộ danh mục, giữ lại 1 bản ghi chính xác nhất cho mỗi mã SKU và tự động xóa bỏ các bản ghi trùng lặp.`;
+    if (!confirm(confirmMsg)) return;
+
+    setIsDeduplicating(true);
+    try {
+      const snap = await get(ref(db, `stores/${targetStoreCode}/catalog_items`));
+      const itemsVal = (snap.val() || {}) as Record<string, any>;
+      const bySku = new Map<string, any[]>();
+
+      Object.entries(itemsVal).forEach(([id, item]: [string, any]) => {
+        const key = (item?.sku || "").trim().toUpperCase() || (item?.name || "").trim().toLowerCase();
+        if (!bySku.has(key)) bySku.set(key, []);
+        bySku.get(key)!.push({ id, ...item });
+      });
+
+      const toDelete: string[] = [];
+      for (const [, list] of bySku.entries()) {
+        if (list.length > 1) {
+          list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+          const dups = list.slice(1);
+          dups.forEach((d) => toDelete.push(d.id));
+        }
+      }
+
+      if (toDelete.length === 0) {
+        alert(`Kho của chi nhánh "${branchName}" không có mặt hàng nào bị trùng lặp.`);
+        return;
+      }
+
+      const updates: Record<string, null> = {};
+      toDelete.forEach((id) => {
+        updates[`stores/${targetStoreCode}/catalog_items/${id}`] = null;
+        updates[`stores/${targetStoreCode}/stock_balances/${targetStoreCode}_${id}`] = null;
+      });
+
+      await update(ref(db), updates);
+      alert(`Đã dọn dẹp thành công! Đã xóa ${toDelete.length} bản ghi hàng hóa bị trùng lặp.`);
+    } catch (err) {
+      alert("Lỗi khi dọn dẹp: " + (errorMessage(err) || String(err)));
+    } finally {
+      setIsDeduplicating(false);
     }
   };
 
@@ -1265,6 +1347,14 @@ export default function InventoryPage() {
                 style={btnSecondary}
               >
                 <Upload size={16} /> Nhập Excel
+              </button>
+              <button
+                onClick={handleDeduplicateCatalog}
+                disabled={isDeduplicating}
+                style={{ ...btnSecondary, color: "var(--primary)" }}
+                title="Quét và xóa các bản ghi hàng hóa bị trùng lặp trong kho"
+              >
+                <Layers size={16} /> {isDeduplicating ? "Đang dọn dẹp..." : "Dọn hàng trùng"}
               </button>
               <button onClick={exportInventoryExcel} style={btnSecondary}>
                 <Download size={16} /> Xuất Excel

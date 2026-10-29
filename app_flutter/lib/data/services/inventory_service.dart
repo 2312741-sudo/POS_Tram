@@ -56,6 +56,49 @@ class InventoryService {
     return map.values.map((e) => CatalogItemModel.fromMap(Map<String, dynamic>.from(e))).toList();
   }
 
+  /// Lấy danh sách hàng kho của một chi nhánh cụ thể (chống lookup sai cross-branch)
+  Future<List<CatalogItemModel>> getCatalogItemsForBranch(String branchCode) async {
+    final snapshot = await _db.ref('stores/$branchCode/catalog_items').get();
+    if (snapshot.value == null) return [];
+    final Map<dynamic, dynamic> map = snapshot.value as Map<dynamic, dynamic>;
+    return map.values.map((e) => CatalogItemModel.fromMap(Map<String, dynamic>.from(e))).toList();
+  }
+
+  /// Quét và xóa các bản ghi hàng hóa bị trùng lặp trong kho của chi nhánh
+  Future<int> deduplicateBranchCatalog(String branchCode) async {
+    final items = await getCatalogItemsForBranch(branchCode);
+    if (items.isEmpty) return 0;
+
+    final Map<String, List<CatalogItemModel>> bySku = {};
+    for (final item in items) {
+      final key = (item.sku?.trim().toUpperCase().isNotEmpty ?? false)
+          ? item.sku!.trim().toUpperCase()
+          : item.name.trim().toLowerCase();
+      bySku.putIfAbsent(key, () => []).add(item);
+    }
+
+    final List<String> toDelete = [];
+    for (final list in bySku.values) {
+      if (list.length > 1) {
+        list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        final dups = list.sublist(1);
+        for (final d in dups) {
+          toDelete.add(d.itemId);
+        }
+      }
+    }
+
+    if (toDelete.isEmpty) return 0;
+
+    final Map<String, Object?> updates = {};
+    for (final id in toDelete) {
+      updates['stores/$branchCode/catalog_items/$id'] = null;
+      updates['stores/$branchCode/stock_balances/${branchCode}_$id'] = null;
+    }
+    await _db.ref().update(updates);
+    return toDelete.length;
+  }
+
   /// Lấy thông tin một hàng kho
   Future<CatalogItemModel?> getCatalogItem(String itemId) async {
     final snapshot = await _storeRef.child('catalog_items/$itemId').get();

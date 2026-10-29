@@ -75,9 +75,21 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               _exportCatalogExcel();
             } else if (val == 'import') {
               _showImportExcelDialog(_lastLoadedItems);
+            } else if (val == 'dedup') {
+              _deduplicateCatalog();
             }
           },
           itemBuilder: (ctx) => [
+            PopupMenuItem(
+              value: 'dedup',
+              child: Row(
+                children: [
+                  Icon(LucideIcons.layers, size: 18, color: context.tc.primary),
+                  const SizedBox(width: 8),
+                  const Text('Dọn hàng trùng lặp'),
+                ],
+              ),
+            ),
             PopupMenuItem(
               value: 'import',
               child: Row(
@@ -701,6 +713,46 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         setState(() {});
       },
     );
+  }
+
+  Future<void> _deduplicateCatalog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dọn dẹp hàng trùng'),
+        content: Text(
+          'Hệ thống sẽ quét kho chi nhánh ${_auth.currentStoreCode}, giữ lại 1 bản ghi chuẩn cho mỗi mã SKU và xóa các bản ghi dư thừa. Bạn có muốn tiếp tục?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Dọn dẹp'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final count = await _inventoryService.deduplicateBranchCatalog(_auth.currentStoreCode);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(count > 0 ? 'Đã xóa $count mặt hàng bị trùng lặp!' : 'Kho không có mặt hàng nào bị trùng lặp.'),
+          backgroundColor: count > 0 ? AppColors.success : null,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi dọn dẹp: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   Future<void> _exportCatalogExcel() async {
