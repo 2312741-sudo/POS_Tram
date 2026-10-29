@@ -203,8 +203,8 @@ class BankNotificationListener : NotificationListenerService() {
     }
 
     private fun parseContent(text: String): String {
-        // Bước 1: Ưu tiên tìm mã đơn / mã bàn của Trạm (VD: tram01a1, TRAM01_A1, TRAM01 A1, TRAM01_BAN_A1...)
-        val tramPattern = Pattern.compile("""(?i)\b(tram\d{0,2}[\s_-]*(?:ban|bàn)?[\s_-]*[a-z0-9]+)\b""")
+        // Bước 1: Ưu tiên tìm mã đơn / mã bàn của Trạm (VD: TRAM01 BAN 1, TRAM01 BAN A1, TRAM04_BAN_D5...)
+        val tramPattern = Pattern.compile("""(?i)\b(tram\d{1,4}[\s_-]*(?:ban|bàn)?[\s_-]*[a-z0-9]+)\b""")
         val mTram = tramPattern.matcher(text)
         val extractedTramCode = if (mTram.find()) mTram.group(1)?.trim() else null
 

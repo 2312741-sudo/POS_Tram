@@ -1438,7 +1438,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   bankAccount: _storeInfo?.bankAccount ?? '0987654321',
                   accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
                   amount: totalSplitAmount,
-                  orderInfo: '${_storeInfo?.storeCode ?? "TRAM"}_${widget.table.name}_TACH',
+                  orderInfo: VietQrGenerator.buildOrderInfo(
+                    storeCode: _storeInfo?.storeCode ?? 'TRAM01',
+                    tableName: widget.table.name,
+                    suffix: 'TACH',
+                  ),
                 )
               : '';
 
@@ -4213,12 +4217,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           final splitChangeAmount = cashGivenForSplit >= splitCashAmount ? cashGivenForSplit - splitCashAmount : 0;
 
           final effectiveQrAmount = paymentMethod == 'SPLIT' ? splitQrAmount : _finalTotal;
+          final orderInfoText = VietQrGenerator.buildOrderInfo(
+            storeCode: _storeInfo?.storeCode ?? 'TRAM01',
+            tableName: widget.table.name,
+          );
           final qrUrl = VietQrGenerator.generateImageUrl(
             bankId: _storeInfo?.bankId ?? 'MB',
             bankAccount: _storeInfo?.bankAccount ?? '0987654321',
             accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
             amount: effectiveQrAmount,
-            orderInfo: '${_storeInfo?.storeCode ?? "TRAM"}_${widget.table.name}',
+            orderInfo: orderInfoText,
           );
 
           // Auto QR Check Listener Management
@@ -4248,13 +4256,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 final content = (val['content']?.toString() ?? '').toLowerCase();
                 final rawText = (val['rawText']?.toString() ?? '').toLowerCase();
                 final bankName = val['bankName']?.toString() ?? 'Ngân hàng';
-                final tableNameClean = widget.table.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-                final contentClean = content.replaceAll(RegExp(r'[^a-z0-9]'), '');
-                final rawClean = rawText.replaceAll(RegExp(r'[^a-z0-9]'), '');
-                final storeClean = (_storeInfo?.storeCode ?? 'tram').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-                // Khớp bàn nếu trong content hoặc rawText chứa tên bàn (VD: "a1", "ban_a1") hoặc mã chi nhánh ("tram01")
-                final textHasTable = tableNameClean.isNotEmpty && (contentClean.contains(tableNameClean) || rawClean.contains(tableNameClean));
+                final tableAscii = VietQrGenerator.toAscii(widget.table.name).toLowerCase();
+                final tableNameClean = tableAscii.replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final contentClean = VietQrGenerator.toAscii(content).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final rawClean = VietQrGenerator.toAscii(rawText).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+                final storeClean = VietQrGenerator.toAscii(_storeInfo?.storeCode ?? 'tram').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+                // Trích xuất số/chữ của bàn (VD: "bàn 1" -> "1", "bàn a1" -> "a1")
+                final tableNumMatch = RegExp(r'[a-z]*\d+').stringMatch(tableNameClean);
+                final tableNum = tableNumMatch ?? tableNameClean;
+
+                // Khớp bàn nếu trong content hoặc rawText chứa tên bàn (VD: "ban1", "1", "bana1", "a1") hoặc mã chi nhánh ("tram01")
+                final textHasTable = tableNameClean.isNotEmpty &&
+                    (contentClean.contains(tableNameClean) ||
+                     rawClean.contains(tableNameClean) ||
+                     (tableNum.isNotEmpty && (contentClean.contains(tableNum) || rawClean.contains(tableNum))));
                 final textHasStore = storeClean.isNotEmpty && (contentClean.contains(storeClean) || rawClean.contains(storeClean));
                 final isRecentEvent = (val['timestamp'] as num? ?? 0) >= sheetOpenedTime - 30000;
 
