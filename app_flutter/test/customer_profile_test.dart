@@ -156,8 +156,8 @@ void main() {
       await tester.tap(saveBtn);
       await tester.pumpAndSettle();
 
-      // Verify createCustomer was invoked with expected values
-      expect(createdName, 'Nguyễn Văn Nam');
+      // Verify createCustomer was invoked with expected values (tự động chuyển in hoa)
+      expect(createdName, 'NGUYỄN VĂN NAM');
       expect(createdPhone, '0988776655');
       expect(createdGender, 'Nữ');
       expect(createdBirthday, '');

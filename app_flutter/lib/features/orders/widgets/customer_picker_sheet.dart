@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/domain/customer_search.dart';
+import '../../../core/utils/text_formatters.dart';
 import '../../../data/models/app_models.dart';
 
 class CustomerPickerSheet extends StatefulWidget {
@@ -162,6 +163,10 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                 ],
                 TextField(
                   controller: nameCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    UpperCaseTextFormatter(),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Họ và tên *',
                     prefixIcon: Icon(Icons.person_outline),
@@ -254,7 +259,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
             ),
             ElevatedButton(
               onPressed: () {
-                final name = nameCtrl.text.trim();
+                final name = nameCtrl.text.trim().toUpperCase();
                 final phone = phoneCtrl.text.trim();
                 if (name.isEmpty) {
                   setDialogState(() => formError = 'Vui lòng nhập họ và tên');
@@ -274,7 +279,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
     );
 
     if (ok != true) return;
-    final name = nameCtrl.text.trim();
+    final name = nameCtrl.text.trim().toUpperCase();
     final phone = phoneCtrl.text.trim();
     final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
 
@@ -379,6 +384,10 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                 ],
                 TextField(
                   controller: nameCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    UpperCaseTextFormatter(),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Họ và tên *',
                     prefixIcon: Icon(Icons.person),
@@ -465,7 +474,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             ElevatedButton(
               onPressed: () {
-                final name = nameCtrl.text.trim();
+                final name = nameCtrl.text.trim().toUpperCase();
                 final phone = phoneCtrl.text.trim();
                 if (name.isEmpty) {
                   setDialogState(() => formError = 'Vui lòng nhập họ và tên');
@@ -487,7 +496,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
     if (ok != true || nameCtrl.text.trim().isEmpty || digitsOf(phoneCtrl.text).length < 9) return;
     final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
     final m = await widget.createCustomer(
-      nameCtrl.text.trim(),
+      nameCtrl.text.trim().toUpperCase(),
       phoneCtrl.text.trim(),
       gender: gender,
       birthday: bdayStr,

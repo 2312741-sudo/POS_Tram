@@ -19,6 +19,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/manager_pin_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../core/vietqr/vietqr_generator.dart';
 import '../../data/models/app_models.dart';
 import '../../data/models/campaign_models.dart';
@@ -2378,6 +2379,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                   TextField(
                     controller: nameCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      UpperCaseTextFormatter(),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Họ và tên *',
                       prefixIcon: Icon(Icons.person_outline),
@@ -2471,7 +2476,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               onPressed: isSaving
                   ? null
                   : () {
-                      final name = nameCtrl.text.trim();
+                      final name = nameCtrl.text.trim().toUpperCase();
                       final phone = phoneCtrl.text.trim();
                       final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
 
@@ -2494,7 +2499,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
 
     if (ok != true || !mounted) return;
-    final name = nameCtrl.text.trim();
+    final name = nameCtrl.text.trim().toUpperCase();
     final phone = phoneCtrl.text.trim();
     final bdayStr = birthday != null ? DateFormat('yyyy-MM-dd').format(birthday!) : '';
 

@@ -12,6 +12,17 @@ import { formatVND } from "@/lib/reports";
 import { nowMs } from "@/lib/kitchen";
 import { fetchOwnOpenShift } from "@/lib/cash-shift-run";
 
+const formatCommaNumber = (val: string) => {
+  const digits = val.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-US");
+};
+
+const formatCommaVND = (amount: number) => {
+  const safe = isNaN(amount) ? 0 : Math.round(amount);
+  return safe.toLocaleString("en-US") + " đ";
+};
+
 const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 18 } as const;
 const input = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 15 } as const;
 const fmtTime = (ms?: number) => (ms ? new Date(ms).toLocaleString("vi-VN") : "—");
@@ -86,7 +97,7 @@ export default function MyShiftPage() {
     if (!open) return;
     if (actualCash.trim() === "") return setError("Vui lòng nhập số tiền mặt kiểm đếm thực tế trong két");
     const v = Number(actualCash.replace(/[^0-9]/g, ""));
-    if (!confirm(`Chốt ca với ${formatVND(v)} tiền mặt thực tế ${canViewOverview ? `(hệ thống ghi nhận ${formatVND(expectedCash(open))})` : ""}?`)) return;
+    if (!confirm(`Chốt ca với ${formatCommaVND(v)} tiền mặt thực tế ${canViewOverview ? `(hệ thống ghi nhận ${formatCommaVND(expectedCash(open))})` : ""}?`)) return;
     return run(() => buildCloseShift({ storeCode, actor, shift: open, actualCash: v, notes, now: nowMs() }), "Đã chốt ca. Cảm ơn bạn!");
   };
 
@@ -121,7 +132,7 @@ export default function MyShiftPage() {
           <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Bạn chưa mở ca</div>
           <div style={{ fontSize: 13, color: "var(--subtext)", marginBottom: 12 }}>Nhập số tiền mặt có trong két lúc bắt đầu ca.</div>
           <label style={{ fontSize: 13, fontWeight: 700 }}>Tiền đầu ca (VNĐ)</label>
-          <input style={{ ...input, margin: "6px 0 12px" }} inputMode="numeric" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder="0" />
+          <input style={{ ...input, margin: "6px 0 12px" }} inputMode="numeric" value={initialCash} onChange={(e) => setInitialCash(formatCommaNumber(e.target.value))} placeholder="0" />
           <button className="btn-primary" disabled={busy} onClick={doOpen} style={{ opacity: busy ? 0.6 : 1 }}>
             <Unlock size={16} /> {busy ? "Đang mở ca..." : "Mở ca"}
           </button>
@@ -136,22 +147,22 @@ export default function MyShiftPage() {
             <span style={{ background: "var(--success-bg)", color: "#137333", borderRadius: 14, padding: "4px 12px", fontSize: 12, fontWeight: 700, alignSelf: "flex-start" }}>ĐANG MỞ</span>
           </div>
           {canViewOverview && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
-            {stat("Tiền đầu ca", formatVND(open.initialCash || 0))}
-            {stat("Bán tiền mặt", formatVND(open.totalCashSales || 0))}
-            {stat("Bán chuyển khoản/QR", formatVND(open.totalQrSales || 0))}
-            {stat("Bán thẻ/ví", formatVND(open.totalCardSales || 0))}
-            {stat("Thu thêm / Chi vặt", `${formatVND(open.cashIn || 0)} / ${formatVND(open.cashOut || 0)}`)}
-            {stat("Tổng doanh số ca", formatVND(totalRevenue(open)), "var(--primary)")}
-            {stat("Tiền mặt dự kiến trong két", formatVND(expectedCash(open)), "#137333")}
+            {stat("Tiền đầu ca", formatCommaVND(open.initialCash || 0))}
+            {stat("Bán tiền mặt", formatCommaVND(open.totalCashSales || 0))}
+            {stat("Bán chuyển khoản/QR", formatCommaVND(open.totalQrSales || 0))}
+            {stat("Bán thẻ/ví", formatCommaVND(open.totalCardSales || 0))}
+            {stat("Thu thêm / Chi vặt", `${formatCommaVND(open.cashIn || 0)} / ${formatCommaVND(open.cashOut || 0)}`)}
+            {stat("Tổng doanh số ca", formatCommaVND(totalRevenue(open)), "var(--primary)")}
+            {stat("Tiền mặt dự kiến trong két", formatCommaVND(expectedCash(open)), "#137333")}
           </div>}
 
           <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>Chốt ca / két</div>
             <label style={{ fontSize: 13, fontWeight: 700 }}>Tiền mặt thực tế kiểm đếm (VNĐ)</label>
-            <input style={{ ...input, margin: "6px 0 6px" }} inputMode="numeric" value={actualCash} onChange={(e) => setActualCash(e.target.value)} placeholder="0" />
+            <input style={{ ...input, margin: "6px 0 6px" }} inputMode="numeric" value={actualCash} onChange={(e) => setActualCash(formatCommaNumber(e.target.value))} placeholder="0" />
             {canViewOverview && actualNum !== null && (
               <div style={{ fontSize: 13, marginBottom: 8, color: actualNum - expectedCash(open) === 0 ? "#137333" : "#B3261E", fontWeight: 700 }}>
-                Chênh lệch: {actualNum - expectedCash(open) > 0 ? "+" : ""}{formatVND(actualNum - expectedCash(open))}
+                Chênh lệch: {actualNum - expectedCash(open) > 0 ? "+" : ""}{formatCommaVND(actualNum - expectedCash(open))}
                 {actualNum - expectedCash(open) === 0 ? " (khớp)" : actualNum - expectedCash(open) > 0 ? " (thừa)" : " (thiếu)"}
               </div>
             )}
@@ -181,8 +192,8 @@ export default function MyShiftPage() {
                 <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "6px 8px", fontFamily: "monospace" }}>{s.shiftCode}</td>
                   <td style={{ padding: "6px 8px" }}>{fmtTime(s.openedAt)} → {fmtTime(s.closedAt)}</td>
-                  <td style={{ padding: "6px 8px", textAlign: "right" }}>{formatVND(totalRevenue(s))}</td>
-                  {canViewOverview && <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: (s.difference || 0) === 0 ? "#137333" : "#B3261E" }}>{formatVND(s.difference || 0)}</td>}
+                  <td style={{ padding: "6px 8px", textAlign: "right" }}>{formatCommaVND(totalRevenue(s))}</td>
+                  {canViewOverview && <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: (s.difference || 0) === 0 ? "#137333" : "#B3261E" }}>{formatCommaVND(s.difference || 0)}</td>}
                 </tr>
               ))}
             </tbody>

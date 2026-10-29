@@ -7,6 +7,7 @@ import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'customer_delete_service.dart';
@@ -157,6 +158,10 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                   ],
                   TextField(
                     controller: nameCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      UpperCaseTextFormatter(),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Họ và tên *',
                       prefixIcon: Icon(Icons.person_outline),
@@ -248,7 +253,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
               onPressed: isSaving ? null : () async {
-                final name = nameCtrl.text.trim();
+                final name = nameCtrl.text.trim().toUpperCase();
                 final phone = phoneCtrl.text.trim();
                 final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
 

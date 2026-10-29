@@ -8,6 +8,7 @@ import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'cash_shifts_screen.dart';
@@ -209,7 +210,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đã mở ca $shiftCode thành công! Tiền két đầu ca: ${FormatUtils.vnd(initial)}'),
+          content: Text('Đã mở ca $shiftCode thành công! Tiền két đầu ca: ${FormatUtils.vndComma(initial)}'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -258,7 +259,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${isCashIn ? "Đã nộp thêm" : "Đã chi vặt"} ${FormatUtils.vnd(amount)}'),
+          content: Text('${isCashIn ? "Đã nộp thêm" : "Đã chi vặt"} ${FormatUtils.vndComma(amount)}'),
           backgroundColor: isCashIn ? AppColors.success : AppColors.warningInk,
         ),
       );
@@ -309,14 +310,14 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               children: [
                 Text('Mã ca: ${shiftToClose.shiftCode}'),
                 const SizedBox(height: 6),
-                Text('Doanh thu ca: ${FormatUtils.vnd(shiftToClose.totalRevenue)}'),
+                Text('Doanh thu ca: ${FormatUtils.vndComma(shiftToClose.totalRevenue)}'),
                 const SizedBox(height: 6),
-                Text('Tiền két kỳ vọng: ${FormatUtils.vnd(shiftToClose.expectedCash)}'),
+                Text('Tiền két kỳ vọng: ${FormatUtils.vndComma(shiftToClose.expectedCash)}'),
                 const SizedBox(height: 6),
-                Text('Tiền kiểm đếm thực tế: ${FormatUtils.vnd(actual)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('Tiền kiểm đếm thực tế: ${FormatUtils.vndComma(actual)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 Text(
-                  'Chênh lệch: ${diff >= 0 ? "+" : ""}${FormatUtils.vnd(diff)}',
+                  'Chênh lệch: ${diff >= 0 ? "+" : ""}${FormatUtils.vndComma(diff)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: diff == 0 ? context.tc.success : (diff > 0 ? context.tc.info : context.tc.danger),
@@ -349,7 +350,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                 const SizedBox(height: 6),
                 Text('Thu ngân: ${shiftToClose.staffFullName}'),
                 const SizedBox(height: 6),
-                Text('Tiền thực tế bàn giao: ${FormatUtils.vnd(actual)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('Tiền thực tế bàn giao: ${FormatUtils.vndComma(actual)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(10),
@@ -421,6 +422,9 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         TextField(
           controller: _initialCashCtrl,
           keyboardType: TextInputType.number,
+          inputFormatters: [
+            ThousandsSeparatorInputFormatter(),
+          ],
           decoration: InputDecoration(
             labelText: 'Tiền mặt đầu ca trong két (VND)',
             prefixIcon: const Icon(Icons.attach_money),
@@ -446,12 +450,12 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
             return ActionChip(
               backgroundColor: context.tc.primaryLight.withValues(alpha: 0.4),
               label: Text(
-                FormatUtils.vnd(amt),
+                FormatUtils.vndComma(amt),
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: context.tc.primaryDark),
               ),
               onPressed: () {
                 setState(() {
-                  _initialCashCtrl.text = amt.toString();
+                  _initialCashCtrl.text = amt == 0 ? '0' : FormatUtils.numberComma(amt);
                 });
               },
             );
@@ -606,17 +610,17 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               SingleChildScrollView(
                 child: Column(
                   children: [
-                    _buildStatRow('Tiền mặt đầu ca:', FormatUtils.vnd(shift.initialCash)),
-                    _buildStatRow('+ Bán hàng tiền mặt:', FormatUtils.vnd(shift.totalCashSales), color: context.tc.success),
-                    _buildStatRow('+ Doanh thu VietQR:', FormatUtils.vnd(shift.totalQrSales), color: context.tc.info),
-                    _buildStatRow('+ Tiền nộp thêm (Cash In):', FormatUtils.vnd(shift.cashIn)),
-                    _buildStatRow('- Tiền chi vặt (Cash Out):', FormatUtils.vnd(shift.cashOut), color: context.tc.danger),
+                    _buildStatRow('Tiền mặt đầu ca:', FormatUtils.vndComma(shift.initialCash)),
+                    _buildStatRow('+ Bán hàng tiền mặt:', FormatUtils.vndComma(shift.totalCashSales), color: context.tc.success),
+                    _buildStatRow('+ Doanh thu VietQR:', FormatUtils.vndComma(shift.totalQrSales), color: context.tc.info),
+                    _buildStatRow('+ Tiền nộp thêm (Cash In):', FormatUtils.vndComma(shift.cashIn)),
+                    _buildStatRow('- Tiền chi vặt (Cash Out):', FormatUtils.vndComma(shift.cashOut), color: context.tc.danger),
                     const Divider(height: 20),
                     if (_canViewDifference)
-                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', FormatUtils.vnd(shift.expectedCash), isBold: true, color: context.tc.primary)
+                      _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', FormatUtils.vndComma(shift.expectedCash), isBold: true, color: context.tc.primary)
                     else
                       _buildStatRow('TIỀN MẶT TRONG KÉT HIỆN TẠI:', '•••••• (Chỉ Quản lý)', isBold: true, color: context.tc.textHint),
-                    _buildStatRow('TỔNG DOANH SỐ CA:', FormatUtils.vnd(shift.totalRevenue), isBold: true),
+                    _buildStatRow('TỔNG DOANH SỐ CA:', FormatUtils.vndComma(shift.totalRevenue), isBold: true),
                     Builder(
                       builder: (ctx) {
                         final promo = _computeShiftPromoStats();
@@ -644,12 +648,12 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                                   const SizedBox(width: 4),
                                   Text('Khuyến mãi ca:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary)),
                                   const Spacer(),
-                                  Text('-${FormatUtils.vnd(totalPromo)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                                  Text('-${FormatUtils.vndComma(totalPromo)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
                                 ],
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '$dItems món giảm (-${FormatUtils.vnd(dItemsTotal)}) • $vCount voucher • $pUsed điểm KMT',
+                                '$dItems món giảm (-${FormatUtils.vndComma(dItemsTotal)}) • $vCount voucher • $pUsed điểm KMT',
                                 style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary),
                               ),
                             ],
@@ -668,6 +672,9 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                     TextField(
                       controller: _adjustAmountCtrl,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       decoration: const InputDecoration(labelText: 'Số tiền (VND)', suffixText: 'đ'),
                     ),
                     const SizedBox(height: 10),
@@ -735,6 +742,9 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                     TextField(
                       controller: _actualCashCtrl,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       decoration: const InputDecoration(labelText: 'Tiền mặt thực tế kiểm đếm (VND)', suffixText: 'đ'),
                     ),
                     const SizedBox(height: 10),

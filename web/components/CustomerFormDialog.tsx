@@ -33,7 +33,7 @@ export default function CustomerFormDialog({ storeCode, existing, initial, savin
       return;
     }
     setLocalError("");
-    onSave({ name: r.name, phone: r.phone, gender, birthday });
+    onSave({ name: r.name.toUpperCase(), phone: r.phone, gender, birthday });
   };
   const shown = localError || error;
 
@@ -56,7 +56,12 @@ export default function CustomerFormDialog({ storeCode, existing, initial, savin
       <div style={{ display: "grid", gap: 12 }}>
         <div>
           <label style={fieldLabel}>Họ và tên *</label>
-          <input style={fieldInput} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <input
+            style={{ ...fieldInput, textTransform: "uppercase" }}
+            value={name}
+            onChange={(e) => setName(e.target.value.toUpperCase())}
+            autoFocus
+          />
         </div>
         <div>
           <label style={fieldLabel}>Số điện thoại *</label>

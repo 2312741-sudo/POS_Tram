@@ -304,6 +304,8 @@ export default function CustomersPage() {
     try {
       const now = Date.now();
       const id = `CUST_${now}`;
+      const upperName = v.name.trim().toUpperCase();
+      const customerData = { ...v, name: upperName };
       const TRAM_CHAIN = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
       const targetStores = TRAM_CHAIN.includes(currentStoreCode) || currentStoreCode === "ALL"
         ? TRAM_CHAIN
@@ -311,7 +313,7 @@ export default function CustomersPage() {
 
       const updates: Record<string, unknown> = {};
       for (const st of targetStores) {
-        updates[`stores/${st}/customers/${id}`] = buildNewCustomerNode(id, v, now);
+        updates[`stores/${st}/customers/${id}`] = buildNewCustomerNode(id, customerData, now);
         updates[`stores/${st}/audit_logs/log_${now}_cust`] = {
           timestamp: now,
           username: actor.username,
@@ -321,12 +323,12 @@ export default function CustomersPage() {
           targetType: "CUSTOMER",
           targetId: id,
           storeCode: st,
-          details: `Tạo khách hàng ${v.name} (${v.phone}) qua Web Admin`,
+          details: `Tạo khách hàng ${upperName} (${v.phone}) qua Web Admin`,
         };
       }
       await update(ref(db), updates);
       setShowCustomerForm(false);
-      flash(`Đã thêm khách hàng ${v.name} vào hệ thống`);
+      flash(`Đã thêm khách hàng ${upperName} vào hệ thống`);
     } catch (e) {
       setOpError(errorMessage(e, "Không tạo được khách hàng"));
     } finally {
@@ -341,6 +343,7 @@ export default function CustomersPage() {
     try {
       const now = Date.now();
       const cid = editTarget.id;
+      const upperName = v.name.trim().toUpperCase();
       const TRAM_CHAIN = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
       const targetStores = TRAM_CHAIN.includes(editTarget.storeCode)
         ? TRAM_CHAIN
@@ -348,9 +351,9 @@ export default function CustomersPage() {
 
       const updates: Record<string, unknown> = {};
       for (const st of targetStores) {
-        updates[`stores/${st}/customers/${cid}/ho_ten`] = v.name;
-        updates[`stores/${st}/customers/${cid}/name`] = v.name;
-        updates[`stores/${st}/customers/${cid}/ho_ten_upper`] = v.name.toUpperCase();
+        updates[`stores/${st}/customers/${cid}/ho_ten`] = upperName;
+        updates[`stores/${st}/customers/${cid}/name`] = upperName;
+        updates[`stores/${st}/customers/${cid}/ho_ten_upper`] = upperName;
         updates[`stores/${st}/customers/${cid}/so_dien_thoai`] = v.phone;
         updates[`stores/${st}/customers/${cid}/phone`] = v.phone;
         updates[`stores/${st}/customers/${cid}/gioi_tinh`] = v.gender;
@@ -367,12 +370,12 @@ export default function CustomersPage() {
           targetType: "CUSTOMER",
           targetId: cid,
           storeCode: st,
-          details: `Cập nhật thông tin khách hàng ${v.name} (${v.phone}) qua Web Admin`,
+          details: `Cập nhật thông tin khách hàng ${upperName} (${v.phone}) qua Web Admin`,
         };
       }
       await update(ref(db), updates);
       setEditTarget(null);
-      flash(`Đã cập nhật thông tin khách hàng ${v.name}`);
+      flash(`Đã cập nhật thông tin khách hàng ${upperName}`);
     } catch (e) {
       setOpError(errorMessage(e, "Không cập nhật được khách hàng"));
     } finally {

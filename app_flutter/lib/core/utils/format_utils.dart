@@ -5,9 +5,20 @@ import '../permissions/app_permissions.dart';
 
 class FormatUtils {
   static final _currencyFormat = NumberFormat('#,###', 'vi_VN');
+  static final _commaCurrencyFormat = NumberFormat('#,###', 'en_US');
 
   static String vnd(num amount) {
     return '${_currencyFormat.format(amount)} đ';
+  }
+
+  /// Định dạng tiền có dấu phẩy ',' phân cách hàng nghìn (VD: 100,000 đ)
+  static String vndComma(num amount) {
+    return '${_commaCurrencyFormat.format(amount)} đ';
+  }
+
+  /// Định dạng số có dấu phẩy ',' phân cách hàng nghìn không có đơn vị (VD: 100,000)
+  static String numberComma(num amount) {
+    return _commaCurrencyFormat.format(amount);
   }
 
   static String currency(num amount) {

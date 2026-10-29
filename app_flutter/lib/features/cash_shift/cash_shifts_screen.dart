@@ -7,6 +7,7 @@ import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/utils/share_utils.dart';
@@ -421,30 +422,30 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
               ),
               child: Column(
                 children: [
-                  _buildNumberRow('1. Tiền mặt đầu ca:', FormatUtils.vnd(shift.initialCash)),
-                  _buildNumberRow('2. Doanh số tiền mặt (+):', FormatUtils.vnd(shift.totalCashSales),
+                  _buildNumberRow('1. Tiền mặt đầu ca:', FormatUtils.vndComma(shift.initialCash)),
+                  _buildNumberRow('2. Doanh số tiền mặt (+):', FormatUtils.vndComma(shift.totalCashSales),
                       color: context.tc.success),
-                  _buildNumberRow('3. Doanh thu Chuyển khoản (VietQR):', FormatUtils.vnd(shift.totalQrSales),
+                  _buildNumberRow('3. Doanh thu Chuyển khoản (VietQR):', FormatUtils.vndComma(shift.totalQrSales),
                       color: context.tc.info),
                   if (shift.totalCardSales > 0)
-                    _buildNumberRow('4. Doanh thu Thẻ POS:', FormatUtils.vnd(shift.totalCardSales)),
-                  _buildNumberRow('5. Nộp thêm vào két (Cash In):', FormatUtils.vnd(shift.cashIn)),
-                  _buildNumberRow('6. Chi vặt từ két (Cash Out):', FormatUtils.vnd(shift.cashOut),
+                    _buildNumberRow('4. Doanh thu Thẻ POS:', FormatUtils.vndComma(shift.totalCardSales)),
+                  _buildNumberRow('5. Nộp thêm vào két (Cash In):', FormatUtils.vndComma(shift.cashIn)),
+                  _buildNumberRow('6. Chi vặt từ két (Cash Out):', FormatUtils.vndComma(shift.cashOut),
                       color: context.tc.danger),
                   const Divider(height: 16),
-                  _buildNumberRow('TỔNG DOANH THU BÁN TRONG CA:', FormatUtils.vnd(shift.totalRevenue),
+                  _buildNumberRow('TỔNG DOANH THU BÁN TRONG CA:', FormatUtils.vndComma(shift.totalRevenue),
                       isBold: true),
                   const Divider(height: 16),
                   if (_canViewDifference) ...[
-                    _buildNumberRow('TIỀN MẶT KỲ VỌNG TRONG KÉT:', FormatUtils.vnd(shift.expectedCash),
+                    _buildNumberRow('TIỀN MẶT KỲ VỌNG TRONG KÉT:', FormatUtils.vndComma(shift.expectedCash),
                         isBold: true, color: context.tc.primary),
                     if (!shift.isOpen) ...[
                       _buildNumberRow(
-                          'TIỀN MẶT THỰC KIỂM ĐẾM:', FormatUtils.vnd(shift.actualCash ?? 0),
+                          'TIỀN MẶT THỰC KIỂM ĐẾM:', FormatUtils.vndComma(shift.actualCash ?? 0),
                           isBold: true),
                       _buildNumberRow(
                         'CHÊNH LỆCH KÉT:',
-                        '${(shift.difference ?? 0) >= 0 ? "+" : ""}${FormatUtils.vnd(shift.difference ?? 0)}',
+                        '${(shift.difference ?? 0) >= 0 ? "+" : ""}${FormatUtils.vndComma(shift.difference ?? 0)}',
                         isBold: true,
                         color: (shift.difference ?? 0) == 0
                             ? context.tc.success
@@ -453,7 +454,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                     ],
                   ] else ...[
                     _buildNumberRow('TIỀN MẶT THỰC KIỂM ĐẾM:',
-                        FormatUtils.vnd(shift.actualCash ?? 0),
+                        FormatUtils.vndComma(shift.actualCash ?? 0),
                         isBold: true),
                     _buildNumberRow('CHÊNH LỆCH KÉT:', '•••••• (Chỉ Quản lý được xem)',
                         isBold: true, color: context.tc.textHint),
@@ -523,11 +524,11 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      _buildNumberRow('• Món giảm giá ($discItemsCount món):', '-${FormatUtils.vnd(discItemsTotal)}', color: context.tc.danger),
-                      _buildNumberRow('• Voucher / KM ($vCount lượt):', '-${FormatUtils.vnd(vTotal)}', color: context.tc.danger),
-                      _buildNumberRow('• Điểm KMT đổi ($pUsed điểm):', '-${FormatUtils.vnd(pDisc)}', color: context.tc.danger),
+                      _buildNumberRow('• Món giảm giá ($discItemsCount món):', '-${FormatUtils.vndComma(discItemsTotal)}', color: context.tc.danger),
+                      _buildNumberRow('• Voucher / KM ($vCount lượt):', '-${FormatUtils.vndComma(vTotal)}', color: context.tc.danger),
+                      _buildNumberRow('• Điểm KMT đổi ($pUsed điểm):', '-${FormatUtils.vndComma(pDisc)}', color: context.tc.danger),
                       const Divider(height: 12),
-                      _buildNumberRow('TỔNG GIẢM GIÁ TRONG CA:', '-${FormatUtils.vnd(totDisc)}', isBold: true, color: context.tc.primary),
+                      _buildNumberRow('TỔNG GIẢM GIÁ TRONG CA:', '-${FormatUtils.vndComma(totDisc)}', isBold: true, color: context.tc.primary),
                     ],
                   ),
                 );
@@ -605,15 +606,15 @@ Thu ngân: ${shift.staffFullName} (${shift.staffUsername})
 Mở ca: $openedStr
 Kết ca: $closedStr
 --------------------------------
-1. Tiền mặt đầu ca: ${FormatUtils.vnd(shift.initialCash)}
-2. Bán hàng tiền mặt: ${FormatUtils.vnd(shift.totalCashSales)}
-3. Doanh thu VietQR: ${FormatUtils.vnd(shift.totalQrSales)}
-4. Nộp thêm két: ${FormatUtils.vnd(shift.cashIn)}
-5. Chi vặt két: ${FormatUtils.vnd(shift.cashOut)}
+1. Tiền mặt đầu ca: ${FormatUtils.vndComma(shift.initialCash)}
+2. Bán hàng tiền mặt: ${FormatUtils.vndComma(shift.totalCashSales)}
+3. Doanh thu VietQR: ${FormatUtils.vndComma(shift.totalQrSales)}
+4. Nộp thêm két: ${FormatUtils.vndComma(shift.cashIn)}
+5. Chi vặt két: ${FormatUtils.vndComma(shift.cashOut)}
 --------------------------------
-TỔNG DOANH THU: ${FormatUtils.vnd(shift.totalRevenue)}
-TIỀN KIỂM ĐẾM THỰC TẾ: ${FormatUtils.vnd(shift.actualCash ?? 0)}
-${_canViewDifference ? "CHÊNH LỆCH: ${FormatUtils.vnd(shift.difference ?? 0)}" : ""}
+TỔNG DOANH THU: ${FormatUtils.vndComma(shift.totalRevenue)}
+TIỀN KIỂM ĐẾM THỰC TẾ: ${FormatUtils.vndComma(shift.actualCash ?? 0)}
+${_canViewDifference ? "CHÊNH LỆCH: ${FormatUtils.vndComma(shift.difference ?? 0)}" : ""}
 Ghi chú: ${shift.notes}
 ================================
 ''';
@@ -920,6 +921,9 @@ Ghi chú: ${shift.notes}
             TextField(
               controller: cashCtrl,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                ThousandsSeparatorInputFormatter(),
+              ],
               decoration: const InputDecoration(labelText: 'Tiền mặt kiểm đếm thực tế', suffixText: 'đ'),
             ),
             TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: 'Lý do đóng ca')),
@@ -970,8 +974,8 @@ Ghi chú: ${shift.notes}
           _buildSlipMetaRow('Giờ mở ca:', openedStr),
           _buildSlipMetaRow('Giờ kết ca:', closedStr),
           const Divider(height: 20),
-          _buildNumberRow('Tổng doanh số ca:', FormatUtils.vnd(shift.totalRevenue), isBold: true),
-          if (!shift.isOpen) _buildNumberRow('Tiền mặt tôi đã kiểm đếm:', FormatUtils.vnd(shift.actualCash ?? 0)),
+          _buildNumberRow('Tổng doanh số ca:', FormatUtils.vndComma(shift.totalRevenue), isBold: true),
+          if (!shift.isOpen) _buildNumberRow('Tiền mặt tôi đã kiểm đếm:', FormatUtils.vndComma(shift.actualCash ?? 0)),
           const SizedBox(height: 8),
           Text(
             'Phiếu bàn giao và số đối soát két chỉ dành cho Quản lý.',
@@ -1087,7 +1091,7 @@ Ghi chú: ${shift.notes}
                             style: GoogleFonts.beVietnamPro(
                                 fontSize: 11, color: context.tc.textSecondary)),
                         Text(
-                          FormatUtils.vnd(shift.totalRevenue),
+                          FormatUtils.vndComma(shift.totalRevenue),
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -1105,7 +1109,7 @@ Ghi chú: ${shift.notes}
                         Text(
                           shift.isOpen
                               ? 'Đang bán...'
-                              : FormatUtils.vnd(shift.actualCash ?? 0),
+                              : FormatUtils.vndComma(shift.actualCash ?? 0),
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -1130,7 +1134,7 @@ Ghi chú: ${shift.notes}
                                   fontSize: 12, color: context.tc.textSecondary))
                         else
                           Text(
-                            '${diff >= 0 ? "+" : ""}${FormatUtils.vnd(diff)}',
+                            '${diff >= 0 ? "+" : ""}${FormatUtils.vndComma(diff)}',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
