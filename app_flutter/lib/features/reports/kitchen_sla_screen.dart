@@ -295,32 +295,49 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
             onPressed: _loading ? null : _loadData,
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            color: context.isDarkMode ? context.tc.surface : TramColors.brandDark,
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: Colors.amberAccent,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
-              unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
-              tabs: const [
-                Tab(
-                  icon: Icon(Icons.receipt_long, size: 18),
-                  text: 'Theo Đơn Hàng',
-                  iconMargin: EdgeInsets.only(bottom: 2),
-                ),
-                Tab(
-                  icon: Icon(Icons.restaurant_menu, size: 18),
-                  text: 'Chi Tiết Từng Món',
-                  iconMargin: EdgeInsets.only(bottom: 2),
-                ),
-              ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.amberAccent,
+          indicatorWeight: 3,
+          dividerColor: Colors.transparent,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
+          unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+          tabs: const [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.receipt_long, size: 17),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Theo Đơn Hàng',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.restaurant_menu, size: 17),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Chi Tiết Từng Món',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
       body: Column(
@@ -395,7 +412,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                             children: [
                               // KPI Cards
                               Padding(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                                 child: Row(
                                   children: [
                                     _buildKpiCard(
@@ -404,21 +421,21 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                       icon: Icons.timer,
                                       color: Colors.blue,
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     _buildKpiCard(
-                                      title: 'Đơn chậm nhất',
+                                      title: 'Chậm nhất',
                                       value: _formatDuration(summary.maxOrder),
                                       icon: Icons.warning_amber_rounded,
                                       color: Colors.deepOrange,
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     _buildKpiCard(
                                       title: 'TB / Món',
                                       value: _formatDuration(summary.averageItem),
                                       icon: Icons.coffee,
                                       color: Colors.teal,
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     _buildKpiCard(
                                       title: 'Tỉ lệ trễ',
                                       value:
@@ -437,13 +454,14 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                   children: [
                                     // Tab 1: Orders
                                     ListView.separated(
-                                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
                                       itemCount: summary.orders.length,
                                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                                       itemBuilder: (context, i) {
                                         final o = summary.orders[i];
                                         final isLate = o.isLate(summary.threshold);
                                         final timeFmt = DateFormat('HH:mm:ss');
+                                        final hasOrderCode = o.orderCode != null && o.orderCode!.isNotEmpty;
                                         return Card(
                                           elevation: 1,
                                           shape: RoundedRectangleBorder(
@@ -453,34 +471,44 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                             ),
                                           ),
                                           child: ListTile(
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                             leading: CircleAvatar(
+                                              radius: 18,
                                               backgroundColor: isLate ? Colors.red.shade100 : Colors.green.shade100,
                                               child: Icon(
                                                 isLate ? Icons.timer_off : Icons.check,
                                                 color: isLate ? AppColors.danger : AppColors.success,
-                                                size: 20,
+                                                size: 18,
                                               ),
                                             ),
                                             title: Row(
                                               children: [
-                                                Text(o.tableName, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-                                                if (o.orderCode != null) ...[
-                                                  const SizedBox(width: 8),
-                                                  Text('(${o.orderCode})', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                                                ],
-                                                const Spacer(),
+                                                Expanded(
+                                                  child: Text(
+                                                    o.tableName,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: GoogleFonts.beVietnamPro(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                   decoration: BoxDecoration(
                                                     color: isLate ? Colors.red.shade50 : Colors.green.shade50,
                                                     borderRadius: BorderRadius.circular(6),
-                                                    border: Border.all(color: isLate ? Colors.red.shade200 : Colors.green.shade200),
+                                                    border: Border.all(
+                                                      color: isLate ? Colors.red.shade200 : Colors.green.shade200,
+                                                    ),
                                                   ),
                                                   child: Text(
                                                     _formatDuration(o.duration),
                                                     style: GoogleFonts.beVietnamPro(
                                                       fontWeight: FontWeight.bold,
-                                                      fontSize: 13,
+                                                      fontSize: 12,
                                                       color: isLate ? AppColors.danger : AppColors.success,
                                                     ),
                                                   ),
@@ -490,9 +518,24 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                             subtitle: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const SizedBox(height: 4),
+                                                if (hasOrderCode) ...[
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    'Mã đơn: ${o.orderCode} • ${o.itemCount} món',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: GoogleFonts.beVietnamPro(
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: context.tc.textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 3),
                                                 Text(
-                                                  'Gửi: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(o.sentAt))} ➔ Xong: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(o.doneAt))} (${o.itemCount} món)',
+                                                  'Gửi: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(o.sentAt))} ➔ Xong: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(o.doneAt))}${hasOrderCode ? "" : " (${o.itemCount} món)"}',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                   style: GoogleFonts.beVietnamPro(fontSize: 12),
                                                 ),
                                                 if (o.isPartialSplit)
@@ -500,7 +543,11 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                                     padding: const EdgeInsets.only(top: 4),
                                                     child: Text(
                                                       '⚡ Có tách xong phần nước/bánh trước',
-                                                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blue.shade700, fontStyle: FontStyle.italic),
+                                                      style: GoogleFonts.beVietnamPro(
+                                                        fontSize: 11,
+                                                        color: Colors.blue.shade700,
+                                                        fontStyle: FontStyle.italic,
+                                                      ),
                                                     ),
                                                   ),
                                               ],
@@ -516,26 +563,29 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                         // Group selector
                                         Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                          child: Row(
-                                            children: [
-                                              ChoiceChip(
-                                                label: const Text('Tất cả món'),
-                                                selected: _selectedGroup == 'ALL',
-                                                onSelected: (_) => setState(() => _selectedGroup = 'ALL'),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              ChoiceChip(
-                                                label: const Text('Nước uống'),
-                                                selected: _selectedGroup == kKitchenGroupDrink,
-                                                onSelected: (_) => setState(() => _selectedGroup = kKitchenGroupDrink),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              ChoiceChip(
-                                                label: const Text('Bánh / Món ăn'),
-                                                selected: _selectedGroup == kKitchenGroupFood,
-                                                onSelected: (_) => setState(() => _selectedGroup = kKitchenGroupFood),
-                                              ),
-                                            ],
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: [
+                                                ChoiceChip(
+                                                  label: const Text('Tất cả món'),
+                                                  selected: _selectedGroup == 'ALL',
+                                                  onSelected: (_) => setState(() => _selectedGroup = 'ALL'),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ChoiceChip(
+                                                  label: const Text('Nước uống'),
+                                                  selected: _selectedGroup == kKitchenGroupDrink,
+                                                  onSelected: (_) => setState(() => _selectedGroup = kKitchenGroupDrink),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ChoiceChip(
+                                                  label: const Text('Bánh / Món ăn'),
+                                                  selected: _selectedGroup == kKitchenGroupFood,
+                                                  onSelected: (_) => setState(() => _selectedGroup = kKitchenGroupFood),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                         Expanded(
@@ -548,6 +598,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                               final timeFmt = DateFormat('HH:mm:ss');
                                               return ListTile(
                                                 tileColor: context.tc.card,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius: BorderRadius.circular(8),
                                                   side: BorderSide(color: context.tc.border),
@@ -558,15 +609,30 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                                 ),
                                                 title: Text(
                                                   '${it.quantity}x ${it.itemName}',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                   style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14),
                                                 ),
                                                 subtitle: Text(
                                                   'Bàn: ${it.tableName} • Gửi: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(it.sentAt))} ➔ Xong: ${timeFmt.format(DateTime.fromMillisecondsSinceEpoch(it.doneAt))}',
-                                                  style: GoogleFonts.beVietnamPro(fontSize: 11),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: GoogleFonts.beVietnamPro(fontSize: 11.5),
                                                 ),
-                                                trailing: Text(
-                                                  _formatDuration(it.duration),
-                                                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primary),
+                                                trailing: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: context.tc.primary.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    _formatDuration(it.duration),
+                                                    style: GoogleFonts.beVietnamPro(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                      color: context.tc.primary,
+                                                    ),
+                                                  ),
                                                 ),
                                               );
                                             },
@@ -593,7 +659,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
@@ -604,23 +670,27 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
           children: [
             Row(
               children: [
-                Icon(icon, size: 14, color: color),
-                const SizedBox(width: 4),
+                Icon(icon, size: 13, color: color),
+                const SizedBox(width: 3),
                 Expanded(
                   child: Text(
                     title,
                     style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 5),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
+                maxLines: 1,
+              ),
             ),
           ],
         ),
