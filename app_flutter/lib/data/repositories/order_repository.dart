@@ -2306,6 +2306,48 @@ class OrderRepository {
     );
   }
 
+  /// Bếp bấm hoàn thành TỪNG MÓN của phiếu:
+  /// - Nếu phiếu chỉ còn đúng 1 món → xong cả phiếu.
+  /// - Nếu phiếu có nhiều món → tách món đã chọn thành phiếu mới (isDone: true, doneAt: now),
+  ///   phiếu cũ giữ lại các món chưa nấu xong.
+  Future<void> markKitchenOrderItemDone(KitchenOrderModel order, int itemIndex) async {
+    final key = order.firebaseKey;
+    if (key == null) return;
+    final List raw;
+    try {
+      raw = jsonDecode(order.itemsJson) as List;
+    } catch (_) {
+      return markKitchenOrderDone(key);
+    }
+    if (itemIndex < 0 || itemIndex >= raw.length) return;
+    if (raw.length <= 1) {
+      return markKitchenOrderDone(key);
+    }
+
+    final doneItem = raw[itemIndex];
+    final restItems = List<dynamic>.from(raw)..removeAt(itemIndex);
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newKey = kitchenOrdersRef.push().key ?? now.toString();
+    final batch = order.batchId ?? key;
+    final donePart = order.copyWith(
+      itemsJson: jsonEncode([doneItem]),
+      isDone: true,
+      doneAt: now,
+      pickedUp: false,
+      batchId: batch,
+      itemGroup: doneItem is Map ? doneItem['kitchenGroup']?.toString() : null,
+    );
+    await _commitWrite(
+      kitchenOrdersRef.update({
+        '$key/itemsJson': jsonEncode(restItems),
+        '$key/batchId': batch,
+        newKey: donePart.toMap(),
+      }),
+      'xong món ${doneItem is Map ? doneItem['name'] : ''} bàn ${order.tableName}',
+    );
+  }
+
   // ==================== GỌI NHÂN VIÊN (BẾP → PHỤC VỤ) ====================
   DatabaseReference staffCallsRefFor([String? storeCode]) {
     final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;

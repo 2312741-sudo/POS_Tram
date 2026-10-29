@@ -35,6 +35,25 @@ class _KitchenScreenState extends State<KitchenScreen> {
   final Set<String> _pendingDone = {};
   // Đang xong một phần (key|nhóm) – chặn bấm đúp
   final Set<String> _pendingGroup = {};
+  final Set<String> _pendingItem = {};
+
+  Future<void> _markItemDone(KitchenOrderModel order, int itemIndex) async {
+    final key = order.firebaseKey;
+    if (key == null) return;
+    final guard = '$key|item_$itemIndex';
+    if (!_pendingItem.add(guard)) return;
+    try {
+      await _fb.markKitchenOrderItemDone(order, itemIndex);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không cập nhật được món: $e'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      _pendingItem.remove(guard);
+    }
+  }
 
   @override
   void initState() {
@@ -187,111 +206,203 @@ class _KitchenScreenState extends State<KitchenScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppColors.kitchenCard,
-        border: Border(bottom: BorderSide(color: AppColors.kitchenCardBorder)),
-      ),
-      child: Row(
-        children: [
-          // Tài khoản không phải Bếp (chủ / quản lý / nhân viên) vào xem màn bếp thì có nút quay về
-          if (!AuthService().isKitchen)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: IconButton(
-                tooltip: 'Quay về',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/tables');
-                  }
-                },
-              ),
-            ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.kitchenAccent, AppColors.primary],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.kitchen, color: Colors.white, size: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 640;
+        final isVeryNarrow = constraints.maxWidth < 420;
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isVeryNarrow ? 10 : 16,
+            vertical: isVeryNarrow ? 10 : 14,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Màn bếp', style: GoogleFonts.beVietnamPro(
-                  color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700,
-                )),
-                Text('${_visibleOrders.length} đơn đang chờ', style: GoogleFonts.beVietnamPro(
-                  color: AppColors.kitchenAccent, fontSize: 13,
-                )),
-              ],
-            ),
+          decoration: const BoxDecoration(
+            color: AppColors.kitchenCard,
+            border: Border(bottom: BorderSide(color: AppColors.kitchenCardBorder)),
           ),
-          if (_canCallStaff)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: OutlinedButton.icon(
-                onPressed: _callStaff,
-                icon: const Icon(Icons.campaign_outlined, size: 18),
-                label: const Text('Gọi nhân viên'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: AppColors.kitchenCardBorder),
+          child: Row(
+            children: [
+              // Tài khoản không phải Bếp (chủ / quản lý / nhân viên) vào xem màn bếp thì có nút quay về
+              if (!AuthService().isKitchen)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    tooltip: 'Quay về',
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/tables');
+                      }
+                    },
+                  ),
+                ),
+              Container(
+                padding: EdgeInsets.all(isVeryNarrow ? 8 : 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.kitchenAccent, AppColors.primary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.kitchen, color: Colors.white, size: isVeryNarrow ? 20 : 24),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Màn bếp',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.beVietnamPro(
+                        color: Colors.white,
+                        fontSize: isVeryNarrow ? 16 : 19,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${_visibleOrders.length} đơn đang chờ',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.beVietnamPro(
+                        color: AppColors.kitchenAccent,
+                        fontSize: isVeryNarrow ? 11.5 : 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          if (canToggleAvailability())
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: OutlinedButton.icon(
-                onPressed: () => SoldOutSheet.show(context),
-                icon: const Icon(Icons.no_meals_outlined, size: 18),
-                label: const Text('Hết món'),
-                style: OutlinedButton.styleFrom(
-                  // Theme nút mặc định có minimumSize rộng vô hạn → trong Row làm tiêu đề bị ép còn 1 chữ/dòng
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: AppColors.kitchenCardBorder),
+              const SizedBox(width: 6),
+              if (_canCallStaff)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: isNarrow
+                      ? InkWell(
+                          onTap: _callStaff,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.shade700),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.campaign, color: Colors.amberAccent, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Gọi NV',
+                                  style: GoogleFonts.beVietnamPro(
+                                    color: Colors.white,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: _callStaff,
+                          icon: const Icon(Icons.campaign_outlined, size: 18),
+                          label: const Text('Gọi nhân viên'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 38),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: AppColors.kitchenCardBorder),
+                          ),
+                        ),
                 ),
-              ),
-            ),
-          if (_visibleOrders.isNotEmpty)
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.danger,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: AppColors.danger.withValues(alpha: 0.5), blurRadius: 12)],
-              ),
-              child: Center(
-                child: Text('${_visibleOrders.length}', style: GoogleFonts.beVietnamPro(
-                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16,
-                )),
-              ),
-            ).animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1.seconds),
-          const SizedBox(width: 8),
+              if (canToggleAvailability())
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: isNarrow
+                      ? InkWell(
+                          onTap: () => SoldOutSheet.show(context),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.kitchenCardBorder),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.no_meals_outlined, color: Colors.white70, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Hết món',
+                                  style: GoogleFonts.beVietnamPro(
+                                    color: Colors.white,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: () => SoldOutSheet.show(context),
+                          icon: const Icon(Icons.no_meals_outlined, size: 18),
+                          label: const Text('Hết món'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 38),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: AppColors.kitchenCardBorder),
+                          ),
+                        ),
+                ),
+              if (_visibleOrders.isNotEmpty)
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.danger,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: AppColors.danger.withValues(alpha: 0.5), blurRadius: 10),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_visibleOrders.length}',
+                      style: GoogleFonts.beVietnamPro(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                )
+                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1.seconds),
+              const SizedBox(width: 4),
           PopupMenuButton(
             tooltip: 'Tùy chọn',
             icon: const Icon(Icons.more_vert, color: AppColors.darkTextSecondary),
             color: AppColors.surface,
-            itemBuilder: (_) => [
+            itemBuilder: (menuCtx) => [
               PopupMenuItem(
                 onTap: () async {
                   await AuthService().logout();
-                  if (mounted) context.go('/login');
+                  if (!mounted) return;
+                  context.go('/login');
                 },
                 child: Row(
                   children: [
@@ -305,7 +416,8 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 onTap: () {
                   // onTap của PopupMenuItem chạy trước khi menu đóng hẳn; lùi một khung để dialog mở đúng
                   Future.microtask(() {
-                    if (mounted) DeleteAccountDialog.start(context);
+                    if (!mounted) return;
+                    DeleteAccountDialog.start(context);
                   });
                 },
                 child: Row(
@@ -321,6 +433,8 @@ class _KitchenScreenState extends State<KitchenScreen> {
         ],
       ),
     );
+  },
+);
   }
 
   Widget _buildEmptyState() {
@@ -360,6 +474,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
               order: orders[i],
               onDone: () => _markDone(orders[i]),
               onGroupDone: (g) => _markGroupDone(orders[i], g),
+              onItemDone: (idx) => _markItemDone(orders[i], idx),
             ).animate(delay: (i * 50).ms).fadeIn(duration: 300.ms).slideX(begin: 0.1, end: 0);
 
         if (cols == 1) {
@@ -400,8 +515,15 @@ class _KitchenOrderCard extends StatelessWidget {
   final KitchenOrderModel order;
   final VoidCallback onDone;
   final void Function(String group) onGroupDone;
+  final void Function(int itemIndex) onItemDone;
 
-  const _KitchenOrderCard({super.key, required this.order, required this.onDone, required this.onGroupDone});
+  const _KitchenOrderCard({
+    super.key,
+    required this.order,
+    required this.onDone,
+    required this.onGroupDone,
+    required this.onItemDone,
+  });
 
   Color _timerColor(Duration d) {
     if (d.inMinutes < 5) return AppColors.success;
@@ -560,6 +682,34 @@ class _KitchenOrderCard extends StatelessWidget {
                               color: AppColors.kitchenAccent,
                               fontWeight: FontWeight.w800,
                               fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => onItemDone(entry.key),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.success.withValues(alpha: 0.6)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check, size: 14, color: AppColors.success),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Xong',
+                                  style: GoogleFonts.beVietnamPro(
+                                    color: AppColors.success,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

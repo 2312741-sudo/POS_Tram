@@ -33,6 +33,7 @@ import {
   StickyNote,
   Info,
   Settings,
+  Timer,
 } from "lucide-react";
 
 const navItems = [
@@ -45,6 +46,7 @@ const navItems = [
   { href: "/dashboard/settings", label: "Cài đặt cửa hàng", icon: Settings },
   { href: "/dashboard/tables", label: "Sơ đồ Phòng/Bàn", icon: LayoutGrid },
   { href: "/dashboard/kitchen", label: "Màn hình Bếp", icon: Flame },
+  { href: "/dashboard/kitchen-sla", label: "Tốc độ Bếp (SOS)", icon: Timer },
   { href: "/dashboard/my-orders", label: "Đơn của tôi", icon: ClipboardList },
   { href: "/dashboard/my-shift", label: "Ca / Két của tôi", icon: Wallet },
   { href: "/dashboard/orders", label: "Giao dịch / Hóa đơn", icon: ShoppingBag },

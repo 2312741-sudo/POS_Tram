@@ -265,10 +265,18 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Đo Tốc Độ Phục Vụ (SOS / Bếp)', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'Đo Tốc Độ Phục Vụ (SOS / Bếp)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.beVietnamPro(fontSize: 15.5, fontWeight: FontWeight.bold),
+            ),
             Text(
               'Từ lúc gửi bếp đến khi hoàn tất • ${_auth.currentStoreCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70),
             ),
           ],
@@ -287,13 +295,32 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
             onPressed: _loading ? null : _loadData,
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.amberAccent,
-          tabs: const [
-            Tab(icon: Icon(Icons.receipt_long, size: 18), text: 'Theo Đơn Hàng'),
-            Tab(icon: Icon(Icons.restaurant_menu, size: 18), text: 'Chi Tiết Từng Món'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: context.isDarkMode ? context.tc.surface : TramColors.brandDark,
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.amberAccent,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold),
+              unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.receipt_long, size: 18),
+                  text: 'Theo Đơn Hàng',
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                ),
+                Tab(
+                  icon: Icon(Icons.restaurant_menu, size: 18),
+                  text: 'Chi Tiết Từng Món',
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       body: Column(

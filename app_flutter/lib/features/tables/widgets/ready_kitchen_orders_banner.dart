@@ -426,39 +426,50 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                       ),
                                       child: Row(
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF2E7D32),
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              'BÀN ${order.tableName.toUpperCase()}',
-                                              style: GoogleFonts.beVietnamPro(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
+                                          Flexible(
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF2E7D32),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      'BÀN ${order.tableName.toUpperCase()}',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: GoogleFonts.beVietnamPro(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (timeStr.isNotEmpty) ...[
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    'Xong $timeStr',
+                                                    style: GoogleFonts.beVietnamPro(
+                                                      fontSize: 11.5,
+                                                      color: TramColors.textSecondary,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                           ),
-                                          if (timeStr.isNotEmpty) ...[
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Xong lúc $timeStr',
-                                              style: GoogleFonts.beVietnamPro(
-                                                fontSize: 12,
-                                                color: TramColors.textSecondary,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                          const Spacer(),
+                                          const SizedBox(width: 8),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: const Color(0xFF2E7D32),
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              minimumSize: const Size(0, 32),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              minimumSize: const Size(0, 30),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
@@ -466,7 +477,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                             ),
                                             icon: const Icon(Icons.check, size: 14),
                                             label: Text(
-                                              'Đã lấy món',
+                                              'Đã lấy',
                                               style: GoogleFonts.beVietnamPro(
                                                 fontSize: 11.5,
                                                 fontWeight: FontWeight.bold,
@@ -486,27 +497,35 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                           const Icon(Icons.person_outline, size: 14, color: Colors.grey),
                                           const SizedBox(width: 4),
                                           Text(
-                                            'Nhân viên gửi: ',
+                                            'Gửi bởi: ',
                                             style: GoogleFonts.beVietnamPro(
                                               fontSize: 11.5,
                                               color: TramColors.textSecondary,
                                             ),
                                           ),
-                                          Text(
-                                            staff,
-                                            style: GoogleFonts.beVietnamPro(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: TramColors.textPrimary,
+                                          Flexible(
+                                            child: Text(
+                                              staff,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: TramColors.textPrimary,
+                                              ),
                                             ),
                                           ),
                                           if (order.orderCode != null || order.billCode != null) ...[
-                                            const Spacer(),
-                                            Text(
-                                              order.orderCode ?? order.billCode ?? '',
-                                              style: GoogleFonts.beVietnamPro(
-                                                fontSize: 11,
-                                                color: TramColors.textHint,
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                '• ${order.orderCode ?? order.billCode}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontSize: 11,
+                                                  color: TramColors.textHint,
+                                                ),
                                               ),
                                             ),
                                           ],

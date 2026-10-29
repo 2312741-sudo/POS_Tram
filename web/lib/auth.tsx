@@ -231,6 +231,9 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
   if (pathname.startsWith("/dashboard/promotions")) {
     return hasPermission(user, "MANAGE_PROMOTIONS");
   }
+  if (pathname.startsWith("/dashboard/kitchen-sla")) {
+    return hasPermission(user, "VIEW_REPORTS") || hasPermission(user, "VIEW_KITCHEN");
+  }
   if (
     pathname.startsWith("/dashboard/revenue") ||
     pathname.startsWith("/dashboard/analytics") ||

@@ -574,6 +574,9 @@ class FirebaseService {
   Future<void> markKitchenOrderGroupDone(KitchenOrderModel order, String group) =>
       _orderRepo.markKitchenOrderGroupDone(order, group);
 
+  Future<void> markKitchenOrderItemDone(KitchenOrderModel order, int itemIndex) =>
+      _orderRepo.markKitchenOrderItemDone(order, itemIndex);
+
   Future<void> callStaff({String message = ''}) => _orderRepo.callStaff(message: message);
 
   Stream<List<StaffCallModel>> pendingStaffCallsStream() => _orderRepo.pendingStaffCallsStream();
