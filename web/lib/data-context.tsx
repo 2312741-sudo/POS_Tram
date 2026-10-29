@@ -240,6 +240,7 @@ export interface UserItem {
   storeName?: string;
   fullName: string;
   username: string;
+  employeeCode?: string;
   role: string;
   roleId?: string;
   password?: string;

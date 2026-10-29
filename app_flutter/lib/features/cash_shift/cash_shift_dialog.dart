@@ -193,6 +193,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       staffUid: _auth.currentUid,
       staffUsername: _auth.currentUser?.username ?? 'staff',
       staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
+      staffEmployeeCode: _auth.currentUser?.employeeCode ?? '',
       openedAt: now.millisecondsSinceEpoch,
       initialCash: initial,
     );

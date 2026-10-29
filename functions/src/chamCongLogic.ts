@@ -255,6 +255,7 @@ export function decideProfile(params: {
         uid: posUid,
         username,
         fullName: membership.name || username,
+        employeeCode: membership.employeeCode ? membership.employeeCode.trim().toUpperCase() : "",
         phone: membership.phone,
         avatarUrl: membership.avatarUrl,
         roleId,
@@ -285,6 +286,10 @@ export function decideProfile(params: {
 
   const values: Record<string, unknown> = {};
   if (membership.name && existing.fullName !== membership.name) values.fullName = membership.name;
+  if (membership.employeeCode) {
+    const cleanCode = membership.employeeCode.trim().toUpperCase();
+    if (existing.employeeCode !== cleanCode) values.employeeCode = cleanCode;
+  }
   if (membership.phone && existing.phone !== membership.phone) values.phone = membership.phone;
   if (membership.avatarUrl && existing.avatarUrl !== membership.avatarUrl) values.avatarUrl = membership.avatarUrl;
   if (existing.chamCongStoreId !== membership.chamCongStoreId) values.chamCongStoreId = membership.chamCongStoreId;

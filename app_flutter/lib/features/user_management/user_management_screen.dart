@@ -10,6 +10,7 @@ import '../../core/permissions/staff_password_policy.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 
@@ -148,6 +149,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final isEditing = userToEdit != null;
     final fullNameCtrl = TextEditingController(text: userToEdit?.fullName ?? '');
     final usernameCtrl = TextEditingController(text: userToEdit?.username ?? '');
+    final employeeCodeCtrl = TextEditingController(text: userToEdit?.employeeCode ?? '');
     final passCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: userToEdit?.phone ?? '');
 
@@ -249,6 +251,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           helperText: isEditing ? 'Không thể thay đổi tên đăng nhập đã tạo' : null,
                         ),
                         enabled: !isEditing,
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: employeeCodeCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Mã nhân viên (Mã NV)',
+                          prefixIcon: const Icon(Icons.tag),
+                          hintText: 'VD: NV01, TN02 (để trống tự cấp)',
+                          helperText: isEditing ? null : 'Để trống hệ thống sẽ tự cấp mã theo thứ tự NV...',
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [UpperCaseTextFormatter()],
                       ),
                       const SizedBox(height: 12),
 
@@ -490,12 +505,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           : () async {
                               final fullName = fullNameCtrl.text.trim();
                               final username = AuthUtils.normalizeUsername(usernameCtrl.text);
+                              final empCode = employeeCodeCtrl.text.trim().toUpperCase();
                               final rawPass = passCtrl.text;
                               final phone = phoneCtrl.text.trim();
 
                               if (fullName.isEmpty) {
                                 setDlgState(() => dlgError = 'Vui lòng nhập họ và tên nhân viên.');
                                 return;
+                              }
+
+                              if (empCode.isNotEmpty) {
+                                final duplicate = _users.any((u) => u.uid != userToEdit?.uid && u.employeeCode.toUpperCase() == empCode);
+                                if (duplicate) {
+                                  setDlgState(() => dlgError = 'Mã nhân viên "$empCode" đã được sử dụng trong chi nhánh.');
+                                  return;
+                                }
                               }
 
                               if (!isEditing) {
@@ -531,6 +555,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                     'storeCode': storeCode,
                                     'username': username,
                                     'fullName': fullName,
+                                    'employeeCode': empCode.isNotEmpty ? empCode : null,
                                     'roleId': selectedRole,
                                     'tempPassword': rawPass,
                                     'phone': phone,
@@ -550,7 +575,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 } on FirebaseFunctionsException catch (e) {
                                   String msg = callableErrorMessage(e.code, e.message, fallback: 'Lỗi tạo tài khoản nhân viên.');
                                   if (e.code == 'already-exists') {
-                                    msg = 'Tên đăng nhập này đã được sử dụng trong chi nhánh.';
+                                    msg = 'Tên đăng nhập hoặc Mã nhân viên này đã được sử dụng trong chi nhánh.';
                                   }
                                   setDlgState(() {
                                     dlgError = msg;
@@ -567,6 +592,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 try {
                                   final updatedUser = userToEdit.copyWith(
                                     fullName: fullName,
+                                    employeeCode: empCode,
                                     phone: phone,
                                     roleId: isRoot ? userToEdit.roleId : selectedRole,
                                     customPermissions: customPerms,
@@ -1021,6 +1047,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         user.fullName,
                                         style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15),
                                       ),
+                                      if (user.employeeCode.isNotEmpty)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: context.tc.primaryLight.withValues(alpha: 0.25),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: context.tc.primary.withValues(alpha: 0.5), width: 0.8),
+                                          ),
+                                          child: Text(
+                                            user.employeeCode,
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.tc.primary),
+                                          ),
+                                        ),
                                       if (user.isRootOwner)
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

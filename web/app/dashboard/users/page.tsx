@@ -100,6 +100,7 @@ export interface DashboardUser {
   uid?: string;
   username: string;
   fullName: string;
+  employeeCode?: string;
   roleId: string;
   role: string;
   isRootOwner?: boolean;
@@ -120,6 +121,7 @@ export interface DashboardUser {
 interface UserForm {
   fullName: string;
   username: string;
+  employeeCode: string;
   password: string;
   role: string;
   phone: string;
@@ -131,6 +133,7 @@ interface UserForm {
 const emptyForm: UserForm = {
   fullName: "",
   username: "",
+  employeeCode: "",
   password: "",
   role: ROLE_STAFF,
   phone: "",
@@ -174,6 +177,7 @@ export default function UsersPage() {
         uid: (typeof u.uid === "string" && u.uid) || u.id || u.username || "",
         username: u.username || "",
         fullName: u.fullName || u.username || "",
+        employeeCode: (u.employeeCode || u.staffCode || "") as string,
         roleId: u.roleId || u.role || ROLE_STAFF,
         role: u.roleId || u.role || ROLE_STAFF,
         isRootOwner: u.isRootOwner,
@@ -237,6 +241,7 @@ export default function UsersPage() {
         !q ||
         u.fullName.toLowerCase().includes(q) ||
         u.username.toLowerCase().includes(q) ||
+        (u.employeeCode && u.employeeCode.toLowerCase().includes(q)) ||
         (u.phone && u.phone.includes(q));
 
       const matchRole = filterRole === "ALL" || normalizeRoleId(u.roleId || u.role) === filterRole;
@@ -275,6 +280,7 @@ export default function UsersPage() {
     setForm({
       fullName: u.fullName,
       username: u.username,
+      employeeCode: u.employeeCode || "",
       password: "",
       role: normalizeRoleId(u.roleId || u.role || ROLE_STAFF),
       phone: u.phone || "",
@@ -336,6 +342,7 @@ export default function UsersPage() {
     setSaving(true);
     const cleanStore = form.storeCode.trim().toUpperCase();
     const cleanUser = normalizeUsername(form.username);
+    const cleanEmpCode = form.employeeCode.trim().toUpperCase();
 
     try {
       if (editUser) {
@@ -343,8 +350,20 @@ export default function UsersPage() {
         const targetUid = editUser.uid || editUser.id;
         const isRoot = editUser.isRootOwner === true;
 
+        if (cleanEmpCode) {
+          const duplicate = currentUsers.find(
+            (u) => (u.uid || u.id) !== targetUid && u.employeeCode?.trim().toUpperCase() === cleanEmpCode
+          );
+          if (duplicate) {
+            setError(`Mã nhân viên "${cleanEmpCode}" đã được sử dụng bởi @${duplicate.username}`);
+            setSaving(false);
+            return;
+          }
+        }
+
         const updateData: Record<string, unknown> = {
           fullName: form.fullName.trim(),
+          employeeCode: cleanEmpCode,
           phone: form.phone.trim(),
           roleId: isRoot ? editUser.roleId : normalizeRoleId(form.role),
           role: isRoot ? editUser.role : normalizeRoleId(form.role),
@@ -371,30 +390,43 @@ export default function UsersPage() {
           username: currentUser?.username || "admin",
           userFullName: currentUser?.fullName || "Quản trị viên",
           userRole: currentUser?.roleId || "ROLE_OWNER",
-          details: `Cập nhật thông tin nhân viên: ${form.fullName.trim()} (@${cleanUser})`,
+          details: `Cập nhật thông tin nhân viên: ${form.fullName.trim()} (@${cleanUser}) - Mã NV: ${cleanEmpCode || "(chưa cấp)"}`,
           timestamp: Date.now(),
         }).catch(() => {});
 
         closeModal();
       } else {
         // TẠO NHÂN VIÊN MỚI QUA CLOUD FUNCTIONS (An toàn tuyệt đối)
+        if (cleanEmpCode) {
+          const duplicate = currentUsers.find(
+            (u) => u.employeeCode?.trim().toUpperCase() === cleanEmpCode
+          );
+          if (duplicate) {
+            setError(`Mã nhân viên "${cleanEmpCode}" đã được sử dụng bởi @${duplicate.username}`);
+            setSaving(false);
+            return;
+          }
+        }
+
         const createStaffFn = httpsCallable<
           {
             storeCode: string;
             username: string;
             fullName: string;
+            employeeCode?: string;
             roleId: string;
             tempPassword: string;
             phone?: string;
             customPermissions?: string[];
           },
-          { success: boolean; uid: string; message: string }
+          { success: boolean; uid: string; employeeCode?: string; message: string }
         >(functions, "createStaffAccount");
 
         await createStaffFn({
           storeCode: cleanStore,
           username: cleanUser,
           fullName: form.fullName.trim(),
+          employeeCode: cleanEmpCode || undefined,
           roleId: normalizeRoleId(form.role),
           tempPassword: form.password.trim(),
           phone: form.phone.trim(),
@@ -844,19 +876,38 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td>
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        color: "var(--primary)",
-                        fontWeight: "700",
-                        fontSize: "13px",
-                        background: "rgba(126,41,48,0.06)",
-                        padding: "2px 8px",
-                        borderRadius: "6px",
-                      }}
-                    >
-                      @{u.username}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      {u.employeeCode && (
+                        <span
+                          style={{
+                            fontFamily: "monospace",
+                            color: "#1e40af",
+                            backgroundColor: "#dbeafe",
+                            border: "1px solid #bfdbfe",
+                            fontWeight: "700",
+                            fontSize: "11px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                          }}
+                          title="Mã nhân viên"
+                        >
+                          {u.employeeCode}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          color: "var(--primary)",
+                          fontWeight: "700",
+                          fontSize: "13px",
+                          background: "rgba(126,41,48,0.06)",
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        @{u.username}
+                      </span>
+                    </div>
                     {u.authProvider === "chamcong" && (
                       <span
                         className="badge badge-info"
@@ -1090,7 +1141,7 @@ export default function UsersPage() {
                 />
               </div>
 
-              {/* Username & Phone */}
+              {/* Username & Mã NV */}
               <div className="grid-stack-sm" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label
@@ -1134,15 +1185,43 @@ export default function UsersPage() {
                       marginBottom: "6px",
                     }}
                   >
-                    Số điện thoại
+                    Mã nhân viên (Mã NV)
                   </label>
                   <input
                     className="input-field"
-                    placeholder="0987xxxxxx"
-                    value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="VD: NV01 (để trống tự cấp)"
+                    value={form.employeeCode}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        employeeCode: e.target.value.toUpperCase().trim(),
+                      }))
+                    }
+                    style={{ textTransform: "uppercase" }}
                   />
+                  <span style={{ fontSize: "11px", color: "var(--muted)" }}>Tự động in hoa, có thể đăng nhập bằng Mã NV</span>
                 </div>
+              </div>
+
+              {/* Số điện thoại */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    color: "var(--text)",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Số điện thoại
+                </label>
+                <input
+                  className="input-field"
+                  placeholder="0987xxxxxx"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                />
               </div>
 
               {/* Password khi tạo mới */}

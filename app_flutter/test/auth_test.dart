@@ -84,7 +84,7 @@ void main() {
       });
 
       test('calculateRemainingLockoutSeconds tính chính xác số giây còn lại', () {
-        final now = 1771900000000;
+        const now = 1771900000000;
 
         // Khóa còn 900 giây (15 phút)
         final lockedUntil = now + 900 * 1000;
@@ -171,6 +171,33 @@ void main() {
         final legacyParsed = UserModel.fromMap(legacyMap, 'fallback_key_uid');
         expect(legacyParsed.uid, equals('fallback_key_uid'));
         expect(legacyParsed.mustChangePassword, isFalse);
+      });
+
+      test('UserModel lưu và đọc trường employeeCode (Mã nhân viên) chính xác', () {
+        final user = UserModel(
+          username: 'thungan1',
+          fullName: 'Nguyễn Thu Ngân',
+          employeeCode: 'NV01',
+          roleId: 'ROLE_STAFF',
+        );
+
+        final map = user.toMap();
+        expect(map['employeeCode'], equals('NV01'));
+        expect(user.displayCode, equals('NV01'));
+
+        final fromMapUser = UserModel.fromMap({
+          'username': 'thungan1',
+          'fullName': 'Nguyễn Thu Ngân',
+          'employeeCode': 'NV02',
+          'roleId': 'ROLE_STAFF',
+        });
+        expect(fromMapUser.employeeCode, equals('NV02'));
+        expect(fromMapUser.displayCode, equals('NV02'));
+
+        // copyWith
+        final copied = user.copyWith(employeeCode: 'TN99');
+        expect(copied.employeeCode, equals('TN99'));
+        expect(copied.displayCode, equals('TN99'));
       });
 
       test('copyWith() cập nhật đúng thuộc tính', () {

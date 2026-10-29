@@ -8,6 +8,7 @@ export interface UserProfile {
   authProvider?: string;
   username?: string;
   fullName?: string;
+  employeeCode?: string;
   roleId?: string;
   isRootOwner?: boolean;
   isActive?: boolean;
@@ -201,4 +202,60 @@ export function resolveStaffAuthUid(nodeKey: string, record?: { uid?: unknown } 
 /** Tài khoản tự tạo khi đăng nhập bằng Chấm Công Trạm (không có mật khẩu POS). */
 export function isChamCongAccount(nodeKey: string, record?: { authProvider?: unknown } | null): boolean {
   return (record && record.authProvider === "chamcong") || nodeKey.startsWith("cc_");
+}
+
+/**
+ * Tự động cấp hoặc kiểm tra mã nhân viên (NV01, NV02, ...)
+ * Hỗ trợ quét toàn bộ danh sách nhân viên hiện có để tìm số thứ tự lớn nhất tiếp theo.
+ */
+export function resolveEmployeeCode(
+  providedCode: unknown,
+  existingUsers: Array<{ employeeCode?: unknown; staffCode?: unknown }> | Record<string, { employeeCode?: unknown; staffCode?: unknown }> | null
+): { code: string; error?: string } {
+  const usersList = existingUsers
+    ? Array.isArray(existingUsers)
+      ? existingUsers
+      : Object.values(existingUsers)
+    : [];
+
+  const existingCodes = new Set(
+    usersList
+      .map((u) => {
+        const val = u?.employeeCode ?? u?.staffCode;
+        return typeof val === "string" ? val.trim().toUpperCase() : "";
+      })
+      .filter((c) => c.length > 0)
+  );
+
+  if (typeof providedCode === "string" && providedCode.trim().length > 0) {
+    const clean = providedCode.trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{2,20}$/.test(clean)) {
+      return { code: "", error: "Mã nhân viên chỉ gồm 2-20 ký tự chữ cái không dấu, số, gạch dưới hoặc gạch ngang." };
+    }
+    if (existingCodes.has(clean)) {
+      return { code: "", error: `Mã nhân viên "${clean}" đã tồn tại trong chi nhánh.` };
+    }
+    return { code: clean };
+  }
+
+  // Tự động sinh mã tiếp theo: NV01, NV02, ...
+  let maxNum = 0;
+  for (const c of existingCodes) {
+    const match = /^NV(\d+)$/i.exec(c);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+
+  let nextNum = maxNum + 1;
+  let candidate = `NV${String(nextNum).padStart(2, "0")}`;
+  while (existingCodes.has(candidate)) {
+    nextNum++;
+    candidate = `NV${String(nextNum).padStart(2, "0")}`;
+  }
+
+  return { code: candidate };
 }

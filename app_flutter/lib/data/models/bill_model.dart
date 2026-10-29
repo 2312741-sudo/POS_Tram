@@ -53,6 +53,7 @@ class BillModel {
   final String? staffUid;
   final String staffUsername;
   final String staffFullName;
+  final String? staffCode; // Mã nhân viên (VD: NV01, TN02)
   List<OrderItemModel> items;
   int subTotal;
   List<BillDiscountModel> discounts;
@@ -88,6 +89,7 @@ class BillModel {
     this.staffUid,
     required this.staffUsername,
     required this.staffFullName,
+    this.staffCode,
     required this.items,
     required this.subTotal,
     this.discounts = const [],
@@ -291,6 +293,7 @@ class BillModel {
       staffUid: map['staffUid']?.toString(),
       staffUsername: staffUsername,
       staffFullName: staffFullName,
+      staffCode: (map['staffCode'] ?? map['staffEmployeeCode'] ?? map['employeeCode'])?.toString(),
       items: items,
       subTotal: subTotal,
       discounts: discounts,
@@ -375,6 +378,7 @@ class BillModel {
     if (staffUid != null && staffUid!.isNotEmpty) 'staffUid': staffUid,
     'staffUsername': staffUsername,
     'staffFullName': staffFullName,
+    if (staffCode != null && staffCode!.isNotEmpty) 'staffCode': staffCode,
     'cashierName': staffFullName.isNotEmpty ? staffFullName : staffUsername,
     'orderStaff': orderStaffSummary,
     'items': items.map((e) => e.toMap()).toList(),

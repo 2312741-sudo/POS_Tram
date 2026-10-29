@@ -303,9 +303,9 @@ class AuthService extends ChangeNotifier {
     if (cleanStore.isEmpty) {
       throw const AuthException('Vui lòng nhập Mã Cửa Hàng.');
     }
-    if (!AuthUtils.isValidUsername(cleanUser)) {
+    if (!AuthUtils.isValidUsername(cleanUser) && !AuthUtils.isValidEmployeeCode(cleanUser)) {
       throw const AuthException(
-        'Tên đăng nhập không hợp lệ. Chỉ chấp nhận chữ thường không dấu (a-z), số (0-9), gạch dưới (_) hoặc gạch ngang (-), từ 3 đến 30 ký tự.',
+        'Tên đăng nhập hoặc Mã nhân viên không hợp lệ. Chỉ chấp nhận chữ không dấu (a-z), số (0-9), gạch dưới (_) hoặc gạch ngang (-), từ 3 đến 30 ký tự.',
       );
     }
     if (password.trim().isEmpty) {

@@ -4,6 +4,7 @@ import 'role_model.dart';
 // ==================== AUTH UTILS ====================
 class AuthUtils {
   static final RegExp usernameRegex = RegExp(r'^[a-z0-9_-]{3,30}$');
+  static final RegExp employeeCodeRegex = RegExp(r'^[a-zA-Z0-9_-]{2,20}$');
 
   /// Kiểm tra username có hợp lệ theo hợp đồng AUTH_CONTRACT:
   /// Chỉ gồm chữ thường a-z, số 0-9, gạch dưới _, gạch ngang -
@@ -11,6 +12,12 @@ class AuthUtils {
   static bool isValidUsername(String username) {
     final clean = username.trim().toLowerCase();
     return usernameRegex.hasMatch(clean);
+  }
+
+  /// Kiểm tra mã nhân viên có hợp lệ (2-20 ký tự chữ, số, gạch dưới/ngang)
+  static bool isValidEmployeeCode(String code) {
+    final clean = code.trim();
+    return employeeCodeRegex.hasMatch(clean);
   }
 
   /// Chuẩn hóa username: cắt khoảng trắng và chuyển thành chữ thường
@@ -36,6 +43,7 @@ class UserModel {
   final String uid;
   final String username;
   final String fullName;
+  final String employeeCode; // Mã nhân viên (VD: NV01, TN02)
   final String roleId;
   final bool isRootOwner;
   final List<String> customPermissions; // Specific individual overrides
@@ -58,7 +66,7 @@ class UserModel {
 
   /// Các khóa model tự quản lý (không đưa vào extraFields)
   static const Set<String> _knownKeys = {
-    'uid', 'username', 'fullName', 'password', 'roleId', 'isRootOwner', 'customPermissions',
+    'uid', 'username', 'fullName', 'employeeCode', 'staffCode', 'password', 'roleId', 'isRootOwner', 'customPermissions',
     'isActive', 'phone', 'createdAt', 'lastLoginAt', 'mustChangePassword', 'authProvider',
   };
 
@@ -67,10 +75,14 @@ class UserModel {
   /// Bị máy chủ tự khóa do không còn là thành viên đang hoạt động bên Chấm Công
   bool get isRevokedByChamCong => extraFields['deactivatedBy']?.toString() == authProviderChamCong;
 
+  /// Mã hiển thị ưu tiên mã NV, nếu chưa có thì hiển thị username
+  String get displayCode => employeeCode.isNotEmpty ? employeeCode : username;
+
   UserModel({
     this.uid = '',
     required this.username,
     required this.fullName,
+    this.employeeCode = '',
     this.password = '',
     required this.roleId,
     this.isRootOwner = false,
@@ -106,11 +118,13 @@ class UserModel {
 
     final parsedUid = map['uid']?.toString() ?? '';
     final effectiveUid = parsedUid.isNotEmpty ? parsedUid : (fallbackUid ?? '');
+    final rawEmployeeCode = (map['employeeCode'] ?? map['staffCode'])?.toString().trim() ?? '';
 
     return UserModel(
       uid: effectiveUid,
       username: map['username']?.toString() ?? '',
       fullName: map['fullName']?.toString() ?? '',
+      employeeCode: rawEmployeeCode,
       password: map['password']?.toString() ?? '',
       roleId: map['roleId']?.toString() ?? 'ROLE_STAFF',
       isRootOwner: map['isRootOwner'] == true ||
@@ -137,6 +151,7 @@ class UserModel {
     'uid': uid,
     'username': username,
     'fullName': fullName,
+    if (employeeCode.isNotEmpty) 'employeeCode': employeeCode,
     'roleId': roleId,
     'isRootOwner': isRootOwner,
     'customPermissions': customPermissions,
@@ -152,6 +167,7 @@ class UserModel {
     String? uid,
     String? username,
     String? fullName,
+    String? employeeCode,
     String? password,
     String? roleId,
     bool? isRootOwner,
@@ -168,6 +184,7 @@ class UserModel {
       uid: uid ?? this.uid,
       username: username ?? this.username,
       fullName: fullName ?? this.fullName,
+      employeeCode: employeeCode ?? this.employeeCode,
       password: password ?? this.password,
       roleId: roleId ?? this.roleId,
       isRootOwner: isRootOwner ?? this.isRootOwner,

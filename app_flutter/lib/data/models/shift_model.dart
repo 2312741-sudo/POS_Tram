@@ -8,6 +8,7 @@ class CashShiftModel {
   final String staffUid;
   final String staffUsername;
   final String staffFullName;
+  final String staffEmployeeCode; // Mã nhân viên mở ca
   final int openedAt;
   int? closedAt;
   final int initialCash; // Tiền mặt đầu ca
@@ -29,6 +30,7 @@ class CashShiftModel {
     this.staffUid = '',
     required this.staffUsername,
     required this.staffFullName,
+    this.staffEmployeeCode = '',
     required this.openedAt,
     this.closedAt,
     int? initialCash,
@@ -85,6 +87,7 @@ class CashShiftModel {
       staffUid: map['staffUid']?.toString() ?? '',
       staffUsername: map['staffUsername']?.toString() ?? '',
       staffFullName: map['staffFullName']?.toString() ?? '',
+      staffEmployeeCode: (map['staffEmployeeCode'] ?? map['staffCode'] ?? '').toString(),
       openedAt: asEpochMs(map['openedAt']) ?? 0,
       closedAt: asEpochMs(map['closedAt']),
       initialCash: asInt(map['initialCash']) ?? asInt(map['initialBalance']) ?? 0,
@@ -108,6 +111,7 @@ class CashShiftModel {
     if (staffUid.isNotEmpty) 'staffUid': staffUid,
     'staffUsername': staffUsername,
     'staffFullName': staffFullName,
+    if (staffEmployeeCode.isNotEmpty) 'staffEmployeeCode': staffEmployeeCode,
     'openedAt': openedAt,
     if (closedAt != null) 'closedAt': closedAt,
     'initialCash': initialCash,

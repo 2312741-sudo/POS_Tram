@@ -13,6 +13,7 @@ import {
   isChamCongAccount,
   sanitizeCustomPermissions,
   OWNER_GRANT_ONLY_PERMISSIONS,
+  resolveEmployeeCode,
 } from "./permissions";
 
 describe("Cloud Functions RBAC & Permissions Unit Tests", () => {
@@ -123,6 +124,39 @@ describe("Quyền chỉ Chủ quán được cấp (Quản lý không được h
     ).toEqual(["VIEW_REPORTS"]);
     expect(sanitizeCustomPermissions(manager, undefined)).toEqual([]);
     expect(sanitizeCustomPermissions(null, ["CANCEL_BILL"])).toEqual([]);
+  });
+});
+
+describe("Mã nhân viên (resolveEmployeeCode)", () => {
+  it("tự động cấp NV01 khi danh sách rỗng", () => {
+    expect(resolveEmployeeCode("", null)).toEqual({ code: "NV01" });
+    expect(resolveEmployeeCode(undefined, [])).toEqual({ code: "NV01" });
+  });
+
+  it("tự động tăng dần mã nhân viên dựa theo số lớn nhất hiện có", () => {
+    const existing = [
+      { employeeCode: "NV01" },
+      { employeeCode: "NV02" },
+      { employeeCode: "NV05" },
+    ];
+    expect(resolveEmployeeCode("", existing)).toEqual({ code: "NV06" });
+  });
+
+  it("chấp nhận mã do người dùng tự nhập và tự động in hoa", () => {
+    const existing = [{ employeeCode: "NV01" }];
+    expect(resolveEmployeeCode("tn01", existing)).toEqual({ code: "TN01" });
+    expect(resolveEmployeeCode("  bep-02  ", existing)).toEqual({ code: "BEP-02" });
+  });
+
+  it("báo lỗi khi mã tự nhập bị trùng trong chi nhánh", () => {
+    const existing = [{ employeeCode: "NV01" }];
+    expect(resolveEmployeeCode("nv01", existing).error).toContain("đã tồn tại");
+    expect(resolveEmployeeCode("NV01", existing).error).toContain("đã tồn tại");
+  });
+
+  it("báo lỗi khi mã chứa ký tự đặc biệt không hợp lệ", () => {
+    expect(resolveEmployeeCode("NV@01", []).error).toContain("chỉ gồm");
+    expect(resolveEmployeeCode("N", []).error).toContain("chỉ gồm");
   });
 });
 

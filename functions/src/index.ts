@@ -16,6 +16,7 @@ import {
   isChamCongAccount,
   UserProfile,
   sanitizeCustomPermissions,
+  resolveEmployeeCode,
 } from "./permissions";
 import {
   AnyMap,
@@ -70,6 +71,7 @@ export const createStaffAccount = onCall(
       storeCode,
       username,
       fullName,
+      employeeCode,
       roleId,
       tempPassword,
       phone,
@@ -107,16 +109,22 @@ export const createStaffAccount = onCall(
       throw new HttpsError("permission-denied", "Quản lý không được phép tạo tài khoản có vai trò Chủ quán.");
     }
 
-    // Kiểm tra trùng username trong quán
+    // Kiểm tra trùng username và mã nhân viên trong quán
     const storeUsersSnap = await db.ref(`stores/${cleanStoreCode}/users`).get();
-    if (storeUsersSnap.exists()) {
-      const usersMap = storeUsersSnap.val();
-      for (const u of Object.values(usersMap) as UserProfile[]) {
-        if (u.username && normalizeUsername(u.username) === cleanUser) {
+    const usersMap = storeUsersSnap.exists() ? (storeUsersSnap.val() as Record<string, UserProfile>) : null;
+    if (usersMap) {
+      for (const u of Object.values(usersMap)) {
+        if (u && u.username && normalizeUsername(u.username) === cleanUser) {
           throw new HttpsError("already-exists", `Tên đăng nhập "${cleanUser}" đã tồn tại trong quán.`);
         }
       }
     }
+
+    const codeResult = resolveEmployeeCode(employeeCode, usersMap);
+    if (codeResult.error) {
+      throw new HttpsError("already-exists", codeResult.error);
+    }
+    const cleanEmployeeCode = codeResult.code;
 
     const syntheticEmail = buildSyntheticEmail(cleanUser, cleanStoreCode);
     let newUid = "";
@@ -136,6 +144,7 @@ export const createStaffAccount = onCall(
         uid: newUid,
         username: cleanUser,
         fullName: String(fullName).trim(),
+        employeeCode: cleanEmployeeCode,
         roleId: normalizeRoleId(String(roleId)),
         isRootOwner: false,
         isActive: true,
@@ -157,14 +166,15 @@ export const createStaffAccount = onCall(
         action: "CREATE_STAFF_ACCOUNT",
         staffUsername: caller.username || "unknown",
         staffFullName: caller.fullName || "Quản lý",
-        details: `Tạo tài khoản nhân viên @${cleanUser} (${fullName}) với vai trò ${roleId}`,
+        details: `Tạo tài khoản nhân viên @${cleanUser} (${fullName}) - Mã NV: ${cleanEmployeeCode} với vai trò ${roleId}`,
       });
 
       return {
         success: true,
         uid: newUid,
+        employeeCode: cleanEmployeeCode,
         email: syntheticEmail,
-        message: "Tạo tài khoản nhân viên thành công.",
+        message: `Đã tạo nhân viên @${cleanUser} (${cleanEmployeeCode}) thành công.`,
       };
     } catch (err: any) {
       // Rollback: Xóa auth user nếu ghi RTDB lỗi
@@ -507,8 +517,8 @@ export const staffSignIn = onCall(
     if (!/^[A-Z0-9_-]{2,30}$/.test(cleanStoreCode)) {
       throw new HttpsError("invalid-argument", "Mã cửa hàng không hợp lệ.");
     }
-    if (!/^[a-z0-9_-]{3,30}$/.test(cleanUser)) {
-      throw new HttpsError("invalid-argument", "Tên đăng nhập không hợp lệ.");
+    if (!/^[a-z0-9_-]{2,30}$/.test(cleanUser)) {
+      throw new HttpsError("invalid-argument", "Tên đăng nhập hoặc Mã nhân viên không hợp lệ.");
     }
     if (!password || password.length > 256) {
       throw new HttpsError("invalid-argument", "Mật khẩu không hợp lệ.");
@@ -516,6 +526,7 @@ export const staffSignIn = onCall(
 
     const INVALID_MSG = "Sai tài khoản hoặc mật khẩu.";
     let email = buildSyntheticEmail(cleanUser, cleanStoreCode);
+    let effectiveUser = cleanUser;
 
     // 1. Tài khoản không tồn tại -> trả lỗi chung, KHÔNG ghi bộ đếm
     try {
@@ -524,16 +535,25 @@ export const staffSignIn = onCall(
       if ((e as { code?: string })?.code !== "auth/user-not-found") {
         throw new HttpsError("internal", "Không thể kiểm tra tài khoản. Vui lòng thử lại sau.");
       }
-      // Chủ nhiều chi nhánh dùng MỘT tài khoản Auth (email theo chi nhánh đầu tiên) nhưng có hồ sơ ở nhiều quán:
-      // tìm hồ sơ theo tên đăng nhập trong quán đang đăng nhập rồi dùng email thật của tài khoản đó.
+      // Hỗ trợ đăng nhập bằng Mã nhân viên HOẶC Chủ nhiều chi nhánh dùng MỘT tài khoản Auth:
+      // tìm hồ sơ theo username HOẶC employeeCode trong quán đang đăng nhập rồi dùng email thật.
       let resolved: string | null = null;
       try {
-        // Không dùng orderByChild (RTDB chưa khai báo .indexOn cho username) — quán chỉ có vài chục tài khoản
         const all = (await db.ref(`stores/${cleanStoreCode}/users`).get()).val() as Record<string, UserProfile> | null;
-        const found =
-          Object.entries(all || {}).find(([, u]) => u && u.username && normalizeUsername(u.username) === cleanUser)?.[0] ??
-          null;
-        if (found) resolved = (await auth.getUser(found)).email ?? null;
+        const foundEntry =
+          Object.entries(all || {}).find(([, u]) => u && (
+            (u.username && normalizeUsername(u.username) === cleanUser) ||
+            (u.employeeCode && String(u.employeeCode).trim().toUpperCase() === cleanUser.toUpperCase()) ||
+            (u.staffCode && String(u.staffCode).trim().toUpperCase() === cleanUser.toUpperCase())
+          )) ?? null;
+
+        if (foundEntry) {
+          const [foundUid, foundProfile] = foundEntry;
+          resolved = (await auth.getUser(foundUid)).email ?? null;
+          if (foundProfile && foundProfile.username) {
+            effectiveUser = normalizeUsername(foundProfile.username);
+          }
+        }
       } catch {
         resolved = null;
       }
@@ -542,7 +562,7 @@ export const staffSignIn = onCall(
     }
 
     // 2. Giữ chỗ 1 lượt thử bằng transaction (an toàn khi gửi song song)
-    const attemptRef = db.ref(loginAttemptPath(cleanStoreCode, cleanUser));
+    const attemptRef = db.ref(loginAttemptPath(cleanStoreCode, effectiveUser));
     let allowed = false;
     const reserveTx = await attemptRef.transaction((current: LoginAttemptRecord | null) => {
       const r = reserveAttempt(current, Date.now());
@@ -600,13 +620,13 @@ export const staffSignIn = onCall(
           .set({
             timestamp: now,
             action: "LOGIN_ATTEMPT_LOCKED_OUT",
-            username: cleanUser,
-            userFullName: cleanUser,
+            username: effectiveUser,
+            userFullName: effectiveUser,
             userRole: "UNKNOWN",
             targetType: "AUTH",
-            targetId: cleanUser,
+            targetId: effectiveUser,
             isSuspicious: true,
-            details: `Tài khoản @${cleanUser} bị khóa tạm 15 phút do nhập sai mật khẩu nhiều lần liên tiếp`,
+            details: `Tài khoản @${effectiveUser} bị khóa tạm 15 phút do nhập sai mật khẩu nhiều lần liên tiếp`,
           })
           .catch(() => undefined);
         const remaining = Math.max(remainingLockSeconds(lockedRec, now), 1);

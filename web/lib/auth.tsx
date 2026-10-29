@@ -28,6 +28,7 @@ export interface User {
   uid: string;
   fullName: string;
   username: string;
+  employeeCode?: string;
   roleId: string;
   role: string;
   isRootOwner: boolean;
@@ -404,6 +405,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         uid: matchedUid,
         fullName: String(profileData.fullName || profileData.username || "Nhân viên"),
         username: String(profileData.username || fbUser.email?.split(".")[0] || "user"),
+        employeeCode: profileData.employeeCode || profileData.staffCode ? String(profileData.employeeCode || profileData.staffCode) : undefined,
         roleId: rawRoleId,
         role: rawRoleId,
         isRootOwner: isRoot,

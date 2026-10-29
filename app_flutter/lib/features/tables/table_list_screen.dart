@@ -431,7 +431,7 @@ class _TableListScreenState extends State<TableListScreen> {
                     ],
                   ),
                   Text(
-                    'CH: ${_auth.currentStoreCode} • ${_auth.currentUser?.fullName ?? ""}',
+                    'CH: ${_auth.currentStoreCode} • ${_auth.currentUser?.employeeCode.isNotEmpty == true ? "[${_auth.currentUser!.employeeCode}] " : ""}${_auth.currentUser?.fullName ?? ""}',
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1585,7 +1585,10 @@ class _TableListScreenState extends State<TableListScreen> {
             decoration: const BoxDecoration(
               gradient: AppColors.primaryGradient,
             ),
-            accountName: Text(_auth.currentUser?.fullName ?? 'Chủ Quán', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: Colors.white)),
+            accountName: Text(
+              '${_auth.currentUser?.employeeCode.isNotEmpty == true ? "[${_auth.currentUser!.employeeCode}] " : ""}${_auth.currentUser?.fullName ?? "Chủ Quán"}',
+              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
             accountEmail: Text('Chi nhánh: ${_auth.currentStoreCode} • ${FormatUtils.roleLabel(_auth.currentUser?.roleId ?? '')}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white70)),
             currentAccountPicture: Container(
               padding: const EdgeInsets.all(2),
