@@ -122,6 +122,31 @@ class CartCampaignPricing {
     );
   }
 
+  /// Báo giá khi nhân viên bấm áp dụng / xem chương trình trên giỏ.
+  /// Khung giờ xét theo LÚC BẤM ([nowMs], mặc định giờ hiện tại) — không theo giờ mở bàn hay giờ gọi món:
+  /// nước gọi trước giờ combo, vào khung giờ vẫn áp được. Chương trình ĐÃ áp dụng ([isApplied]) thì bỏ qua
+  /// khung giờ để đơn treo qua hết giờ vẫn giữ giảm (khớp web: recalculateDiscounts).
+  static PriceQuoteModel quoteForApply(
+    CampaignModel campaign, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+    required String branchId,
+    required bool isApplied,
+    int? guestCount,
+    String? customerBirthday,
+    int? nowMs,
+  }) =>
+      quote(
+        campaign,
+        cart: cart,
+        products: products,
+        branchId: branchId,
+        guestCount: guestCount,
+        customerBirthday: customerBirthday,
+        nowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
+        ignoreSchedule: isApplied,
+      );
+
   /// Chương trình "tặng/giảm món theo giá trị đơn" hoặc "Mua X tặng/giảm Y" đủ điều kiện nhưng món thưởng chưa có trong đơn?
   /// Cho phép bấm để tự thêm món thưởng vào đơn.
   static bool needsRewardItems(PriceQuoteModel quote, CampaignModel campaign) {

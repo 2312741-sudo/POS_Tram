@@ -1091,18 +1091,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     return true;
   }
 
-  /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại
+  /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại (khung giờ theo lúc bấm — xem quoteForApply)
   PriceQuoteModel _quoteCampaign(CampaignModel c) {
     final isApplied = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
-    return CartCampaignPricing.quote(
+    return CartCampaignPricing.quoteForApply(
       c,
       cart: _cart,
       products: _products,
       branchId: _fb.currentStoreCode,
       guestCount: _guestCount,
       customerBirthday: _selectedCustomer?.birthday,
-      nowMs: widget.table.openedAt,
-      ignoreSchedule: isApplied,
+      isApplied: isApplied,
     );
   }
 

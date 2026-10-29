@@ -313,6 +313,8 @@ export interface PricingInput {
   nowMs: number;
   lines: PricingLine[];
   manualDiscountMoney?: number;
+  /** Bỏ qua khung giờ — dùng khi tính lại chương trình ĐÃ áp dụng (đơn treo qua hết giờ vẫn giữ giảm), giống Flutter */
+  ignoreSchedule?: boolean;
 }
 
 export interface QuoteReason {
@@ -500,7 +502,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
   };
 
   for (const campaign of activeCampaigns) {
-    if (!isEligibleAt(campaign, input.nowMs)) {
+    if (!input.ignoreSchedule && !isEligibleAt(campaign, input.nowMs)) {
       addReason(campaign, "OUTSIDE_SCHEDULE", "Ngoài thời gian áp dụng");
       continue;
     }
@@ -778,9 +780,9 @@ export function linesFromOrder(
 export function quoteCampaign(
   campaign: Campaign,
   lines: PricingLine[],
-  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null }
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null; ignoreSchedule?: boolean }
 ): PriceQuote {
-  return calculatePrice({ branchId: ctx.branchId, guestCount: ctx.guestCount, nowMs: ctx.nowMs, customerBirthday: ctx.customerBirthday, lines }, [campaign]);
+  return calculatePrice({ branchId: ctx.branchId, guestCount: ctx.guestCount, nowMs: ctx.nowMs, customerBirthday: ctx.customerBirthday, ignoreSchedule: ctx.ignoreSchedule, lines }, [campaign]);
 }
 
 export function quoteReason(quote: PriceQuote, campaign: Campaign): string | undefined {
@@ -837,7 +839,8 @@ export function recalculateDiscounts(
       out.push(d);
       continue;
     }
-    const amt = quoteCampaign(c, lines, ctx).totalPromotionDiscount;
+    // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có trong giỏ
+    const amt = quoteCampaign(c, lines, { ...ctx, ignoreSchedule: true }).totalPromotionDiscount;
     if (amt > 0) out.push({ ...d, amount: amt });
     else dropped.push(d.description);
   }

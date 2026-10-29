@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePrice, isEligibleAt, parseCampaign, listEligibleCampaigns, quoteCampaign, type Campaign, type PricingLine } from "../lib/pricing-engine";
+import { buildAppliedDiscount, calculatePrice, isEligibleAt, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
 const vn = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 7, mi);
@@ -179,5 +179,29 @@ describe("so khớp nhóm món chịu khác biệt dấu / hoa thường / kho�
   });
   it("nhóm khác tên thì không khớp", () => {
     expect(run("TRÀ SỮA")).toBe(0);
+  });
+});
+
+describe("Khung giờ xét theo LÚC BẤM ÁP DỤNG (không theo giờ gọi món / mở bàn)", () => {
+  const ctx = (nowMs: number) => ({ branchId: "TRAM01", nowMs });
+  it("nước gọi lúc 17:50 (ngoài giờ), bấm KM lúc 18:30 (trong giờ) → được giảm", () => {
+    // Pricing không phụ thuộc giờ gọi món: chỉ xét giờ lúc bấm
+    expect(quoteCampaign(combo(), cart, ctx(vn(2026, 10, 22, 18, 30))).totalPromotionDiscount).toBe(10000);
+  });
+  it("bấm KM ngoài khung giờ (17:50) → không áp dụng được", () => {
+    expect(quoteCampaign(combo(), cart, ctx(vn(2026, 10, 22, 17, 50))).totalPromotionDiscount).toBe(0);
+    expect(listEligibleCampaigns([combo()], "TRAM01", vn(2026, 10, 22, 17, 50))).toHaveLength(0);
+  });
+  it("đã áp dụng lúc 19:50, treo đơn tới 20:30 (hết giờ) → vẫn giữ giảm khi tính lại", () => {
+    const applied = [buildAppliedDiscount(combo(), 10000)];
+    const r = recalculateDiscounts(applied, { CAM_HD1: combo() }, cart, ctx(vn(2026, 10, 22, 20, 30)));
+    expect(r.discounts.map((d) => d.amount)).toEqual([10000]);
+    expect(r.dropped).toEqual([]);
+  });
+  it("đã áp dụng nhưng bỏ bớt món (hết nước) → gỡ, dù trong hay ngoài giờ", () => {
+    const applied = [buildAppliedDiscount(combo(), 10000)];
+    const r = recalculateDiscounts(applied, { CAM_HD1: combo() }, [cart[1]], ctx(vn(2026, 10, 22, 20, 30)));
+    expect(r.discounts).toEqual([]);
+    expect(r.dropped).toHaveLength(1);
   });
 });
