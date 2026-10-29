@@ -28,6 +28,7 @@ import {
 import { businessDayStartFor } from "@/lib/business-day";
 import { nowMs } from "@/lib/kitchen";
 import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/product-code";
+import { buildToppingLookup } from "@/lib/topping-split";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
 import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
@@ -43,6 +44,7 @@ const PAGE_SIZE = 20;
 export default function OrdersPage() {
   const { historyData, historyLoaded, tables, stores, currentStoreCode, cancelOrder, deleteOrder, products } = useDashboardData();
   const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
+  const toppingLookup = useMemo(() => buildToppingLookup(products), [products]);
   const { user } = useAuth();
   // Hủy / xóa hóa đơn: chỉ Chủ quán hoặc tài khoản được cấp CANCEL_BILL (Quản lý mặc định KHÔNG có)
   const canCancelBill = hasPermission(user, "CANCEL_BILL");
@@ -191,11 +193,11 @@ export default function OrdersPage() {
   };
 
   const handleExportAll = () => {
-    exportHistory(filtered, codeMap);
+    exportHistory(filtered, codeMap, toppingLookup);
   };
 
   const handleExportSingle = (order: HistoryOrder) => {
-    exportSingleBillExcel(order, codeMap);
+    exportSingleBillExcel(order, codeMap, toppingLookup);
   };
 
   const handlePrint = (order: HistoryOrder) => {

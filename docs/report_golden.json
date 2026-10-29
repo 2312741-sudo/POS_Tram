@@ -1877,12 +1877,12 @@
       {
         "category": "Trà Trái Cây",
         "quantity": 17,
-        "grossRevenue": 496000,
+        "grossRevenue": 465000,
         "itemDiscount": 5000,
-        "netRevenue": 491000,
-        "costPrice": 178500,
-        "grossProfit": 312500,
-        "grossProfitMarginPercent": 63.65
+        "netRevenue": 460000,
+        "costPrice": 169000,
+        "grossProfit": 291000,
+        "grossProfitMarginPercent": 63.26
       },
       {
         "category": "Cà Phê",
@@ -1913,9 +1913,49 @@
         "costPrice": 80000,
         "grossProfit": 125000,
         "grossProfitMarginPercent": 60.98
+      },
+      {
+        "category": "Topping",
+        "quantity": 5,
+        "grossRevenue": 31000,
+        "itemDiscount": 0,
+        "netRevenue": 31000,
+        "costPrice": 9500,
+        "grossProfit": 21500,
+        "grossProfitMarginPercent": 69.35
       }
     ],
     "revenueByProduct": [
+      {
+        "productId": 0,
+        "productCode": "",
+        "productName": "Kem Cheese",
+        "category": "Topping",
+        "unit": "Phần",
+        "basePrice": 8000,
+        "quantity": 2,
+        "grossRevenue": 16000,
+        "itemDiscount": 0,
+        "netRevenue": 16000,
+        "costPrice": 5000,
+        "grossProfit": 11000,
+        "grossProfitMarginPercent": 68.75
+      },
+      {
+        "productId": 0,
+        "productCode": "",
+        "productName": "Trân châu trắng",
+        "category": "Topping",
+        "unit": "Phần",
+        "basePrice": 5000,
+        "quantity": 3,
+        "grossRevenue": 15000,
+        "itemDiscount": 0,
+        "netRevenue": 15000,
+        "costPrice": 4500,
+        "grossProfit": 10500,
+        "grossProfitMarginPercent": 70
+      },
       {
         "productId": 1,
         "productCode": "TRA_CHANH",
@@ -1924,12 +1964,12 @@
         "unit": "Ly",
         "basePrice": 25000,
         "quantity": 9,
-        "grossRevenue": 240000,
+        "grossRevenue": 225000,
         "itemDiscount": 0,
-        "netRevenue": 240000,
-        "costPrice": 85500,
-        "grossProfit": 154500,
-        "grossProfitMarginPercent": 64.38
+        "netRevenue": 225000,
+        "costPrice": 81000,
+        "grossProfit": 144000,
+        "grossProfitMarginPercent": 64
       },
       {
         "productId": 2,
@@ -1939,12 +1979,12 @@
         "unit": "Ly",
         "basePrice": 30000,
         "quantity": 8,
-        "grossRevenue": 256000,
+        "grossRevenue": 240000,
         "itemDiscount": 5000,
-        "netRevenue": 251000,
-        "costPrice": 93000,
-        "grossProfit": 158000,
-        "grossProfitMarginPercent": 62.95
+        "netRevenue": 235000,
+        "costPrice": 88000,
+        "grossProfit": 147000,
+        "grossProfitMarginPercent": 62.55
       },
       {
         "productId": 3,
@@ -1974,7 +2014,7 @@
         "netRevenue": 125000,
         "costPrice": 42500,
         "grossProfit": 82500,
-        "grossProfitMarginPercent": 66.0
+        "grossProfitMarginPercent": 66
       },
       {
         "productId": 5,
@@ -2019,7 +2059,7 @@
         "netRevenue": 60000,
         "costPrice": 24000,
         "grossProfit": 36000,
-        "grossProfitMarginPercent": 60.0
+        "grossProfitMarginPercent": 60
       }
     ],
     "revenueByStaff": {
@@ -2203,7 +2243,7 @@
         "refundTotal": 47000
       },
       "tab3_hangHoa": {
-        "totalItemsSold": 42,
+        "totalItemsSold": 47,
         "products": [
           {
             "productId": 2,
@@ -2213,12 +2253,12 @@
             "unit": "Ly",
             "basePrice": 30000,
             "quantity": 8,
-            "grossRevenue": 256000,
+            "grossRevenue": 240000,
             "itemDiscount": 5000,
-            "netRevenue": 251000,
-            "costPrice": 93000,
-            "grossProfit": 158000,
-            "grossProfitMarginPercent": 62.95
+            "netRevenue": 235000,
+            "costPrice": 88000,
+            "grossProfit": 147000,
+            "grossProfitMarginPercent": 62.55
           },
           {
             "productId": 1,
@@ -2228,12 +2268,12 @@
             "unit": "Ly",
             "basePrice": 25000,
             "quantity": 9,
-            "grossRevenue": 240000,
+            "grossRevenue": 225000,
             "itemDiscount": 0,
-            "netRevenue": 240000,
-            "costPrice": 85500,
-            "grossProfit": 154500,
-            "grossProfitMarginPercent": 64.38
+            "netRevenue": 225000,
+            "costPrice": 81000,
+            "grossProfit": 144000,
+            "grossProfitMarginPercent": 64
           },
           {
             "productId": 5,
@@ -2278,7 +2318,7 @@
             "netRevenue": 125000,
             "costPrice": 42500,
             "grossProfit": 82500,
-            "grossProfitMarginPercent": 66.0
+            "grossProfitMarginPercent": 66
           },
           {
             "productId": 6,
@@ -2308,7 +2348,37 @@
             "netRevenue": 60000,
             "costPrice": 24000,
             "grossProfit": 36000,
-            "grossProfitMarginPercent": 60.0
+            "grossProfitMarginPercent": 60
+          },
+          {
+            "productId": 0,
+            "productCode": "",
+            "productName": "Kem Cheese",
+            "category": "Topping",
+            "unit": "Phần",
+            "basePrice": 8000,
+            "quantity": 2,
+            "grossRevenue": 16000,
+            "itemDiscount": 0,
+            "netRevenue": 16000,
+            "costPrice": 5000,
+            "grossProfit": 11000,
+            "grossProfitMarginPercent": 68.75
+          },
+          {
+            "productId": 0,
+            "productCode": "",
+            "productName": "Trân châu trắng",
+            "category": "Topping",
+            "unit": "Phần",
+            "basePrice": 5000,
+            "quantity": 3,
+            "grossRevenue": 15000,
+            "itemDiscount": 0,
+            "netRevenue": 15000,
+            "costPrice": 4500,
+            "grossProfit": 10500,
+            "grossProfitMarginPercent": 70
           }
         ]
       },

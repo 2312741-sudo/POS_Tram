@@ -8,6 +8,7 @@ import '../../core/reports/bill_report_rows.dart';
 import '../../core/reports/report_calculator.dart';
 import '../../core/utils/share_utils.dart';
 import 'firebase_service.dart';
+import '../../core/reports/topping_split.dart';
 
 class ExportService {
   static String sanitizeFileName(String input) {
@@ -119,21 +120,26 @@ class ExportService {
             final orderTime = item.orderedAt != null
                 ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(item.orderedAt!))
                 : DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(b.createdAt));
-            itemSheet.appendRow([
-              TextCellValue(b.billCode),
-              TextCellValue(b.tableName),
-              TextCellValue(ReportCalculator.resolveProductCode(item.productId, item.name, productsMap)),
-              TextCellValue(item.name),
-              TextCellValue(item.optionsSummary),
-              TextCellValue(item.note),
-              DoubleCellValue(item.quantity.toDouble()),
-              DoubleCellValue(item.unitPrice.toDouble()),
-              DoubleCellValue(item.lineDiscountTotal.toDouble()),
-              DoubleCellValue(item.itemTotal.toDouble()),
-              TextCellValue(item.orderedByName.isNotEmpty ? item.orderedByName : b.orderStaffSummary),
-              TextCellValue(b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername),
-              TextCellValue(orderTime),
-            ]);
+            // Topping tách thành dòng riêng (số lượng + tiền riêng)
+            for (final part in splitLineParts(item, mainKey: item.name, mainUnitCost: 0, productsMap: productsMap)) {
+              itemSheet.appendRow([
+                TextCellValue(b.billCode),
+                TextCellValue(b.tableName),
+                TextCellValue(part.isTopping ? part.code : ReportCalculator.resolveProductCode(item.productId, item.name, productsMap)),
+                TextCellValue(part.isTopping ? '+ ${part.name}' : item.name),
+                TextCellValue(part.isTopping
+                    ? 'Topping (kèm ${part.parentName})'
+                    : [item.selectedSize, item.selectedSugar, item.selectedIce].where((x) => x.trim().isNotEmpty).join(' • ')),
+                TextCellValue(part.isTopping ? '' : item.note),
+                DoubleCellValue(part.quantity.toDouble()),
+                DoubleCellValue(part.quantity > 0 ? (part.grossRevenue / part.quantity).roundToDouble() : 0),
+                DoubleCellValue(part.itemDiscount.toDouble()),
+                DoubleCellValue((part.grossRevenue - part.itemDiscount).toDouble()),
+                TextCellValue(item.orderedByName.isNotEmpty ? item.orderedByName : b.orderStaffSummary),
+                TextCellValue(b.staffFullName.isNotEmpty ? b.staffFullName : b.staffUsername),
+                TextCellValue(orderTime),
+              ]);
+            }
           }
         }
 

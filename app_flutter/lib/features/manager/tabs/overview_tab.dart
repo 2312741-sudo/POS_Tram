@@ -15,6 +15,7 @@ import '../../cash_shift/cash_shift_dialog.dart';
 import '../../reports/reports_hub_screen.dart';
 import '../../../core/domain/business_day.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../core/reports/topping_split.dart';
 
 class OverviewTab extends StatefulWidget {
   final VoidCallback onGoToPOS;
@@ -160,7 +161,10 @@ class _OverviewTabState extends State<OverviewTab> {
     final map = <String, int>{};
     for (final b in _todayPaidBills) {
       for (final item in b.items) {
-        map[item.name] = (map[item.name] ?? 0) + item.quantity;
+        // Topping đếm riêng, không gộp vào món gốc
+        for (final part in splitLineParts(item, mainKey: item.name, mainUnitCost: 0)) {
+          map[part.name] = (map[part.name] ?? 0) + part.quantity;
+        }
       }
     }
     final sorted = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));

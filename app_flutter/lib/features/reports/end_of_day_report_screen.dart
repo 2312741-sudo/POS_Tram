@@ -20,6 +20,7 @@ import 'reports_hub_screen.dart';
 import '../../core/utils/share_utils.dart';
 import '../../core/domain/business_day.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../core/reports/topping_split.dart';
 
 class EndOfDayReportScreen extends StatefulWidget {
   const EndOfDayReportScreen({super.key});
@@ -435,24 +436,24 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           continue;
         }
 
-        final key = item.name.trim();
-        if (!productMap.containsKey(key)) {
-          productMap[key] = {
-            'name': key,
-            'code': _codeOf(item.productId, key),
-            'productId': item.productId,
-            'quantity': 0,
-            'revenue': 0,
-            'unitPrice': item.unitPrice,
-            'category': 'Đồ uống & Món ăn',
-            'staffSales': <String, int>{},
-          };
+        // Topping tách thành dòng riêng (số bán + doanh thu), không gộp vào món gốc
+        for (final part in splitLineParts(item, mainKey: item.name.trim(), mainUnitCost: 0, productsMap: _productsMap)) {
+          final key = part.isTopping ? part.key : item.name.trim();
+          final entry = productMap.putIfAbsent(key, () => {
+                'name': part.isTopping ? part.name : key,
+                'code': part.isTopping ? part.code : _codeOf(item.productId, key),
+                'productId': part.isTopping ? part.productId : item.productId,
+                'quantity': 0,
+                'revenue': 0,
+                'unitPrice': part.quantity > 0 ? (part.grossRevenue / part.quantity).round() : 0,
+                'category': part.isTopping ? 'Topping' : 'Đồ uống & Món ăn',
+                'staffSales': <String, int>{},
+              });
+          entry['quantity'] = (entry['quantity'] as int) + part.quantity;
+          entry['revenue'] = (entry['revenue'] as int) + (part.grossRevenue - part.itemDiscount);
+          final staffMap = entry['staffSales'] as Map<String, int>;
+          staffMap[itemStaff] = (staffMap[itemStaff] ?? 0) + part.quantity;
         }
-        productMap[key]!['quantity'] = (productMap[key]!['quantity'] as int) + item.quantity;
-        productMap[key]!['revenue'] = (productMap[key]!['revenue'] as int) + item.itemTotal;
-
-        final staffMap = productMap[key]!['staffSales'] as Map<String, int>;
-        staffMap[itemStaff] = (staffMap[itemStaff] ?? 0) + item.quantity;
       }
     }
 
@@ -904,18 +905,19 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               staffMap[itemStaff] = {};
             }
             final pMap = staffMap[itemStaff]!;
-            final key = item.name.trim();
-            if (!pMap.containsKey(key)) {
-              pMap[key] = {
-                'name': key,
-                'code': _codeOf(item.productId, key),
-                'unitPrice': item.unitPrice,
-                'quantity': 0,
-                'revenue': 0,
-              };
+            // Topping tách thành dòng riêng
+            for (final part in splitLineParts(item, mainKey: item.name.trim(), mainUnitCost: 0, productsMap: _productsMap)) {
+              final key = part.isTopping ? part.key : item.name.trim();
+              final e = pMap.putIfAbsent(key, () => {
+                    'name': part.isTopping ? '${part.name} (topping)' : key,
+                    'code': part.isTopping ? part.code : _codeOf(item.productId, key),
+                    'unitPrice': part.quantity > 0 ? (part.grossRevenue / part.quantity).round() : 0,
+                    'quantity': 0,
+                    'revenue': 0,
+                  });
+              e['quantity'] = (e['quantity'] as int) + part.quantity;
+              e['revenue'] = (e['revenue'] as int) + (part.grossRevenue - part.itemDiscount);
             }
-            pMap[key]!['quantity'] = (pMap[key]!['quantity'] as int) + item.quantity;
-            pMap[key]!['revenue'] = (pMap[key]!['revenue'] as int) + item.itemTotal;
           }
         }
 

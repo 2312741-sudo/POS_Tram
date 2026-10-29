@@ -1,3 +1,4 @@
+import { buildToppingLookup, splitLineParts } from "./topping-split";
 import { resolveProductCode } from "./product-code";
 import { businessDateOf, businessDayStartFor } from "./business-day";
 /**
@@ -958,43 +959,28 @@ export function calculateCategoryReport(
     costPrice: number;
   }>();
 
+  const lookupTopping = productsMap ? buildToppingLookup(Object.values(productsMap) as (ProductLookup & { name?: string })[]) : undefined;
+
   for (const b of paidBills) {
     const items = extractBillItems(b);
     for (const it of items) {
-      let category = (it.category || "").trim();
-      if (!category && productsMap) {
-        const prod = productsMap[it.productId || it.name];
-        if (prod) category = (prod.category || "").trim();
+      for (const part of splitLineParts(it, lookupTopping)) {
+        let category = part.category.trim();
+        if (!part.isTopping && !category && productsMap) {
+          const prod = productsMap[it.productId || it.name];
+          if (prod) category = (prod.category || "").trim();
+        }
+        if (!category) category = "Khác";
+
+        if (!catMap.has(category)) {
+          catMap.set(category, { category, quantity: 0, grossRevenue: 0, itemDiscount: 0, costPrice: 0 });
+        }
+        const entry = catMap.get(category)!;
+        entry.quantity += part.quantity;
+        entry.grossRevenue += part.grossRevenue;
+        entry.itemDiscount += part.itemDiscount;
+        entry.costPrice += part.costPrice;
       }
-      if (!category) category = "Khác";
-
-      if (!catMap.has(category)) {
-        catMap.set(category, {
-          category,
-          quantity: 0,
-          grossRevenue: 0,
-          itemDiscount: 0,
-          costPrice: 0,
-        });
-      }
-
-      const entry = catMap.get(category)!;
-      const qty = Number(it.quantity || 1);
-      const lineGross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : (Number(it.price || 0) * qty);
-      const itemDisc = itemLineDiscount(it);
-
-      let lineCost = 0;
-      if (it.lineCostPrice != null) {
-        lineCost = Number(it.lineCostPrice);
-      } else {
-        const unitC = Number(it.unitCost != null ? it.unitCost : (it.costPrice || 0));
-        lineCost = unitC * qty;
-      }
-
-      entry.quantity += qty;
-      entry.grossRevenue += lineGross;
-      entry.itemDiscount += itemDisc;
-      entry.costPrice += lineCost;
     }
   }
 
@@ -1051,60 +1037,66 @@ export function calculateProductReport(
     costPrice: number;
   }>();
 
+  // Topping tách thành dòng riêng (số bán + doanh thu), không cộng vào món gốc
+  const lookupTopping = productsMap ? buildToppingLookup(Object.values(productsMap) as (ProductLookup & { name?: string })[]) : undefined;
+
   for (const b of paidBills) {
     const items = extractBillItems(b);
     for (const it of items) {
-      const pId = it.productId != null ? it.productId : (it.name || "0");
-      const key = String(pId);
+      for (const part of splitLineParts(it, lookupTopping)) {
+        let key: string;
+        let pId: number | string;
+        let pCode: string;
+        let basePrice: number;
+        let unit: string;
+        let category: string;
+        if (part.isTopping) {
+          key = part.key;
+          pId = part.productId ?? 0;
+          pCode = part.code;
+          basePrice = part.quantity > 0 ? Math.round(part.grossRevenue / part.quantity) : 0;
+          unit = part.unit;
+          category = part.category;
+        } else {
+          pId = it.productId != null ? it.productId : (it.name || "0");
+          key = String(pId);
+          pCode = resolveProductCode({ productId: it.productId, name: it.name, productCode: it.productCode, code: it.code }, productsMap);
+          basePrice = Number(it.price || 0);
+          unit = it.unit || "Ly";
+          category = it.category || "Khác";
+          if (productsMap && productsMap[pId]) {
+            const pDef = productsMap[pId];
+            if (!basePrice) basePrice = Number(pDef.price || 0);
+            if (!unit && pDef.unit) unit = pDef.unit;
+            if ((!category || category === "Khác") && pDef.category) category = pDef.category;
+          }
+        }
 
-      const pCode = resolveProductCode({ productId: it.productId, name: it.name, productCode: it.productCode, code: it.code }, productsMap);
-      let basePrice = Number(it.price || 0);
-      let unit = it.unit || "Ly";
-      let category = it.category || "Khác";
+        if (!prodMap.has(key)) {
+          prodMap.set(key, {
+            productId: pId,
+            productCode: pCode,
+            productName: part.name,
+            category,
+            unit,
+            basePrice,
+            quantity: 0,
+            grossRevenue: 0,
+            itemDiscount: 0,
+            costPrice: 0,
+          });
+        }
 
-      if (productsMap && productsMap[pId]) {
-        const pDef = productsMap[pId];
-        if (!basePrice) basePrice = Number(pDef.price || 0);
-        if (!unit && pDef.unit) unit = pDef.unit;
-        if ((!category || category === "Khác") && pDef.category) category = pDef.category;
+        const entry = prodMap.get(key)!;
+        if (!entry.productCode && pCode) entry.productCode = pCode;
+        if (!entry.basePrice && basePrice) entry.basePrice = basePrice;
+        if ((!entry.category || entry.category === "Khác") && category) entry.category = category;
+
+        entry.quantity += part.quantity;
+        entry.grossRevenue += part.grossRevenue;
+        entry.itemDiscount += part.itemDiscount;
+        entry.costPrice += part.costPrice;
       }
-
-      if (!prodMap.has(key)) {
-        prodMap.set(key, {
-          productId: pId,
-          productCode: pCode,
-          productName: it.name,
-          category,
-          unit,
-          basePrice,
-          quantity: 0,
-          grossRevenue: 0,
-          itemDiscount: 0,
-          costPrice: 0,
-        });
-      }
-
-      const entry = prodMap.get(key)!;
-      if (!entry.productCode && pCode) entry.productCode = pCode;
-      if (!entry.basePrice && basePrice) entry.basePrice = basePrice;
-      if ((!entry.category || entry.category === "Khác") && category) entry.category = category;
-
-      const qty = Number(it.quantity || 1);
-      const lineGross = it.lineGrossAmount != null ? Number(it.lineGrossAmount) : (basePrice * qty);
-      const itemDisc = itemLineDiscount(it);
-
-      let lineCost = 0;
-      if (it.lineCostPrice != null) {
-        lineCost = Number(it.lineCostPrice);
-      } else {
-        const unitC = Number(it.unitCost != null ? it.unitCost : (it.costPrice || 0));
-        lineCost = unitC * qty;
-      }
-
-      entry.quantity += qty;
-      entry.grossRevenue += lineGross;
-      entry.itemDiscount += itemDisc;
-      entry.costPrice += lineCost;
     }
   }
 

@@ -7,7 +7,9 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/bill_model.dart';
 import '../../data/models/product_model.dart';
+import '../../data/models/order_item_model.dart';
 import 'report_calculator.dart';
+import 'topping_split.dart';
 
 class BillReportRows {
   static String statusLabel(String status) {
@@ -90,21 +92,28 @@ class BillReportRows {
     'Thành tiền',
   ];
 
-  static List<List<dynamic>> itemRows(BillModel b, {Map<int, ProductModel>? productsMap}) => b.items
-      .map((i) => <dynamic>[
-            b.billCode,
-            statusLabel(b.status),
-            b.tableName,
-            ReportCalculator.resolveProductCode(i.productId, i.name, productsMap),
-            i.name,
-            i.optionsSummary,
-            i.quantity,
-            i.unitPrice,
-            i.lineGross,
-            i.lineDiscountTotal,
-            i.itemTotal,
-          ])
-      .toList();
+  /// Mỗi món một dòng; topping tách thành dòng riêng ngay dưới món gốc (số lượng + tiền riêng).
+  static List<List<dynamic>> itemRows(BillModel b, {Map<int, ProductModel>? productsMap}) => [
+        for (final i in b.items)
+          for (final part in splitLineParts(i, mainKey: i.name, mainUnitCost: 0, productsMap: productsMap))
+            <dynamic>[
+              b.billCode,
+              statusLabel(b.status),
+              b.tableName,
+              part.isTopping ? part.code : ReportCalculator.resolveProductCode(i.productId, i.name, productsMap),
+              part.isTopping ? '+ ${part.name}' : i.name,
+              part.isTopping ? 'Topping (kèm ${part.parentName})' : _optionsWithoutToppings(i),
+              part.quantity,
+              part.quantity > 0 ? (part.grossRevenue / part.quantity).round() : 0,
+              part.grossRevenue,
+              part.itemDiscount,
+              part.grossRevenue - part.itemDiscount,
+            ],
+      ];
+
+  /// Size / đường / đá (topping đã có dòng riêng)
+  static String _optionsWithoutToppings(OrderItemModel i) =>
+      [i.selectedSize, i.selectedSugar, i.selectedIce].where((x) => x.trim().isNotEmpty).join(' • ');
 
   static const List<String> deletedHeaders = [
     'Mã HĐ',

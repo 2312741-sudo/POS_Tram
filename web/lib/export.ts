@@ -32,7 +32,7 @@ import {
   billPointsDiscount,
   billPointsUsed,
 } from "./reports";
-import { lineUnitPrice, type RawOrderLine } from "./order-math";
+import { splitLineParts, type ToppingLookup } from "./topping-split";
 import { billDeletedItems, type DeletionReport } from "./item-deletion";
 import type { CampaignReport } from "./promotion-report";
 
@@ -1250,7 +1250,7 @@ export function exportRevenue(
   downloadWorkbook(wb, `${title}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }
 
-export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap) {
+export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap, lookupTopping?: (name: string) => ToppingLookup | undefined) {
   if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
 
@@ -1308,36 +1308,35 @@ export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap
         const orderTime = it.orderedAt
           ? format(new Date(typeof it.orderedAt === "number" ? it.orderedAt : new Date(it.orderedAt).getTime()), "dd/MM/yyyy HH:mm", { locale: vi })
           : billClosedTime;
-        const unitPrice = lineUnitPrice(it as unknown as RawOrderLine);
-        const qty = Number(it.quantity) || 1;
-        const lineDiscount = itemLineDiscount(it);
-        const total = Math.max(0, unitPrice * qty - lineDiscount);
-
-        itemRows.push({
-          "Mã HĐ": billCode,
-          "Mã đặt món": orderCode,
-          "Bàn": tableName,
-          "Trạng thái": statusText,
-          "Mã món": resolveProductCode(it as unknown as CodeLine, productsMap),
-          "Tên món": it.name || "",
-          "Tùy chọn (Size/Đường/Đá)": it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn"),
-          "Ghi chú": it.note || "",
-          "Số lượng": qty,
-          "Đơn giá (VNĐ)": unitPrice,
-          "Giảm giá món (VNĐ)": lineDiscount,
-          "Thành tiền (VNĐ)": total,
-          "Người nhận order món": it.orderedByName || item.orderStaff || "—",
-          "Thời gian gọi món": orderTime,
-          "Người thanh toán HĐ": cashier,
-          "Thời gian thanh toán": billClosedTime,
-        });
+        // Topping tách thành dòng riêng (số lượng + tiền riêng, không gộp vào món gốc)
+        for (const part of splitLineParts(it, lookupTopping)) {
+          itemRows.push({
+            "Mã HĐ": billCode,
+            "Mã đặt món": orderCode,
+            "Bàn": tableName,
+            "Trạng thái": statusText,
+            "Mã món": part.isTopping ? part.code : resolveProductCode(it as unknown as CodeLine, productsMap),
+            "Tên món": part.name,
+            "Loại": part.isTopping ? `Topping (kèm ${part.parentName})` : "Món",
+            "Tùy chọn (Size/Đường/Đá)": part.isTopping ? "" : (it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn")),
+            "Ghi chú": part.isTopping ? "" : it.note || "",
+            "Số lượng": part.quantity,
+            "Đơn giá (VNĐ)": part.quantity > 0 ? Math.round(part.grossRevenue / part.quantity) : 0,
+            "Giảm giá món (VNĐ)": part.itemDiscount,
+            "Thành tiền (VNĐ)": Math.max(0, part.grossRevenue - part.itemDiscount),
+            "Người nhận order món": it.orderedByName || item.orderStaff || "—",
+            "Thời gian gọi món": orderTime,
+            "Người thanh toán HĐ": cashier,
+            "Thời gian thanh toán": billClosedTime,
+          });
+        }
       });
     }
   });
   if (itemRows.length > 0) {
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
     wsItems["!cols"] = [
-      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 25 }, { wch: 20 },
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 24 }, { wch: 25 }, { wch: 20 },
       { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
     ];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món & Người nhận");
@@ -1407,7 +1406,7 @@ export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap
   downloadWorkbook(wb, `LichSu_HoaDon_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
 }
 
-export function exportSingleBillExcel(order: HistoryOrder, productsMap?: ProductCodeMap) {
+export function exportSingleBillExcel(order: HistoryOrder, productsMap?: ProductCodeMap, lookupTopping?: (name: string) => ToppingLookup | undefined) {
   if (!guardExport("EXPORT_REPORTS")) return;
   const wb = XLSX.utils.book_new();
   const billCode = order.billCode || order.orderCode || order.id?.slice(0, 8) || "HD";
@@ -1438,23 +1437,26 @@ export function exportSingleBillExcel(order: HistoryOrder, productsMap?: Product
 
   // 2. Items Sheet
   if (Array.isArray(order.items) && order.items.length > 0) {
-    const itemRows = order.items.map((it: OrderItem, idx: number) => {
-      const unitPrice = Number(it.price) || 0;
-      const qty = Number(it.quantity) || 1;
-      return {
-        "STT": idx + 1,
-        "Mã món": resolveProductCode(it as unknown as CodeLine, productsMap),
-        "Tên món": it.name || "",
-        "Tùy chọn": it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn"),
-        "Ghi chú": it.note || "",
-        "Số lượng": qty,
-        "Đơn giá (VNĐ)": unitPrice,
-        "Thành tiền (VNĐ)": unitPrice * qty,
-        "Người nhận order món": it.orderedByName || order.orderStaff || "—",
-      };
+    // Topping tách thành dòng riêng; đơn giá món gốc gồm size, topping có giá riêng
+    const itemRows: Array<Record<string, unknown>> = [];
+    order.items.forEach((it: OrderItem) => {
+      for (const part of splitLineParts(it, lookupTopping)) {
+        itemRows.push({
+          "STT": itemRows.length + 1,
+          "Mã món": part.isTopping ? part.code : resolveProductCode(it as unknown as CodeLine, productsMap),
+          "Tên món": part.isTopping ? `   + ${part.name}` : part.name,
+          "Tùy chọn": part.isTopping ? `Topping (kèm ${part.parentName})` : (it.optionsSummary || (it.selectedSize ? `Size ${it.selectedSize}` : "Chuẩn")),
+          "Ghi chú": part.isTopping ? "" : it.note || "",
+          "Số lượng": part.quantity,
+          "Đơn giá (VNĐ)": part.quantity > 0 ? Math.round(part.grossRevenue / part.quantity) : 0,
+          "Thành tiền (VNĐ)": part.grossRevenue,
+          "Giảm giá (VNĐ)": part.itemDiscount,
+          "Người nhận order món": it.orderedByName || order.orderStaff || "—",
+        });
+      }
     });
     const wsItems = XLSX.utils.json_to_sheet(itemRows);
-    wsItems["!cols"] = [{ wch: 6 }, { wch: 14 }, { wch: 28 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
+    wsItems["!cols"] = [{ wch: 6 }, { wch: 14 }, { wch: 28 }, { wch: 26 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 22 }];
     XLSX.utils.book_append_sheet(wb, wsItems, "Chi tiết Món");
   }
 

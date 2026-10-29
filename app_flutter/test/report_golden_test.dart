@@ -404,7 +404,8 @@ void main() {
       expect(gp.totalCostPrice, equals(expOverview['totalCostPrice']));
       expect(gp.grossProfit, equals(expOverview['grossProfit']));
       expect(gp.grossProfitMarginPercent, equals(expOverview['grossProfitMarginPercent']));
-      expect(gp.items.length, equals(7));
+      // 7 món + 2 topping (topping tách dòng riêng)
+      expect(gp.items.length, equals(9));
     });
 
     test('12. Báo cáo Doanh thu theo kỳ (Period Revenue)', () {

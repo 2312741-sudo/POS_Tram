@@ -9,6 +9,7 @@ import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../../../core/domain/business_day.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../../../core/reports/topping_split.dart';
 
 class AnalyticsTab extends StatefulWidget {
   const AnalyticsTab({super.key});
@@ -149,12 +150,13 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     final Map<String, Map<String, dynamic>> map = {};
     for (final b in _filteredBills) {
       for (final item in b.items) {
-        final key = item.name;
-        if (!map.containsKey(key)) {
-          map[key] = {'name': item.name, 'qty': 0, 'revenue': 0};
+        // Topping đếm riêng (số bán + doanh thu), không gộp vào món gốc
+        for (final part in splitLineParts(item, mainKey: item.name, mainUnitCost: 0)) {
+          final key = part.isTopping ? part.key : item.name;
+          final e = map.putIfAbsent(key, () => {'name': part.name, 'qty': 0, 'revenue': 0});
+          e['qty'] = (e['qty'] as int) + part.quantity;
+          e['revenue'] = (e['revenue'] as int) + (part.grossRevenue - part.itemDiscount);
         }
-        map[key]!['qty'] = (map[key]!['qty'] as int) + item.quantity;
-        map[key]!['revenue'] = (map[key]!['revenue'] as int) + item.itemTotal;
       }
     }
     final list = map.values.toList();

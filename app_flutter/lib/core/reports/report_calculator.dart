@@ -2,6 +2,7 @@
 // Không import Flutter framework, phục vụ kiểm thử và tính toán độc lập
 
 import '../../data/models/bill_model.dart';
+import 'topping_split.dart';
 import '../domain/deleted_items.dart';
 import '../../data/models/order_item_model.dart';
 import '../../data/models/product_model.dart';
@@ -204,6 +205,22 @@ class ReportCalculator {
     }
     return '';
   }
+
+  /// Món gốc + từng topping của một dòng (xem topping_split.dart)
+  static List<LinePart> _lineParts(
+    OrderItemModel it,
+    ProductModel? p,
+    Map<int, ProductModel>? productsMap,
+    Map<String, int>? toppingCosts, {
+    required String mainKey,
+  }) =>
+      splitLineParts(
+        it,
+        mainKey: mainKey,
+        mainUnitCost: p?.costPrice ?? 0,
+        productsMap: productsMap,
+        toppingCostOf: (name) => toppingCosts?[name] ?? defaultToppingCosts[name],
+      );
 
   /// Tính giá vốn của 1 dòng món (Line Cost Price)
   static int getLineCostPrice(
@@ -497,17 +514,16 @@ class ReportCalculator {
     for (final b in paidBills) {
       for (final it in b.items) {
         final p = findProduct(it, productsMap);
-        final cat = (p != null && p.category.isNotEmpty) ? p.category : 'Khác';
-        accMap.putIfAbsent(cat, () => _CatAccumulator(category: cat));
-
-        final acc = accMap[cat]!;
-        final lineCost = getLineCostPrice(it, productsMap: productsMap, toppingCosts: toppingCosts);
-        final lineGross = it.unitPrice * it.quantity;
-
-        acc.quantity += it.quantity;
-        acc.grossRevenue += lineGross;
-        acc.itemDiscount += it.lineDiscountTotal;
-        acc.costPrice += lineCost;
+        final mainCat = (p != null && p.category.isNotEmpty) ? p.category : 'Khác';
+        // Topping tách riêng (nhóm "Topping" hoặc nhóm của món topping), không cộng vào nhóm món gốc
+        for (final part in _lineParts(it, p, productsMap, toppingCosts, mainKey: mainCat)) {
+          final cat = part.isTopping ? part.category : mainCat;
+          final acc = accMap.putIfAbsent(cat, () => _CatAccumulator(category: cat));
+          acc.quantity += part.quantity;
+          acc.grossRevenue += part.grossRevenue;
+          acc.itemDiscount += part.itemDiscount;
+          acc.costPrice += part.costPrice;
+        }
       }
     }
 
@@ -527,8 +543,11 @@ class ReportCalculator {
       );
     }).toList();
 
-    // Sắp xếp theo số lượng bán giảm dần
-    list.sort((a, b) => b.quantity.compareTo(a.quantity));
+    // Sắp xếp theo số lượng bán giảm dần (bằng nhau thì theo tên nhóm để thứ tự cố định)
+    list.sort((a, b) {
+      final c = b.quantity.compareTo(a.quantity);
+      return c != 0 ? c : a.category.compareTo(b.category);
+    });
     return list;
   }
 
@@ -565,14 +584,23 @@ class ReportCalculator {
           basePrice: basePrice,
         ));
 
-        final acc = accMap[accKey]!;
-        final lineCost = getLineCostPrice(it, productsMap: productsMap, toppingCosts: toppingCosts);
-        final lineGross = it.unitPrice * it.quantity;
-
-        acc.quantity += it.quantity;
-        acc.grossRevenue += lineGross;
-        acc.itemDiscount += it.lineDiscountTotal;
-        acc.costPrice += lineCost;
+        // Topping tách thành dòng riêng (số bán + doanh thu), không cộng vào món gốc
+        for (final part in _lineParts(it, p, productsMap, toppingCosts, mainKey: accKey)) {
+          final acc = part.isTopping
+              ? accMap.putIfAbsent(part.key, () => _ProdAccumulator(
+                    productId: part.productId,
+                    productCode: part.code,
+                    productName: part.name,
+                    category: part.category,
+                    unit: part.unit,
+                    basePrice: part.quantity > 0 ? (part.grossRevenue / part.quantity).round() : 0,
+                  ))
+              : accMap[accKey]!;
+          acc.quantity += part.quantity;
+          acc.grossRevenue += part.grossRevenue;
+          acc.itemDiscount += part.itemDiscount;
+          acc.costPrice += part.costPrice;
+        }
       }
     }
 

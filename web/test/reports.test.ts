@@ -35,6 +35,10 @@ goldenData.catalogue.products.forEach((p: ProductItem) => {
   productsMap[p.productId || String(p.id)] = p;
   productsMap[p.name] = p;
 });
+// Danh mục topping (giá vốn) — topping được tách thành dòng riêng trong báo cáo hàng hóa
+goldenData.catalogue.toppings.forEach((t: { name: string; costPrice: number }) => {
+  productsMap[t.name] = { name: t.name, costPrice: t.costPrice, isTopping: true } as unknown as ProductItem;
+});
 
 describe("POS Trạm - Core Reports Pure Functions vs docs/report_golden.json", () => {
   it("Báo cáo 1: Tổng quan quản trị (Executive Overview) khớp từng con số", () => {
@@ -103,7 +107,7 @@ describe("POS Trạm - Core Reports Pure Functions vs docs/report_golden.json", 
 
     expect(products.length).toBe(expected.length);
     expected.forEach((exp: ProductReportItem) => {
-      const match = products.find((p) => p.productId === exp.productId);
+      const match = products.find((p) => p.productId === exp.productId && p.productName === exp.productName);
       expect(match).toBeDefined();
       expect(match!.productCode).toBe(exp.productCode);
       expect(match!.productName).toBe(exp.productName);
@@ -248,7 +252,8 @@ describe("POS Trạm - Core Reports Pure Functions vs docs/report_golden.json", 
 
   it("Báo cáo 11: Lợi nhuận gộp & Giá vốn (Gross Profit & COGS) khớp tổng thể", () => {
     const gpReport = calculateGrossProfitReport(goldenData.bills, productsMap);
-    expect(gpReport.summary.totalQuantity).toBe(42);
+    // 42 phần món + 5 phần topping (topping tách dòng riêng)
+    expect(gpReport.summary.totalQuantity).toBe(47);
     expect(gpReport.summary.netRevenue).toBe(1162000);
     expect(gpReport.summary.totalCOGS).toBe(426000);
     expect(gpReport.summary.grossProfit).toBe(736000);

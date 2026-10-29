@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -29,6 +30,7 @@ interface StatCard {
 import { businessDayStartFor } from "@/lib/business-day";
 import { nowMs } from "@/lib/kitchen";
 import { useDashboardData } from "@/lib/data-context";
+import { buildToppingLookup, splitLineParts } from "@/lib/topping-split";
 import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
 
 // Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render
@@ -61,7 +63,8 @@ const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
 };
 
 export default function DashboardPage() {
-  const { historyData, tables: tablesData, onlineOrders, loading: ctxLoading, currentStoreCode } = useDashboardData();
+  const { historyData, tables: tablesData, onlineOrders, loading: ctxLoading, currentStoreCode, products } = useDashboardData();
+  const toppingLookup = useMemo(() => buildToppingLookup(products), [products]);
   const loading = ctxLoading && tablesData.length === 0;
 
   // Ngày kinh doanh: "hôm nay" bắt đầu từ giờ bắt đầu ngày của cửa hàng (Cài đặt cửa hàng)
@@ -111,12 +114,15 @@ export default function DashboardPage() {
   historyData.forEach((order) => {
     if (order.items && Array.isArray(order.items)) {
       order.items.forEach((item) => {
-        const key = String(item.productId || item.name);
-        if (!productCountMap[key]) {
-          productCountMap[key] = { name: item.name, count: 0, total: 0 };
+        // Topping đếm riêng, không cộng vào món gốc
+        for (const part of splitLineParts(item, toppingLookup)) {
+          const key = part.isTopping ? part.key : String(item.productId || item.name);
+          if (!productCountMap[key]) {
+            productCountMap[key] = { name: part.name, count: 0, total: 0 };
+          }
+          productCountMap[key].count += part.quantity;
+          productCountMap[key].total += part.grossRevenue;
         }
-        productCountMap[key].count += item.quantity || 1;
-        productCountMap[key].total += (item.price || 0) * (item.quantity || 1);
       });
     }
   });
