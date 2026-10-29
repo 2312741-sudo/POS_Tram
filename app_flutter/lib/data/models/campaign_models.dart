@@ -441,6 +441,21 @@ class CampaignSchedule {
     );
   }
   
+  /// Mô tả ngắn lịch áp dụng để hiển thị lý do "ngoài thời gian": khung giờ, thứ trong tuần, hạn
+  String summary() {
+    const dayNames = {1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN'};
+    final parts = <String>[];
+    if (timeSlots.isNotEmpty) parts.add(timeSlots.map((s) => '${s.startTime}–${s.endTime}').join(', '));
+    if (daysOfWeek.isNotEmpty) parts.add((List<int>.from(daysOfWeek)..sort()).map((d) => dayNames[d] ?? '$d').join(', '));
+    String ymd(int ms) {
+      final d = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).add(const Duration(hours: 7));
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    }
+    if (absoluteStart != null) parts.add('từ ${ymd(absoluteStart!)}');
+    if (absoluteEnd != null) parts.add('đến ${ymd(absoluteEnd!)}');
+    return parts.isEmpty ? 'theo lịch chương trình' : parts.join(' • ');
+  }
+
   CampaignSchedule copyWith({
     int? absoluteStart,
     int? absoluteEnd,

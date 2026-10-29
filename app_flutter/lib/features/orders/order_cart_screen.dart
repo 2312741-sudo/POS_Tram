@@ -3773,7 +3773,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Text('Chương trình khuyến mãi khả dụng:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     if (!_allPromotions.any((p) => p.isActive && p.code.isEmpty) &&
-                        !_campaigns.any((c) => !c.hasCodes && (c.isEligibleAt(nowMs) || _appliedDiscounts.any((d) => d.campaignId == c.campaignId))))
+                        !_campaigns.any((c) => !c.hasCodes))
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Text(
@@ -3827,8 +3827,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       );
                     }),
                     // Chương trình KM mới (không phát hành mã) - tính bằng Pricing Engine
-                    ..._campaigns.where((c) => !c.hasCodes && (c.isEligibleAt(nowMs) || _appliedDiscounts.any((d) => d.campaignId == c.campaignId))).map((c) {
+                    ..._campaigns.where((c) => !c.hasCodes).map((c) {
                       final isSelected = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
+                      // Ngoài khung ngày/giờ áp dụng: vẫn HIỆN trong danh sách (mờ) kèm lý do để nhân viên biết vì sao chưa dùng được
+                      final inSchedule = c.isEligibleAt(nowMs);
                       final q = _quoteCampaign(c);
                       final amt = q.totalPromotionDiscount;
                       final reason = CartCampaignPricing.reason(q, c);
@@ -3862,9 +3864,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         }
                       }
 
+                      if (!inSchedule) {
+                        sub = '${c.typeDisplay} • ⏰ Ngoài thời gian áp dụng (${c.schedule.summary()})';
+                      }
+
                       return CheckboxListTile(
                         value: isSelected,
-                        enabled: isCombo ? hasWater : (amt > 0 || isSelected || canAutoAdd),
+                        enabled: !inSchedule ? isSelected : (isCombo ? hasWater : (amt > 0 || isSelected || canAutoAdd)),
                         title: Text(c.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
                         subtitle: Text(sub, style: GoogleFonts.beVietnamPro(fontSize: 11)),
                         secondary: (isCombo && hasWater && isSelected && combo.remainingRewardUnits > 0)
