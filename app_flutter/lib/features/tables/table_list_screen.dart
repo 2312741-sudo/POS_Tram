@@ -1845,7 +1845,7 @@ class _TableListScreenState extends State<TableListScreen> {
           ListTile(
             leading: Icon(Icons.info_outline, color: context.tc.primary),
             title: const Text('Thông Tin Ứng Dụng'),
-            subtitle: const Text('Phiên bản 1.0.3 (Build 4), hỗ trợ kỹ thuật & pháp lý'),
+            subtitle: const Text('Phiên bản 1.0.4 (Build 5), hỗ trợ kỹ thuật & pháp lý'),
             onTap: () {
               Navigator.pop(context);
               context.push('/about-app');

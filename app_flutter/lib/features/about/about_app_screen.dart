@@ -14,8 +14,8 @@ import '../auth/delete_account_dialog.dart';
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
 
-  static const String appVersion = '1.0.3';
-  static const String appBuild = '4';
+  static const String appVersion = '1.0.4';
+  static const String appBuild = '5';
   static const String bundleId = 'com.tramapp.tramFlutter';
   static const String teamId = 'W97CS7VC54';
   static const String hotline = '0865.062.205';
