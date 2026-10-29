@@ -42,6 +42,20 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
   String _selectedStoreCode = 'TRAM01';
   bool _autoDetectStore = true;
   final List<Map<String, dynamic>> _recentPayments = [];
+  Map<String, String> _bankMappings = {};
+
+  static const List<Map<String, String>> _popularBanks = [
+    {'name': 'MB Bank (Quân Đội)', 'pkg': 'com.mbmobile'},
+    {'name': 'Vietcombank', 'pkg': 'com.VCB'},
+    {'name': 'Techcombank', 'pkg': 'vn.com.techcombank.bb.app'},
+    {'name': 'ACB', 'pkg': 'mobile.acb.com.vn'},
+    {'name': 'VPBank', 'pkg': 'com.vpb.neo'},
+    {'name': 'BIDV', 'pkg': 'com.vnpay.bidv'},
+    {'name': 'VietinBank', 'pkg': 'com.vietinbank.ipay'},
+    {'name': 'TPBank', 'pkg': 'com.tpb.mb.gprs'},
+    {'name': 'Sacombank', 'pkg': 'com.vnpay.sacombank'},
+    {'name': 'Agribank', 'pkg': 'com.vnpay.Agribank'},
+  ];
 
   @override
   void initState() {
@@ -80,6 +94,30 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
       if (mounted) {
         setState(() => _selectedStoreCode = code);
       }
+    } catch (_) {}
+    try {
+      final Map<dynamic, dynamic>? maps = await _methodChannel.invokeMethod('getBankMappings');
+      if (maps != null && mounted) {
+        setState(() {
+          _bankMappings = maps.map((k, v) => MapEntry(k.toString(), v.toString()));
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _updateBankMapping(String pkg, String? storeCode) async {
+    setState(() {
+      if (storeCode == null) {
+        _bankMappings.remove(pkg);
+      } else {
+        _bankMappings[pkg] = storeCode;
+      }
+    });
+    try {
+      await _methodChannel.invokeMethod('setBankMapping', {
+        'packageName': pkg,
+        'storeCode': storeCode ?? '',
+      });
     } catch (_) {}
   }
 
@@ -304,6 +342,77 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                       );
                     }).toList(),
                   ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 2b. Gán Ngân Hàng -> Cửa Hàng (Mô hình 1 điện thoại dùng cho 4 cửa hàng)
+          Card(
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.account_balance_outlined, color: Color(0xFF7E2930), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Gán Ngân Hàng -> Chi Nhánh (Mô hình 1 máy nhiều quán)',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Vì bạn đang dùng 1 máy nhận thông báo cho 4 quán khác nhau, hãy gán cố định ngân hàng tương ứng với từng quán bên dưới. Tiền vào app nào sẽ tự động đổ về POS quán đó ngay cả khi khách xóa hoặc sửa nội dung chuyển khoản.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF5D5B63), height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._popularBanks.map((bank) {
+                    final pkg = bank['pkg']!;
+                    final name = bank['name']!;
+                    final currentStore = _bankMappings[pkg];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonFormField<String?>(
+                              value: currentStore,
+                              isDense: true,
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              hint: const Text('Tự động theo mã', style: TextStyle(fontSize: 11)),
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('Tự động theo mã', style: TextStyle(fontSize: 12))),
+                                ...['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'].map((code) => DropdownMenuItem(
+                                  value: code,
+                                  child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF7E2930))),
+                                )),
+                              ],
+                              onChanged: (val) => _updateBankMapping(pkg, val),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
