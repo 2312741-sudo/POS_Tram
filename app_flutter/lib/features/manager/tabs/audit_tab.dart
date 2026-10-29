@@ -413,14 +413,14 @@ class _AuditTabState extends State<AuditTab> {
                 children: [
                   Icon(LucideIcons.triangleAlert, size: 14, color: context.tc.danger),
                   const SizedBox(width: 6),
-                  Text(
+                  Flexible(child: Text(
                     'CẢNH BÁO THAO TÁC NGHI VẤN GIAN LẬN',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: context.tc.danger,
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),

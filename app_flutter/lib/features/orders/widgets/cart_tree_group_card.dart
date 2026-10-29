@@ -694,13 +694,15 @@ class CartTreeGroupCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(
+                              Flexible(child: Text(
                                 '${FormatUtils.vnd(item.unitPrice)} × ${item.quantity}',
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 11,
                                   color: context.tc.textSecondary,
                                 ),
-                              ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )),
                               if (branch.hasAnyDiscount) ...[
                                 const SizedBox(width: 4),
                                 Flexible(

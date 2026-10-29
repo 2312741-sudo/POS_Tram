@@ -454,10 +454,12 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                Flexible(child: Text(
                   'Loại phiếu: $_docTypeName',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -608,10 +610,12 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                Flexible(child: Text(
                   FormatUtils.currency(line.lineNetMoney),
                   style: TextStyle(fontWeight: FontWeight.bold, color: context.tc.primary),
-                ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )),
                 if (!isReadOnly)
                   IconButton(
                     icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),

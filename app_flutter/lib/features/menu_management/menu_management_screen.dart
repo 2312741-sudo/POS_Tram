@@ -566,10 +566,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
+                Flexible(child: Text(
                   'Đang bán: ${_products.where((p) => p.isAvailable).length}',
                   style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.bold),
-                ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )),
               ],
             ),
           ),

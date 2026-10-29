@@ -569,10 +569,12 @@ class _RevenueTabState extends State<RevenueTab> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(
+                              Flexible(child: Text(
                                 '${st.name} (${st.zone}): ',
                                 style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.ink(const Color(0xFF1E40AF))),
-                              ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )),
                               Text(
                                 FormatUtils.vnd(st.currentTotal),
                                 style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: context.ink(const Color(0xFF1D4ED8))),
@@ -762,10 +764,12 @@ class _RevenueTabState extends State<RevenueTab> {
                             children: [
                               Row(
                                 children: [
-                                  Text(
+                                  Flexible(child: Text(
                                     bill.billCode,
                                     style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )),
                                   const SizedBox(width: 6),
                                   Flexible(
                                     child: Container(

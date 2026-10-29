@@ -609,14 +609,14 @@ class AboutAppScreen extends StatelessWidget {
               children: [
                 Icon(LucideIcons.sparkles, size: 20, color: context.tc.primary),
                 const SizedBox(width: 8),
-                Text(
+                Flexible(child: Text(
                   'Hệ Sinh Thái Tính Năng POS Trạm',
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: context.tc.textPrimary,
                   ),
-                ),
+                )),
               ],
             ),
             const SizedBox(height: 12),

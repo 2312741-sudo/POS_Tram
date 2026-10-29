@@ -1713,14 +1713,16 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                             color: _productSection == 'SERVING' ? context.tc.primary : context.tc.textSecondary,
                           ),
                           const SizedBox(width: 6),
-                          Text(
+                          Flexible(child: Text(
                             'Đang phục vụ ($totalServingQty)',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 13,
                               fontWeight: _productSection == 'SERVING' ? FontWeight.bold : FontWeight.w600,
                               color: _productSection == 'SERVING' ? context.tc.primary : context.tc.textSecondary,
                             ),
-                          ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
                         ],
                       ),
                     ),
@@ -1753,14 +1755,16 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                             color: _productSection == 'SOLD' ? context.tc.primary : context.tc.textSecondary,
                           ),
                           const SizedBox(width: 6),
-                          Text(
+                          Flexible(child: Text(
                             'Đã bán ra ($totalSoldQty)',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 13,
                               fontWeight: _productSection == 'SOLD' ? FontWeight.bold : FontWeight.w600,
                               color: _productSection == 'SOLD' ? context.tc.primary : context.tc.textSecondary,
                             ),
-                          ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
                         ],
                       ),
                     ),
@@ -1995,10 +1999,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                     children: [
                                       const Icon(LucideIcons.circleCheck, size: 12, color: Colors.green),
                                       const SizedBox(width: 4),
-                                      Text(
+                                      Flexible(child: Text(
                                         'Đã gửi bếp: $sentKitchen',
                                         style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink(Colors.green.shade800)),
-                                      ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )),
                                     ],
                                   ),
                                 ),
@@ -2015,10 +2021,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                     children: [
                                       const Icon(LucideIcons.hourglass, size: 12, color: Colors.orange),
                                       const SizedBox(width: 4),
-                                      Text(
+                                      Flexible(child: Text(
                                         'Chưa gửi bếp: $unsentKitchen',
                                         style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.ink(Colors.orange.shade900)),
-                                      ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )),
                                     ],
                                   ),
                                 ),
@@ -2570,14 +2578,16 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
               ],
             ],
           ),
-          Text(
+          Flexible(child: Text(
             value,
             style: GoogleFonts.beVietnamPro(
               fontSize: 14,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
               color: color ?? context.tc.textPrimary,
             ),
-          ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          )),
         ],
       ),
     );

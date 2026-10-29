@@ -178,7 +178,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                       return CheckboxListTile(
                         title: Row(
                           children: [
-                            Text(perm.label, style: GoogleFonts.beVietnamPro(fontSize: 14)),
+                            Flexible(child: Text(perm.label, style: GoogleFonts.beVietnamPro(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis)),
                             if (isSensitive) ...[
                               const SizedBox(width: 6),
                               Container(

@@ -471,14 +471,16 @@ class _TableListScreenState extends State<TableListScreen> {
                           color: Colors.white,
                         ),
                         const SizedBox(width: 5),
-                        Text(
+                        Flexible(child: Text(
                           isOpen ? 'Ca mở' : 'Mở ca',
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
-                        ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )),
                       ],
                     ),
                   ),
@@ -1468,7 +1470,7 @@ class _TableListScreenState extends State<TableListScreen> {
                               child: Text(table.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: context.tc.primaryDark)),
                             ),
                             const SizedBox(width: 8),
-                            Text(table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                            Flexible(child: Text(table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                         const SizedBox(height: 4),

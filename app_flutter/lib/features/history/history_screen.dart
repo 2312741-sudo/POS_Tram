@@ -216,10 +216,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Bán: ${paidBills.length}${cancelledBills.isNotEmpty ? " • Hủy: ${cancelledBills.length}" : ""}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 12, color: context.tc.primaryDark)),
+                          Flexible(child: Text('Bán: ${paidBills.length}${cancelledBills.isNotEmpty ? " • Hủy: ${cancelledBills.length}" : ""}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 12, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           if (totalDiscounts > 0)
                             Text('KM: -${FormatUtils.vnd(totalDiscounts)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.danger)),
-                          Text('Doanh thu: ${FormatUtils.vnd(totalRevenue)}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark)),
+                          Flexible(child: Text('Doanh thu: ${FormatUtils.vnd(totalRevenue)}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
                         ],
                       ),
                     ),
@@ -284,14 +284,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
         title: Row(
           children: [
-            Text(
+            Flexible(child: Text(
               bill.billCode,
               style: GoogleFonts.beVietnamPro(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
                 color: isCancelled ? context.tc.textHint : context.tc.textPrimary,
               ),
-            ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )),
             const SizedBox(width: 8),
             Flexible(
               child: Container(
@@ -371,7 +373,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         style: GoogleFonts.beVietnamPro(fontSize: 13),
                       ),
                     ),
-                    Text(FormatUtils.vnd(i.itemTotal), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    Flexible(child: Text(FormatUtils.vnd(i.itemTotal), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   ],
                 ),
               )),
@@ -380,7 +382,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Tiền hàng:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-              Text(FormatUtils.vnd(bill.subTotal), style: GoogleFonts.beVietnamPro(fontSize: 12)),
+              Flexible(child: Text(FormatUtils.vnd(bill.subTotal), style: GoogleFonts.beVietnamPro(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
           ),
           if (bill.itemDiscountTotal > 0)
@@ -388,15 +390,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Giảm giá món:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                Text('-${FormatUtils.vnd(bill.itemDiscountTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success)),
+                Flexible(child: Text('-${FormatUtils.vnd(bill.itemDiscountTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
               ],
             ),
           if (bill.discounts.isNotEmpty) ...[
             ...bill.discounts.map((d) => Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(' - ${d.promoCode ?? d.description}:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success)),
-                    Text('-${FormatUtils.vnd(d.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.bold)),
+                    Flexible(child: Text(' - ${d.promoCode ?? d.description}:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    Flexible(child: Text('-${FormatUtils.vnd(d.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   ],
                 )),
           ],
@@ -404,8 +406,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('VAT (${bill.vatRate.toStringAsFixed(0)}%):', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                Text('+${FormatUtils.vnd(bill.vatAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                Flexible(child: Text('VAT (${bill.vatRate.toStringAsFixed(0)}%):', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                Flexible(child: Text('+${FormatUtils.vnd(bill.vatAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
               ],
             ),
           if (bill.deletedItems.isNotEmpty) ...[
@@ -545,8 +547,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark)),
-                          Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success)),
+                          Flexible(child: Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Flexible(child: Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
                         ],
                       ),
                       if (bill.orderCode != null && bill.orderCode!.isNotEmpty)

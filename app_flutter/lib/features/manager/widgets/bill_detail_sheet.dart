@@ -148,10 +148,12 @@ class BillDetailSheet extends StatelessWidget {
                   children: [
                     Icon(LucideIcons.utensils, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
-                    Text(
+                    Flexible(child: Text(
                       'Danh sách món ăn (${bill.items.length} món)',
                       style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    )),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -222,14 +224,16 @@ class BillDetailSheet extends StatelessWidget {
                               color: context.tc.textPrimary,
                             ),
                           ),
-                          Text(
+                          Flexible(child: Text(
                             FormatUtils.vnd(bill.finalAmount),
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: context.tc.primary,
                             ),
-                          ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
                         ],
                       ),
                     ],
@@ -263,7 +267,7 @@ class BillDetailSheet extends StatelessWidget {
                                 style: GoogleFonts.beVietnamPro(fontSize: 12),
                               ),
                             ),
-                            Text('-${FormatUtils.vnd(e.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
+                            Flexible(child: Text('-${FormatUtils.vnd(e.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                       )),
@@ -276,10 +280,12 @@ class BillDetailSheet extends StatelessWidget {
                     children: [
                       Icon(LucideIcons.history, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
-                      Text(
+                      Flexible(child: Text(
                         'Lịch sử thao tác đơn (${bill.actionLogs.length})',
                         style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -523,21 +529,25 @@ class BillDetailSheet extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  Flexible(child: Text(
                     log.staffFullName.isNotEmpty ? log.staffFullName : log.staffUsername,
                     style: GoogleFonts.beVietnamPro(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                       color: context.tc.textPrimary,
                     ),
-                  ),
-                  Text(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )),
+                  Flexible(child: Text(
                     FormatUtils.dateTime(log.timestamp),
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 10,
                       color: context.tc.textSecondary,
                     ),
-                  ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )),
                 ],
               ),
               Text(
@@ -559,6 +569,7 @@ class BillDetailSheet extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+        const SizedBox(width: 8),
         Flexible(
           child: Text(
             value,
@@ -574,7 +585,8 @@ class BillDetailSheet extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary)),
+        Flexible(child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary))),
+        const SizedBox(width: 8),
         Text(
           value,
           style: GoogleFonts.beVietnamPro(
@@ -692,8 +704,8 @@ class BillDetailSheet extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark)),
-                          Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success)),
+                          Flexible(child: Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Flexible(child: Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
                         ],
                       ),
                       if (bill.orderCode != null && bill.orderCode!.isNotEmpty)

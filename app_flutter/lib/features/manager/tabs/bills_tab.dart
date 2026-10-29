@@ -703,10 +703,12 @@ class _BillsTabState extends State<BillsTab> {
                 Expanded(
                   child: Row(
                     children: [
-                      Text(
+                      Flexible(child: Text(
                         bill.billCode,
                         style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 14, color: context.tc.textPrimary),
-                      ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )),
                       if (showOrderCode) ...[
                         const SizedBox(width: 6),
                         Container(
@@ -746,7 +748,7 @@ class _BillsTabState extends State<BillsTab> {
               Row(
                 children: [
                   if (hasTable)
-                    Container(
+                    Flexible(child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
                         color: context.tc.primary.withValues(alpha: 0.08),
@@ -761,13 +763,17 @@ class _BillsTabState extends State<BillsTab> {
                             color: context.tc.primary,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            tableDisplay,
-                            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.primary),
+                          Flexible(
+                            child: Text(
+                              tableDisplay,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: context.tc.primary),
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                    )),
                   if (isCancelled) ...[
                     if (hasTable) const SizedBox(width: 6),
                     Container(

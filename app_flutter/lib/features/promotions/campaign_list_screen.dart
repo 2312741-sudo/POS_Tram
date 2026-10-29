@@ -254,10 +254,12 @@ class _CampaignListScreenState extends State<CampaignListScreen> {
               children: [
                 Icon(_getTypeIcon(CampaignType.fromMap(campaign.campaignType)), size: 16, color: context.tc.textSecondary),
                 const SizedBox(width: 4),
-                Text(
+                Flexible(child: Text(
                   _getTypeName(CampaignType.fromMap(campaign.campaignType)),
                   style: TextStyle(color: context.tc.textSecondary, fontSize: 13),
-                ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )),
               ],
             ),
             const SizedBox(height: 8),

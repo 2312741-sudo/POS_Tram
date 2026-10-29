@@ -549,7 +549,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                   ),
                   title: Row(
                     children: [
-                      Text(doc.documentCode, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Flexible(child: Text(doc.documentCode, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -286,15 +286,19 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           padding: const EdgeInsets.only(top: 4),
           child: Row(
             children: [
-              Text(
+              Flexible(child: Text(
                 '${log.userFullName} (@${log.username})',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary, fontWeight: FontWeight.w500),
-              ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )),
               const SizedBox(width: 8),
-              Text(
+              Flexible(child: Text(
                 '• ${FormatUtils.dateTime(log.timestamp)}',
                 style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textHint),
-              ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )),
             ],
           ),
         ),

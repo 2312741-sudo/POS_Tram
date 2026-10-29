@@ -847,8 +847,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(widget.table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: context.tc.primaryDark)),
-                            Text(widget.table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                            Flexible(child: Text(widget.table.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 15, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            Flexible(child: Text(widget.table.zone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -1605,18 +1605,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
+                          Flexible(child: Text(
                             'Đã chọn tách: $totalSplitParts phần',
                             style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600),
-                          ),
-                          Text(
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
+                          Flexible(child: Text(
                             FormatUtils.vnd(totalSplitAmount),
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: context.tc.primary,
                             ),
-                          ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
                         ],
                       ),
                     ),
@@ -2371,10 +2375,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Mã: ${customer.code.isNotEmpty ? customer.code : customer.id}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary)),
-                        Text('${customer.currentPoints} pt (${customer.tierName(tiers)})',
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800))),
+                        Flexible(child: Text('Mã: ${customer.code.isNotEmpty ? customer.code : customer.id}',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                        Flexible(child: Text('${customer.currentPoints} pt (${customer.tierName(tiers)})',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                   ),
@@ -2622,8 +2630,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Tiền gốc (${item.quantity} phần):', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                        Text(FormatUtils.vnd(lineGross), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold)),
+                        Flexible(child: Text('Tiền gốc (${item.quantity} phần):', style: GoogleFonts.beVietnamPro(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Flexible(child: Text(FormatUtils.vnd(lineGross), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                   ),
@@ -2706,7 +2714,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         icon: const Icon(LucideIcons.circleMinus),
                         onPressed: discountedQty > 1 ? () => setDlgState(() => discountedQty -= 1) : null,
                       ),
-                      Text('$discountedQty / ${item.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold)),
+                      Flexible(child: Text('$discountedQty / ${item.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       IconButton(
                         tooltip: 'Thêm 1 phần',
                         icon: const Icon(LucideIcons.circlePlus),
@@ -2761,7 +2769,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.ink(Colors.orange.shade900)),
                               ),
                             ),
-                            Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.red.shade700))),
+                            Flexible(child: Text('-${FormatUtils.vnd(calcDiscount)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.ink(Colors.red.shade700)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                         const Divider(height: 10),
@@ -2769,7 +2777,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Thành tiền sau giảm:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
-                            Text(FormatUtils.vnd(calcAfter), style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade800))),
+                            Flexible(child: Text(FormatUtils.vnd(calcAfter), style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold, color: context.ink(Colors.green.shade800)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                       ],
@@ -4467,10 +4475,12 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   Expanded(
                                     child: Text('2. Phần chuyển khoản QR:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                                   ),
-                                  Text(
+                                  Flexible(child: Text(
                                     FormatUtils.vnd(splitQrAmount),
                                     style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: context.tc.info),
-                                  ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )),
                                 ],
                               ),
                             ),

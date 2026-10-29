@@ -268,13 +268,13 @@ class CartItemCard extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Text(
+                                Flexible(child: Text(
                                   '${FormatUtils.vnd(item.unitPrice)} × ${item.quantity}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.beVietnamPro(
                                       fontSize: 12, color: context.tc.textSecondary),
-                                ),
+                                )),
                                 if (hasAnyDiscount) ...[
                                   const SizedBox(width: 4),
                                   Text(

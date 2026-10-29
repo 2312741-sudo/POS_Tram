@@ -205,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(child: Text(e.key, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13))),
-                                  Text('${e.value} phần', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: context.tc.primary)),
+                                  Flexible(child: Text('${e.value} phần', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, color: context.tc.primary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                 ],
                               ),
                             );

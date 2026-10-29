@@ -1238,14 +1238,16 @@ class _ProductListRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text(
+                          Flexible(child: Text(
                             FormatUtils.vnd(product.price),
                             style: GoogleFonts.beVietnamPro(
                               color: context.tc.primary,
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),
-                          ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )),
                           if (product.unit.isNotEmpty)
                             Text(
                               ' / ${product.unit}',

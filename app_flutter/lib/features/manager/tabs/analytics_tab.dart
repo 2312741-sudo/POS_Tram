@@ -248,10 +248,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   children: [
                     Icon(LucideIcons.chartPie, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
-                    Text(
+                    Flexible(child: Text(
                       'Tỷ Lệ Phương Thức Thanh Toán',
                       style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
+                    )),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -342,10 +342,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                       children: [
                         Icon(LucideIcons.clock, size: 20, color: context.tc.warning),
                         const SizedBox(width: 8),
-                        Text(
+                        Flexible(child: Text(
                           'Khung Giờ Cao Điểm (0h - 23h)',
                           style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
+                        )),
                       ],
                     ),
                   ],
@@ -436,10 +436,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                     children: [
                       Icon(LucideIcons.mapPin, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
-                      Text(
+                      Flexible(child: Text(
                         'Doanh Thu Theo Khu Vực / Tầng',
                         style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
+                      )),
                     ],
                   ),
                   const SizedBox(height: 14),

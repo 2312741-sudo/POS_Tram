@@ -65,14 +65,16 @@ class CartHeaderBar extends StatelessWidget {
           children: [
             Icon(icon, size: 13, color: fg),
             const SizedBox(width: 3),
-            Text(
+            Flexible(child: Text(
               title,
               style: GoogleFonts.beVietnamPro(
                 fontSize: 10.5,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: fg,
               ),
-            ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )),
           ],
         ),
       ),

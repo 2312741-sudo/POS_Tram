@@ -273,7 +273,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 children: [
                   const Icon(LucideIcons.circleArrowDown, color: AppColors.managerAccent, size: 20),
                   const SizedBox(width: 6),
-                  Text(
+                  Flexible(child: Text(
                     'Chưa có file mẫu? Tải ngay file mẫu Excel',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 13,
@@ -281,7 +281,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                       color: AppColors.managerAccent,
                       decoration: TextDecoration.underline,
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),

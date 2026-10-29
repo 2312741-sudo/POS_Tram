@@ -485,10 +485,10 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary),
                         ),
                         const SizedBox(width: 8),
-                        Text(
+                        Flexible(child: Text(
                           'Đang tính toán khuyến mãi ca...',
                           style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.primary),
-                        ),
+                        )),
                       ],
                     ),
                   );
@@ -518,10 +518,10 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                         children: [
                           Icon(LucideIcons.badgePercent, size: 16, color: context.tc.primary),
                           const SizedBox(width: 6),
-                          Text(
+                          Flexible(child: Text(
                             'KHUYẾN MÃI & GIẢM GIÁ TRONG CA',
                             style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
-                          ),
+                          )),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -808,14 +808,16 @@ Ghi chú: ${shift.notes}
                 children: [
                   Icon(LucideIcons.funnel, size: 14, color: context.tc.primary),
                   const SizedBox(width: 4),
-                  Text(
+                  Flexible(child: Text(
                     'Đang lọc ngày: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: context.tc.primary,
                     ),
-                  ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )),
                 ],
               ),
             ),

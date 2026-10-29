@@ -151,8 +151,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Mã: ${customer.code}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary)),
-                          Text('${customer.currentPoints} pt (${customer.tierName(_tiers)})', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800))),
+                          Flexible(child: Text('Mã: ${customer.code}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Flexible(child: Text('${customer.currentPoints} pt (${customer.tierName(_tiers)})', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.ink(Colors.blue.shade800)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                         ],
                       ),
                     ),
@@ -825,9 +825,9 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                               children: [
                                                 Icon(LucideIcons.phone, size: 12, color: context.tc.textHint),
                                                 const SizedBox(width: 4),
-                                                Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
+                                                Flexible(child: Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                                 const SizedBox(width: 10),
-                                                Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
+                                                Flexible(child: Text('• Mã: ${c.code}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                               ],
                                             ),
                                             if (c.gender.isNotEmpty || c.birthday.isNotEmpty) ...[

@@ -66,8 +66,10 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                     children: [
                       Icon(LucideIcons.clock, color: context.tc.textSecondary, size: 14),
                       const SizedBox(width: 6),
-                      Text(FormatUtils.dateTime(order.timestamp), style: GoogleFonts.beVietnamPro(
-                        color: context.tc.textSecondary, fontSize: 13)),
+                      Flexible(child: Text(FormatUtils.dateTime(order.timestamp), style: GoogleFonts.beVietnamPro(
+                        color: context.tc.textSecondary, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis)),
                     ],
                   ),
                   if (order.type == 'CALL_WAITER') ...[
@@ -123,11 +125,15 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                         children: [
                           Expanded(child: Text(item.name, style: GoogleFonts.beVietnamPro(
                             color: context.tc.textPrimary, fontWeight: FontWeight.w500))),
-                          Text('x${item.quantity}', style: GoogleFonts.beVietnamPro(
-                            color: context.tc.textSecondary, fontSize: 13)),
+                          Flexible(child: Text('x${item.quantity}', style: GoogleFonts.beVietnamPro(
+                            color: context.tc.textSecondary, fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
                           const SizedBox(width: 16),
-                          Text(FormatUtils.vnd(item.itemTotal), style: GoogleFonts.beVietnamPro(
-                            color: context.tc.primary, fontWeight: FontWeight.w700)),
+                          Flexible(child: Text(FormatUtils.vnd(item.itemTotal), style: GoogleFonts.beVietnamPro(
+                            color: context.tc.primary, fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
                         ],
                       ),
                     );
@@ -147,8 +153,10 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                   children: [
                     Text('Tổng cộng', style: GoogleFonts.beVietnamPro(
                       color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
-                    Text(FormatUtils.currency(total), style: GoogleFonts.beVietnamPro(
-                      color: context.tc.primary, fontWeight: FontWeight.w800, fontSize: 20)),
+                    Flexible(child: Text(FormatUtils.currency(total), style: GoogleFonts.beVietnamPro(
+                      color: context.tc.primary, fontWeight: FontWeight.w800, fontSize: 20),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis)),
                   ],
                 ),
               ),
