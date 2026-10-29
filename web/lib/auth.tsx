@@ -239,6 +239,7 @@ export function canAccessRoute(user: User | null, pathname: string): boolean {
     pathname.startsWith("/dashboard/analytics") ||
     pathname.startsWith("/dashboard/end-of-day") ||
     pathname.startsWith("/dashboard/product-sales") ||
+    pathname === "/dashboard/reports" ||
     pathname.startsWith("/dashboard/reports/promotions") ||
     pathname.startsWith("/dashboard/reports/loyalty")
   ) {

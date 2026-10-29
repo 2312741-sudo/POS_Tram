@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   Store,
   ClipboardCheck,
+  FileChartColumn,
   Receipt,
   ShoppingCart,
   Warehouse,
@@ -38,6 +39,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
+  { href: "/dashboard/reports", label: "Trung tâm báo cáo", icon: FileChartColumn },
   { href: "/dashboard/end-of-day", label: "Báo cáo Cuối ngày", icon: ClipboardCheck },
   { href: "/dashboard/shifts", label: "Phiếu Bàn Giao Ca", icon: Receipt },
   { href: "/dashboard/customers", label: "Khách hàng CRM (KMT)", icon: Users },
@@ -92,7 +94,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
   }, [open, onClose]);
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard" || href === "/dashboard/reports") return pathname === href;
     return pathname.startsWith(href);
   };
 
