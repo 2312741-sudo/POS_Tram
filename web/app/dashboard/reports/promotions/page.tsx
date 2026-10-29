@@ -1,11 +1,11 @@
 "use client";
 import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { BadgePercent, Calendar, ChevronDown, ChevronRight, Download, Receipt, Store, Ticket, TrendingUp } from "lucide-react";
+import { BadgePercent, Calendar, Users, ChevronDown, ChevronRight, Download, Receipt, Store, Ticket, TrendingUp } from "lucide-react";
 import { useDashboardData } from "@/lib/data-context";
 import { businessDayStartFor } from "@/lib/business-day";
 import { formatNumber, formatVND, getBusinessBillTimestamp, getUTC7Date } from "@/lib/reports";
-import { calculateCampaignReport } from "@/lib/promotion-report";
+import { calculateCampaignReport, UNKNOWN_PROMO_STAFF } from "@/lib/promotion-report";
 import { exportCampaignReportExcel, type ReportStoreInfo } from "@/lib/export";
 
 type RangeKey = "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM";
@@ -36,6 +36,7 @@ export default function PromotionReportPage() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [staffFilter, setStaffFilter] = useState("ALL");
 
   const currentStore = useMemo(() => {
     if (currentStoreCode === "ALL") return undefined;
@@ -88,7 +89,17 @@ export default function PromotionReportPage() {
     [historyData, currentStoreCode, range]
   );
 
-  const report = useMemo(() => calculateCampaignReport(bills), [bills]);
+  // Danh sách nhân viên có áp dụng khuyến mãi trong kỳ (dựa trên toàn bộ hóa đơn của kỳ, không phụ thuộc bộ lọc nhân viên)
+  const fullReport = useMemo(() => calculateCampaignReport(bills), [bills]);
+  const staffOptions = useMemo(() => fullReport.staffTotals.map((r) => r.staff), [fullReport]);
+  const billStaffOf = (b: { cashierName?: string; staffFullName?: string; staffUsername?: string }) =>
+    (b.cashierName || b.staffFullName || b.staffUsername || "").trim() || UNKNOWN_PROMO_STAFF;
+  // Bộ lọc nhân viên (người thanh toán / áp dụng khuyến mãi): tính lại toàn bộ số liệu chỉ với hóa đơn của người đó
+  const activeStaff = staffFilter !== "ALL" && staffOptions.includes(staffFilter) ? staffFilter : "ALL";
+  const report = useMemo(
+    () => (activeStaff === "ALL" ? fullReport : calculateCampaignReport(bills.filter((b) => billStaffOf(b) === activeStaff))),
+    [fullReport, bills, activeStaff]
+  );
 
   const handleExport = () => {
     const info: ReportStoreInfo = {
@@ -148,6 +159,17 @@ export default function PromotionReportPage() {
               ))}
             </select>
           </div>
+          <div style={selectBox}>
+            <Users size={16} color="var(--primary)" />
+            <select aria-label="Nhân viên" value={activeStaff} onChange={(e) => setStaffFilter(e.target.value)} style={selectStyle}>
+              <option value="ALL">Tất cả nhân viên</option>
+              {staffOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
           <button className="btn-primary" style={{ background: "var(--success)" }} onClick={handleExport} disabled={report.campaigns.length === 0}>
             <Download size={16} /> Xuất Excel
           </button>
@@ -167,6 +189,43 @@ export default function PromotionReportPage() {
           </div>
         ))}
       </div>
+
+      {report.staffTotals.length > 0 && (
+        <div>
+          <h2 style={{ fontSize: "15px", fontWeight: 800, margin: "0 0 4px", color: "var(--text)" }}>Khuyến mãi theo nhân viên</h2>
+          <p style={{ fontSize: "12px", color: "var(--subtext)", margin: "0 0 8px" }}>
+            Tính theo nhân viên thanh toán và áp dụng khuyến mãi trên hóa đơn. Mỗi hóa đơn chỉ tính một lần vào số HĐ và doanh thu.
+          </p>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nhân viên</th>
+                  <th style={{ textAlign: "right" }}>Số HĐ có KM</th>
+                  <th style={{ textAlign: "right" }}>Số combo</th>
+                  <th style={{ textAlign: "right" }}>Tổng giảm</th>
+                  <th style={{ textAlign: "right" }}>Doanh thu HĐ</th>
+                  <th style={{ textAlign: "right" }}>Voucher đã dùng</th>
+                  <th style={{ textAlign: "right" }}>Điểm đã đổi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.staffTotals.map((r) => (
+                  <tr key={r.staff}>
+                    <td style={{ fontWeight: 700, color: "var(--text)" }}>{r.staff}</td>
+                    <td style={{ textAlign: "right" }}>{r.billCount}</td>
+                    <td style={{ textAlign: "right" }}>{r.comboCount > 0 ? `${formatNumber(r.comboCount)} combo` : "—"}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700, color: "var(--danger)" }}>{formatVND(r.totalDiscount)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700, color: "var(--success)" }}>{formatVND(r.revenue)}</td>
+                    <td style={{ textAlign: "right" }}>{r.vouchersUsed}</td>
+                    <td style={{ textAlign: "right" }}>{r.pointsUsed ? formatNumber(r.pointsUsed) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="table-wrapper">
         <table>
@@ -230,6 +289,30 @@ export default function PromotionReportPage() {
                     {open && (
                       <tr>
                         <td colSpan={10} style={{ background: "var(--surface-muted)", padding: "12px 16px" }}>
+                          {c.staffRows.length > 0 && (
+                            <table style={{ margin: "0 0 12px" }}>
+                              <thead>
+                                <tr>
+                                  <th>Nhân viên</th>
+                                  <th style={{ textAlign: "right" }}>Số HĐ</th>
+                                  <th style={{ textAlign: "right" }}>Số combo</th>
+                                  <th style={{ textAlign: "right" }}>Tổng giảm</th>
+                                  <th style={{ textAlign: "right" }}>Doanh thu HĐ</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {c.staffRows.map((r) => (
+                                  <tr key={r.staff}>
+                                    <td style={{ fontWeight: 600 }}>{r.staff}</td>
+                                    <td style={{ textAlign: "right" }}>{r.billCount}</td>
+                                    <td style={{ textAlign: "right" }}>{r.comboCount > 0 ? `${formatNumber(r.comboCount)} combo` : "—"}</td>
+                                    <td style={{ textAlign: "right", color: "var(--danger)", fontWeight: 700 }}>{formatVND(r.totalDiscount)}</td>
+                                    <td style={{ textAlign: "right" }}>{formatVND(r.revenue)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
                           <table style={{ margin: 0 }}>
                             <thead>
                               <tr>

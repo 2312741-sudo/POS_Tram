@@ -56,3 +56,29 @@ describe("calculateCampaignReport", () => {
     expect(campaignIdentity({ promoCode: "X" })).toMatchObject({ key: "code:X", name: "X" });
   });
 });
+
+describe("khuyến mãi theo nhân viên", () => {
+  const mk = (id: string, staff: string, final: number, discounts: NonNullable<HistoryOrder["discounts"]>) =>
+    bill({ id, cashierName: staff, finalAmount: final, discounts });
+  const r = calculateCampaignReport([
+    mk("1", "Lan", 100000, [{ campaignId: "C1", campaignName: "Combo", amount: 10000, comboCount: 2 }, { campaignId: "C2", campaignName: "Voucher", amount: 5000, voucherCode: "V1" }]),
+    mk("2", "Lan", 50000, [{ campaignId: "C1", campaignName: "Combo", amount: 10000, comboCount: 1 }]),
+    mk("3", "Minh", 80000, [{ campaignId: "C1", campaignName: "Combo", amount: 10000, comboCount: 3 }]),
+    bill({ id: "4", finalAmount: 20000, discounts: [{ campaignId: "C2", campaignName: "Voucher", amount: 2000 }] }),
+  ]);
+
+  it("tổng theo nhân viên: mỗi hóa đơn chỉ tính một lần cho số HĐ và doanh thu", () => {
+    const lan = r.staffTotals.find((s) => s.staff === "Lan")!;
+    expect(lan).toMatchObject({ billCount: 2, comboCount: 3, totalDiscount: 25000, revenue: 150000, vouchersUsed: 1 });
+    expect(r.staffTotals.find((s) => s.staff === "Minh")).toMatchObject({ billCount: 1, comboCount: 3, totalDiscount: 10000, revenue: 80000 });
+  });
+
+  it("hóa đơn không có tên nhân viên gom vào Không rõ", () => {
+    expect(r.staffTotals.find((s) => s.staff === "Không rõ")).toMatchObject({ billCount: 1, totalDiscount: 2000 });
+  });
+
+  it("từng chương trình có bảng nhân viên riêng", () => {
+    const c1 = r.campaigns.find((c) => c.campaignId === "C1")!;
+    expect(c1.staffRows.map((s) => [s.staff, s.billCount, s.comboCount])).toEqual(expect.arrayContaining([["Lan", 2, 3], ["Minh", 1, 3]]));
+  });
+});
