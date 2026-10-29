@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ChangePasswordDialog extends StatefulWidget {
   final bool isMandatory;
@@ -118,7 +119,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                widget.isMandatory ? Icons.warning_amber_rounded : Icons.lock_reset,
+                widget.isMandatory ? LucideIcons.triangleAlert : LucideIcons.rotateCcwKey,
                 color: widget.isMandatory ? context.tc.warning : context.tc.primary,
                 size: 24,
               ),
@@ -159,7 +160,7 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: context.tc.danger, size: 18),
+                      Icon(LucideIcons.circleAlert, color: context.tc.danger, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -177,9 +178,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 decoration: InputDecoration(
                   labelText: 'Mật khẩu mới *',
                   hintText: 'Tối thiểu 6 ký tự',
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  prefixIcon: const Icon(LucideIcons.lock),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
+                    icon: Icon(_obscureNew ? LucideIcons.eyeOff : LucideIcons.eye),
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                   ),
                 ),
@@ -191,9 +192,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
                 decoration: InputDecoration(
                   labelText: 'Xác nhận mật khẩu mới *',
                   hintText: 'Nhập lại mật khẩu mới',
-                  prefixIcon: const Icon(Icons.lock_reset),
+                  prefixIcon: const Icon(LucideIcons.rotateCcwKey),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                    icon: Icon(_obscureConfirm ? LucideIcons.eyeOff : LucideIcons.eye),
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                 ),

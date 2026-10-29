@@ -8,6 +8,7 @@ import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
 import '../../data/services/firebase_service.dart';
 import 'inventory_excel_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ExcelImportDialog extends StatefulWidget {
   final List<CatalogItemModel> existingItems;
@@ -97,7 +98,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
               color: context.tc.primary.withAlpha(25),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.table_view_rounded, color: context.tc.primary, size: 24),
+            child: Icon(LucideIcons.table, color: context.tc.primary, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -126,7 +127,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.close, color: context.tc.textSecondary),
+            icon: Icon(LucideIcons.x, color: context.tc.textSecondary),
             onPressed: _isImporting ? null : () => Navigator.of(context).pop(),
             tooltip: 'Đóng',
           ),
@@ -239,7 +240,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 18),
+                    const Icon(LucideIcons.info, color: Color(0xFFD97706), size: 18),
                     const SizedBox(width: 8),
                     Text(
                       'Lưu ý',
@@ -270,7 +271,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.download_for_offline_outlined, color: AppColors.managerAccent, size: 20),
+                  const Icon(LucideIcons.circleArrowDown, color: AppColors.managerAccent, size: 20),
                   const SizedBox(width: 6),
                   Text(
                     'Chưa có file mẫu? Tải ngay file mẫu Excel',
@@ -361,7 +362,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
               const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: _pickAndParseFile,
-                icon: const Icon(Icons.file_open_outlined, size: 18),
+                icon: const Icon(LucideIcons.fileInput, size: 18),
                 label: Text(_pickedFile == null ? 'Chọn file Excel' : 'Đổi file khác'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size(64, AppSpacing.minTapTarget),
@@ -395,7 +396,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.error_outline, color: context.tc.danger, size: 48),
+                            Icon(LucideIcons.circleAlert, color: context.tc.danger, size: 48),
                             const SizedBox(height: 12),
                             Text(
                               'Lỗi khi đọc file',
@@ -423,7 +424,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.cloud_upload_outlined, size: 64, color: context.tc.border),
+                                Icon(LucideIcons.cloudUpload, size: 64, color: context.tc.border),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Chưa có dữ liệu để xem trước',

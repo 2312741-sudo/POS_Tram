@@ -8,6 +8,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 Future<void> showCopyMenuDialog(
   BuildContext context, {
@@ -225,7 +226,7 @@ class _CopyMenuDialogState extends State<_CopyMenuDialog> {
       ),
       if (_pickMode) ...[
         TextField(
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Tìm món hoặc nhóm...', isDense: true),
+          decoration: const InputDecoration(prefixIcon: Icon(LucideIcons.search), hintText: 'Tìm món hoặc nhóm...', isDense: true),
           onChanged: (v) => setState(() => _search = v),
         ),
         SizedBox(

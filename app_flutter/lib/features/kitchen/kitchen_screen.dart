@@ -16,6 +16,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class KitchenScreen extends StatefulWidget {
   const KitchenScreen({super.key});
@@ -230,7 +231,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                     tooltip: 'Quay về',
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                    icon: const Icon(LucideIcons.arrowLeft, color: Colors.white, size: 22),
                     onPressed: () {
                       if (context.canPop()) {
                         context.pop();
@@ -250,7 +251,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.kitchen, color: Colors.white, size: isVeryNarrow ? 20 : 24),
+                child: Icon(LucideIcons.refrigerator, color: Colors.white, size: isVeryNarrow ? 20 : 24),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -299,7 +300,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.campaign, color: Colors.amberAccent, size: 16),
+                                const Icon(LucideIcons.megaphone, color: Colors.amberAccent, size: 16),
                                 const SizedBox(width: 4),
                                 Text(
                                   'Gọi NV',
@@ -315,7 +316,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                         )
                       : OutlinedButton.icon(
                           onPressed: _callStaff,
-                          icon: const Icon(Icons.campaign_outlined, size: 18),
+                          icon: const Icon(LucideIcons.megaphone, size: 18),
                           label: const Text('Gọi nhân viên'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(0, 38),
@@ -342,7 +343,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.no_meals_outlined, color: Colors.white70, size: 16),
+                                const Icon(LucideIcons.utensilsCrossed, color: Colors.white70, size: 16),
                                 const SizedBox(width: 4),
                                 Text(
                                   'Hết món',
@@ -358,7 +359,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                         )
                       : OutlinedButton.icon(
                           onPressed: () => SoldOutSheet.show(context),
-                          icon: const Icon(Icons.no_meals_outlined, size: 18),
+                          icon: const Icon(LucideIcons.utensilsCrossed, size: 18),
                           label: const Text('Hết món'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(0, 38),
@@ -395,7 +396,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
               const SizedBox(width: 4),
           PopupMenuButton(
             tooltip: 'Tùy chọn',
-            icon: const Icon(Icons.more_vert, color: AppColors.darkTextSecondary),
+            icon: const Icon(LucideIcons.ellipsisVertical, color: AppColors.darkTextSecondary),
             color: AppColors.surface,
             itemBuilder: (menuCtx) => [
               PopupMenuItem(
@@ -406,7 +407,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 },
                 child: Row(
                   children: [
-                    const Icon(Icons.logout, color: AppColors.danger, size: 18),
+                    const Icon(LucideIcons.logOut, color: AppColors.danger, size: 18),
                     const SizedBox(width: 8),
                     Text('Đăng xuất', style: GoogleFonts.beVietnamPro(color: AppColors.danger)),
                   ],
@@ -422,7 +423,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 },
                 child: Row(
                   children: [
-                    const Icon(Icons.no_accounts_outlined, color: AppColors.danger, size: 18),
+                    const Icon(LucideIcons.userX, color: AppColors.danger, size: 18),
                     const SizedBox(width: 8),
                     Text('Xóa tài khoản của tôi', style: GoogleFonts.beVietnamPro(color: AppColors.danger)),
                   ],
@@ -448,7 +449,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
               color: AppColors.success.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 72),
+            child: const Icon(LucideIcons.circleCheck, color: AppColors.success, size: 72),
           ).animate(onPlay: (c) => c.repeat(reverse: true))
             .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 2.seconds),
           const SizedBox(height: 24),
@@ -558,7 +559,7 @@ class _KitchenOrderCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle, color: AppColors.success, size: 32),
+            const Icon(LucideIcons.circleCheck, color: AppColors.success, size: 32),
             const SizedBox(height: 4),
             Text('Xong!', style: GoogleFonts.beVietnamPro(
               color: AppColors.success, fontWeight: FontWeight.w700,
@@ -614,7 +615,7 @@ class _KitchenOrderCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.timer_outlined, color: timerColor, size: 14),
+                        Icon(LucideIcons.timer, color: timerColor, size: 14),
                         const SizedBox(width: 4),
                         Text(FormatUtils.waitTime(waiting), style: GoogleFonts.beVietnamPro(
                           color: timerColor, fontWeight: FontWeight.w700, fontSize: 13,
@@ -699,7 +700,7 @@ class _KitchenOrderCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.check, size: 14, color: AppColors.success),
+                                const Icon(LucideIcons.check, size: 14, color: AppColors.success),
                                 const SizedBox(width: 3),
                                 Text(
                                   'Xong',
@@ -778,7 +779,7 @@ class _KitchenOrderCard extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => onGroupDone(g),
-                          icon: Icon(g == kKitchenGroupDrink ? Icons.local_cafe_outlined : Icons.cake_outlined, size: 18),
+                          icon: Icon(g == kKitchenGroupDrink ? LucideIcons.coffee : LucideIcons.cake, size: 18),
                           label: Text('Xong ${kitchenGroupLabel(g).toLowerCase()}'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.success,
@@ -797,7 +798,7 @@ class _KitchenOrderCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: onDone,
-                  icon: const Icon(Icons.check_circle_outline),
+                  icon: const Icon(LucideIcons.circleCheck),
                   label: Text(canSplit ? 'Xong cả đơn' : 'Đã xong', style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w700, fontSize: 15,
                   )),

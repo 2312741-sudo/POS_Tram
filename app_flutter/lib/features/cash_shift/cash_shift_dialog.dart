@@ -12,6 +12,7 @@ import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'cash_shifts_screen.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CashShiftDialog extends StatefulWidget {
   const CashShiftDialog({super.key});
@@ -400,7 +401,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: context.tc.warningLight, borderRadius: BorderRadius.circular(12)),
-              child: Icon(Icons.lock_open_rounded, color: context.tc.warningInk, size: 24),
+              child: Icon(LucideIcons.lockOpen, color: context.tc.warningInk, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -428,11 +429,11 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           ],
           decoration: InputDecoration(
             labelText: 'Tiền mặt đầu ca trong két (VND)',
-            prefixIcon: const Icon(Icons.attach_money),
+            prefixIcon: const Icon(LucideIcons.dollarSign),
             suffixText: 'đ',
             suffixIcon: _initialCashCtrl.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
+                    icon: const Icon(LucideIcons.x, size: 18),
                     onPressed: () {
                       setState(() {
                         _initialCashCtrl.clear();
@@ -469,7 +470,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
           child: ElevatedButton.icon(
             icon: _isSubmitting
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.check_circle_outline),
+                : const Icon(LucideIcons.circleCheck),
             label: Text(_isSubmitting ? 'Đang kích hoạt ca...' : 'Bắt Đầu Ca Làm Việc'),
             style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             onPressed: _isSubmitting ? null : _openShift,
@@ -483,7 +484,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               navigator.pop();
               navigator.push(MaterialPageRoute(builder: (_) => const CashShiftsScreen()));
             },
-            icon: Icon(Icons.history, size: 16, color: context.tc.primary),
+            icon: Icon(LucideIcons.history, size: 16, color: context.tc.primary),
             label: Text(
               'Xem lịch sử các ca trước đó ›',
               style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary),
@@ -516,7 +517,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.point_of_sale,
+                      LucideIcons.calculator,
                       color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
                       size: 20,
                     ),
@@ -571,7 +572,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
               },
               child: Row(
                 children: [
-                  Icon(Icons.receipt_long, size: 16, color: context.tc.primary),
+                  Icon(LucideIcons.receiptText, size: 16, color: context.tc.primary),
                   const SizedBox(width: 4),
                   Text(
                     'Xem tất cả phiếu giao ca ›',
@@ -645,7 +646,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.discount_outlined, size: 14, color: context.tc.primary),
+                                  Icon(LucideIcons.badgePercent, size: 14, color: context.tc.primary),
                                   const SizedBox(width: 4),
                                   Text('Khuyến mãi ca:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.primary)),
                                   const Spacer(),
@@ -688,7 +689,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.add_circle_outline),
+                            icon: const Icon(LucideIcons.circlePlus),
                             label: const Text('Nộp Thêm Tiền'),
                             style: ElevatedButton.styleFrom(backgroundColor: context.tc.success),
                             onPressed: _isSubmitting ? null : () => _addAdjustment(true),
@@ -697,7 +698,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                         const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.remove_circle_outline),
+                            icon: const Icon(LucideIcons.circleMinus),
                             label: const Text('Rút / Chi Vặt'),
                             style: ElevatedButton.styleFrom(backgroundColor: context.tc.warningInk),
                             onPressed: _isSubmitting ? null : () => _addAdjustment(false),
@@ -725,7 +726,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.lock_clock, size: 16, color: context.tc.warningInk),
+                            Icon(LucideIcons.lockKeyhole, size: 16, color: context.tc.warningInk),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -760,7 +761,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
                       child: ElevatedButton.icon(
                         icon: _isSubmitting
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.check_circle_outline),
+                            : const Icon(LucideIcons.circleCheck),
                         label: Text(_isSubmitting ? 'Đang chốt ca...' : 'Xác Nhận Chốt Két & Kết Ca'),
                         style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
                         onPressed: _isSubmitting ? null : _closeShift,

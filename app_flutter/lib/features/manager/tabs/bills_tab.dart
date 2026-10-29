@@ -13,6 +13,7 @@ import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../../../core/utils/share_utils.dart';
 import '../../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class BillsTab extends StatefulWidget {
   const BillsTab({super.key});
@@ -282,10 +283,10 @@ class _BillsTabState extends State<BillsTab> {
                   decoration: InputDecoration(
                     hintText: 'Tìm theo mã bill, bàn, thu ngân, người order...',
                     hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textHint),
-                    prefixIcon: Icon(Icons.search, size: 20, color: context.tc.primary),
+                    prefixIcon: Icon(LucideIcons.search, size: 20, color: context.tc.primary),
                     suffixIcon: _search.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(LucideIcons.x, size: 18),
                             onPressed: () => setState(() => _search = ''),
                           )
                         : null,
@@ -337,7 +338,7 @@ class _BillsTabState extends State<BillsTab> {
                           child: Row(
                             children: [
                               Icon(
-                                Icons.calendar_month,
+                                LucideIcons.calendarDays,
                                 size: 14,
                                 color: _dateFilter == 'CUSTOM' ? Colors.white : context.tc.textPrimary,
                               ),
@@ -401,7 +402,7 @@ class _BillsTabState extends State<BillsTab> {
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.table_restaurant,
+                                  LucideIcons.armchair,
                                   size: 14,
                                   color: _tableFilter != 'ALL' ? Colors.white : context.tc.textPrimary,
                                 ),
@@ -415,7 +416,7 @@ class _BillsTabState extends State<BillsTab> {
                                   ),
                                 ),
                                 Icon(
-                                  Icons.arrow_drop_down,
+                                  LucideIcons.chevronDown,
                                   size: 16,
                                   color: _tableFilter != 'ALL' ? Colors.white : context.tc.textPrimary,
                                 ),
@@ -456,7 +457,7 @@ class _BillsTabState extends State<BillsTab> {
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: Icon(Icons.file_download_outlined, color: context.tc.primary),
+                      icon: Icon(LucideIcons.download, color: context.tc.primary),
                       tooltip: 'Xuất file Excel',
                       visualDensity: VisualDensity.compact,
                       onPressed: _exportFilteredExcel,
@@ -479,7 +480,7 @@ class _BillsTabState extends State<BillsTab> {
                   children: [
                     Expanded(child: Row(
                       children: [
-                        Icon(Icons.receipt_long, size: 16, color: context.tc.textSecondary),
+                        Icon(LucideIcons.receiptText, size: 16, color: context.tc.textSecondary),
                         const SizedBox(width: 4),
                         Flexible(child: Text(
                           cancelledBills.isEmpty
@@ -500,7 +501,7 @@ class _BillsTabState extends State<BillsTab> {
                   children: [
                     Expanded(child: Row(
                       children: [
-                        const Icon(Icons.shopping_bag_outlined, size: 15, color: Color(0xFF8B5CF6)),
+                        const Icon(LucideIcons.shoppingBag, size: 15, color: Color(0xFF8B5CF6)),
                         const SizedBox(width: 4),
                         Flexible(child: Text(
                           'Mang về: $takeawayCount đơn',
@@ -524,7 +525,7 @@ class _BillsTabState extends State<BillsTab> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.receipt_long_outlined, size: 56, color: context.tc.textHint),
+                        Icon(LucideIcons.receiptText, size: 56, color: context.tc.textHint),
                         const SizedBox(height: 10),
                         Text(
                           'Không tìm thấy hóa đơn nào phù hợp bộ lọc',
@@ -755,7 +756,7 @@ class _BillsTabState extends State<BillsTab> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _isTakeaway(bill) ? Icons.shopping_bag_outlined : Icons.table_restaurant_outlined,
+                            _isTakeaway(bill) ? LucideIcons.shoppingBag : LucideIcons.armchair,
                             size: 13,
                             color: context.tc.primary,
                           ),
@@ -815,7 +816,7 @@ class _BillsTabState extends State<BillsTab> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.access_time, size: 13, color: context.tc.textHint),
+                    Icon(LucideIcons.clock, size: 13, color: context.tc.textHint),
                     const SizedBox(width: 4),
                     Text(
                       timeStr,
@@ -847,7 +848,7 @@ class _BillsTabState extends State<BillsTab> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Icon(Icons.chevron_right, size: 16, color: context.tc.textHint),
+                    Icon(LucideIcons.chevronRight, size: 16, color: context.tc.textHint),
                   ],
                 ),
               ],

@@ -18,6 +18,7 @@ import 'tabs/audit_tab.dart';
 import '../reports/reports_hub_screen.dart';
 import '../crm/customer_management_screen.dart';
 import '../chamcong/chamcong_link_screen.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ManagerHubScreen extends StatefulWidget {
   final int initialTab;
@@ -68,7 +69,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.storefront, color: context.tc.primary),
+            Icon(LucideIcons.store, color: context.tc.primary),
             const SizedBox(width: 8),
             Text(
               'Chọn Chi Nhánh',
@@ -89,7 +90,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     final isCurrent = s.storeCode == _auth.currentStoreCode;
                     return ListTile(
                       leading: Icon(
-                        isCurrent ? Icons.check_circle : Icons.store,
+                        isCurrent ? LucideIcons.circleCheck : LucideIcons.store,
                         color: isCurrent ? context.tc.primary : context.tc.textHint,
                       ),
                       title: Text(
@@ -199,7 +200,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       ),
                       if (_auth.canAccessManagerHub) ...[
                         const SizedBox(width: 4),
-                        Icon(Icons.arrow_drop_down, size: 20, color: context.tc.primary),
+                        Icon(LucideIcons.chevronDown, size: 20, color: context.tc.primary),
                       ],
                     ],
                   ),
@@ -248,7 +249,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.point_of_sale, size: 14),
+                  icon: const Icon(LucideIcons.calculator, size: 14),
                   label: Text(
                     'Bán Hàng',
                     style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold),
@@ -260,7 +261,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               ),
               if (MediaQuery.of(context).size.width >= 600)
                 IconButton(
-                  icon: Icon(Icons.assessment_outlined, color: context.tc.primary, size: 20),
+                  icon: Icon(LucideIcons.chartColumn, color: context.tc.primary, size: 20),
                   tooltip: 'Trung tâm Báo cáo',
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
@@ -271,13 +272,13 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                   },
                 ),
               IconButton(
-                icon: Icon(Icons.refresh, color: context.tc.textPrimary, size: 20),
+                icon: Icon(LucideIcons.refreshCw, color: context.tc.textPrimary, size: 20),
                 tooltip: 'Làm mới',
                 visualDensity: VisualDensity.compact,
                 onPressed: () => setState(() {}),
               ),
               PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: context.tc.textPrimary, size: 20),
+                icon: Icon(LucideIcons.ellipsisVertical, color: context.tc.textPrimary, size: 20),
                 tooltip: 'Tuỳ chọn',
                 onSelected: (val) async {
                   if (val == 'REPORTS') {
@@ -321,7 +322,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'PRINTER',
                     child: Row(
                       children: [
-                        Icon(Icons.print_outlined, size: 18, color: context.tc.primary),
+                        Icon(LucideIcons.printer, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Cài đặt máy in (LAN & Bluetooth)'),
                       ],
@@ -331,7 +332,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'REPORTS',
                     child: Row(
                       children: [
-                        Icon(Icons.assessment_outlined, size: 18, color: context.tc.primary),
+                        Icon(LucideIcons.chartColumn, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Trung tâm Báo cáo (12 BC)'),
                       ],
@@ -342,7 +343,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'CUSTOMERS',
                     child: Row(
                       children: [
-                        Icon(Icons.people_outline, size: 18, color: context.tc.primary),
+                        Icon(LucideIcons.users, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Khách hàng & Tích điểm KMT'),
                       ],
@@ -353,7 +354,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       value: 'ZONES',
                       child: Row(
                         children: [
-                          Icon(Icons.map_outlined, size: 18, color: context.tc.primary),
+                          Icon(LucideIcons.map, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('Khu vực & bàn'),
                         ],
@@ -364,7 +365,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       value: 'STORE_SETTINGS',
                       child: Row(
                         children: [
-                          Icon(Icons.settings_outlined, size: 18, color: context.tc.primary),
+                          Icon(LucideIcons.settings, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('Cài đặt cửa hàng'),
                         ],
@@ -375,7 +376,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       value: 'STORE',
                       child: Row(
                         children: [
-                          Icon(Icons.storefront, size: 18, color: context.tc.primary),
+                          Icon(LucideIcons.store, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('Đổi chi nhánh'),
                         ],
@@ -387,7 +388,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       value: 'APPROVAL_PIN',
                       child: Row(
                         children: [
-                          Icon(Icons.pin_outlined, size: 18, color: context.tc.primary),
+                          Icon(LucideIcons.keyRound, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('PIN duyệt của tôi'),
                         ],
@@ -399,7 +400,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                       value: 'CHAMCONG_LINK',
                       child: Row(
                         children: [
-                          Icon(Icons.badge_outlined, size: 18, color: context.tc.primary),
+                          Icon(LucideIcons.idCard, size: 18, color: context.tc.primary),
                           const SizedBox(width: 8),
                           const Text('Liên kết Chấm Công Trạm'),
                         ],
@@ -409,7 +410,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'THEME',
                     child: Row(
                       children: [
-                        Icon(Icons.palette_outlined, size: 18, color: context.tc.primary),
+                        Icon(LucideIcons.palette, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Giao diện (Sáng/Tối)'),
                       ],
@@ -419,7 +420,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'ABOUT_APP',
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 18, color: context.tc.primary),
+                        Icon(LucideIcons.info, size: 18, color: context.tc.primary),
                         const SizedBox(width: 8),
                         const Text('Thông tin ứng dụng'),
                       ],
@@ -429,7 +430,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'DELETE_ACCOUNT',
                     child: Row(
                       children: [
-                        Icon(Icons.no_accounts_outlined, size: 18, color: context.tc.danger),
+                        Icon(LucideIcons.userX, size: 18, color: context.tc.danger),
                         const SizedBox(width: 8),
                         Text('Xóa tài khoản của tôi', style: TextStyle(color: context.tc.danger)),
                       ],
@@ -439,7 +440,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
                     value: 'LOGOUT',
                     child: Row(
                       children: [
-                        Icon(Icons.logout, size: 18, color: context.tc.danger),
+                        Icon(LucideIcons.logOut, size: 18, color: context.tc.danger),
                         const SizedBox(width: 8),
                         Text('Đăng xuất', style: TextStyle(color: context.tc.danger)),
                       ],
@@ -487,29 +488,29 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
               elevation: 0,
               items: [
                 const BottomNavigationBarItem(
-                  icon: Icon(Icons.dashboard_outlined),
-                  activeIcon: Icon(Icons.dashboard),
+                  icon: Icon(LucideIcons.layoutDashboard),
+                  activeIcon: Icon(LucideIcons.layoutDashboard),
                   label: 'Tổng quan',
                 ),
                 const BottomNavigationBarItem(
-                  icon: Icon(Icons.monetization_on_outlined),
-                  activeIcon: Icon(Icons.monetization_on),
+                  icon: Icon(LucideIcons.circleDollarSign),
+                  activeIcon: Icon(LucideIcons.circleDollarSign),
                   label: 'Doanh thu',
                 ),
                 const BottomNavigationBarItem(
-                  icon: Icon(Icons.bar_chart_outlined),
-                  activeIcon: Icon(Icons.bar_chart),
+                  icon: Icon(LucideIcons.chartColumn),
+                  activeIcon: Icon(LucideIcons.chartColumn),
                   label: 'Phân tích',
                 ),
                 const BottomNavigationBarItem(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  activeIcon: Icon(Icons.receipt_long),
+                  icon: Icon(LucideIcons.receiptText),
+                  activeIcon: Icon(LucideIcons.receiptText),
                   label: 'Hóa đơn',
                 ),
                 if (canAudit)
                 const BottomNavigationBarItem(
-                  icon: Icon(Icons.shield_outlined),
-                  activeIcon: Icon(Icons.shield),
+                  icon: Icon(LucideIcons.shield),
+                  activeIcon: Icon(LucideIcons.shield),
                   label: 'Giám sát',
                 ),
               ],

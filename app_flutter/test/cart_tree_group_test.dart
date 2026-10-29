@@ -7,6 +7,7 @@ import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/models/campaign_models.dart';
 import 'package:tram_flutter/features/orders/widgets/campaign_pricing.dart';
 import 'package:tram_flutter/features/orders/widgets/cart_tree_group_card.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -235,13 +236,13 @@ void main() {
       expect(find.textContaining('Giảm KM: -10.000 đ'), findsOneWidget);
 
       // Bấm nút tăng số lượng của nhánh 1
-      final steppers = find.byIcon(Icons.add);
+      final steppers = find.byIcon(LucideIcons.plus);
       expect(steppers, findsNWidgets(2));
       await tester.tap(steppers.first);
       expect(incrementedIndex, equals(0));
 
       // Bấm nút xóa nhánh 2
-      final deleteButtons = find.byIcon(Icons.close_rounded);
+      final deleteButtons = find.byIcon(LucideIcons.x);
       expect(deleteButtons, findsNWidgets(2));
       await tester.tap(deleteButtons.last);
       expect(removedIndex, equals(1));

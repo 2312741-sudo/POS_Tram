@@ -14,6 +14,7 @@ import '../../../data/services/firebase_service.dart';
 import '../../cash_shift/cash_shift_dialog.dart';
 import '../../reports/reports_hub_screen.dart';
 import '../../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OverviewTab extends StatefulWidget {
   final VoidCallback onGoToPOS;
@@ -198,7 +199,7 @@ class _OverviewTabState extends State<OverviewTab> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.delivery_dining, size: 20, color: context.tc.warningInk),
+                            Icon(LucideIcons.bike, size: 20, color: context.tc.warningInk),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -226,7 +227,7 @@ class _OverviewTabState extends State<OverviewTab> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.shield_outlined, size: 20, color: context.tc.danger),
+                            Icon(LucideIcons.shield, size: 20, color: context.tc.danger),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -249,7 +250,7 @@ class _OverviewTabState extends State<OverviewTab> {
             title: 'Doanh thu ước tính ngày (Đã thu + Phục vụ)',
             value: FormatUtils.vnd(_todayRevenue + _todayServingTotal),
             subtitle: 'Đã thu: ${FormatUtils.vnd(_todayRevenue)} + Đang phục vụ: ${FormatUtils.vnd(_todayServingTotal)}',
-            icon: Icons.trending_up,
+            icon: LucideIcons.trendingUp,
             color: const Color(0xFF059669),
             onTap: widget.onGoToRevenue,
           ),
@@ -263,7 +264,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   title: 'Doanh thu hôm nay',
                   value: FormatUtils.vnd(_todayRevenue),
                   subtitle: '${_todayPaidBills.length} đơn hoàn tất',
-                  icon: Icons.monetization_on,
+                  icon: LucideIcons.circleDollarSign,
                   color: context.tc.primary,
                   onTap: widget.onGoToRevenue,
                 ),
@@ -274,7 +275,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   title: 'Số đơn bán ra',
                   value: '${_todayPaidBills.length} đơn',
                   subtitle: 'Xem danh sách',
-                  icon: Icons.receipt_long,
+                  icon: LucideIcons.receiptText,
                   color: context.tc.success,
                   onTap: widget.onGoToBills,
                 ),
@@ -289,7 +290,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   title: 'Bàn đang phục vụ',
                   value: '$_occupiedTables/${_tables.length} bàn',
                   subtitle: '${_tables.length - _occupiedTables} bàn còn trống',
-                  icon: Icons.table_restaurant,
+                  icon: LucideIcons.armchair,
                   color: context.tc.warning,
                   onTap: widget.onGoToPOS,
                 ),
@@ -300,7 +301,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   title: 'Tổng giảm giá',
                   value: FormatUtils.vnd(_todayDiscounts),
                   subtitle: 'Voucher & điểm',
-                  icon: Icons.discount,
+                  icon: LucideIcons.badgePercent,
                   color: context.tc.danger,
                   onTap: widget.onGoToAnalytics,
                 ),
@@ -328,7 +329,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   children: [
                     Expanded(child: Row(
                       children: [
-                        Icon(Icons.trending_up, size: 20, color: context.tc.primary),
+                        Icon(LucideIcons.trendingUp, size: 20, color: context.tc.primary),
                         const SizedBox(width: 8),
                         Flexible(child: Text(
                           'Xu Hướng 7 Ngày Qua',
@@ -373,7 +374,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.local_fire_department, size: 20, color: context.tc.warning),
+                        Icon(LucideIcons.flame, size: 20, color: context.tc.warning),
                         const SizedBox(width: 8),
                         Text(
                           'Top Món Bán Chạy Hôm Nay',
@@ -454,7 +455,7 @@ class _OverviewTabState extends State<OverviewTab> {
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.assessment, color: Colors.white, size: 26),
+                    child: const Icon(LucideIcons.chartColumn, color: Colors.white, size: 26),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -473,7 +474,7 @@ class _OverviewTabState extends State<OverviewTab> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                  const Icon(LucideIcons.chevronRight, color: Colors.white70, size: 14),
                 ],
               ),
             ),
@@ -491,7 +492,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Két Tiền Ca',
-                  icon: Icons.point_of_sale,
+                  icon: LucideIcons.calculator,
                   color: context.tc.success,
                   onTap: () => CashShiftDialog.show(context),
                 ),
@@ -500,7 +501,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Voucher',
-                  icon: Icons.discount_outlined,
+                  icon: LucideIcons.badgePercent,
                   color: context.tc.warning,
                   onTap: () => context.push('/promotions'),
                 ),
@@ -509,7 +510,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Nhân Viên',
-                  icon: Icons.people_outline,
+                  icon: LucideIcons.users,
                   color: context.tc.info,
                   onTap: () => context.push('/user-management'),
                 ),
@@ -518,7 +519,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Thực Đơn',
-                  icon: Icons.menu_book_outlined,
+                  icon: LucideIcons.bookOpen,
                   color: context.tc.primary,
                   onTap: () => context.push('/menu-management'),
                 ),
@@ -531,7 +532,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Báo Cáo Cuối Ngày',
-                  icon: Icons.summarize_outlined,
+                  icon: LucideIcons.fileText,
                   color: context.tc.primary,
                   onTap: () => context.push('/end-of-day-report'),
                 ),
@@ -540,7 +541,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Phiếu Giao Ca',
-                  icon: Icons.receipt_long,
+                  icon: LucideIcons.receiptText,
                   color: context.tc.success,
                   onTap: () => context.push('/cash-shifts'),
                 ),
@@ -549,7 +550,7 @@ class _OverviewTabState extends State<OverviewTab> {
               Expanded(
                 child: _buildActionShortcut(
                   label: 'Kho Hàng',
-                  icon: Icons.inventory_2_outlined,
+                  icon: LucideIcons.package,
                   color: TramColors.accent,
                   onTap: () => context.push('/inventory'),
                 ),
@@ -559,7 +560,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 Expanded(
                   child: _buildActionShortcut(
                     label: 'Giám Sát',
-                    icon: Icons.shield_outlined,
+                    icon: LucideIcons.shield,
                     color: context.tc.danger,
                     onTap: widget.onGoToAudit,
                   ),
@@ -608,7 +609,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   ),
                   child: Icon(icon, size: 20, color: color),
                 ),
-                Icon(Icons.arrow_forward_ios, size: 12, color: context.tc.textHint),
+                Icon(LucideIcons.chevronRight, size: 12, color: context.tc.textHint),
               ],
             ),
             const SizedBox(height: 10),

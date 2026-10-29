@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ==================== HEADER ====================
 class CartHeaderBar extends StatelessWidget {
@@ -103,7 +104,7 @@ class CartHeaderBar extends StatelessWidget {
                   _buildToggleBtn(
                     context,
                     title: 'Nhánh',
-                    icon: Icons.account_tree_outlined,
+                    icon: LucideIcons.network,
                     isSelected: treeViewMode,
                     onTap: () => onToggleTreeViewMode!(true),
                   ),
@@ -111,7 +112,7 @@ class CartHeaderBar extends StatelessWidget {
                   _buildToggleBtn(
                     context,
                     title: 'Danh sách',
-                    icon: Icons.format_list_bulleted,
+                    icon: LucideIcons.list,
                     isSelected: !treeViewMode,
                     onTap: () => onToggleTreeViewMode!(false),
                   ),
@@ -263,7 +264,7 @@ class CartCustomerBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Row(
           children: [
-            Icon(Icons.person_pin, color: context.tc.warningInk, size: 20),
+            Icon(LucideIcons.userRound, color: context.tc.warningInk, size: 20),
             const SizedBox(width: 6),
             Expanded(
               child: c == null
@@ -327,7 +328,7 @@ class CartCustomerBar extends StatelessWidget {
                   tooltip: 'Sửa thông tin khách',
                   padding: const EdgeInsets.all(4),
                   constraints: const BoxConstraints(),
-                  icon: Icon(Icons.edit_outlined, size: 18, color: context.tc.textSecondary),
+                  icon: Icon(LucideIcons.pencil, size: 18, color: context.tc.textSecondary),
                   onPressed: onEdit,
                 ),
               const SizedBox(width: 4),
@@ -345,13 +346,13 @@ class CartCustomerBar extends StatelessWidget {
                 tooltip: 'Bỏ chọn khách',
                 padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(),
-                icon: Icon(Icons.close, size: 18, color: context.tc.textSecondary),
+                icon: Icon(LucideIcons.x, size: 18, color: context.tc.textSecondary),
                 onPressed: onClear,
               ),
             ] else
               TextButton.icon(
                 onPressed: onLookup,
-                icon: const Icon(Icons.search, size: 15),
+                icon: const Icon(LucideIcons.search, size: 15),
                 label: const Text('Tìm khách'),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
@@ -500,7 +501,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                         ),
                       ],
                       const Spacer(),
-                      Icon(Icons.keyboard_arrow_down, size: 16, color: context.tc.textSecondary),
+                      Icon(LucideIcons.chevronDown, size: 16, color: context.tc.textSecondary),
                     ],
                   ),
                 ),
@@ -517,7 +518,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                     onTap: () => setState(() => _expandedBreakdown = false),
                     child: Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: Icon(Icons.keyboard_arrow_up, size: 18, color: context.tc.textSecondary),
+                      child: Icon(LucideIcons.chevronUp, size: 18, color: context.tc.textSecondary),
                     ),
                   ),
                 Text(
@@ -551,7 +552,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.discount_outlined, size: 15),
+                    icon: const Icon(LucideIcons.badgePercent, size: 15),
                     label: Text(
                       widget.appliedDiscounts.isEmpty ? 'Khuyến mãi' : 'KM (${widget.appliedDiscounts.length})',
                       maxLines: 1,
@@ -564,7 +565,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                 const SizedBox(width: 5),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.receipt_long_outlined, size: 15),
+                    icon: const Icon(LucideIcons.receiptText, size: 15),
                     label: const Text('Tạm tính', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
                       foregroundColor: WidgetStatePropertyAll(context.tc.textPrimary),
@@ -576,7 +577,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                 const SizedBox(width: 5),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.cancel_outlined, size: 15),
+                    icon: const Icon(LucideIcons.circleX, size: 15),
                     label: const Text('Hủy đơn', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: secondaryStyle.copyWith(
                       foregroundColor: WidgetStatePropertyAll(context.tc.danger),
@@ -596,7 +597,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                   Expanded(
                     flex: 4,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.soup_kitchen_outlined, size: 18),
+                      icon: const Icon(LucideIcons.chefHat, size: 18),
                       label: Text(
                         'Gửi bếp (${widget.unsentCount})',
                         maxLines: 1,
@@ -617,7 +618,7 @@ class _CartSummaryPanelState extends State<CartSummaryPanel> {
                 Expanded(
                   flex: hasUnsent ? 5 : 1,
                   child: ElevatedButton.icon(
-                    icon: Icon(hasUnsent ? Icons.payments_outlined : Icons.check_circle_outline, size: 19),
+                    icon: Icon(hasUnsent ? LucideIcons.banknote : LucideIcons.circleCheck, size: 19),
                     label: Text(
                       hasUnsent ? 'THANH TOÁN' : 'THANH TOÁN (${FormatUtils.vnd(widget.finalTotal)})',
                       maxLines: 1,

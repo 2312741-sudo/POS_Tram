@@ -14,6 +14,7 @@ import 'stock_card_screen.dart';
 import 'excel_import_dialog.dart';
 import 'inventory_excel_service.dart';
 import '../../core/utils/format_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -56,17 +57,17 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
       title: 'Quản lý kho',
       actions: [
         IconButton(
-          icon: const Icon(Icons.file_download_outlined),
+          icon: const Icon(LucideIcons.download),
           tooltip: 'Xuất file Excel',
           onPressed: _exportCatalogExcel,
         ),
         IconButton(
-          icon: const Icon(Icons.upload_file_rounded),
+          icon: const Icon(LucideIcons.fileUp),
           tooltip: 'Nhập từ file Excel',
           onPressed: () => _showImportExcelDialog(_lastLoadedItems),
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert),
+          icon: const Icon(LucideIcons.ellipsisVertical),
           onSelected: (val) {
             if (val == 'template') {
               _downloadSampleExcel();
@@ -81,7 +82,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               value: 'import',
               child: Row(
                 children: [
-                  Icon(Icons.upload_file_rounded, size: 18, color: context.tc.primary),
+                  Icon(LucideIcons.fileUp, size: 18, color: context.tc.primary),
                   const SizedBox(width: 8),
                   const Text('Nhập file Excel'),
                 ],
@@ -91,7 +92,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               value: 'export',
               child: Row(
                 children: [
-                  Icon(Icons.file_download_outlined, size: 18, color: AppColors.managerAccent),
+                  Icon(LucideIcons.download, size: 18, color: AppColors.managerAccent),
                   SizedBox(width: 8),
                   Text('Xuất file Excel'),
                 ],
@@ -101,7 +102,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               value: 'template',
               child: Row(
                 children: [
-                  Icon(Icons.description_outlined, size: 18, color: context.tc.textSecondary),
+                  Icon(LucideIcons.fileText, size: 18, color: context.tc.textSecondary),
                   const SizedBox(width: 8),
                   const Text('Tải file mẫu Excel'),
                 ],
@@ -160,7 +161,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
 
         if (items.isEmpty) {
           return EmptyState(
-            icon: Icons.inventory_2_outlined,
+            icon: LucideIcons.package,
             title: 'Chưa có hàng hóa',
             action: _auth.can(AppPermissions.editCatalogItem)
                 ? Row(
@@ -168,7 +169,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                     children: [
                       ElevatedButton.icon(
                         onPressed: () => _showCatalogDialog(null),
-                        icon: const Icon(Icons.add, size: 18),
+                        icon: const Icon(LucideIcons.plus, size: 18),
                         label: const Text('Thêm hàng'),
                         style: ElevatedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget), backgroundColor: context.tc.primary, foregroundColor: Colors.white),
                       ),
@@ -176,7 +177,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                         onPressed: () => _showImportExcelDialog(items),
-                        icon: const Icon(Icons.upload_file_rounded, size: 18),
+                        icon: const Icon(LucideIcons.fileUp, size: 18),
                         label: const Text('Nhập Excel'),
                       ),
                     ],
@@ -213,7 +214,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                             decoration: InputDecoration(
                               hintText: 'Tìm theo tên, mã SKU, nhóm hàng...',
                               hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textSecondary),
-                              prefixIcon: const Icon(Icons.search, size: 20),
+                              prefixIcon: const Icon(LucideIcons.search, size: 20),
                               isDense: true,
                               filled: true,
                               fillColor: context.tc.surface,
@@ -228,7 +229,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                         const SizedBox(width: 8),
                         IconButton.filledTonal(
                           onPressed: () => _showImportExcelDialog(items),
-                          icon: const Icon(Icons.upload_file_rounded, size: 20),
+                          icon: const Icon(LucideIcons.fileUp, size: 20),
                           tooltip: 'Nhập Excel',
                           style: IconButton.styleFrom(
                             backgroundColor: context.tc.primary.withAlpha(25),
@@ -238,7 +239,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                         const SizedBox(width: 4),
                         IconButton.filledTonal(
                           onPressed: _exportCatalogExcel,
-                          icon: const Icon(Icons.file_download_outlined, size: 20),
+                          icon: const Icon(LucideIcons.download, size: 20),
                           tooltip: 'Xuất Excel',
                           style: IconButton.styleFrom(
                             backgroundColor: AppColors.managerAccent.withAlpha(25),
@@ -290,7 +291,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               ? FloatingActionButton(
                   onPressed: () => _showCatalogDialog(null),
                   backgroundColor: context.tc.primary,
-                  child: const Icon(Icons.add, color: Colors.white),
+                  child: const Icon(LucideIcons.plus, color: Colors.white),
                 )
               : null,
         );
@@ -312,7 +313,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         final stocks = snapshot.data ?? [];
         if (stocks.isEmpty) {
           return const EmptyState(
-            icon: Icons.inventory_outlined,
+            icon: LucideIcons.boxes,
             title: 'Không có dữ liệu tồn kho',
           );
         }
@@ -327,7 +328,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               child: ListTile(
                 title: Text('Hàng ID: ${stock.itemId}'),
                 subtitle: Text('Tồn: ${stock.onHandQty} | Khả dụng: ${stock.availableQty}'),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(LucideIcons.chevronRight),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(
                     builder: (_) => StockCardScreen(itemId: stock.itemId, branchId: stock.branchId),
@@ -363,7 +364,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               color: context.tc.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.login_rounded, color: context.tc.primary),
+            child: Icon(LucideIcons.logIn, color: context.tc.primary),
           ),
           title: const Text('Phiếu nhập hàng (Stock In)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Nhập nguyên vật liệu từ nhà cung cấp, cập nhật giá vốn'),
@@ -387,7 +388,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               color: context.tc.warningLight.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.logout_rounded, color: context.tc.warningLight),
+            child: Icon(LucideIcons.logOut, color: context.tc.warningLight),
           ),
           title: const Text('Phiếu xuất kho (Stock Out)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Xuất nguyên vật liệu cho quầy bar, bếp, pha chế nội bộ'),
@@ -411,7 +412,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               color: context.tc.dangerLight.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.delete_sweep_outlined, color: context.tc.dangerLight),
+            child: Icon(LucideIcons.trash, color: context.tc.dangerLight),
           ),
           title: const Text('Phiếu xuất hủy (Waste)', style: TextStyle(fontWeight: FontWeight.w600)),
           subtitle: const Text('Ghi nhận hàng hết hạn, đổ vỡ, hư hỏng không sử dụng được'),
@@ -491,11 +492,11 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         final docs = snapshot.data ?? [];
         if (docs.isEmpty) {
           return EmptyState(
-            icon: Icons.receipt_long_outlined,
+            icon: LucideIcons.receiptText,
             title: 'Chưa có phiếu kho nào',
             action: canAnyCreate
                 ? ElevatedButton.icon(
-                    icon: const Icon(Icons.add),
+                    icon: const Icon(LucideIcons.plus),
                     onPressed: () => _showCreateDocSheet(context),
                     label: const Text('Tạo phiếu kho'),
                   )
@@ -541,8 +542,8 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
                     ),
                     child: Icon(
                       doc.docType == 'PURCHASE_RECEIPT'
-                          ? Icons.login_rounded
-                          : (doc.docType == 'INTERNAL_USE' ? Icons.logout_rounded : Icons.delete_outline_rounded),
+                          ? LucideIcons.logIn
+                          : (doc.docType == 'INTERNAL_USE' ? LucideIcons.logOut : LucideIcons.trash2),
                       color: typeColor,
                     ),
                   ),
@@ -597,7 +598,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               ? FloatingActionButton.extended(
                   onPressed: () => _showCreateDocSheet(context),
                   backgroundColor: context.tc.primary,
-                  icon: const Icon(Icons.add, color: Colors.white),
+                  icon: const Icon(LucideIcons.plus, color: Colors.white),
                   label: const Text('Tạo phiếu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 )
               : null,
@@ -620,7 +621,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
         final suppliers = snapshot.data ?? [];
         if (suppliers.isEmpty) {
           return EmptyState(
-            icon: Icons.business_outlined,
+            icon: LucideIcons.building2,
             title: 'Chưa có nhà cung cấp',
             action: _auth.can(AppPermissions.editSuppliers)
                 ? ElevatedButton(
@@ -651,7 +652,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SingleTickerProv
               ? FloatingActionButton(
                   onPressed: () => _showSupplierDialog(null),
                   backgroundColor: context.tc.primary,
-                  child: const Icon(Icons.add, color: Colors.white),
+                  child: const Icon(LucideIcons.plus, color: Colors.white),
                 )
               : null,
         );

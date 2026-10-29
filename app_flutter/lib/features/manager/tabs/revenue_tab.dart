@@ -14,6 +14,7 @@ import '../../../data/services/firebase_service.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../../../core/utils/share_utils.dart';
 import '../../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 enum RevenueTabType { day, week, month, year }
 
@@ -309,7 +310,7 @@ class _RevenueTabState extends State<RevenueTab> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.file_download_outlined, size: 18),
+                icon: const Icon(LucideIcons.download, size: 18),
                 label: Text('Xuất Excel', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
                 onPressed: _exportExcel,
               ),
@@ -384,7 +385,7 @@ class _RevenueTabState extends State<RevenueTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.chevron_left),
+                  icon: const Icon(LucideIcons.chevronLeft),
                   tooltip: 'Kỳ trước',
                   onPressed: () => setState(() => _offset++),
                 ),
@@ -397,7 +398,7 @@ class _RevenueTabState extends State<RevenueTab> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.calendar_month, size: 16, color: context.tc.primary),
+                          Icon(LucideIcons.calendarDays, size: 16, color: context.tc.primary),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
@@ -413,7 +414,7 @@ class _RevenueTabState extends State<RevenueTab> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right),
+                  icon: const Icon(LucideIcons.chevronRight),
                   tooltip: 'Kỳ sau',
                   onPressed: _offset > 0 ? () => setState(() => _offset--) : null,
                 ),
@@ -428,7 +429,7 @@ class _RevenueTabState extends State<RevenueTab> {
               title: 'Doanh thu ước tính ngày',
               value: FormatUtils.vnd(_totalRevenue + _servingTotal),
               subtitle: 'Công thức: Đã thu (${FormatUtils.vnd(_totalRevenue)}) + Phục vụ (${FormatUtils.vnd(_servingTotal)})',
-              icon: Icons.trending_up,
+              icon: LucideIcons.trendingUp,
               color: const Color(0xFF059669),
               fullWidth: true,
             ),
@@ -440,7 +441,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Tổng doanh thu',
                     value: FormatUtils.vnd(_totalRevenue),
                     subtitle: '${filtered.length} hóa đơn đã thu',
-                    icon: Icons.monetization_on,
+                    icon: LucideIcons.circleDollarSign,
                     color: context.tc.primary,
                   ),
                 ),
@@ -450,7 +451,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Đang phục vụ',
                     value: FormatUtils.vnd(_servingTotal),
                     subtitle: '$_servingCount bàn đang dùng',
-                    icon: Icons.table_restaurant_outlined,
+                    icon: LucideIcons.armchair,
                     color: const Color(0xFF2563EB),
                   ),
                 ),
@@ -464,7 +465,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Mang về',
                     value: FormatUtils.vnd(_takeawayRevenue),
                     subtitle: '$_takeawayCount hóa đơn mang về',
-                    icon: Icons.shopping_bag_outlined,
+                    icon: LucideIcons.shoppingBag,
                     color: const Color(0xFF8B5CF6),
                   ),
                 ),
@@ -474,7 +475,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Tiền mặt',
                     value: FormatUtils.vnd(_cashRevenue),
                     subtitle: 'Doanh thu tiền mặt',
-                    icon: Icons.payments_outlined,
+                    icon: LucideIcons.banknote,
                     color: context.tc.success,
                   ),
                 ),
@@ -488,7 +489,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Chuyển khoản (QR)',
                     value: FormatUtils.vnd(_transferRevenue),
                     subtitle: 'Chuyển khoản / VietQR',
-                    icon: Icons.qr_code_2,
+                    icon: LucideIcons.qrCode,
                     color: context.tc.info,
                   ),
                 ),
@@ -498,7 +499,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'TB / Đơn',
                     value: FormatUtils.vnd(_avgPerOrder),
                     subtitle: 'Giá trị TB mỗi hóa đơn',
-                    icon: Icons.analytics_outlined,
+                    icon: LucideIcons.chartLine,
                     color: context.tc.warning,
                   ),
                 ),
@@ -524,7 +525,7 @@ class _RevenueTabState extends State<RevenueTab> {
                             color: context.bg(const Color(0xFFDBEAFE)),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.table_restaurant, color: context.ink(const Color(0xFF2563EB)), size: 18),
+                          child: Icon(LucideIcons.armchair, color: context.ink(const Color(0xFF2563EB)), size: 18),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -593,7 +594,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Tổng doanh thu',
                     value: FormatUtils.vnd(_totalRevenue),
                     subtitle: '${filtered.length} đơn hoàn tất',
-                    icon: Icons.monetization_on,
+                    icon: LucideIcons.circleDollarSign,
                     color: context.tc.primary,
                   ),
                 ),
@@ -603,7 +604,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Mang về',
                     value: FormatUtils.vnd(_takeawayRevenue),
                     subtitle: '$_takeawayCount hóa đơn mang về',
-                    icon: Icons.shopping_bag_outlined,
+                    icon: LucideIcons.shoppingBag,
                     color: const Color(0xFF8B5CF6),
                   ),
                 ),
@@ -617,7 +618,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Tiền mặt',
                     value: FormatUtils.vnd(_cashRevenue),
                     subtitle: 'Doanh thu tiền mặt',
-                    icon: Icons.payments_outlined,
+                    icon: LucideIcons.banknote,
                     color: context.tc.success,
                   ),
                 ),
@@ -627,7 +628,7 @@ class _RevenueTabState extends State<RevenueTab> {
                     title: 'Chuyển khoản (QR)',
                     value: FormatUtils.vnd(_transferRevenue),
                     subtitle: 'Chuyển khoản / VietQR',
-                    icon: Icons.qr_code_2,
+                    icon: LucideIcons.qrCode,
                     color: context.tc.info,
                   ),
                 ),
@@ -638,7 +639,7 @@ class _RevenueTabState extends State<RevenueTab> {
               title: 'Giá trị trung bình mỗi đơn (TB/Đơn)',
               value: FormatUtils.vnd(_avgPerOrder),
               subtitle: 'Doanh thu bình quân mỗi hóa đơn',
-              icon: Icons.analytics_outlined,
+              icon: LucideIcons.chartLine,
               color: context.tc.warning,
               fullWidth: true,
             ),
@@ -708,7 +709,7 @@ class _RevenueTabState extends State<RevenueTab> {
               ),
               child: Column(
                 children: [
-                  Icon(Icons.receipt_outlined, size: 48, color: context.tc.textHint),
+                  Icon(LucideIcons.receipt, size: 48, color: context.tc.textHint),
                   const SizedBox(height: 8),
                   Text(
                     'Không có hóa đơn nào trong khoảng thời gian này',
@@ -749,7 +750,7 @@ class _RevenueTabState extends State<RevenueTab> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            isCash ? Icons.payments_outlined : Icons.qr_code_2,
+                            isCash ? LucideIcons.banknote : LucideIcons.qrCode,
                             color: isCash ? context.tc.success : context.tc.info,
                             size: 20,
                           ),

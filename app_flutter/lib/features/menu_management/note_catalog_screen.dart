@@ -13,6 +13,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
 import 'note_catalog_access.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class NoteCatalogScreen extends StatefulWidget {
   final String storeCode;
@@ -104,7 +105,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                 for (var i = 0; i < items.length; i++)
                   Row(children: [
                     Expanded(child: TextField(controller: items[i], decoration: InputDecoration(hintText: 'Câu note ${i + 1}'))),
-                    IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setSt(() {
+                    IconButton(icon: const Icon(LucideIcons.x, size: 18), onPressed: () => setSt(() {
                           items.removeAt(i);
                           ids.removeAt(i);
                         })),
@@ -116,7 +117,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                       items.add(TextEditingController());
                       ids.add(_newId('n'));
                     }),
-                    icon: const Icon(Icons.add),
+                    icon: const Icon(LucideIcons.plus),
                     label: const Text('Thêm câu note'),
                   ),
                 ),
@@ -186,7 +187,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                     Expanded(flex: 3, child: TextField(controller: names[i], decoration: const InputDecoration(hintText: 'Tên'))),
                     const SizedBox(width: 8),
                     Expanded(flex: 2, child: TextField(controller: prices[i], keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'Giá (đ)'))),
-                    IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setSt(() {
+                    IconButton(icon: const Icon(LucideIcons.x, size: 18), onPressed: () => setSt(() {
                           names.removeAt(i);
                           prices.removeAt(i);
                           ids.removeAt(i);
@@ -200,7 +201,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                       prices.add(TextEditingController(text: '0'));
                       ids.add(_newId('t'));
                     }),
-                    icon: const Icon(Icons.add),
+                    icon: const Icon(LucideIcons.plus),
                     label: const Text('Thêm topping'),
                   ),
                 ),
@@ -274,7 +275,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
         onTap: onTap,
         title: Text(title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, color: active ? context.tc.textPrimary : context.tc.textHint)),
         subtitle: Text(active ? subtitle : 'Đã tắt • $subtitle', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-        trailing: IconButton(icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20), onPressed: onDelete),
+        trailing: IconButton(icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20), onPressed: onDelete),
       ),
     );
   }
@@ -296,7 +297,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
           foregroundColor: context.tc.textPrimary,
           title: Text('Note & topping [${widget.storeCode}]', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, color: context.tc.textPrimary)),
           actions: [
-            IconButton(tooltip: 'Nhập từ cấu hình cũ', icon: const Icon(Icons.download_for_offline_outlined), onPressed: _importLegacy),
+            IconButton(tooltip: 'Nhập từ cấu hình cũ', icon: const Icon(LucideIcons.circleArrowDown), onPressed: _importLegacy),
           ],
           bottom: const TabBar(tabs: [Tab(text: 'Danh mục note'), Tab(text: 'Nhóm topping')]),
         ),
@@ -369,7 +370,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
   }) {
     return Stack(children: [
       count == 0
-          ? EmptyState(icon: Icons.sticky_note_2_outlined, title: empty)
+          ? EmptyState(icon: LucideIcons.stickyNote, title: empty)
           : ReorderableListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               itemCount: count,
@@ -382,7 +383,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
         child: FloatingActionButton.extended(
           heroTag: addLabel,
           onPressed: onAdd,
-          icon: const Icon(Icons.add, color: Colors.white),
+          icon: const Icon(LucideIcons.plus, color: Colors.white),
           label: Text(addLabel, style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
           backgroundColor: context.tc.primary,
         ),

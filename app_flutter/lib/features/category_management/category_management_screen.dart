@@ -10,6 +10,7 @@ import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../menu_management/attachment_picker.dart';
 import '../menu_management/note_catalog_access.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   final String? initialStoreCode;
@@ -113,7 +114,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           style: TextStyle(color: context.tc.textPrimary),
           decoration: InputDecoration(
             labelText: 'Tên danh mục',
-            prefixIcon: Icon(Icons.category_outlined, color: context.tc.textSecondary),
+            prefixIcon: Icon(LucideIcons.shapes, color: context.tc.textSecondary),
           ),
           autofocus: true,
           textCapitalization: TextCapitalization.words,
@@ -155,7 +156,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     style: TextStyle(fontSize: 12, color: context.tc.textSecondary)),
                 AttachmentPicker(
                   title: 'Danh mục note áp dụng',
-                  icon: Icons.sticky_note_2_outlined,
+                  icon: LucideIcons.stickyNote,
                   isProduct: false,
                   options: [for (final g in _catalog.noteGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
                   value: noteIds,
@@ -163,7 +164,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 ),
                 AttachmentPicker(
                   title: 'Nhóm topping áp dụng',
-                  icon: Icons.add_circle_outline,
+                  icon: LucideIcons.circlePlus,
                   isProduct: false,
                   options: [for (final g in _catalog.toppingGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
                   value: toppingIds,
@@ -228,7 +229,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Icon(Icons.storefront, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.store, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary)),
                 const SizedBox(width: 10),
@@ -275,11 +276,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               ? const Center(child: CircularProgressIndicator())
               : _categories.isEmpty
                 ? EmptyState(
-                    icon: Icons.category_outlined,
+                    icon: LucideIcons.shapes,
                     title: 'Chưa có danh mục cho chi nhánh $_selectedStoreCode',
                     action: ElevatedButton.icon(
                       onPressed: _showAddDialog,
-                      icon: const Icon(Icons.add),
+                      icon: const Icon(LucideIcons.plus),
                       label: const Text('Thêm danh mục'),
                     ),
                   )
@@ -324,17 +325,17 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                             color: context.tc.primary.withAlpha(26),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.category_outlined, color: context.tc.primary, size: 18),
+                          child: Icon(LucideIcons.shapes, color: context.tc.primary, size: 18),
                         ),
                         title: Text(_categories[i].name, style: GoogleFonts.beVietnamPro(
                           color: context.tc.textPrimary, fontWeight: FontWeight.w600)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.drag_handle, color: context.tc.textHint, size: 20),
+                            Icon(LucideIcons.gripHorizontal, color: context.tc.textHint, size: 20),
                             const SizedBox(width: 8),
                             IconButton(
-                              icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
+                              icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20),
                               onPressed: () => _deleteCategory(_categories[i]),
                             ),
                           ],
@@ -347,7 +348,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDialog,
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(LucideIcons.plus, color: Colors.white),
         label: Text('Thêm danh mục vào [$_selectedStoreCode]', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
         backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,

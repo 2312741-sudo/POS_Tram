@@ -5,6 +5,7 @@ import '../../core/permissions/app_permissions.dart';
 import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
 import '../../core/utils/format_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PurchaseReceiptScreen extends StatefulWidget {
   final String? documentId;
@@ -402,19 +403,19 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
         actions: [
           if (isDraft) ...[
             IconButton(
-              icon: const Icon(Icons.save_outlined),
+              icon: const Icon(LucideIcons.save),
               onPressed: () => _save(complete: false),
               tooltip: 'Lưu tạm DRAFT',
             ),
             if (_canCompleteDoc())
               IconButton(
-                icon: const Icon(Icons.check_circle_outline),
+                icon: const Icon(LucideIcons.circleCheck),
                 onPressed: () => _save(complete: true),
                 tooltip: 'Duyệt & Hoàn thành',
               ),
             if (_doc != null)
               IconButton(
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(LucideIcons.trash2),
                 onPressed: _cancelDoc,
                 tooltip: 'Hủy phiếu',
               ),
@@ -509,7 +510,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
                           }
                         }
                       },
-                      icon: const Icon(Icons.business, size: 16),
+                      icon: const Icon(LucideIcons.building2, size: 16),
                       label: const Text('Chọn NCC'),
                     ),
                   ],
@@ -517,7 +518,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
               else
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.business, color: context.tc.primary),
+                  leading: Icon(LucideIcons.building2, color: context.tc.primary),
                   title: Text(_doc?.supplierName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: const Text('Nhà cung cấp'),
                 ),
@@ -582,7 +583,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 48, color: context.tc.textHint),
+            Icon(LucideIcons.package, size: 48, color: context.tc.textHint),
             const SizedBox(height: 8),
             Text(
               'Chưa có mặt hàng nào trong $_docTypeName',
@@ -613,7 +614,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
                 ),
                 if (!isReadOnly)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                    icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
                     onPressed: () {
                       setState(() {
                         _lines.removeAt(index);
@@ -644,7 +645,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
           if (!isReadOnly)
             ElevatedButton.icon(
               onPressed: _showAddItemDialog,
-              icon: const Icon(Icons.add),
+              icon: const Icon(LucideIcons.plus),
               label: const Text('Thêm hàng vào phiếu'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.tc.primary,

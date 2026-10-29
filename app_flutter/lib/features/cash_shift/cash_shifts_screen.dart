@@ -11,6 +11,7 @@ import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/utils/share_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CashShiftsScreen extends StatefulWidget {
   const CashShiftsScreen({super.key});
@@ -515,7 +516,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.discount_outlined, size: 16, color: context.tc.primary),
+                          Icon(LucideIcons.badgePercent, size: 16, color: context.tc.primary),
                           const SizedBox(width: 6),
                           Text(
                             'KHUYẾN MÃI & GIẢM GIÁ TRONG CA',
@@ -553,7 +554,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                icon: Icon(Icons.table_view_outlined, size: 18, color: context.ink(const Color(0xFF137333))),
+                icon: Icon(LucideIcons.table, size: 18, color: context.ink(const Color(0xFF137333))),
                 label: Text('Xuất Excel Khuyến Mãi Ca', style: TextStyle(color: context.ink(const Color(0xFF137333)), fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF137333)),
@@ -583,7 +584,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  icon: Icon(Icons.lock_outline, size: 18, color: context.tc.danger),
+                  icon: Icon(LucideIcons.lock, size: 18, color: context.tc.danger),
                   label: Text('Đóng ca bắt buộc', style: TextStyle(color: context.tc.danger, fontWeight: FontWeight.bold)),
                   onPressed: () => _forceCloseShift(shift),
                 ),
@@ -594,7 +595,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.share_outlined, size: 18),
+                    icon: const Icon(LucideIcons.share2, size: 18),
                     label: const Text('Chia Sẻ Phiếu'),
                     onPressed: () async {
                       final text = '''
@@ -633,7 +634,7 @@ Ghi chú: ${shift.notes}
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.print_outlined, size: 18),
+                    icon: const Icon(LucideIcons.printer, size: 18),
                     label: const Text('In Phiếu Bàn Giao'),
                     style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
                     onPressed: () {
@@ -727,7 +728,7 @@ Ghi chú: ${shift.notes}
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_month_outlined),
+            icon: const Icon(LucideIcons.calendarDays),
             tooltip: 'Chọn ngày',
             onPressed: () async {
               final picked = await showDatePicker(
@@ -743,7 +744,7 @@ Ghi chú: ${shift.notes}
           ),
           if (_selectedDate != null)
             IconButton(
-              icon: const Icon(Icons.clear, size: 20),
+              icon: const Icon(LucideIcons.x, size: 20),
               tooltip: 'Xóa lọc ngày',
               onPressed: () => setState(() => _selectedDate = null),
             ),
@@ -763,7 +764,7 @@ Ghi chú: ${shift.notes}
                   child: TextField(
                     decoration: InputDecoration(
                       hintText: 'Tìm theo mã ca, tên nhân viên...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
+                      prefixIcon: const Icon(LucideIcons.search, size: 20),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       filled: true,
                       fillColor: context.tc.card,
@@ -805,7 +806,7 @@ Ghi chú: ${shift.notes}
               padding: const EdgeInsets.only(left: 16, bottom: 6),
               child: Row(
                 children: [
-                  Icon(Icons.filter_alt, size: 14, color: context.tc.primary),
+                  Icon(LucideIcons.funnel, size: 14, color: context.tc.primary),
                   const SizedBox(width: 4),
                   Text(
                     'Đang lọc ngày: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
@@ -842,7 +843,7 @@ Ghi chú: ${shift.notes}
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.receipt_long_outlined, size: 56, color: context.tc.textHint),
+                                    Icon(LucideIcons.receiptText, size: 56, color: context.tc.textHint),
                                     const SizedBox(height: 12),
                                     Text(
                                       'Không tìm thấy phiên giao két nào',
@@ -1031,7 +1032,7 @@ Ghi chú: ${shift.notes}
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
-                            Icons.point_of_sale,
+                            LucideIcons.calculator,
                             size: 18,
                             color: shift.isOpen ? context.tc.success : context.tc.textSecondary,
                           ),

@@ -11,6 +11,7 @@ import '../../widgets/theme_mode_selector.dart';
 import '../../data/services/firebase_service.dart';
 import '../../data/models/app_models.dart';
 import 'change_password_dialog.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -286,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Container(
                                     color: context.tc.primaryLight,
-                                    child: Icon(Icons.restaurant_menu,
+                                    child: Icon(LucideIcons.utensils,
                                         size: 40, color: context.tc.primary),
                                   ),
                                 ),
@@ -325,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.timer_outlined,
+                                  Icon(LucideIcons.timer,
                                       color: context.tc.warning, size: 22),
                                   const SizedBox(width: 10),
                                   Expanded(
@@ -353,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.error_outline,
+                                  Icon(LucideIcons.circleAlert,
                                       color: context.tc.danger, size: 20),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -378,7 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             autocorrect: false,
                             decoration: const InputDecoration(
                               labelText: 'Mã cửa hàng *',
-                              prefixIcon: Icon(Icons.storefront_outlined),
+                              prefixIcon: Icon(LucideIcons.store),
                               hintText: 'VD: TRAM01, TRAM02',
                             ),
                           ),
@@ -427,7 +428,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             autofillHints: const [AutofillHints.username],
                             decoration: const InputDecoration(
                               labelText: 'Tên đăng nhập *',
-                              prefixIcon: Icon(Icons.person_outline),
+                              prefixIcon: Icon(LucideIcons.user),
                               hintText: 'VD: thungan1, ql_kho...',
                             ),
                           ),
@@ -441,15 +442,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             autofillHints: const [AutofillHints.password],
                             decoration: InputDecoration(
                               labelText: 'Mật khẩu *',
-                              prefixIcon: const Icon(Icons.lock_outline),
+                              prefixIcon: const Icon(LucideIcons.lock),
                               suffixIcon: IconButton(
                                 tooltip: _obscurePassword
                                     ? 'Hiện mật khẩu'
                                     : 'Ẩn mật khẩu',
                                 icon: Icon(
                                   _obscurePassword
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
+                                      ? LucideIcons.eyeOff
+                                      : LucideIcons.eye,
                                   color: context.tc.textSecondary,
                                 ),
                                 onPressed: () => setState(
@@ -571,7 +572,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       borderRadius: BorderRadius.circular(12)),
                                 ),
                                 onPressed: _isLoading ? null : _handleChamCongLogin,
-                                icon: const Icon(Icons.badge_outlined),
+                                icon: const Icon(LucideIcons.idCard),
                                 label: Text(
                                   'Đăng nhập bằng Chấm Công Trạm',
                                   style: GoogleFonts.beVietnamPro(
@@ -595,8 +596,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 tooltip: 'Giao diện',
                 icon: Icon(
                   context.isDarkMode
-                      ? Icons.dark_mode_outlined
-                      : Icons.light_mode_outlined,
+                      ? LucideIcons.moon
+                      : LucideIcons.sun,
                   color: context.tc.textSecondary,
                 ),
                 onPressed: () => showThemeModeDialog(context),

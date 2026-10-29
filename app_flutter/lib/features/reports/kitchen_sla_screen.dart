@@ -13,6 +13,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/share_utils.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 enum SlaDateFilter {
   today('Hôm nay'),
@@ -260,7 +261,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.delete_forever, color: AppColors.danger),
+            const Icon(LucideIcons.trash2, color: AppColors.danger),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -359,19 +360,19 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
           IconButton(
             icon: _exporting
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.table_view_outlined, color: Colors.greenAccent),
+                : const Icon(LucideIcons.table, color: Colors.greenAccent),
             tooltip: 'Xuất file Excel báo cáo SOS',
             onPressed: (_exporting || _loading || _clearing) ? null : _exportExcel,
           ),
           IconButton(
             icon: _clearing
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.delete_sweep_outlined, color: Colors.amberAccent),
+                : const Icon(LucideIcons.trash, color: Colors.amberAccent),
             tooltip: 'Xoá dữ liệu SOS',
             onPressed: (_clearing || _loading || _exporting) ? null : _confirmClearSlaData,
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(LucideIcons.refreshCw),
             tooltip: 'Tải lại',
             onPressed: (_loading || _clearing) ? null : _loadData,
           ),
@@ -390,7 +391,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.receipt_long, size: 17),
+                  Icon(LucideIcons.receiptText, size: 17),
                   SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -406,7 +407,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.restaurant_menu, size: 17),
+                  Icon(LucideIcons.utensils, size: 17),
                   SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -485,7 +486,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                     ? ErrorState(title: 'Lỗi tải dữ liệu', message: _error!, onRetry: _loadData)
                     : (summary == null || summary.orders.isEmpty)
                         ? const EmptyState(
-                            icon: Icons.timer_outlined,
+                            icon: LucideIcons.timer,
                             title: 'Chưa có dữ liệu đơn bếp hoàn tất',
                             subtitle: 'Hệ thống sẽ đo thời gian ngay khi bếp bấm hoàn thành các đơn gọi món.',
                           )
@@ -499,21 +500,21 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                     _buildKpiCard(
                                       title: 'TB / Đơn',
                                       value: _formatDuration(summary.averageOrder),
-                                      icon: Icons.timer,
+                                      icon: LucideIcons.timer,
                                       color: Colors.blue,
                                     ),
                                     const SizedBox(width: 6),
                                     _buildKpiCard(
                                       title: 'Chậm nhất',
                                       value: _formatDuration(summary.maxOrder),
-                                      icon: Icons.warning_amber_rounded,
+                                      icon: LucideIcons.triangleAlert,
                                       color: Colors.deepOrange,
                                     ),
                                     const SizedBox(width: 6),
                                     _buildKpiCard(
                                       title: 'TB / Món',
                                       value: _formatDuration(summary.averageItem),
-                                      icon: Icons.coffee,
+                                      icon: LucideIcons.coffee,
                                       color: Colors.teal,
                                     ),
                                     const SizedBox(width: 6),
@@ -521,7 +522,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                       title: 'Tỉ lệ trễ',
                                       value:
                                           '${summary.lateOrderCount}/${summary.orders.length} (${(summary.lateOrderCount * 100 / summary.orders.length).toStringAsFixed(0)}%)',
-                                      icon: Icons.report_problem,
+                                      icon: LucideIcons.triangleAlert,
                                       color: summary.lateOrderCount > 0 ? AppColors.danger : AppColors.success,
                                     ),
                                   ],
@@ -557,7 +558,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                               radius: 18,
                                               backgroundColor: isLate ? Colors.red.shade100 : Colors.green.shade100,
                                               child: Icon(
-                                                isLate ? Icons.timer_off : Icons.check,
+                                                isLate ? LucideIcons.timerOff : LucideIcons.check,
                                                 color: isLate ? AppColors.danger : AppColors.success,
                                                 size: 18,
                                               ),
@@ -685,7 +686,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                                                   side: BorderSide(color: context.tc.border),
                                                 ),
                                                 leading: Icon(
-                                                  it.group == kKitchenGroupFood ? Icons.cake_outlined : Icons.local_cafe_outlined,
+                                                  it.group == kKitchenGroupFood ? LucideIcons.cake : LucideIcons.coffee,
                                                   color: context.tc.primary,
                                                 ),
                                                 title: Text(

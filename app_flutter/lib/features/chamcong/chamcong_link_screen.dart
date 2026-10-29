@@ -9,6 +9,7 @@ import '../../core/services/chamcong_auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import 'chamcong_sign_in_sheet.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ChamCongLinkScreen extends StatefulWidget {
   const ChamCongLinkScreen({super.key});
@@ -150,7 +151,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
       appBar: AppBar(
         title: Text('Liên kết Chấm Công Trạm', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), tooltip: 'Làm mới', onPressed: _loading ? null : _load),
+          IconButton(icon: const Icon(LucideIcons.refreshCw), tooltip: 'Làm mới', onPressed: _loading ? null : _load),
         ],
       ),
       body: !(_auth.isOwner || _auth.can(AppPermissions.manageChamcongLink))
@@ -170,7 +171,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                           children: [
                             if (!_configured)
                               _banner(
-                                icon: Icons.info_outline,
+                                icon: LucideIcons.info,
                                 color: context.tc.warning,
                                 bg: context.tc.warningLight,
                                 ink: context.tc.warningInk,
@@ -179,7 +180,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                               ),
                             if (_error != null)
                               _banner(
-                                icon: Icons.error_outline,
+                                icon: LucideIcons.circleAlert,
                                 color: context.tc.danger,
                                 bg: context.tc.dangerLight,
                                 ink: context.tc.danger,
@@ -198,7 +199,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                                   children: [
                                     Row(
                                       children: [
-                                        Icon(linked ? Icons.link : Icons.link_off,
+                                        Icon(linked ? LucideIcons.link : LucideIcons.unlink,
                                             color: linked ? context.tc.success : context.tc.textSecondary),
                                         const SizedBox(width: 8),
                                         Expanded(
@@ -214,13 +215,13 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 8),
-                                    _infoRow(Icons.storefront_outlined, 'Cửa hàng POS', _storeCode),
+                                    _infoRow(LucideIcons.store, 'Cửa hàng POS', _storeCode),
                                     if (linked) ...[
-                                      _infoRow(Icons.badge_outlined, 'Cửa hàng chấm công',
+                                      _infoRow(LucideIcons.idCard, 'Cửa hàng chấm công',
                                           status?.chamCongStoreName ?? status?.chamCongStoreId ?? '—'),
                                       if (status?.linkedAt != null)
-                                        _infoRow(Icons.schedule, 'Liên kết lúc', FormatUtils.dateTime(status!.linkedAt!)),
-                                      _infoRow(Icons.group_outlined, 'Tài khoản đã tự cấp',
+                                        _infoRow(LucideIcons.clock, 'Liên kết lúc', FormatUtils.dateTime(status!.linkedAt!)),
+                                      _infoRow(LucideIcons.users, 'Tài khoản đã tự cấp',
                                           '${status?.provisionedCount ?? 0} nhân viên'),
                                     ],
                                   ],
@@ -229,7 +230,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                             ),
                             const SizedBox(height: 16),
                             _banner(
-                              icon: Icons.lightbulb_outline,
+                              icon: LucideIcons.lightbulb,
                               color: context.tc.info,
                               bg: context.tc.infoLight,
                               ink: context.tc.textPrimary,
@@ -249,7 +250,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
                                   onPressed: (_busy || !_configured || _error != null) ? null : _link,
-                                  icon: const Icon(Icons.link, color: Colors.white),
+                                  icon: const Icon(LucideIcons.link, color: Colors.white),
                                   label: Text('Liên kết',
                                       style: GoogleFonts.beVietnamPro(
                                           fontWeight: FontWeight.bold, color: Colors.white)),
@@ -270,7 +271,7 @@ class _ChamCongLinkScreenState extends State<ChamCongLinkScreen> {
                                           width: 18,
                                           height: 18,
                                           child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.danger))
-                                      : const Icon(Icons.link_off),
+                                      : const Icon(LucideIcons.unlink),
                                   label: Text('Hủy liên kết',
                                       style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
                                 ),

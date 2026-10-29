@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/domain/customer_search.dart';
 import '../../../core/utils/text_formatters.dart';
 import '../../../data/models/app_models.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CustomerPickerSheet extends StatefulWidget {
   final Future<List<CustomerCandidate>> Function() loadCandidates;
@@ -128,7 +129,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: const [
-              Icon(Icons.edit_outlined, color: Colors.blue),
+              Icon(LucideIcons.pencil, color: Colors.blue),
               SizedBox(width: 8),
               Text('Sửa thông tin khách hàng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
@@ -149,7 +150,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                        Icon(LucideIcons.circleAlert, size: 16, color: Colors.red.shade700),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -169,7 +170,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   ],
                   decoration: const InputDecoration(
                     labelText: 'Họ và tên *',
-                    prefixIcon: Icon(Icons.person_outline),
+                    prefixIcon: Icon(LucideIcons.user),
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),
@@ -183,7 +184,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Số điện thoại *',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                    prefixIcon: Icon(LucideIcons.phone),
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),
@@ -201,9 +202,9 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   width: double.infinity,
                   child: SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
-                      ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
-                      ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                      ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(LucideIcons.mars, size: 16)),
+                      ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(LucideIcons.venus, size: 16)),
+                      ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(LucideIcons.user, size: 16)),
                     ],
                     selected: {gender},
                     onSelectionChanged: (set) => setDialogState(() => gender = set.first),
@@ -216,12 +217,12 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   decoration: InputDecoration(
                     labelText: 'Ngày sinh',
                     hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
-                    prefixIcon: const Icon(Icons.cake_outlined),
+                    prefixIcon: const Icon(LucideIcons.cake),
                     isDense: true,
                     border: const OutlineInputBorder(),
                     suffixIcon: birthday != null
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(LucideIcons.x, size: 18),
                             onPressed: () {
                               setDialogState(() {
                                 birthday = null;
@@ -229,7 +230,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                               });
                             },
                           )
-                        : const Icon(Icons.calendar_today, size: 18),
+                        : const Icon(LucideIcons.calendar, size: 18),
                   ),
                   onTap: () async {
                     final now = DateTime.now();
@@ -370,7 +371,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                        Icon(LucideIcons.circleAlert, size: 16, color: Colors.red.shade700),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -390,7 +391,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   ],
                   decoration: const InputDecoration(
                     labelText: 'Họ và tên *',
-                    prefixIcon: Icon(Icons.person),
+                    prefixIcon: Icon(LucideIcons.user),
                     isDense: true,
                   ),
                   onChanged: (_) {
@@ -403,7 +404,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Số điện thoại *',
-                    prefixIcon: Icon(Icons.phone),
+                    prefixIcon: Icon(LucideIcons.phone),
                     isDense: true,
                   ),
                   onChanged: (_) {
@@ -420,9 +421,9 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   width: double.infinity,
                   child: SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
-                      ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
-                      ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                      ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(LucideIcons.mars, size: 16)),
+                      ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(LucideIcons.venus, size: 16)),
+                      ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(LucideIcons.user, size: 16)),
                     ],
                     selected: {gender},
                     onSelectionChanged: (set) => setDialogState(() => gender = set.first),
@@ -435,11 +436,11 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                   decoration: InputDecoration(
                     labelText: 'Ngày sinh',
                     hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
-                    prefixIcon: const Icon(Icons.cake_outlined),
+                    prefixIcon: const Icon(LucideIcons.cake),
                     isDense: true,
                     suffixIcon: birthday != null
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(LucideIcons.x, size: 18),
                             onPressed: () {
                               setDialogState(() {
                                 birthday = null;
@@ -447,7 +448,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                               });
                             },
                           )
-                        : const Icon(Icons.calendar_today, size: 18),
+                        : const Icon(LucideIcons.calendar, size: 18),
                   ),
                   onTap: () async {
                     final now = DateTime.now();
@@ -523,8 +524,8 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                 onChanged: _onChanged,
                 decoration: InputDecoration(
                   hintText: 'SĐT, 4 số cuối hoặc tên khách',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: hasQuery ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _ctrl.clear(); _onChanged(''); }) : null,
+                  prefixIcon: const Icon(LucideIcons.search),
+                  suffixIcon: hasQuery ? IconButton(icon: const Icon(LucideIcons.x), onPressed: () { _ctrl.clear(); _onChanged(''); }) : null,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -559,7 +560,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                                 if (widget.updateCustomer != null) ...[
                                   const SizedBox(width: 4),
                                   IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.black54),
+                                    icon: const Icon(LucideIcons.pencil, size: 20, color: Colors.black54),
                                     tooltip: 'Sửa thông tin',
                                     onPressed: () => _editCustomer(m.customer),
                                   ),
@@ -570,7 +571,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                         if (_remote != null)
                           ListTile(
                             onTap: () => Navigator.pop(context, _toModel(_remote!)),
-                            leading: const Icon(Icons.public),
+                            leading: const Icon(LucideIcons.globe),
                             title: Text(_remote!.name, style: bold),
                             subtitle: Text('${_phone(_remote!.phone)} • khách ở chi nhánh khác', style: small),
                             trailing: Text('${_remote!.points} điểm', style: bold.copyWith(fontSize: 13)),
@@ -578,7 +579,7 @@ class _CustomerPickerSheetState extends State<CustomerPickerSheet> {
                         if (hasQuery && _results.isEmpty && _remote == null)
                           Padding(padding: const EdgeInsets.all(16), child: Text('Không thấy khách phù hợp.', style: small)),
                         ListTile(
-                          leading: const Icon(Icons.person_add),
+                          leading: const Icon(LucideIcons.userPlus),
                           title: const Text('Thêm khách mới'),
                           onTap: _addNew,
                         ),

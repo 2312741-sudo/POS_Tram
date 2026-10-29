@@ -7,6 +7,7 @@ import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class StockCardScreen extends StatelessWidget {
   final String itemId;
@@ -41,7 +42,7 @@ class StockCardScreen extends StatelessWidget {
           final events = snapshot.data ?? [];
           if (events.isEmpty) {
             return const EmptyState(
-              icon: Icons.history,
+              icon: LucideIcons.history,
               title: 'Chưa có biến động kho',
             );
           }

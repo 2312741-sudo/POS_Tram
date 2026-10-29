@@ -10,6 +10,7 @@ import '../../data/services/firebase_service.dart';
 import '../../core/services/auth_service.dart';
 import 'voucher_check.dart';
 import 'voucher_management_screen.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CampaignFormScreen extends StatefulWidget {
   final CampaignModel? campaign;
@@ -437,7 +438,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                     TextField(
                       decoration: const InputDecoration(
                         hintText: 'Tìm kiếm món...',
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(LucideIcons.search),
                         isDense: true,
                         border: OutlineInputBorder(),
                       ),
@@ -522,7 +523,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.save),
+            icon: const Icon(LucideIcons.save),
             onPressed: _save,
           )
         ],
@@ -545,7 +546,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Mã chương trình (Tự động)',
                   border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(icon: const Icon(Icons.refresh), onPressed: _generateCode),
+                  suffixIcon: IconButton(icon: const Icon(LucideIcons.refreshCw), onPressed: _generateCode),
                 ),
                 readOnly: widget.campaign != null,
               ),
@@ -702,7 +703,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   const Text('Nhóm hàng áp dụng:', style: TextStyle(fontWeight: FontWeight.bold)),
                   TextButton.icon(
                     onPressed: _showCategorySelector,
-                    icon: const Icon(Icons.add, size: 16),
+                    icon: const Icon(LucideIcons.plus, size: 16),
                     label: const Text('Chọn nhóm'),
                   ),
                 ],
@@ -719,7 +720,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   children: _includedGroupIds.map((catName) {
                     return Chip(
                       label: Text(catName),
-                      deleteIcon: const Icon(Icons.close, size: 14),
+                      deleteIcon: const Icon(LucideIcons.x, size: 14),
                       onDeleted: () => setState(() => _includedGroupIds.remove(catName)),
                       backgroundColor: context.tc.surface,
                     );
@@ -732,7 +733,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   const Text('Món hàng áp dụng:', style: TextStyle(fontWeight: FontWeight.bold)),
                   TextButton.icon(
                     onPressed: _showProductSelector,
-                    icon: const Icon(Icons.add, size: 16),
+                    icon: const Icon(LucideIcons.plus, size: 16),
                     label: const Text('Chọn món'),
                   ),
                 ],
@@ -751,7 +752,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                     final name = prod?.name ?? 'Món #$itemId';
                     return Chip(
                       label: Text(name),
-                      deleteIcon: const Icon(Icons.close, size: 14),
+                      deleteIcon: const Icon(LucideIcons.x, size: 14),
                       onDeleted: () => setState(() => _includedItemIds.remove(itemId)),
                       backgroundColor: context.tc.surface,
                     );
@@ -809,7 +810,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   const Text('Khung giờ (Happy hours):', style: TextStyle(fontWeight: FontWeight.bold)),
                   TextButton.icon(
                     onPressed: _addTimeSlot,
-                    icon: const Icon(Icons.add_alarm, size: 16),
+                    icon: const Icon(LucideIcons.alarmClockPlus, size: 16),
                     label: const Text('Thêm khung giờ'),
                   ),
                 ],
@@ -827,10 +828,10 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.access_time, color: context.tc.primary),
+                      leading: Icon(LucideIcons.clock, color: context.tc.primary),
                       title: Text('${slot.startTime} - ${slot.endTime}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        icon: const Icon(LucideIcons.trash2, color: Colors.red),
                         onPressed: () => setState(() => _timeSlots.removeAt(idx)),
                       ),
                     );
@@ -844,7 +845,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               ListTile(
                 title: const Text('Ngày bắt đầu'),
                 subtitle: Text(_startDate == null ? 'Không giới hạn' : DateFormat('dd/MM/yyyy HH:mm').format(_startDate!)),
-                trailing: const Icon(Icons.calendar_today),
+                trailing: const Icon(LucideIcons.calendar),
                 onTap: () async {
                   final date = await showDatePicker(
                     context: context,
@@ -861,7 +862,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
               ListTile(
                 title: const Text('Ngày kết thúc'),
                 subtitle: Text(_endDate == null ? 'Không giới hạn' : DateFormat('dd/MM/yyyy HH:mm').format(_endDate!)),
-                trailing: const Icon(Icons.calendar_today),
+                trailing: const Icon(LucideIcons.calendar),
                 onTap: () async {
                   final date = await showDatePicker(
                     context: context,
@@ -1026,14 +1027,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             children: [
               TextButton.icon(
                 onPressed: _showRandomCodesDialog,
-                icon: const Icon(Icons.casino_outlined, size: 16),
+                icon: const Icon(LucideIcons.dices, size: 16),
                 label: const Text('Tạo mã ngẫu nhiên'),
               ),
               if (widget.campaign != null)
                 TextButton.icon(
                   onPressed: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => VoucherManagementScreen(campaign: widget.campaign!))),
-                  icon: const Icon(Icons.list_alt, size: 16),
+                  icon: const Icon(LucideIcons.list, size: 16),
                   label: const Text('Xem danh sách mã đã tạo'),
                 ),
             ],
@@ -1161,16 +1162,16 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         final qty = t.maxRewardQty > 0 ? t.maxRewardQty : 1;
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.card_giftcard),
+          leading: const Icon(LucideIcons.gift),
           title: Text('Đơn hàng từ ${FormatUtils.vnd(t.threshold)}'),
           subtitle: Text('${_benefitText(t.benefitMode, t.value)} tối đa $qty món: ${_itemsAndGroups(t.rewardItemIds, t.rewardGroupIds)}'),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editTier(e.key)),
-            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => setState(() => _tiers.removeAt(e.key))),
+            IconButton(icon: const Icon(LucideIcons.pencil), onPressed: () => _editTier(e.key)),
+            IconButton(icon: const Icon(LucideIcons.trash2, color: Colors.red), onPressed: () => setState(() => _tiers.removeAt(e.key))),
           ]),
         );
       }),
-      TextButton.icon(onPressed: () => _editTier(null), icon: const Icon(Icons.add), label: const Text('Thêm mức ưu đãi')),
+      TextButton.icon(onPressed: () => _editTier(null), icon: const Icon(LucideIcons.plus), label: const Text('Thêm mức ưu đãi')),
       Text('Khi đơn đạt mức, nhân viên chọn khuyến mãi ở màn hình bán hàng và app tự thêm món được tặng/giảm vào đơn. Đơn đạt nhiều mức sẽ lấy mức cao nhất.',
           style: TextStyle(fontSize: 12, color: context.tc.textHint)),
     ]);
@@ -1212,14 +1213,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Nhóm món được tặng/giảm'),
                   subtitle: Text(rewardGroups.isEmpty ? '(chưa chọn)' : rewardGroups.join(', ')),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickGroups('Chọn nhóm món được tặng/giảm', rewardGroups, () => setDlg(() {})),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Món được tặng/giảm'),
                   subtitle: Text(_productNames(rewardIds)),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickProducts('Chọn món được tặng/giảm', rewardIds, () => setDlg(() {})),
                 ),
               ]),
@@ -1271,17 +1272,17 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
         final c = e.value;
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.shopping_basket_outlined),
+          leading: const Icon(LucideIcons.shoppingBasket),
           title: Text('Mua ${c.requiredBuyQty}: ${_itemsAndGroups(c.buyItemIds, c.buyGroupIds)}'),
           subtitle: Text('${_benefitText(c.benefitMode, c.value)} ${c.rewardQty}: ${_itemsAndGroups(c.rewardItemIds, c.rewardGroupIds)}'
               '${c.multiplyByBundle ? "\n(Nhân theo số món X bán ra)" : ""}'),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editCondition(e.key)),
-            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => setState(() => _buyConditions.removeAt(e.key))),
+            IconButton(icon: const Icon(LucideIcons.pencil), onPressed: () => _editCondition(e.key)),
+            IconButton(icon: const Icon(LucideIcons.trash2, color: Colors.red), onPressed: () => setState(() => _buyConditions.removeAt(e.key))),
           ]),
         );
       }),
-      TextButton.icon(onPressed: () => _editCondition(null), icon: const Icon(Icons.add), label: const Text('Thêm điều kiện')),
+      TextButton.icon(onPressed: () => _editCondition(null), icon: const Icon(LucideIcons.plus), label: const Text('Thêm điều kiện')),
       Text('Có thể chọn cả nhóm món để tránh sót món lẻ. Món Y do nhân viên tự gọi (app không tự thêm); mỗi món X ghép với một món Y có trong đơn, ưu đãi áp vào món Y rẻ nhất trước.', style: TextStyle(fontSize: 12, color: context.tc.textHint)),
     ]);
   }
@@ -1312,14 +1313,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Nhóm món mua (X)'),
                   subtitle: Text(buyGroups.isEmpty ? '(chưa chọn)' : buyGroups.join(', ')),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickGroups('Chọn nhóm món mua (X)', buyGroups, () => setDlg(() {})),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Hàng mua (X)'),
                   subtitle: Text(_productNames(buyIds)),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickProducts('Chọn hàng mua (X)', buyIds, () => setDlg(() {})),
                 ),
                 TextField(
@@ -1332,14 +1333,14 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Nhóm món được tặng/giảm (Y)'),
                   subtitle: Text(rewardGroups.isEmpty ? '(chưa chọn)' : rewardGroups.join(', ')),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickGroups('Chọn nhóm món được tặng/giảm (Y)', rewardGroups, () => setDlg(() {})),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Hàng được tặng/giảm giá (Y)'),
                   subtitle: Text(_productNames(rewardIds)),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(LucideIcons.chevronRight),
                   onTap: () => _pickProducts('Chọn hàng được tặng/giảm (Y)', rewardIds, () => setDlg(() {})),
                 ),
                 TextField(

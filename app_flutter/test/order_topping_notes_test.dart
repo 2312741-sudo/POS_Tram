@@ -4,6 +4,7 @@ import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/data/models/order_item_model.dart';
 import 'package:tram_flutter/data/models/category_model.dart';
 import 'package:tram_flutter/features/orders/widgets/payment_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   group('Order Topping & Notes Tests', () {
@@ -166,9 +167,9 @@ void main() {
       expect(find.text('Thanh toán • Bàn 01'), findsOneWidget);
       expect(find.text('125.000 đ'), findsOneWidget);
       expect(find.text('Khách hàng: Nguyễn Văn A (0987654321)'), findsOneWidget);
-      expect(find.byIcon(Icons.close), findsOneWidget);
+      expect(find.byIcon(LucideIcons.x), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.close));
+      await tester.tap(find.byIcon(LucideIcons.x));
       await tester.pump();
       expect(closed, isTrue);
     });

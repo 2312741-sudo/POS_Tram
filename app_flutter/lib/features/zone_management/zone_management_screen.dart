@@ -11,6 +11,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ZoneManagementScreen extends StatefulWidget {
   const ZoneManagementScreen({super.key});
@@ -152,7 +153,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
             controller: nameCtrl,
             autofocus: true,
             style: TextStyle(color: context.tc.textPrimary),
-            decoration: _field('Tên khu vực (VD: Khu A, Tầng 2)', icon: Icons.map_outlined),
+            decoration: _field('Tên khu vực (VD: Khu A, Tầng 2)', icon: LucideIcons.map),
             textCapitalization: TextCapitalization.words,
           ),
           const SizedBox(height: 12),
@@ -201,7 +202,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
             controller: ctrl,
             autofocus: true,
             style: TextStyle(color: context.tc.textPrimary),
-            decoration: _field('Tên khu mới', icon: Icons.edit_outlined),
+            decoration: _field('Tên khu mới', icon: LucideIcons.pencil),
             textCapitalization: TextCapitalization.words,
           ),
           const SizedBox(height: 8),
@@ -354,7 +355,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                                   : null,
                               trailing: IconButton(
                                 tooltip: 'Xóa bàn',
-                                icon: Icon(Icons.delete_outline, color: context.tc.danger),
+                                icon: Icon(LucideIcons.trash2, color: context.tc.danger),
                                 onPressed: _busy
                                     ? null
                                     : () async {
@@ -386,19 +387,19 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
         actions: [
           IconButton(
             tooltip: 'Dọn bàn trùng',
-            icon: const Icon(Icons.cleaning_services_outlined),
+            icon: const Icon(LucideIcons.brushCleaning),
             onPressed: _busy ? null : _dedupe,
           ),
         ],
       ),
       body: zones.isEmpty
           ? EmptyState(
-              icon: Icons.map_outlined,
+              icon: LucideIcons.map,
               title: 'Chưa có khu vực',
               subtitle: 'Thêm khu vực để phân loại bàn',
               action: ElevatedButton.icon(
                 onPressed: _showCreateDialog,
-                icon: const Icon(Icons.add),
+                icon: const Icon(LucideIcons.plus),
                 label: const Text('Thêm khu vực'),
               ),
             )
@@ -423,7 +424,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                   child: ListTile(
                     leading: IconButton(
                       tooltip: pinned ? 'Bỏ ghim khu' : 'Ghim khu lên đầu',
-                      icon: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                      icon: Icon(pinned ? LucideIcons.pin : LucideIcons.pin,
                           color: pinned ? context.tc.primary : context.tc.textHint, size: 22),
                       onPressed: _busy ? null : () => _togglePin(zone, !pinned),
                     ),
@@ -438,29 +439,29 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
                       children: [
                         IconButton(
                           tooltip: busy ? 'Còn bàn đang dùng — không đổi tên' : 'Đổi tên khu',
-                          icon: Icon(Icons.edit_outlined, color: context.tc.primary, size: 20),
+                          icon: Icon(LucideIcons.pencil, color: context.tc.primary, size: 20),
                           onPressed: _busy || busy ? null : () => _showRenameDialog(zone),
                         ),
                         IconButton(
                           tooltip: 'Xem / xóa bàn',
-                          icon: Icon(Icons.table_restaurant_outlined, color: context.tc.primary, size: 20),
+                          icon: Icon(LucideIcons.armchair, color: context.tc.primary, size: 20),
                           onPressed: _busy ? null : () => _showTables(zone),
                         ),
                         IconButton(
                           tooltip: 'Thêm bàn vào khu',
-                          icon: Icon(Icons.add_circle_outline, color: context.tc.primary, size: 20),
+                          icon: Icon(LucideIcons.circlePlus, color: context.tc.primary, size: 20),
                           onPressed: _busy ? null : () => _showAddTablesDialog(zone),
                         ),
                         IconButton(
                           tooltip: n > 0 ? 'Khu còn bàn — không thể xóa' : 'Xóa khu',
-                          icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
+                          icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20),
                           onPressed: _busy || n > 0 ? null : () => _deleteZone(zone),
                         ),
                         ReorderableDragStartListener(
                           index: i,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Icon(Icons.drag_handle, color: context.tc.textHint, size: 22),
+                            child: Icon(LucideIcons.gripHorizontal, color: context.tc.textHint, size: 22),
                           ),
                         ),
                       ],
@@ -473,7 +474,7 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
           ? null
           : FloatingActionButton.extended(
               onPressed: _busy ? null : _showCreateDialog,
-              icon: const Icon(Icons.add, color: Colors.white),
+              icon: const Icon(LucideIcons.plus, color: Colors.white),
               label: Text('Thêm khu', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
               backgroundColor: context.tc.primary,
               foregroundColor: Colors.white,

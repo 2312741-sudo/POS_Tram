@@ -3,6 +3,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/inventory_models.dart';
 import '../../data/services/inventory_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class InventoryReportScreen extends StatefulWidget {
   const InventoryReportScreen({super.key});
@@ -209,7 +210,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            leading: Icon(isOutOfStock ? Icons.error : Icons.warning, color: color),
+            leading: Icon(isOutOfStock ? LucideIcons.circleAlert : LucideIcons.triangleAlert, color: color),
             title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('SKU: ${item.sku ?? 'N/A'} | Tồn: ${balance.onHandQty} | Tối thiểu: ${item.minStock}'),
             trailing: Text('Thiếu: $missing', style: TextStyle(color: color, fontWeight: FontWeight.bold)),

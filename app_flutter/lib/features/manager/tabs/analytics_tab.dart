@@ -8,6 +8,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AnalyticsTab extends StatefulWidget {
   const AnalyticsTab({super.key});
@@ -245,7 +246,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.pie_chart, size: 20, color: context.tc.primary),
+                    Icon(LucideIcons.chartPie, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Tỷ Lệ Phương Thức Thanh Toán',
@@ -339,7 +340,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.access_time_filled, size: 20, color: context.tc.warning),
+                        Icon(LucideIcons.clock, size: 20, color: context.tc.warning),
                         const SizedBox(width: 8),
                         Text(
                           'Khung Giờ Cao Điểm (0h - 23h)',
@@ -380,7 +381,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.emoji_events, size: 20, color: Color(0xFFFFB800)),
+                    const Icon(LucideIcons.trophy, size: 20, color: Color(0xFFFFB800)),
                     const SizedBox(width: 8),
                     Text(
                       'Top 10 Món Bán Chạy Nhất',
@@ -433,7 +434,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.place, size: 20, color: context.tc.info),
+                      Icon(LucideIcons.mapPin, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
                       Text(
                         'Doanh Thu Theo Khu Vực / Tầng',
@@ -722,7 +723,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       children: [
         Expanded(child: Row(
           children: [
-            Icon(Icons.table_bar_outlined, size: 18, color: context.tc.primary),
+            Icon(LucideIcons.armchair, size: 18, color: context.tc.primary),
             const SizedBox(width: 8),
             Flexible(child: Text(
               zone,

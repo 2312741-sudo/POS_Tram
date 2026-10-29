@@ -11,6 +11,7 @@ import '../../core/utils/text_formatters.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'customer_delete_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CustomerManagementScreen extends StatefulWidget {
   const CustomerManagementScreen({super.key});
@@ -96,7 +97,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           title: Row(
             children: [
               Icon(
-                isEditing ? Icons.edit_outlined : Icons.person_add_outlined,
+                isEditing ? LucideIcons.pencil : LucideIcons.userPlus,
                 color: context.tc.primary,
               ),
               const SizedBox(width: 8),
@@ -126,7 +127,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                          Icon(LucideIcons.circleAlert, size: 16, color: Colors.red.shade700),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -164,7 +165,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                     ],
                     decoration: const InputDecoration(
                       labelText: 'Họ và tên *',
-                      prefixIcon: Icon(Icons.person_outline),
+                      prefixIcon: Icon(LucideIcons.user),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) {
@@ -177,7 +178,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Số điện thoại *',
-                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixIcon: Icon(LucideIcons.phone),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) {
@@ -194,9 +195,9 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                     width: double.infinity,
                     child: SegmentedButton<String>(
                       segments: const [
-                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
-                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
-                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(LucideIcons.mars, size: 16)),
+                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(LucideIcons.venus, size: 16)),
+                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(LucideIcons.user, size: 16)),
                       ],
                       selected: {gender},
                       onSelectionChanged: (set) => setDialogState(() => gender = set.first),
@@ -209,11 +210,11 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                     decoration: InputDecoration(
                       labelText: 'Ngày sinh',
                       hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
-                      prefixIcon: const Icon(Icons.cake_outlined),
+                      prefixIcon: const Icon(LucideIcons.cake),
                       border: const OutlineInputBorder(),
                       suffixIcon: birthday != null
                           ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
+                              icon: const Icon(LucideIcons.x, size: 18),
                               onPressed: () {
                                 setDialogState(() {
                                   birthday = null;
@@ -221,7 +222,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                 });
                               },
                             )
-                          : const Icon(Icons.calendar_today, size: 18),
+                          : const Icon(LucideIcons.calendar, size: 18),
                     ),
                     onTap: () async {
                       final now = DateTime.now();
@@ -525,7 +526,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.settings, color: context.tc.primary),
+            Icon(LucideIcons.settings, color: context.tc.primary),
             const SizedBox(width: 8),
             Text(
               'Cấu Hình Tỷ Lệ Điểm KMT',
@@ -625,24 +626,24 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
         actions: [
           if (_canManageCustomer)
             IconButton(
-              icon: const Icon(Icons.person_add_outlined),
+              icon: const Icon(LucideIcons.userPlus),
               tooltip: 'Thêm khách hàng mới',
               onPressed: () => _showAddOrEditCustomerDialog(),
             ),
           if (_auth.isOwner || _auth.can(AppPermissions.manageLoyalty))
             IconButton(
-              icon: const Icon(Icons.settings_outlined),
+              icon: const Icon(LucideIcons.settings),
               tooltip: 'Cấu hình tỷ lệ đổi điểm',
               onPressed: _showConfigPointRateDialog,
             ),
           if (_auth.can(AppPermissions.exportData))
             IconButton(
-              icon: const Icon(Icons.table_view_outlined),
+              icon: const Icon(LucideIcons.table),
               tooltip: 'Xuất Excel danh sách',
               onPressed: _exportExcel,
             ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(LucideIcons.refreshCw),
             tooltip: 'Làm mới',
             onPressed: _loadData,
           ),
@@ -652,7 +653,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
           ? FloatingActionButton.extended(
               backgroundColor: context.tc.primary,
               foregroundColor: Colors.white,
-              icon: const Icon(Icons.person_add),
+              icon: const Icon(LucideIcons.userPlus),
               label: Text('Thêm khách hàng', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
               onPressed: () => _showAddOrEditCustomerDialog(),
             )
@@ -671,7 +672,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                         child: _buildKpiBox(
                           title: 'Tổng khách hàng',
                           value: '$totalCustomers',
-                          icon: Icons.people_outline,
+                          icon: LucideIcons.users,
                           color: context.tc.primary,
                         ),
                       ),
@@ -680,7 +681,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                         child: _buildKpiBox(
                           title: 'Tổng điểm KMT',
                           value: '${FormatUtils.number(totalPoints)} pt',
-                          icon: Icons.monetization_on_outlined,
+                          icon: LucideIcons.circleDollarSign,
                           color: context.ink(Colors.blue.shade700),
                         ),
                       ),
@@ -689,7 +690,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                         child: _buildKpiBox(
                           title: 'Giá trị quy đổi',
                           value: FormatUtils.vnd(totalValue),
-                          icon: Icons.redeem_outlined,
+                          icon: LucideIcons.gift,
                           color: context.tc.success,
                         ),
                       ),
@@ -706,7 +707,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                       TextField(
                         decoration: InputDecoration(
                           hintText: 'Tìm theo Tên, SĐT hoặc Mã khách hàng...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
+                          prefixIcon: const Icon(LucideIcons.search, size: 20),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           filled: true,
                           fillColor: context.tc.cardElevated,
@@ -744,7 +745,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.person_search_outlined, size: 64, color: context.tc.textHint),
+                              Icon(LucideIcons.userSearch, size: 64, color: context.tc.textHint),
                               const SizedBox(height: 8),
                               Text(
                                 'Không tìm thấy khách hàng nào',
@@ -822,7 +823,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                             const SizedBox(height: 4),
                                             Row(
                                               children: [
-                                                Icon(Icons.phone, size: 12, color: context.tc.textHint),
+                                                Icon(LucideIcons.phone, size: 12, color: context.tc.textHint),
                                                 const SizedBox(width: 4),
                                                 Text(c.phone, style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
                                                 const SizedBox(width: 10),
@@ -836,8 +837,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                                   if (c.gender.isNotEmpty) ...[
                                                     Icon(
                                                       c.gender == 'Nam'
-                                                          ? Icons.male
-                                                          : (c.gender == 'Nữ' ? Icons.female : Icons.person_outline),
+                                                          ? LucideIcons.mars
+                                                          : (c.gender == 'Nữ' ? LucideIcons.venus : LucideIcons.user),
                                                       size: 13,
                                                       color: c.gender == 'Nam'
                                                           ? Colors.blue.shade700
@@ -852,7 +853,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                                   if (c.gender.isNotEmpty && c.birthday.isNotEmpty)
                                                     Text(' • ', style: TextStyle(color: context.tc.textHint, fontSize: 11)),
                                                   if (c.birthday.isNotEmpty) ...[
-                                                    Icon(Icons.cake_outlined, size: 12, color: context.ink(Colors.orange.shade700)),
+                                                    Icon(LucideIcons.cake, size: 12, color: context.ink(Colors.orange.shade700)),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       _formatBirthday(c.birthday),
@@ -890,13 +891,13 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                                       if (_canManageCustomer)
                                         IconButton(
                                           tooltip: 'Chỉnh sửa thông tin',
-                                          icon: Icon(Icons.edit_outlined, size: 20, color: context.tc.primary),
+                                          icon: Icon(LucideIcons.pencil, size: 20, color: context.tc.primary),
                                           onPressed: () => _showAddOrEditCustomerDialog(customer: c),
                                         ),
                                       if (_canDeleteCustomer)
                                         IconButton(
                                           tooltip: 'Xóa khách hàng',
-                                          icon: Icon(Icons.delete_outline, size: 20, color: context.tc.danger),
+                                          icon: Icon(LucideIcons.trash2, size: 20, color: context.tc.danger),
                                           onPressed: () => _confirmDeleteCustomer(c),
                                         ),
                                     ],

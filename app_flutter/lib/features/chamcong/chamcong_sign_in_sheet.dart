@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/chamcong_auth_service.dart';
 import '../../core/theme/app_theme.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Mở sheet; [onSubmit] thực hiện công việc (có loading/lỗi ngay trong sheet).
 /// Trả về kết quả của [onSubmit] khi thành công, hoặc null nếu người dùng đóng sheet.
@@ -136,7 +137,7 @@ class _ChamCongSignInSheetState<T> extends State<_ChamCongSignInSheet<T>> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Icon(Icons.badge_outlined, color: context.tc.primary),
+                Icon(LucideIcons.idCard, color: context.tc.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(widget.title,
@@ -162,7 +163,7 @@ class _ChamCongSignInSheetState<T> extends State<_ChamCongSignInSheet<T>> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.error_outline, color: context.tc.danger, size: 20),
+                    Icon(LucideIcons.circleAlert, color: context.tc.danger, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(_error!,
@@ -194,7 +195,7 @@ class _ChamCongSignInSheetState<T> extends State<_ChamCongSignInSheet<T>> {
             ],
             _optionButton(
               method: ChamCongMethod.email,
-              icon: Icons.email_outlined,
+              icon: LucideIcons.mail,
               label: 'Đăng nhập bằng Email',
               onTap: () => setState(() {
                 _showEmailForm = !_showEmailForm;
@@ -211,7 +212,7 @@ class _ChamCongSignInSheetState<T> extends State<_ChamCongSignInSheet<T>> {
                 autofillHints: const [AutofillHints.email],
                 decoration: const InputDecoration(
                   labelText: 'Email Chấm Công Trạm',
-                  prefixIcon: Icon(Icons.alternate_email),
+                  prefixIcon: Icon(LucideIcons.atSign),
                 ),
               ),
               const SizedBox(height: 12),
@@ -223,10 +224,10 @@ class _ChamCongSignInSheetState<T> extends State<_ChamCongSignInSheet<T>> {
                 onSubmitted: (_) => _submitEmail(),
                 decoration: InputDecoration(
                   labelText: 'Mật khẩu',
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  prefixIcon: const Icon(LucideIcons.lock),
                   suffixIcon: IconButton(
                     tooltip: _obscure ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
-                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: context.tc.textSecondary),
+                    icon: Icon(_obscure ? LucideIcons.eyeOff : LucideIcons.eye, color: context.tc.textSecondary),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                 ),
@@ -278,7 +279,7 @@ Future<String?> showChamCongChoiceDialog(
           shrinkWrap: true,
           children: items
               .map((it) => ListTile(
-                    leading: Icon(Icons.storefront_outlined, color: ctx.tc.primary),
+                    leading: Icon(LucideIcons.store, color: ctx.tc.primary),
                     title: Text(it.title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
                     subtitle: it.subtitle.isEmpty
                         ? null

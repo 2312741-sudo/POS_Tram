@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/domain/deleted_items.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 Future<String?> showDeleteItemReasonDialog(
   BuildContext context, {
@@ -75,7 +76,7 @@ class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          Icon(Icons.delete_outline, color: context.tc.danger, size: 24),
+          Icon(LucideIcons.trash2, color: context.tc.danger, size: 24),
           const SizedBox(width: 8),
           Flexible(child: Text(title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16))),
         ],
@@ -102,7 +103,7 @@ class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: context.tc.warning, size: 18),
+                      Icon(LucideIcons.triangleAlert, color: context.tc.warning, size: 18),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(

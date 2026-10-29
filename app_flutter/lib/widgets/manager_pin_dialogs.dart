@@ -12,6 +12,7 @@ import '../core/theme/app_theme.dart';
 import '../data/models/app_models.dart';
 import '../data/services/firebase_service.dart';
 import 'common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Yêu cầu Quản lý nhập PIN để duyệt [action]. Trả về lần duyệt (null nếu hủy).
 /// [contextText] được gửi lên máy chủ để ghi vào nhật ký duyệt.
@@ -114,7 +115,7 @@ class _ManagerApprovalDialogState extends State<_ManagerApprovalDialog> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(color: context.bg(Colors.amber.shade100), borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.shield_outlined, color: context.ink(Colors.amber.shade900), size: 24),
+            child: Icon(LucideIcons.shield, color: context.ink(Colors.amber.shade900), size: 24),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -146,7 +147,7 @@ class _ManagerApprovalDialogState extends State<_ManagerApprovalDialog> {
             DropdownButtonFormField<String>(
               initialValue: _approverUid ?? '',
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Người duyệt', prefixIcon: Icon(Icons.person_outline)),
+              decoration: const InputDecoration(labelText: 'Người duyệt', prefixIcon: Icon(LucideIcons.user)),
               items: [
                 const DropdownMenuItem(value: '', child: Text('Tự nhận diện theo PIN')),
                 for (final u in _approvers)
@@ -171,7 +172,7 @@ class _ManagerApprovalDialogState extends State<_ManagerApprovalDialog> {
                 counterText: '',
                 errorText: _error,
                 errorMaxLines: 3,
-                prefixIcon: const Icon(Icons.lock_outline),
+                prefixIcon: const Icon(LucideIcons.lock),
               ),
               onChanged: (_) {
                 if (_error != null && !_locked) setState(() => _error = null);
@@ -275,7 +276,7 @@ class _SetApprovalPinDialogState extends State<_SetApprovalPinDialog> {
         labelText: label,
         hintText: '••••',
         counterText: '',
-        prefixIcon: const Icon(Icons.lock_outline),
+        prefixIcon: const Icon(LucideIcons.lock),
       );
 
   @override
@@ -284,7 +285,7 @@ class _SetApprovalPinDialogState extends State<_SetApprovalPinDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
-          Icon(Icons.pin_outlined, color: context.tc.primary),
+          Icon(LucideIcons.keyRound, color: context.tc.primary),
           const SizedBox(width: 10),
           Expanded(child: Text('PIN duyệt của tôi', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold))),
         ],

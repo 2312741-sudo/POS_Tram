@@ -7,6 +7,7 @@ import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../manager/widgets/bill_detail_sheet.dart';
 import 'voucher_check.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class VoucherManagementScreen extends StatefulWidget {
   final CampaignModel campaign;
@@ -98,7 +99,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: () => _showGenerateDialog(),
-              icon: const Icon(Icons.add),
+              icon: const Icon(LucideIcons.plus),
               label: const Text('Tạo mã'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: context.tc.primary,
@@ -110,7 +111,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: draftCount > 0 ? () => _releaseAll(vouchers) : null,
-              icon: const Icon(Icons.send),
+              icon: const Icon(LucideIcons.send),
               label: Text('Phát hành ($draftCount)'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
@@ -171,7 +172,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
 
     if (filtered.isEmpty) {
       return const EmptyState(
-        icon: Icons.qr_code_scanner,
+        icon: LucideIcons.scanQrCode,
         title: 'Chưa có mã voucher nào',
       );
     }
@@ -229,7 +230,7 @@ class _VoucherManagementScreenState extends State<VoucherManagementScreen> {
         color: Colors.red,
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
-        child: const Icon(Icons.cancel, color: Colors.white),
+        child: const Icon(LucideIcons.circleX, color: Colors.white),
       ),
       child: Card(
       margin: const EdgeInsets.only(bottom: 8),

@@ -1,6 +1,7 @@
 // lib/widgets/keyboard_dismiss_wrapper.dart
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Wrapper toàn cục tự động ẩn bàn phím khi:
 /// 1. Chạm vào bất kỳ vùng trống nào trên màn hình (tap outside)
@@ -57,7 +58,7 @@ class KeyboardDismissWrapper extends StatelessWidget {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.keyboard_hide_rounded, color: Colors.white, size: 16),
+                            Icon(LucideIcons.keyboardOff, color: Colors.white, size: 16),
                             SizedBox(width: 5),
                             Text(
                               'Ẩn bàn phím',

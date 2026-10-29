@@ -40,6 +40,7 @@ import '../../core/domain/table_customer.dart';
 import 'widgets/payment_widgets.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/manager_pin_dialogs.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OrderCartScreen extends StatefulWidget {
   final TableModel table;
@@ -486,7 +487,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.delete_outline, color: context.tc.danger, size: 24),
+            Icon(LucideIcons.trash2, color: context.tc.danger, size: 24),
             const SizedBox(width: 8),
             Text('Xác nhận xóa món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -510,7 +511,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18),
+                    const Icon(LucideIcons.triangleAlert, color: Colors.amber, size: 18),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -559,7 +560,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.delete_sweep_outlined, color: context.tc.danger, size: 24),
+            Icon(LucideIcons.trash, color: context.tc.danger, size: 24),
             const SizedBox(width: 8),
             Text('Xóa toàn bộ món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -605,7 +606,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.delete_outline, color: context.tc.danger, size: 24),
+            Icon(LucideIcons.trash2, color: context.tc.danger, size: 24),
             const SizedBox(width: 8),
             Text('Xác nhận xóa món', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -822,7 +823,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
-                Icon(Icons.cancel_outlined, color: context.tc.danger, size: 24),
+                Icon(LucideIcons.circleX, color: context.tc.danger, size: 24),
                 const SizedBox(width: 8),
                 Text('Hủy Hóa Đơn Bàn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
               ],
@@ -900,7 +901,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: context.tc.danger),
-                icon: const Icon(Icons.delete_forever, size: 16, color: Colors.white),
+                icon: const Icon(LucideIcons.trash2, size: 16, color: Colors.white),
                 label: const Text('Xác nhận Hủy Đơn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 onPressed: () {
                   if (reasonCtrl.text.trim().isEmpty) return;
@@ -1453,7 +1454,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
             title: Row(
               children: [
-                Icon(Icons.call_split, color: context.tc.primary, size: 22),
+                Icon(LucideIcons.split, color: context.tc.primary, size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1462,7 +1463,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20),
+                  icon: const Icon(LucideIcons.x, size: 20),
                   tooltip: 'Đóng',
                   onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
                 ),
@@ -1561,7 +1562,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   children: [
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
-                                      icon: const Icon(Icons.remove_circle_outline, size: 22),
+                                      icon: const Icon(LucideIcons.circleMinus, size: 22),
                                       onPressed: curr > 0
                                           ? () => setDlgState(() => splitQty[idx] = curr - 1)
                                           : null,
@@ -1577,7 +1578,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
                                       icon: Icon(
-                                        Icons.add_circle_outline,
+                                        LucideIcons.circlePlus,
                                         size: 22,
                                         color: curr < item.quantity ? context.tc.primary : null,
                                       ),
@@ -1645,7 +1646,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Row(
                               children: [
                                 Icon(
-                                  splitAction == 'PAY_NOW' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                  splitAction == 'PAY_NOW' ? LucideIcons.circleDot : LucideIcons.circle,
                                   color: splitAction == 'PAY_NOW' ? context.tc.primary : context.tc.textSecondary,
                                   size: 20,
                                 ),
@@ -1685,7 +1686,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                       ),
                                       onPressed: () => setDlgState(() => splitPayMethod = 'CASH'),
                                       icon: Icon(
-                                        Icons.payments_outlined,
+                                        LucideIcons.banknote,
                                         size: 16,
                                         color: splitPayMethod == 'CASH' ? context.tc.primary : context.tc.textSecondary,
                                       ),
@@ -1714,7 +1715,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                       ),
                                       onPressed: () => setDlgState(() => splitPayMethod = 'TRANSFER_QR'),
                                       icon: Icon(
-                                        Icons.qr_code_2_outlined,
+                                        LucideIcons.qrCode,
                                         size: 16,
                                         color: splitPayMethod == 'TRANSFER_QR'
                                             ? context.tc.primary
@@ -1772,7 +1773,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Row(
                               children: [
                                 Icon(
-                                  splitAction == 'TRANSFER' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                  splitAction == 'TRANSFER' ? LucideIcons.circleDot : LucideIcons.circle,
                                   color: splitAction == 'TRANSFER' ? context.tc.primary : context.tc.textSecondary,
                                   size: 20,
                                 ),
@@ -1858,7 +1859,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               Row(
                                 children: [
                                   Icon(
-                                    splitAction == 'MERGE' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    splitAction == 'MERGE' ? LucideIcons.circleDot : LucideIcons.circle,
                                     color: splitAction == 'MERGE' ? context.tc.primary : context.tc.textSecondary,
                                     size: 20,
                                   ),
@@ -1929,8 +1930,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 style: dialogActionStyle(background: context.tc.primary),
                 icon: Icon(
                   splitAction == 'PAY_NOW'
-                      ? Icons.payments_outlined
-                      : (splitAction == 'MERGE' ? Icons.call_merge : Icons.swap_horiz),
+                      ? LucideIcons.banknote
+                      : (splitAction == 'MERGE' ? LucideIcons.merge : LucideIcons.arrowLeftRight),
                   size: 18,
                   color: Colors.white,
                 ),
@@ -2133,7 +2134,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             itemBuilder: (_, i) {
               final t = otherInUseTables[i];
               return ListTile(
-                leading: Icon(Icons.table_restaurant, color: context.tc.primary),
+                leading: Icon(LucideIcons.armchair, color: context.tc.primary),
                 title: Text(t.name),
                 subtitle: Text('${t.zone} • ${t.currentItems.length} món'),
                 onTap: () async {
@@ -2319,7 +2320,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              Icon(Icons.edit_outlined, color: context.tc.primary),
+              Icon(LucideIcons.pencil, color: context.tc.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -2347,7 +2348,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, size: 16, color: Colors.red.shade700),
+                          Icon(LucideIcons.circleAlert, size: 16, color: Colors.red.shade700),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -2385,7 +2386,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     ],
                     decoration: const InputDecoration(
                       labelText: 'Họ và tên *',
-                      prefixIcon: Icon(Icons.person_outline),
+                      prefixIcon: Icon(LucideIcons.user),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) {
@@ -2398,7 +2399,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Số điện thoại *',
-                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixIcon: Icon(LucideIcons.phone),
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (_) {
@@ -2415,9 +2416,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     width: double.infinity,
                     child: SegmentedButton<String>(
                       segments: const [
-                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(Icons.male, size: 16)),
-                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(Icons.female, size: 16)),
-                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(Icons.person_outline, size: 16)),
+                        ButtonSegment(value: 'Nam', label: Text('Nam'), icon: Icon(LucideIcons.mars, size: 16)),
+                        ButtonSegment(value: 'Nữ', label: Text('Nữ'), icon: Icon(LucideIcons.venus, size: 16)),
+                        ButtonSegment(value: 'Khác', label: Text('Khác'), icon: Icon(LucideIcons.user, size: 16)),
                       ],
                       selected: {gender},
                       onSelectionChanged: (set) => setDialogState(() => gender = set.first),
@@ -2430,11 +2431,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     decoration: InputDecoration(
                       labelText: 'Ngày sinh',
                       hintText: 'Chọn ngày sinh (dd/MM/yyyy)',
-                      prefixIcon: const Icon(Icons.cake_outlined),
+                      prefixIcon: const Icon(LucideIcons.cake),
                       border: const OutlineInputBorder(),
                       suffixIcon: birthday != null
                           ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
+                              icon: const Icon(LucideIcons.x, size: 18),
                               onPressed: () {
                                 setDialogState(() {
                                   birthday = null;
@@ -2442,7 +2443,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 });
                               },
                             )
-                          : const Icon(Icons.calendar_today, size: 18),
+                          : const Icon(LucideIcons.calendar, size: 18),
                     ),
                     onTap: () async {
                       final now = DateTime.now();
@@ -2596,7 +2597,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(color: context.bg(Colors.orange.shade100), borderRadius: BorderRadius.circular(10)),
-                  child: Icon(Icons.local_offer, color: context.ink(Colors.orange.shade900), size: 22),
+                  child: Icon(LucideIcons.tag, color: context.ink(Colors.orange.shade900), size: 22),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2702,13 +2703,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       ),
                       IconButton(
                         tooltip: 'Bớt 1 phần',
-                        icon: const Icon(Icons.remove_circle_outline),
+                        icon: const Icon(LucideIcons.circleMinus),
                         onPressed: discountedQty > 1 ? () => setDlgState(() => discountedQty -= 1) : null,
                       ),
                       Text('$discountedQty / ${item.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold)),
                       IconButton(
                         tooltip: 'Thêm 1 phần',
-                        icon: const Icon(Icons.add_circle_outline),
+                        icon: const Icon(LucideIcons.circlePlus),
                         onPressed: discountedQty < item.quantity ? () => setDlgState(() => discountedQty += 1) : null,
                       ),
                     ],
@@ -3055,7 +3056,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             ),
                             const SizedBox(width: 6),
                             IconButton(
-                              icon: const Icon(Icons.close, size: 22),
+                              icon: const Icon(LucideIcons.x, size: 22),
                               tooltip: 'Đóng',
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
@@ -3220,11 +3221,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     decoration: InputDecoration(
                       labelText: 'Ghi chú cho bếp / pha chế',
                       hintText: 'VD: ít ngọt, pha đậm vị, mang về...',
-                      prefixIcon: Icon(Icons.edit_note, color: context.tc.primary),
+                      prefixIcon: Icon(LucideIcons.notebookPen, color: context.tc.primary),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       suffixIcon: noteCtrl.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
+                              icon: const Icon(LucideIcons.x, size: 18),
                               onPressed: () => setModalState(() => noteCtrl.clear()),
                             )
                           : null,
@@ -3434,7 +3435,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       builder: (noteCtx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.edit_note, color: context.tc.primary),
+            Icon(LucideIcons.notebookPen, color: context.tc.primary),
             const SizedBox(width: 8),
             const Text('Ghi chú áp dụng voucher'),
           ],
@@ -3522,7 +3523,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(
                               labelText: 'Nhập mã Voucher',
-                              prefixIcon: Icon(Icons.confirmation_number_outlined),
+                              prefixIcon: Icon(LucideIcons.ticket),
                               hintText: 'VD: CHAOBAN20',
                             ),
                           ),
@@ -3752,7 +3753,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(voucherResult!.isValid ? Icons.check_circle : Icons.error_outline,
+                            Icon(voucherResult!.isValid ? LucideIcons.circleCheck : LucideIcons.circleAlert,
                                 size: 18, color: voucherResult!.isValid ? AppColors.success : AppColors.danger),
                             const SizedBox(width: 8),
                             Expanded(
@@ -3875,7 +3876,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         subtitle: Text(sub, style: GoogleFonts.beVietnamPro(fontSize: 11)),
                         secondary: (isCombo && hasWater && isSelected && combo.remainingRewardUnits > 0)
                             ? TextButton.icon(
-                                icon: const Icon(Icons.add_circle_outline, size: 16),
+                                icon: const Icon(LucideIcons.circlePlus, size: 16),
                                 label: Text('Thêm ${combo.remainingRewardUnits} món', style: GoogleFonts.beVietnamPro(fontSize: 11)),
                                 onPressed: () async {
                                   final added = await _pickComboRewardItems(c);
@@ -4368,7 +4369,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         decoration: const InputDecoration(
                           labelText: 'Khách đưa (VND)',
                           suffixText: 'đ',
-                          prefixIcon: Icon(Icons.payments_outlined),
+                          prefixIcon: Icon(LucideIcons.banknote),
                         ),
                         onTap: () => cashGivenCtrl.selection = TextSelection(baseOffset: 0, extentOffset: cashGivenCtrl.text.length),
                         onChanged: (v) => setSheetState(() {}),
@@ -4427,7 +4428,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               decoration: const InputDecoration(
                                 labelText: '1. Phần tiền mặt (VND)',
                                 suffixText: 'đ',
-                                prefixIcon: Icon(Icons.payments_outlined),
+                                prefixIcon: Icon(LucideIcons.banknote),
                               ),
                               onChanged: (v) => setSheetState(() {}),
                             ),
@@ -4541,7 +4542,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     Row(
                       children: [
                         IconButton.outlined(
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(LucideIcons.x),
                           tooltip: 'Đóng',
                           style: IconButton.styleFrom(
                             minimumSize: const Size(48, 56),
@@ -4554,7 +4555,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           flex: 2,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                            icon: const Icon(Icons.print_outlined),
+                            icon: const Icon(LucideIcons.printer),
                             label: const Text('Tạm tính', maxLines: 1, overflow: TextOverflow.ellipsis),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -4600,7 +4601,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
+                                      const Icon(LucideIcons.circleCheck, color: Colors.white, size: 22),
                                       const SizedBox(width: 6),
                                       Flexible(
                                         child: Text(
@@ -4774,7 +4775,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: context.tc.primaryLight, borderRadius: BorderRadius.circular(8)),
-              child: Icon(Icons.people_alt, color: context.tc.primary, size: 20),
+              child: Icon(LucideIcons.users, color: context.tc.primary, size: 20),
             ),
             const SizedBox(width: 10),
             Text('Số Lượng Khách', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -4939,7 +4940,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              _autoPrintBill ? Icons.print : Icons.print_disabled_outlined,
+              _autoPrintBill ? LucideIcons.printer : LucideIcons.printerX,
               color: _autoPrintBill ? Colors.white : Colors.white60,
               size: 22,
             ),
@@ -4958,7 +4959,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
             },
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            icon: const Icon(LucideIcons.ellipsisVertical, color: Colors.white),
             tooltip: 'Thao tác bàn',
             onSelected: (val) {
               if (val == 'SPLIT') _showSplitBillDialog();
@@ -4970,7 +4971,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 value: 'SPLIT',
                 child: Row(
                   children: [
-                    Icon(Icons.call_split, size: 20, color: context.tc.primary),
+                    Icon(LucideIcons.split, size: 20, color: context.tc.primary),
                     const SizedBox(width: 10),
                     const Text('Tách hóa đơn'),
                   ],
@@ -4980,7 +4981,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 value: 'MERGE',
                 child: Row(
                   children: [
-                    Icon(Icons.merge_type, size: 20, color: context.tc.primary),
+                    Icon(LucideIcons.merge, size: 20, color: context.tc.primary),
                     const SizedBox(width: 10),
                     const Text('Ghép bàn'),
                   ],
@@ -4991,7 +4992,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                 value: 'CANCEL',
                 child: Row(
                   children: [
-                    Icon(Icons.cancel_outlined, size: 20, color: context.tc.danger),
+                    Icon(LucideIcons.circleX, size: 20, color: context.tc.danger),
                     const SizedBox(width: 10),
                     Text('Hủy hóa đơn bàn', style: TextStyle(color: context.tc.danger)),
                   ],
@@ -5065,13 +5066,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
                 final cartList = _cart.isEmpty
                     ? EmptyState(
-                        icon: Icons.receipt_long_outlined,
+                        icon: LucideIcons.receiptText,
                         title: 'Chưa có món nào trong order',
                         subtitle: 'Bấm "Thêm món" để chọn món cho bàn này.',
                         action: SizedBox(
                           width: 220,
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.add),
+                            icon: const Icon(LucideIcons.plus),
                             label: const Text('Thêm món vào đơn'),
                             onPressed: _goToAddItems,
                           ),
@@ -5149,7 +5150,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     height: 52,
                                     alignment: Alignment.center,
                                     child: const Icon(
-                                      Icons.add,
+                                      LucideIcons.plus,
                                       color: Colors.white,
                                       size: 28,
                                     ),
@@ -5172,10 +5173,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       InfoBanner(
                         solid: true,
                         tone: BannerTone.warning,
-                        icon: Icons.lock,
+                        icon: LucideIcons.lock,
                         title: 'Đang khóa order & thanh toán do chưa nhập két đầu ca.',
                         actionLabel: 'Mở két ngay',
-                        actionIcon: Icons.point_of_sale,
+                        actionIcon: LucideIcons.calculator,
                         onAction: () => CashShiftDialog.show(context),
                       ),
                     Expanded(

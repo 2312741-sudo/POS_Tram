@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OnlineOrderDetailScreen extends StatelessWidget {
   final OnlineOrderModel order;
@@ -63,7 +64,7 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.access_time, color: context.tc.textSecondary, size: 14),
+                      Icon(LucideIcons.clock, color: context.tc.textSecondary, size: 14),
                       const SizedBox(width: 6),
                       Text(FormatUtils.dateTime(order.timestamp), style: GoogleFonts.beVietnamPro(
                         color: context.tc.textSecondary, fontSize: 13)),
@@ -80,7 +81,7 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.campaign, color: context.tc.warningInk, size: 20),
+                          Icon(LucideIcons.megaphone, color: context.tc.warningInk, size: 20),
                           const SizedBox(width: 10),
                           Text(
                             'Khách gọi nhân viên phục vụ',
@@ -187,7 +188,7 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                               backgroundColor: context.tc.danger,
                               content: Row(
                                 children: [
-                                  const Icon(Icons.cancel_outlined, color: Colors.white, size: 20),
+                                  const Icon(LucideIcons.circleX, color: Colors.white, size: 20),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -239,7 +240,7 @@ class OnlineOrderDetailScreen extends StatelessWidget {
                               content: Row(
                                 children: [
                                   Icon(
-                                    success ? Icons.check_circle_outline : Icons.error_outline,
+                                    success ? LucideIcons.circleCheck : LucideIcons.circleAlert,
                                     color: Colors.white,
                                     size: 20,
                                   ),

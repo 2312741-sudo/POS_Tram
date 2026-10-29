@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Ô tổng tiền cần thu – cỡ chữ lớn để thu ngân và khách cùng nhìn.
 class PaymentTotalHeader extends StatelessWidget {
@@ -70,7 +71,7 @@ class PaymentTotalHeader extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 20),
+                    child: const Icon(LucideIcons.x, color: Colors.white, size: 20),
                   ),
                 ),
               ],
@@ -80,7 +81,7 @@ class PaymentTotalHeader extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.person, size: 16, color: Colors.white70),
+                const Icon(LucideIcons.user, size: 16, color: Colors.white70),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
@@ -150,11 +151,11 @@ class PaymentMethodSelector extends StatelessWidget {
 
     return Row(
       children: [
-        tile('CASH', Icons.payments_outlined, 'Tiền mặt'),
+        tile('CASH', LucideIcons.banknote, 'Tiền mặt'),
         const SizedBox(width: 8),
-        tile('TRANSFER_QR', Icons.qr_code_2, 'VietQR'),
+        tile('TRANSFER_QR', LucideIcons.qrCode, 'VietQR'),
         const SizedBox(width: 8),
-        tile('SPLIT', Icons.call_split, 'Hỗn hợp'),
+        tile('SPLIT', LucideIcons.split, 'Hỗn hợp'),
       ],
     );
   }
@@ -190,7 +191,7 @@ class QuickCashAmounts extends StatelessWidget {
           ActionChip(
             label: Text(v == amountDue ? 'Đủ ${FormatUtils.vnd(v)}' : FormatUtils.vnd(v)),
             labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: context.tc.textPrimary),
-            avatar: v == amountDue ? Icon(Icons.check, size: 16, color: context.tc.success) : null,
+            avatar: v == amountDue ? Icon(LucideIcons.check, size: 16, color: context.tc.success) : null,
             onPressed: () => onPick(v),
           ),
       ],
@@ -278,7 +279,7 @@ class VietQrImage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.wifi_off, color: context.tc.danger, size: 32),
+                Icon(LucideIcons.wifiOff, color: context.tc.danger, size: 32),
                 const SizedBox(height: 8),
                 Text(
                   'Không tải được mã QR.\nKiểm tra kết nối mạng.',
@@ -327,7 +328,7 @@ class VietQrImage extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.zoom_in, color: Colors.white, size: 13),
+                  const Icon(LucideIcons.zoomIn, color: Colors.white, size: 13),
                   const SizedBox(width: 3),
                   Text(
                     'Phóng to',
@@ -404,7 +405,7 @@ class FullScreenQrDialog extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.qr_code_2, color: Color(0xFF2563EB), size: 20),
+                        child: const Icon(LucideIcons.qrCode, color: Color(0xFF2563EB), size: 20),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -414,7 +415,7 @@ class FullScreenQrDialog extends StatelessWidget {
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                    icon: const Icon(LucideIcons.x, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -513,7 +514,7 @@ class AutoPrintToggleTile extends StatelessWidget {
                   color: value ? context.tc.primary : context.tc.textDisabled,
                   borderRadius: AppRadius.brSm,
                 ),
-                child: Icon(value ? Icons.print : Icons.print_disabled_outlined, size: 18, color: Colors.white),
+                child: Icon(value ? LucideIcons.printer : LucideIcons.printerX, size: 18, color: Colors.white),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -560,7 +561,7 @@ class PaymentErrorBox extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Icon(Icons.error_outline, color: context.tc.danger, size: 20),
+            child: Icon(LucideIcons.circleAlert, color: context.tc.danger, size: 20),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -572,7 +573,7 @@ class PaymentErrorBox extends StatelessWidget {
           IconButton(
             tooltip: 'Đóng',
             visualDensity: VisualDensity.compact,
-            icon: Icon(Icons.close, size: 18, color: context.tc.danger),
+            icon: Icon(LucideIcons.x, size: 18, color: context.tc.danger),
             onPressed: onClose,
           ),
         ],

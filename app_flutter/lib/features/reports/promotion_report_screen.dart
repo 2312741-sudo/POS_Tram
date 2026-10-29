@@ -3,6 +3,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/campaign_models.dart';
 import '../../data/services/campaign_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PromotionReportScreen extends StatefulWidget {
   const PromotionReportScreen({super.key});
@@ -49,11 +50,11 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, size: 40, color: context.tc.danger),
+              Icon(LucideIcons.circleAlert, size: 40, color: context.tc.danger),
               const SizedBox(height: 12),
               Text('Không tải được dữ liệu khuyến mãi\n$error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              ElevatedButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh), label: const Text('Thử lại')),
+              ElevatedButton.icon(onPressed: _reload, icon: const Icon(LucideIcons.refreshCw), label: const Text('Thử lại')),
             ],
           ),
         ),
@@ -67,7 +68,7 @@ class _PromotionReportScreenState extends State<PromotionReportScreen> {
         backgroundColor: context.tc.primary,
         title: const Text('Hiệu suất Khuyến mãi', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [IconButton(tooltip: 'Tải lại', icon: const Icon(Icons.refresh), onPressed: _reload)],
+        actions: [IconButton(tooltip: 'Tải lại', icon: const Icon(LucideIcons.refreshCw), onPressed: _reload)],
       ),
       body: StreamBuilder<List<CampaignModel>>(
         stream: _campaigns,

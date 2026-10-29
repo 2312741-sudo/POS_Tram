@@ -13,6 +13,7 @@ import 'core/reports/report_export_service.dart';
 import 'data/services/firebase_service.dart';
 import 'widgets/keyboard_dismiss_wrapper.dart';
 import 'firebase_options.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -95,7 +96,7 @@ class FirebaseConfigErrorApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.warning_amber_rounded, size: 72, color: Colors.amber),
+                const Icon(LucideIcons.triangleAlert, size: 72, color: Colors.amber),
                 const SizedBox(height: 16),
                 const Text(
                   'LỖI CẤU HÌNH DỰ ÁN FIREBASE',

@@ -17,24 +17,25 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 enum ReportKind {
-  overview('BC_TONGHOP', 'Tổng quan Quản trị', Icons.dashboard_outlined),
-  periodRevenue('BC_DOANHTHU_KY', 'Doanh thu theo kỳ', Icons.timeline_outlined),
-  category('BC_NHOMHANG', 'Nhóm hàng / Danh mục', Icons.category_outlined),
-  product('BC_HANGHOA', 'Hiệu suất Món ăn', Icons.restaurant_menu_outlined),
-  staff('BC_NHANVIEN', 'Năng suất Nhân viên', Icons.people_alt_outlined),
-  hourly('BC_KHUNGGIO', 'Khung giờ bán hàng', Icons.access_time_outlined),
-  paymentMethods('BC_PTTT', 'Hình thức thanh toán', Icons.payment_outlined),
-  promotions('BC_KHUYENMAI', 'Khuyến mãi & Voucher', Icons.discount_outlined),
-  campaigns('BC_CTKM', 'Theo chương trình KM', Icons.campaign_outlined),
-  bills('BC_HOADON', 'Danh sách hóa đơn', Icons.receipt_long_outlined),
-  billItems('BC_CHITIET_MON', 'Chi tiết món theo HĐ', Icons.list_alt_outlined),
-  deletedItems('BC_XOAMON', 'Món bị xóa', Icons.remove_shopping_cart_outlined),
-  cancellations('BC_HUYMON', 'Hủy món & Hủy đơn', Icons.cancel_presentation_outlined),
-  cashShifts('BC_CAKET', 'Ca két & Chênh lệch', Icons.account_balance_wallet_outlined),
-  grossProfit('BC_LOINHUAN', 'Lợi nhuận gộp & COGS', Icons.trending_up_outlined),
-  endOfDay('BC_CUOINGAY_Z', 'Cuối ngày (Z-Report)', Icons.summarize_outlined);
+  overview('BC_TONGHOP', 'Tổng quan Quản trị', LucideIcons.layoutDashboard),
+  periodRevenue('BC_DOANHTHU_KY', 'Doanh thu theo kỳ', LucideIcons.chartLine),
+  category('BC_NHOMHANG', 'Nhóm hàng / Danh mục', LucideIcons.shapes),
+  product('BC_HANGHOA', 'Hiệu suất Món ăn', LucideIcons.utensils),
+  staff('BC_NHANVIEN', 'Năng suất Nhân viên', LucideIcons.users),
+  hourly('BC_KHUNGGIO', 'Khung giờ bán hàng', LucideIcons.clock),
+  paymentMethods('BC_PTTT', 'Hình thức thanh toán', LucideIcons.creditCard),
+  promotions('BC_KHUYENMAI', 'Khuyến mãi & Voucher', LucideIcons.badgePercent),
+  campaigns('BC_CTKM', 'Theo chương trình KM', LucideIcons.megaphone),
+  bills('BC_HOADON', 'Danh sách hóa đơn', LucideIcons.receiptText),
+  billItems('BC_CHITIET_MON', 'Chi tiết món theo HĐ', LucideIcons.list),
+  deletedItems('BC_XOAMON', 'Món bị xóa', LucideIcons.shoppingCart),
+  cancellations('BC_HUYMON', 'Hủy món & Hủy đơn', LucideIcons.monitorX),
+  cashShifts('BC_CAKET', 'Ca két & Chênh lệch', LucideIcons.wallet),
+  grossProfit('BC_LOINHUAN', 'Lợi nhuận gộp & COGS', LucideIcons.trendingUp),
+  endOfDay('BC_CUOINGAY_Z', 'Cuối ngày (Z-Report)', LucideIcons.fileText);
 
   final String code;
   final String title;
@@ -663,17 +664,17 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.table_view_outlined, color: Colors.green),
+            icon: const Icon(LucideIcons.table, color: Colors.green),
             tooltip: 'Xuất file Excel (.xlsx)',
             onPressed: _exporting ? null : _handleExportExcel,
           ),
           IconButton(
-            icon: Icon(Icons.picture_as_pdf_outlined, color: context.tc.primary),
+            icon: Icon(LucideIcons.fileText, color: context.tc.primary),
             tooltip: 'Xuất file PDF (.pdf)',
             onPressed: _exporting ? null : _handleExportPdf,
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, size: 20),
+            icon: const Icon(LucideIcons.refreshCw, size: 20),
             tooltip: 'Tải lại',
             onPressed: _loadInitialData,
           ),
@@ -710,7 +711,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 48, color: context.tc.danger),
+            Icon(LucideIcons.circleAlert, size: 48, color: context.tc.danger),
             const SizedBox(height: 12),
             Text(
               _errorMessage ?? 'Đã xảy ra lỗi',
@@ -720,7 +721,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _loadInitialData,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(LucideIcons.refreshCw),
               label: const Text('Thử lại'),
               style: ElevatedButton.styleFrom(backgroundColor: context.tc.primary),
             ),
@@ -987,7 +988,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               _buildKpiCard(
                 'Doanh thu thuần',
                 ReportExportService.formatCurrency(o.netRevenue),
-                icon: Icons.account_balance_wallet,
+                icon: LucideIcons.wallet,
                 color: context.tc.primary,
                 prevValue: prevO?.netRevenue,
                 currentValue: o.netRevenue,
@@ -996,7 +997,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               _buildKpiCard(
                 'Lợi nhuận gộp',
                 ReportExportService.formatCurrency(o.grossProfit),
-                icon: Icons.trending_up,
+                icon: LucideIcons.trendingUp,
                 color: context.ink(Colors.green.shade800),
                 subText: 'Biên LN: ${o.grossProfitMarginPercent}%',
               ),
@@ -1008,7 +1009,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               _buildKpiCard(
                 'Số hóa đơn',
                 '${o.paidBillsCount} đơn',
-                icon: Icons.receipt_long,
+                icon: LucideIcons.receiptText,
                 color: context.ink(Colors.blue.shade800),
                 subText: 'TB: ${ReportExportService.formatCurrency(o.avgRevenuePerPaidBill)}',
               ),
@@ -1016,7 +1017,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               _buildKpiCard(
                 'Tổng giảm giá',
                 ReportExportService.formatCurrency(o.totalDiscount),
-                icon: Icons.discount,
+                icon: LucideIcons.badgePercent,
                 color: context.ink(Colors.orange.shade800),
                 subText: 'VAT: ${ReportExportService.formatCurrency(o.vatTotal)}',
               ),
@@ -1321,7 +1322,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                     decoration: InputDecoration(
                       hintText: 'Tìm món ăn hoặc mã món...',
                       hintStyle: GoogleFonts.beVietnamPro(fontSize: 11),
-                      prefixIcon: const Icon(Icons.search, size: 16),
+                      prefixIcon: const Icon(LucideIcons.search, size: 16),
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -1434,7 +1435,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         padding: const EdgeInsets.symmetric(vertical: 36),
         child: Column(
           children: [
-            Icon(Icons.inbox_outlined, size: 40, color: context.tc.textHint),
+            Icon(LucideIcons.inbox, size: 40, color: context.tc.textHint),
             const SizedBox(height: 8),
             Text(
               'Không có dữ liệu trong khoảng thời gian này',

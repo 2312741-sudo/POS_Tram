@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AuditLogsScreen extends StatefulWidget {
   const AuditLogsScreen({super.key});
@@ -82,7 +83,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                           child: TextField(
                             decoration: InputDecoration(
                               hintText: 'Tìm nhân viên...',
-                              prefixIcon: const Icon(Icons.search, size: 20),
+                              prefixIcon: const Icon(LucideIcons.search, size: 20),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -132,7 +133,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                       children: [
                         FilterChip(
                           selected: _onlySuspicious,
-                          avatar: Icon(Icons.security, size: 16, color: _onlySuspicious ? Colors.white : context.tc.danger),
+                          avatar: Icon(LucideIcons.shieldCheck, size: 16, color: _onlySuspicious ? Colors.white : context.tc.danger),
                           label: Text(
                             'Chỉ xem thao tác nhạy cảm / cảnh báo',
                             style: GoogleFonts.beVietnamPro(
@@ -148,7 +149,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                         const Spacer(),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
-                          icon: const Icon(Icons.date_range, size: 16),
+                          icon: const Icon(LucideIcons.calendarRange, size: 16),
                           label: Text(
                             _selectedDateRange == null
                                 ? 'Chọn ngày'
@@ -169,7 +170,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                         ),
                         if (_selectedDateRange != null)
                           IconButton(
-                            icon: const Icon(Icons.close, size: 16),
+                            icon: const Icon(LucideIcons.x, size: 16),
                             onPressed: () => setState(() => _selectedDateRange = null),
                           ),
                       ],
@@ -186,7 +187,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.history_toggle_off, size: 64, color: context.tc.textHint),
+                            Icon(LucideIcons.history, size: 64, color: context.tc.textHint),
                             const SizedBox(height: 12),
                             Text('Không tìm thấy nhật ký thao tác phù hợp', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                           ],
@@ -238,7 +239,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
           child: Icon(
-            log.isSuspicious ? Icons.warning_amber_rounded : Icons.history,
+            log.isSuspicious ? LucideIcons.triangleAlert : LucideIcons.history,
             color: badgeColor,
             size: 20,
           ),

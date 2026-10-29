@@ -15,6 +15,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/order_item_model.dart';
 import '../../../widgets/common_widgets.dart';
 import 'cart_item_card.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Dữ liệu một nhánh trong nhóm sản phẩm (tập hợp các dòng giỏ hàng có cùng tính chất/tùy chọn)
 class CartBranchItem {
@@ -372,7 +373,7 @@ class CartTreeGroupCard extends StatelessWidget {
               border: Border.all(color: context.tc.borderLight),
             ),
             child: Icon(
-              Icons.account_tree_rounded,
+              LucideIcons.network,
               size: 16,
               color: context.tc.primary,
             ),
@@ -438,7 +439,7 @@ class CartTreeGroupCard extends StatelessWidget {
               tooltip: 'Xóa toàn bộ ${group.productName}',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              icon: Icon(Icons.delete_sweep_outlined, size: 18, color: context.tc.textSecondary),
+              icon: Icon(LucideIcons.trash, size: 18, color: context.tc.textSecondary),
               onPressed: () => onRemoveGroup!(group),
             ),
           ],
@@ -552,7 +553,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       StatusBadge(
                         label: 'Hết',
                         color: context.tc.danger,
-                        icon: Icons.warning_amber_rounded,
+                        icon: LucideIcons.triangleAlert,
                         fontSize: 9.5,
                       ),
                     ],
@@ -561,7 +562,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       StatusBadge(
                         label: 'Bếp',
                         color: context.tc.success,
-                        icon: Icons.check,
+                        icon: LucideIcons.check,
                         fontSize: 9.5,
                       ),
                     ] else if (branch.sentCount > 0 && branch.unsentCount > 0) ...[
@@ -569,7 +570,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       StatusBadge(
                         label: 'Bếp: ${branch.sentCount}/${branch.totalQuantity}',
                         color: context.tc.success,
-                        icon: Icons.check,
+                        icon: LucideIcons.check,
                         fontSize: 9.5,
                       ),
                     ],
@@ -578,7 +579,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       tooltip: 'Xóa phần #${branchIndex + 1}',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                      icon: Icon(Icons.close_rounded, size: 16, color: context.tc.textSecondary),
+                      icon: Icon(LucideIcons.x, size: 16, color: context.tc.textSecondary),
                       onPressed: () => onRemoveBranch != null ? onRemoveBranch!(branch) : onRemove(branch.cartIndex),
                     ),
                   ],
@@ -600,7 +601,7 @@ class CartTreeGroupCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.edit_note, size: 13, color: context.tc.warningInk),
+                          Icon(LucideIcons.notebookPen, size: 13, color: context.tc.warningInk),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
@@ -658,7 +659,7 @@ class CartTreeGroupCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.card_giftcard_rounded, size: 13, color: Color(0xFFC2410C)),
+                            const Icon(LucideIcons.gift, size: 13, color: Color(0xFFC2410C)),
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(
@@ -733,7 +734,7 @@ class CartTreeGroupCard extends StatelessWidget {
 
                     // Nút icon Ghi chú (bật sáng khi đã có ghi chú)
                     _BranchIconBtn(
-                      icon: Icons.edit_note_rounded,
+                      icon: LucideIcons.notebookPen,
                       tooltip: item.note.isEmpty ? 'Thêm ghi chú' : 'Sửa ghi chú',
                       isActive: item.note.isNotEmpty,
                       activeColor: context.tc.warningInk,
@@ -744,7 +745,7 @@ class CartTreeGroupCard extends StatelessWidget {
 
                     // Nút icon Giảm giá món (bật sáng đỏ khi đã giảm giá)
                     _BranchIconBtn(
-                      icon: item.hasDiscount ? Icons.discount : Icons.discount_outlined,
+                      icon: item.hasDiscount ? LucideIcons.badgePercent : LucideIcons.badgePercent,
                       tooltip: item.hasDiscount ? 'Đã giảm món' : 'Giảm món',
                       isActive: item.hasDiscount,
                       activeColor: context.tc.danger,

@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class StoreSettingsScreen extends StatefulWidget {
   const StoreSettingsScreen({super.key});
@@ -208,7 +209,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                     child: Text('Bạn chỉ được xem. Chỉ Chủ quán (hoặc tài khoản được cấp quyền) mới sửa được cài đặt.',
                         style: GoogleFonts.beVietnamPro(color: context.tc.warningInk, fontWeight: FontWeight.w600)),
                   ),
-                _section('Ngày kinh doanh & chia doanh thu', Icons.schedule, [
+                _section('Ngày kinh doanh & chia doanh thu', LucideIcons.clock, [
                   Text(
                     'Cửa hàng hoạt động qua 0h: hóa đơn trước giờ này được tính vào doanh thu của ngày hôm trước. '
                     'Để 00:00 nếu chốt doanh thu đúng nửa đêm (mặc định). Biểu đồ theo khung giờ vẫn dùng giờ thực.',
@@ -218,7 +219,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                   Row(children: [
                     OutlinedButton.icon(
                       onPressed: _canEdit ? _pickDayStart : null,
-                      icon: const Icon(Icons.access_time),
+                      icon: const Icon(LucideIcons.clock),
                       label: Text('Bắt đầu ngày lúc ${BusinessDay.formatMinutes(_dayStart)}'),
                     ),
                     const SizedBox(width: 8),
@@ -237,13 +238,13 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                       child: Text(_example!, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, color: context.tc.primary, fontSize: 13)),
                     ),
                 ]),
-                _section('Thông tin cửa hàng', Icons.storefront_outlined, [
+                _section('Thông tin cửa hàng', LucideIcons.store, [
                   _field('Tên cửa hàng *', _nameCtrl),
                   _field('Địa chỉ', _addressCtrl),
                   _field('Số điện thoại', _phoneCtrl, type: TextInputType.phone),
                   _field('Tên WiFi (in trên hóa đơn)', _wifiCtrl),
                 ]),
-                _section('Thanh toán chuyển khoản (VietQR)', Icons.qr_code_2, [
+                _section('Thanh toán chuyển khoản (VietQR)', LucideIcons.qrCode, [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: DropdownButtonFormField<String>(
@@ -256,7 +257,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                   _field('Số tài khoản', _bankAccountCtrl, type: TextInputType.number),
                   _field('Tên chủ tài khoản', _accountNameCtrl),
                 ]),
-                _section('Tùy chọn bán hàng', Icons.receipt_long_outlined, [
+                _section('Tùy chọn bán hàng', LucideIcons.receiptText, [
                   _field('VAT mặc định (%)', _vatCtrl, type: const TextInputType.numberWithOptions(decimal: true)),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -278,7 +279,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                     onPressed: _saving ? null : _save,
                     icon: _saving
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.save_outlined),
+                        : const Icon(LucideIcons.save),
                     label: const Text('Lưu cài đặt'),
                     style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                   ),

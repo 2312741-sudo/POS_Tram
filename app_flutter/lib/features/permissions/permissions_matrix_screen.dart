@@ -7,6 +7,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PermissionsMatrixScreen extends StatefulWidget {
   const PermissionsMatrixScreen({super.key});
@@ -248,8 +249,8 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
           unselectedLabelColor: context.tc.textSecondary,
           indicatorColor: context.tc.primary,
           tabs: const [
-            Tab(icon: Icon(Icons.grid_on), text: 'Ma Trận Quyền Nhân Viên'),
-            Tab(icon: Icon(Icons.badge_outlined), text: 'Danh Sách Vai Trò'),
+            Tab(icon: Icon(LucideIcons.grid3x3), text: 'Ma Trận Quyền Nhân Viên'),
+            Tab(icon: Icon(LucideIcons.idCard), text: 'Danh Sách Vai Trò'),
           ],
         ),
       ),
@@ -274,7 +275,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                 child: TextField(
                                   decoration: InputDecoration(
                                     hintText: 'Tìm kiếm nhân viên...',
-                                    prefixIcon: const Icon(Icons.search, size: 20),
+                                    prefixIcon: const Icon(LucideIcons.search, size: 20),
                                     isDense: true,
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -306,7 +307,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.info_outline, size: 16, color: context.tc.primary),
+                              Icon(LucideIcons.info, size: 16, color: context.tc.primary),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -328,7 +329,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.people_outline, size: 64, color: context.tc.textHint),
+                                  Icon(LucideIcons.users, size: 64, color: context.tc.textHint),
                                   const SizedBox(height: 16),
                                   Text(
                                     _searchQuery.isEmpty ? 'Chưa có tài khoản nhân viên nào' : 'Không tìm thấy tài khoản phù hợp',
@@ -367,7 +368,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                         Text(perm.label, style: TextStyle(fontWeight: FontWeight.bold, color: isSens ? context.tc.danger : null)),
                                         if (isSens) ...[
                                           const SizedBox(width: 4),
-                                          Icon(Icons.warning_amber_rounded, size: 14, color: context.tc.danger),
+                                          Icon(LucideIcons.triangleAlert, size: 14, color: context.tc.danger),
                                         ],
                                       ],
                                     ),
@@ -458,7 +459,7 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                 Scaffold(
                   floatingActionButton: FloatingActionButton.extended(
                     onPressed: () => _showAddEditRoleDialog(),
-                    icon: const Icon(Icons.add, color: Colors.white),
+                    icon: const Icon(LucideIcons.plus, color: Colors.white),
                     label: Text('Thêm Vai Trò Tùy Chỉnh', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
                     backgroundColor: context.tc.primary,
                     foregroundColor: Colors.white,
@@ -490,12 +491,12 @@ class _PermissionsMatrixScreenState extends State<PermissionsMatrixScreen> with 
                                       child: const Text('Mặc định hệ thống', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                                     ),
                                   IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 20),
+                                    icon: const Icon(LucideIcons.pencil, size: 20),
                                     onPressed: () => _showAddEditRoleDialog(role),
                                   ),
                                   if (!role.isSystemRole)
                                     IconButton(
-                                      icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
+                                      icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20),
                                       onPressed: () async {
                                         final confirm = await showDialog<bool>(
                                           context: context,

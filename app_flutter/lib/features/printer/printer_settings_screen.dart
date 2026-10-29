@@ -12,6 +12,7 @@ import '../../core/printer/receipt_printer.dart';
 import '../../core/services/auth_service.dart';
 import '../../data/services/firebase_service.dart';
 import '../../data/models/store_info_model.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Màn hình Cài Đặt Máy In Mạng LAN & Bluetooth (POS Trạm)
 class PrinterSettingsScreen extends StatefulWidget {
@@ -465,7 +466,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   backgroundColor: context.tc.danger,
                   child: IconButton(
                     tooltip: 'Phiếu in lỗi chờ in lại',
-                    icon: const Icon(Icons.print_disabled, color: Colors.white),
+                    icon: const Icon(LucideIcons.printerX, color: Colors.white),
                     onPressed: _showQueueBottomSheet,
                   ),
                 ),
@@ -479,7 +480,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : const Icon(Icons.refresh),
+                : const Icon(LucideIcons.refreshCw),
             onPressed: (_isScanning || _isLoadingStore)
                 ? null
                 : () => _isLanMode ? _loadStoreConfig() : _startScan(),
@@ -557,7 +558,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.lan_outlined,
+                      LucideIcons.network,
                       size: 18,
                       color: _isLanMode ? Colors.white : context.tc.textPrimary,
                     ),
@@ -595,7 +596,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.bluetooth,
+                      LucideIcons.bluetooth,
                       size: 18,
                       color: !_isLanMode ? Colors.white : context.tc.textPrimary,
                     ),
@@ -640,7 +641,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     color: context.tc.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.router_outlined, color: context.tc.primary, size: 22),
+                  child: Icon(LucideIcons.router, color: context.tc.primary, size: 22),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -673,7 +674,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               keyboardType: TextInputType.text,
               style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
-                prefixIcon: Icon(Icons.receipt_long, color: context.tc.primary, size: 20),
+                prefixIcon: Icon(LucideIcons.receiptText, color: context.tc.primary, size: 20),
                 hintText: 'VD: 192.168.1.201',
                 hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textHint),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -700,7 +701,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               Row(
                 children: [
                   Icon(
-                    _billIpTestSuccess! ? Icons.check_circle : Icons.error,
+                    _billIpTestSuccess! ? LucideIcons.circleCheck : LucideIcons.circleAlert,
                     size: 14,
                     color: _billIpTestSuccess! ? context.tc.success : context.tc.danger,
                   ),
@@ -733,7 +734,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               keyboardType: TextInputType.text,
               style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
-                prefixIcon: Icon(Icons.soup_kitchen, color: context.tc.primary, size: 20),
+                prefixIcon: Icon(LucideIcons.chefHat, color: context.tc.primary, size: 20),
                 hintText: 'VD: 192.168.1.200 (để trống nếu không dùng)',
                 hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: context.tc.textHint),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -760,7 +761,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               Row(
                 children: [
                   Icon(
-                    _kitchenIpTestSuccess! ? Icons.check_circle : Icons.error,
+                    _kitchenIpTestSuccess! ? LucideIcons.circleCheck : LucideIcons.circleAlert,
                     size: 14,
                     color: _kitchenIpTestSuccess! ? context.tc.success : context.tc.danger,
                   ),
@@ -810,7 +811,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 ),
                 icon: _isSavingLan
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.save, size: 18),
+                    : const Icon(LucideIcons.save, size: 18),
                 label: Text(
                   'Lưu Cài Đặt Máy In LAN',
                   style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
@@ -846,7 +847,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isConnected ? Icons.print : Icons.print_disabled,
+                    isConnected ? LucideIcons.printer : LucideIcons.printerX,
                     color: isConnected ? context.tc.success : context.tc.warning,
                     size: 28,
                   ),
@@ -939,7 +940,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.receipt, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.receipt, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -978,7 +979,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       child: Column(
                         children: [
                           Icon(
-                            Icons.receipt_outlined,
+                            LucideIcons.receipt,
                             color: currentSize == PrinterPaperSize.mm58
                                 ? context.tc.primary
                                 : context.tc.textSecondary,
@@ -1026,7 +1027,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       child: Column(
                         children: [
                           Icon(
-                            Icons.receipt_long_outlined,
+                            LucideIcons.receiptText,
                             color: currentSize == PrinterPaperSize.mm80
                                 ? context.tc.primary
                                 : context.tc.textSecondary,
@@ -1074,7 +1075,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.text_fields, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.type, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1142,7 +1143,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.print_outlined, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.printer, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1174,7 +1175,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     ),
                     icon: _isTesting
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.receipt, size: 18),
+                        : const Icon(LucideIcons.receipt, size: 18),
                     label: Text(
                       'In Thử Hóa Đơn',
                       style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
@@ -1193,7 +1194,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                     ),
                     icon: _isTesting
                         ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.tc.primary))
-                        : const Icon(Icons.soup_kitchen, size: 18),
+                        : const Icon(LucideIcons.chefHat, size: 18),
                     label: Text(
                       'In Thử Phiếu Bếp',
                       style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
@@ -1221,7 +1222,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.bluetooth_searching, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.bluetoothSearching, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1233,7 +1234,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   onPressed: _isScanning ? null : _startScan,
                   icon: _isScanning
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.refresh, size: 16),
+                      : const Icon(LucideIcons.refreshCw, size: 16),
                   label: const Text('Quét lại'),
                 ),
               ],
@@ -1261,7 +1262,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.bluetooth_disabled, color: context.tc.textHint, size: 40),
+                      Icon(LucideIcons.bluetoothOff, color: context.tc.textHint, size: 40),
                       const SizedBox(height: 8),
                       Text(
                         'Chưa tìm thấy máy in Bluetooth nào.',
@@ -1290,7 +1291,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      Icons.print,
+                      LucideIcons.printer,
                       color: isCurrent && isConnected ? context.tc.success : context.tc.textSecondary,
                     ),
                     title: Text(
@@ -1345,7 +1346,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.queue, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.listPlus, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1362,13 +1363,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                     ),
-                    icon: const Icon(Icons.replay, size: 14),
+                    icon: const Icon(LucideIcons.rotateCcw, size: 14),
                     label: Text('In lại ($failedCount)'),
                     onPressed: _retryAllFailed,
                   ),
                   const SizedBox(width: 4),
                   IconButton(
-                    icon: Icon(Icons.delete_sweep, color: context.tc.danger, size: 20),
+                    icon: Icon(LucideIcons.trash, color: context.tc.danger, size: 20),
                     tooltip: 'Xóa phiếu lỗi',
                     onPressed: () async {
                       await _queueService.clearFailedJobs();
@@ -1438,7 +1439,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       child: Row(
         children: [
           Icon(
-            job.type == 'KITCHEN' ? Icons.soup_kitchen : Icons.receipt_long,
+            job.type == 'KITCHEN' ? LucideIcons.chefHat : LucideIcons.receiptText,
             color: statusColor,
             size: 24,
           ),
@@ -1479,13 +1480,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           if (job.status == PrintJobStatus.failed) ...[
             const SizedBox(width: 4),
             IconButton(
-              icon: Icon(Icons.refresh, size: 18, color: context.tc.primary),
+              icon: Icon(LucideIcons.refreshCw, size: 18, color: context.tc.primary),
               tooltip: 'In lại phiếu này',
               onPressed: () => _retryJob(job),
             ),
           ],
           IconButton(
-            icon: Icon(Icons.close, size: 16, color: context.tc.textHint),
+            icon: Icon(LucideIcons.x, size: 16, color: context.tc.textHint),
             tooltip: 'Xóa phiếu',
             onPressed: () => _queueService.removeJob(job.id),
           ),
@@ -1535,7 +1536,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                             ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(Icons.delete_sweep, color: context.tc.textHint),
+                            icon: Icon(LucideIcons.trash, color: context.tc.textHint),
                             tooltip: 'Dọn dẹp phiếu xong',
                             onPressed: () async {
                               await _queueService.clearCompletedJobs();
@@ -1564,7 +1565,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 16),
                               color: context.tc.danger,
-                              child: const Icon(Icons.delete, color: Colors.white),
+                              child: const Icon(LucideIcons.trash2, color: Colors.white),
                             ),
                             onDismissed: (_) {
                               _queueService.removeJob(j.id);

@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class PromotionsScreen extends StatefulWidget {
   const PromotionsScreen({super.key});
@@ -160,7 +161,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                       decoration: InputDecoration(
                         labelText: 'Mã Code (Nhập tay khi tính tiền)',
                         hintText: selectedType == 'VOUCHER' ? 'VD: VOUCHER50K' : 'Tùy chọn',
-                        prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                        prefixIcon: const Icon(LucideIcons.ticket),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -223,7 +224,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.calendar_today, size: 16),
+                            icon: const Icon(LucideIcons.calendar, size: 16),
                             label: Text('Từ: ${DateFormat("dd/MM/yy").format(startDate)}'),
                             onPressed: () async {
                               final picked = await showDatePicker(
@@ -241,7 +242,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.event, size: 16),
+                            icon: const Icon(LucideIcons.calendar, size: 16),
                             label: Text('Đến: ${DateFormat("dd/MM/yy").format(endDate)}'),
                             onPressed: () async {
                               final picked = await showDatePicker(
@@ -324,7 +325,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddEditPromoDialog(),
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(LucideIcons.plus, color: Colors.white),
         label: Text('Thêm Khuyến Mãi', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
         backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
@@ -344,7 +345,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.layers_outlined, color: Colors.amber, size: 28),
+                      const Icon(LucideIcons.layers, color: Colors.amber, size: 28),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -377,7 +378,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.discount_outlined, size: 64, color: context.tc.textHint),
+                              Icon(LucideIcons.badgePercent, size: 64, color: context.tc.textHint),
                               const SizedBox(height: 12),
                               Text('Chưa có chương trình khuyến mãi nào', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
                             ],
@@ -425,11 +426,11 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.edit_outlined, size: 20),
+                                          icon: const Icon(LucideIcons.pencil, size: 20),
                                           onPressed: () => _showAddEditPromoDialog(p),
                                         ),
                                         IconButton(
-                                          icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
+                                          icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20),
                                           onPressed: () async {
                                             final confirm = await showDialog<bool>(
                                               context: context,
@@ -459,11 +460,11 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                                       spacing: 12,
                                       runSpacing: 6,
                                       children: [
-                                        _infoChip(Icons.percent, 'Mức giảm: ${p.type == "PERCENT_BILL" ? "${p.value}%" : FormatUtils.vnd(p.value)}'),
-                                        if (p.minBillAmount > 0) _infoChip(Icons.shopping_bag_outlined, 'Đơn từ: ${FormatUtils.vnd(p.minBillAmount)}'),
-                                        if (p.maxDiscountAmount > 0) _infoChip(Icons.arrow_downward, 'Tối đa: ${FormatUtils.vnd(p.maxDiscountAmount)}'),
-                                        _infoChip(Icons.repeat, 'Đã dùng: ${p.usageCount}${p.maxUsage > 0 ? "/${p.maxUsage}" : ""} lượt'),
-                                        _infoChip(Icons.date_range, 'Hạn: ${FormatUtils.dateOnly(p.endDate)}'),
+                                        _infoChip(LucideIcons.percent, 'Mức giảm: ${p.type == "PERCENT_BILL" ? "${p.value}%" : FormatUtils.vnd(p.value)}'),
+                                        if (p.minBillAmount > 0) _infoChip(LucideIcons.shoppingBag, 'Đơn từ: ${FormatUtils.vnd(p.minBillAmount)}'),
+                                        if (p.maxDiscountAmount > 0) _infoChip(LucideIcons.arrowDown, 'Tối đa: ${FormatUtils.vnd(p.maxDiscountAmount)}'),
+                                        _infoChip(LucideIcons.repeat, 'Đã dùng: ${p.usageCount}${p.maxUsage > 0 ? "/${p.maxUsage}" : ""} lượt'),
+                                        _infoChip(LucideIcons.calendarRange, 'Hạn: ${FormatUtils.dateOnly(p.endDate)}'),
                                       ],
                                     ),
                                   ],

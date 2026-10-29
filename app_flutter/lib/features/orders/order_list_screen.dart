@@ -14,6 +14,7 @@ import '../../core/utils/format_utils.dart';
 import '../cash_shift/cash_shift_dialog.dart';
 import '../../core/domain/product_availability.dart';
 import '../kitchen/sold_out_actions.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OrderListScreen extends StatefulWidget {
   final TableModel table;
@@ -458,7 +459,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                             ),
                             const SizedBox(width: 6),
                             IconButton(
-                              icon: const Icon(Icons.close, size: 22),
+                              icon: const Icon(LucideIcons.x, size: 22),
                               tooltip: 'Đóng',
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
@@ -609,7 +610,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Ghi chú cho bếp / pha chế',
                       hintText: 'VD: ít ngọt, pha đậm vị...',
-                      prefixIcon: Icon(Icons.edit_note),
+                      prefixIcon: Icon(LucideIcons.notebookPen),
                     ),
                     onChanged: (_) => setModalState(() {}),
                   ),
@@ -693,12 +694,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
                             child: Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.remove, size: 18),
+                                  icon: const Icon(LucideIcons.minus, size: 18),
                                   onPressed: quantity > 1 ? () => setModalState(() => quantity--) : null,
                                 ),
                                 Text('$quantity', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.bold)),
                                 IconButton(
-                                  icon: const Icon(Icons.add, size: 18),
+                                  icon: const Icon(LucideIcons.plus, size: 18),
                                   onPressed: () => setModalState(() => quantity++),
                                 ),
                               ],
@@ -798,7 +799,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       backgroundColor: context.tc.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () {
             // Nếu chưa chọn món nào khi thoát:
             // - Với phiên mở bàn mới (_startedAsNewOrder): chỉ nhả khóa orderingBy an toàn
@@ -856,7 +857,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 color: Colors.amber.shade900,
                 child: Row(
                   children: [
-                    const Icon(Icons.lock, color: Colors.white, size: 18),
+                    const Icon(LucideIcons.lock, color: Colors.white, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -901,7 +902,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    icon: Icon(widget.isAddingMore ? Icons.check_circle_outline : Icons.receipt_long, size: 22),
+                    icon: Icon(widget.isAddingMore ? LucideIcons.circleCheck : LucideIcons.receiptText, size: 22),
                     label: Text(
                       widget.isAddingMore
                           ? 'Xong, Quay Lại Đơn • ${FormatUtils.vnd(_cartTotal)} ($_cartCount món)'
@@ -985,11 +986,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
         style: TextStyle(color: context.tc.textPrimary),
         decoration: InputDecoration(
           hintText: 'Tìm món ăn, thức uống, mã SKU...',
-          prefixIcon: Icon(Icons.search, color: context.tc.primary),
+          prefixIcon: Icon(LucideIcons.search, color: context.tc.primary),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           suffixIcon: _search.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.clear, color: context.tc.textSecondary, size: 18),
+                  icon: Icon(LucideIcons.x, color: context.tc.textSecondary, size: 18),
                   onPressed: () {
                     _searchCtrl.clear();
                     setState(() => _search = '');
@@ -1047,7 +1048,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.no_meals_outlined, size: 64, color: context.tc.textHint),
+            Icon(LucideIcons.utensilsCrossed, size: 64, color: context.tc.textHint),
             const SizedBox(height: 12),
             Text('Không tìm thấy món nào', style: GoogleFonts.beVietnamPro(color: context.tc.textSecondary)),
           ],
@@ -1195,11 +1196,11 @@ class _ProductListRow extends StatelessWidget {
                                 width: 58,
                                 height: 58,
                                 errorBuilder: (_, __, ___) => Center(
-                                  child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
+                                  child: Icon(LucideIcons.utensils, color: context.tc.primary, size: 28),
                                 ),
                               )
                             : Center(
-                                child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
+                                child: Icon(LucideIcons.utensils, color: context.tc.primary, size: 28),
                               )),
                   ),
                 ),
@@ -1316,7 +1317,7 @@ class _ProductListRow extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.add, color: Colors.white, size: 18),
+                          const Icon(LucideIcons.plus, color: Colors.white, size: 18),
                           const SizedBox(width: 4),
                           Text('Thêm', style: GoogleFonts.beVietnamPro(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                         ],
@@ -1338,7 +1339,7 @@ class _ProductListRow extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: context.tc.primary.withValues(alpha: 0.5)),
                           ),
-                          child: Icon(Icons.remove, color: context.tc.primary, size: 16),
+                          child: Icon(LucideIcons.minus, color: context.tc.primary, size: 16),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1361,7 +1362,7 @@ class _ProductListRow extends StatelessWidget {
                             color: soldOut ? context.tc.textHint : context.tc.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 16),
+                          child: const Icon(LucideIcons.plus, color: Colors.white, size: 16),
                         ),
                       ),
                     ],
@@ -1399,12 +1400,12 @@ class _ProductListRow extends StatelessWidget {
         width: 58,
         height: 58,
         errorBuilder: (_, __, ___) => Center(
-          child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
+          child: Icon(LucideIcons.utensils, color: context.tc.primary, size: 28),
         ),
       );
     } catch (_) {
       return Center(
-        child: Icon(Icons.restaurant_menu, color: context.tc.primary, size: 28),
+        child: Icon(LucideIcons.utensils, color: context.tc.primary, size: 28),
       );
     }
   }

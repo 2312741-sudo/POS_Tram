@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class CartItemCard extends StatelessWidget {
   final OrderItemModel item;
@@ -88,14 +89,14 @@ class CartItemCard extends StatelessWidget {
                           StatusBadge(
                             label: 'Món đã hết hàng',
                             color: context.tc.danger,
-                            icon: Icons.warning_amber_rounded,
+                            icon: LucideIcons.triangleAlert,
                             fontSize: 10,
                           ),
                         if (kitchenBadgeLabel != null || item.isSentKitchen)
                           StatusBadge(
                             label: kitchenBadgeLabel ?? 'Đã gửi bếp',
                             color: context.tc.success,
-                            icon: Icons.check,
+                            icon: LucideIcons.check,
                             fontSize: 10,
                           ),
                       ],
@@ -105,7 +106,7 @@ class CartItemCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Xóa món',
                   onPressed: onRemove,
-                  icon: Icon(Icons.delete_outline,
+                  icon: Icon(LucideIcons.trash2,
                       size: 22, color: context.tc.textSecondary),
                 ),
               ],
@@ -161,7 +162,7 @@ class CartItemCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.edit_note,
+                        Icon(LucideIcons.notebookPen,
                             size: 16, color: context.tc.warningInk),
                         const SizedBox(width: 4),
                         Flexible(
@@ -225,7 +226,7 @@ class CartItemCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.card_giftcard_rounded, size: 14, color: Color(0xFFC2410C)),
+                        const Icon(LucideIcons.gift, size: 14, color: Color(0xFFC2410C)),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
@@ -302,7 +303,7 @@ class CartItemCard extends StatelessWidget {
                         ),
                       ),
                       _ActionPill(
-                        icon: Icons.edit_note,
+                        icon: LucideIcons.notebookPen,
                         label: item.note.isEmpty ? '+ Ghi chú' : 'Ghi chú',
                         compact: compact,
                         onTap: onEditNote,
@@ -310,8 +311,8 @@ class CartItemCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       _ActionPill(
                         icon: hasDiscount
-                            ? Icons.discount
-                            : Icons.discount_outlined,
+                            ? LucideIcons.badgePercent
+                            : LucideIcons.badgePercent,
                         label: hasDiscount ? 'Đã giảm' : 'Giảm món',
                         compact: compact,
                         onTap: onDiscount,

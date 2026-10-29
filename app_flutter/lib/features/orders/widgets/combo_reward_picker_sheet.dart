@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/campaign_models.dart';
 import '../../../data/models/product_model.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ComboRewardPickerSheet extends StatefulWidget {
   final CampaignModel campaign;
@@ -133,7 +134,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                       color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.fastfood_rounded, color: AppColors.primary, size: 22),
+                    child: const Icon(LucideIcons.sandwich, color: AppColors.primary, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -154,7 +155,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded),
+                    icon: const Icon(LucideIcons.x),
                     onPressed: () => Navigator.pop(context, null),
                     tooltip: 'Đóng',
                   ),
@@ -176,7 +177,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
               child: Row(
                 children: [
                   Icon(
-                    isMaxReached ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                    isMaxReached ? LucideIcons.circleCheck : LucideIcons.info,
                     size: 20,
                     color: isMaxReached ? AppColors.success : AppColors.accent,
                   ),
@@ -226,10 +227,10 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                   style: GoogleFonts.beVietnamPro(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Tìm món giảm giá...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(LucideIcons.search, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(LucideIcons.x, size: 18),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _searchQuery = '');
@@ -365,7 +366,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline_rounded),
+                                          icon: const Icon(LucideIcons.circleMinus),
                                           color: qty > 0 ? AppColors.danger : tc.borderLight,
                                           iconSize: 26,
                                           padding: EdgeInsets.zero,
@@ -386,7 +387,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.add_circle_outline_rounded),
+                                          icon: const Icon(LucideIcons.circlePlus),
                                           color: !isMaxReached ? AppColors.primary : tc.borderLight,
                                           iconSize: 26,
                                           padding: EdgeInsets.zero,

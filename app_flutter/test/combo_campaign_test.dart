@@ -9,6 +9,7 @@ import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/data/models/promotion_model.dart';
 import 'package:tram_flutter/features/orders/widgets/campaign_pricing.dart';
 import 'package:tram_flutter/features/orders/widgets/combo_reward_picker_sheet.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   final waterProduct = ProductModel(id: 101, name: 'Trà Đào Cam Sả', price: 35000, category: 'Nước', unit: 'Ly');
@@ -244,7 +245,7 @@ void main() {
       expect(find.text('Bánh Tiramisu'), findsOneWidget);
 
       // Thêm 1 Bánh Croissant
-      final addButtons = find.byIcon(Icons.add_circle_outline_rounded);
+      final addButtons = find.byIcon(LucideIcons.circlePlus);
       await tester.tap(addButtons.first);
       await tester.pumpAndSettle();
 

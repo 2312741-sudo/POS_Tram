@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class QRCodeScreen extends StatelessWidget {
   final String tableName;
@@ -42,7 +43,7 @@ class QRCodeScreen extends StatelessWidget {
         backgroundColor: context.tc.primary,
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const Icon(LucideIcons.circleCheck, color: Colors.white, size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -71,7 +72,7 @@ class QRCodeScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: context.tc.border),
             ),
-            child: Icon(Icons.arrow_back_ios_new, size: 14, color: context.tc.textPrimary),
+            child: Icon(LucideIcons.chevronLeft, size: 14, color: context.tc.textPrimary),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -80,7 +81,7 @@ class QRCodeScreen extends StatelessWidget {
         )),
         actions: [
           IconButton(
-            icon: Icon(Icons.share_outlined, color: context.tc.textPrimary),
+            icon: Icon(LucideIcons.share2, color: context.tc.textPrimary),
             onPressed: () => _share(context),
             tooltip: 'Chia sẻ',
           ),
@@ -106,7 +107,7 @@ class QRCodeScreen extends StatelessWidget {
                     color: context.tc.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.table_restaurant, color: context.tc.primary, size: 24),
+                  child: Icon(LucideIcons.armchair, color: context.tc.primary, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -202,7 +203,7 @@ class QRCodeScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.info_outline, color: context.tc.primary, size: 16),
+                    Icon(LucideIcons.info, color: context.tc.primary, size: 16),
                     const SizedBox(width: 8),
                     Text('Hướng dẫn sử dụng', style: GoogleFonts.beVietnamPro(
                       color: context.tc.primary, fontWeight: FontWeight.w600, fontSize: 13,
@@ -224,7 +225,7 @@ class QRCodeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  icon: const Icon(LucideIcons.copy, size: 18),
                   label: Text('Sao chép link', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: context.tc.textPrimary,
@@ -239,7 +240,7 @@ class QRCodeScreen extends StatelessWidget {
                         backgroundColor: context.tc.primary,
                         content: Row(
                           children: [
-                            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                            const Icon(LucideIcons.circleCheck, color: Colors.white, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -257,7 +258,7 @@ class QRCodeScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  icon: const Icon(Icons.share_outlined, size: 18),
+                  icon: const Icon(LucideIcons.share2, size: 18),
                   label: Text('Chia sẻ', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),

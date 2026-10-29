@@ -10,6 +10,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/domain/business_day.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -59,7 +60,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         title: const Text('Lịch Sử Hóa Đơn'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download_outlined),
+            icon: const Icon(LucideIcons.download),
             tooltip: 'Xuất Báo Cáo Excel (Trạm)',
             onPressed: () async {
               if (_currentFiltered.isEmpty) {
@@ -155,7 +156,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           child: TextField(
                             decoration: InputDecoration(
                               hintText: 'Tìm mã HD, mã đơn, bàn, thu ngân...',
-                              prefixIcon: const Icon(Icons.search, size: 20),
+                              prefixIcon: const Icon(LucideIcons.search, size: 20),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -166,7 +167,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
-                          icon: const Icon(Icons.calendar_today, size: 16),
+                          icon: const Icon(LucideIcons.calendar, size: 16),
                           label: Text(DateFormat('dd/MM/yyyy').format(_selectedDate)),
                           onPressed: () async {
                             final picked = await showDatePicker(
@@ -276,7 +277,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            isCancelled ? Icons.cancel_outlined : Icons.receipt_long,
+            isCancelled ? LucideIcons.circleX : LucideIcons.receiptText,
             color: isCancelled ? context.tc.danger : context.tc.success,
             size: 20,
           ),
@@ -432,7 +433,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     foregroundColor: context.tc.danger,
                   ),
                   icon: Icon(
-                    isCancelled ? Icons.delete_forever : Icons.cancel_outlined,
+                    isCancelled ? LucideIcons.trash2 : LucideIcons.circleX,
                     size: 16,
                   ),
                   label: Text(
@@ -445,7 +446,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               // Reprint button
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
-                icon: const Icon(Icons.print_outlined, size: 16),
+                icon: const Icon(LucideIcons.printer, size: 16),
                 label: const Text('In lại hóa đơn'),
                 onPressed: () async {
                   if (!_auth.can(AppPermissions.reprintBill)) {
@@ -515,7 +516,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: context.bg(Colors.red.shade50), shape: BoxShape.circle),
-                child: Icon(Icons.warning_amber_rounded, color: context.tc.danger, size: 24),
+                child: Icon(LucideIcons.triangleAlert, color: context.tc.danger, size: 24),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -606,7 +607,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.cancel_outlined, size: 16),
+                icon: const Icon(LucideIcons.circleX, size: 16),
                 label: const Text('Hủy hóa đơn'),
                 onPressed: () async {
                   final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
@@ -636,7 +637,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   side: BorderSide(color: context.line(Colors.red.shade300)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.delete_forever, size: 16),
+                icon: const Icon(LucideIcons.trash2, size: 16),
                 label: const Text('Xóa hẳn khỏi máy'),
                 onPressed: () async {
                   final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;

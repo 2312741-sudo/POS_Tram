@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_mode_controller.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Bộ chọn chế độ giao diện: Theo hệ thống / Sáng / Tối.
 /// Lựa chọn lưu trên thiết bị (SharedPreferences) và áp dụng ngay.
@@ -21,17 +22,17 @@ class ThemeModeSelector extends StatelessWidget {
           segments: const [
             ButtonSegment(
               value: ThemeMode.system,
-              icon: Icon(Icons.brightness_auto_outlined, size: 18),
+              icon: Icon(LucideIcons.sunMoon, size: 18),
               label: Text('Hệ thống'),
             ),
             ButtonSegment(
               value: ThemeMode.light,
-              icon: Icon(Icons.light_mode_outlined, size: 18),
+              icon: Icon(LucideIcons.sun, size: 18),
               label: Text('Sáng'),
             ),
             ButtonSegment(
               value: ThemeMode.dark,
-              icon: Icon(Icons.dark_mode_outlined, size: 18),
+              icon: Icon(LucideIcons.moon, size: 18),
               label: Text('Tối'),
             ),
           ],
@@ -57,7 +58,7 @@ class ThemeModeCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.palette_outlined, color: context.tc.primary, size: 22),
+                Icon(LucideIcons.palette, color: context.tc.primary, size: 22),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   'Giao diện',

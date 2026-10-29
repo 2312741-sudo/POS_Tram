@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import 'sold_out_actions.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class SoldOutSheet extends StatefulWidget {
   const SoldOutSheet({super.key});
@@ -131,10 +132,10 @@ class _SoldOutSheetState extends State<SoldOutSheet> {
                 if (soldOutCount > 0)
                   TextButton.icon(
                     onPressed: _restoreAll,
-                    icon: const Icon(Icons.restart_alt, size: 18),
+                    icon: const Icon(LucideIcons.rotateCcw, size: 18),
                     label: const Text('Bật lại tất cả'),
                   ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
               ],
             ),
           ),
@@ -145,10 +146,10 @@ class _SoldOutSheetState extends State<SoldOutSheet> {
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Tìm món theo tên hoặc mã',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(LucideIcons.search),
                 suffixIcon: _query.isEmpty
                     ? null
-                    : IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() { _searchCtrl.clear(); _query = ''; })),
+                    : IconButton(icon: const Icon(LucideIcons.x), onPressed: () => setState(() { _searchCtrl.clear(); _query = ''; })),
                 isDense: true,
               ),
             ),

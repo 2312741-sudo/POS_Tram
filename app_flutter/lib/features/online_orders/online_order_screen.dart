@@ -10,6 +10,7 @@ import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class OnlineOrderScreen extends StatefulWidget {
   const OnlineOrderScreen({super.key});
@@ -64,7 +65,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
             backgroundColor: context.tc.success,
             content: Row(
               children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                const Icon(LucideIcons.circleCheck, color: Colors.white, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -93,7 +94,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
           content: Row(
             children: [
               Icon(
-                success ? Icons.check_circle_outline : Icons.error_outline,
+                success ? LucideIcons.circleCheck : LucideIcons.circleAlert,
                 color: Colors.white,
                 size: 20,
               ),
@@ -121,7 +122,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
           backgroundColor: context.tc.danger,
           content: Row(
             children: [
-              const Icon(Icons.cancel_outlined, color: Colors.white, size: 20),
+              const Icon(LucideIcons.circleX, color: Colors.white, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -188,7 +189,7 @@ class _OnlineOrderScreenState extends State<OnlineOrderScreen> with SingleTicker
   Widget _buildOrderList(List<OnlineOrderModel> orders, {required bool showActions}) {
     if (orders.isEmpty) {
       return const EmptyState(
-        icon: Icons.smartphone_outlined,
+        icon: LucideIcons.smartphone,
         title: 'Không có đơn nào',
         subtitle: 'Các đơn hàng online sẽ hiển thị ở đây',
       );
@@ -263,7 +264,7 @@ class _OnlineOrderCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isCallWaiter ? Icons.campaign_outlined : Icons.restaurant,
+                          isCallWaiter ? LucideIcons.megaphone : LucideIcons.utensilsCrossed,
                           color: isCallWaiter ? context.tc.warningInk : context.tc.primary,
                           size: 14,
                         ),

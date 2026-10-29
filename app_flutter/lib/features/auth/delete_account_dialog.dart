@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Luồng "Xóa tài khoản của tôi" (Apple 5.1.1(v)) — dùng chung cho mọi vai trò.
 /// Lối vào: Quản lý/Chủ quán → Trung tâm quản lý → menu ⋮ (góc phải) → "Xóa tài khoản của tôi";
@@ -98,7 +99,7 @@ class _DeleteAccountConfirmDialogState extends State<_DeleteAccountConfirmDialog
       child: AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.no_accounts_outlined, color: tc.danger),
+            Icon(LucideIcons.userX, color: tc.danger),
             const SizedBox(width: 8),
             const Expanded(child: Text('Xóa tài khoản của tôi')),
           ],
@@ -133,7 +134,7 @@ class _DeleteAccountConfirmDialogState extends State<_DeleteAccountConfirmDialog
                 textCapitalization: TextCapitalization.characters,
                 decoration: const InputDecoration(
                   labelText: 'Nhập XOA để xác nhận',
-                  prefixIcon: Icon(Icons.warning_amber_rounded),
+                  prefixIcon: Icon(LucideIcons.triangleAlert),
                 ),
               ),
             ],

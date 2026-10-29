@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Banner / Floating Notification Card nổi bật thông báo món bếp đã nấu xong.
 class ReadyKitchenOrdersBanner extends StatelessWidget {
@@ -91,7 +92,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                     ],
                   ),
                   child: const Icon(
-                    Icons.notifications_active,
+                    LucideIcons.bellRing,
                     color: Colors.white,
                     size: 24,
                   ),
@@ -175,7 +176,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                       ),
                       elevation: 1,
                     ),
-                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    icon: const Icon(LucideIcons.circleCheck, size: 16),
                     label: Text(
                       'Đã lấy món',
                       style: GoogleFonts.beVietnamPro(
@@ -292,7 +293,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                             border: Border.all(color: const Color(0xFFA5D6A7)),
                           ),
                           child: const Icon(
-                            Icons.restaurant,
+                            LucideIcons.utensilsCrossed,
                             color: Color(0xFF2E7D32),
                             size: 20,
                           ),
@@ -328,7 +329,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                               foregroundColor: const Color(0xFF2E7D32),
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                             ),
-                            icon: const Icon(Icons.done_all, size: 16),
+                            icon: const Icon(LucideIcons.checkCheck, size: 16),
                             label: Text(
                               'Lấy tất cả',
                               style: GoogleFonts.beVietnamPro(
@@ -344,7 +345,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                           const SizedBox(width: 4),
                         ],
                         IconButton(
-                          icon: const Icon(Icons.close, size: 20),
+                          icon: const Icon(LucideIcons.x, size: 20),
                           tooltip: 'Đóng',
                           onPressed: () => Navigator.pop(ctx),
                         ),
@@ -363,7 +364,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Icons.check_circle_outline,
+                                    LucideIcons.circleCheck,
                                     size: 56,
                                     color: Colors.green.shade400,
                                   ),
@@ -475,7 +476,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                               ),
                                               elevation: 0,
                                             ),
-                                            icon: const Icon(Icons.check, size: 14),
+                                            icon: const Icon(LucideIcons.check, size: 14),
                                             label: Text(
                                               'Đã lấy',
                                               style: GoogleFonts.beVietnamPro(
@@ -494,7 +495,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                       padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+                                          const Icon(LucideIcons.user, size: 14, color: Colors.grey),
                                           const SizedBox(width: 4),
                                           Text(
                                             'Gửi bởi: ',

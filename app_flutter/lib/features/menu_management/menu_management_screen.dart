@@ -20,6 +20,7 @@ import 'attachment_picker.dart';
 import 'copy_menu_dialog.dart';
 import 'note_catalog_access.dart';
 import 'note_catalog_screen.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class MenuManagementScreen extends StatefulWidget {
   const MenuManagementScreen({super.key});
@@ -188,7 +189,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                               child: Image.asset(existing!.assetPath!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_photo_alternate_outlined, color: context.tc.textSecondary, size: 32),
+                                  Icon(LucideIcons.imagePlus, color: context.tc.textSecondary, size: 32),
                                   const SizedBox(height: 4),
                                   Text('Chọn ảnh', style: TextStyle(color: context.tc.textSecondary, fontSize: 11)),
                                 ],
@@ -196,7 +197,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                           : Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_photo_alternate_outlined, color: context.tc.textSecondary, size: 32),
+                                Icon(LucideIcons.imagePlus, color: context.tc.textSecondary, size: 32),
                                 const SizedBox(height: 4),
                                 Text('Chọn ảnh', style: TextStyle(color: context.tc.textSecondary, fontSize: 11)),
                               ],
@@ -210,7 +211,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Mã món / SKU',
                     hintText: 'VD: SP001, TRA01...',
-                    prefixIcon: Icon(Icons.qr_code),
+                    prefixIcon: Icon(LucideIcons.qrCode),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -262,7 +263,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                     return Column(children: [
                       AttachmentPicker(
                         title: 'Danh mục note áp dụng',
-                        icon: Icons.sticky_note_2_outlined,
+                        icon: LucideIcons.stickyNote,
                         options: [for (final g in _catalog.noteGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
                         value: noteIds,
                         inheritedLabel: names(cat?.noteGroupIds, noteById),
@@ -270,7 +271,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       ),
                       AttachmentPicker(
                         title: 'Nhóm topping áp dụng',
-                        icon: Icons.add_circle_outline,
+                        icon: LucideIcons.circlePlus,
                         options: [for (final g in _catalog.toppingGroups) (g.id, g.active ? g.name : '${g.name} (đã tắt)')],
                         value: toppingIds,
                         inheritedLabel: names(cat?.toppingGroupIds, topById),
@@ -443,18 +444,18 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         )),
         actions: [
           IconButton(
-            icon: const Icon(Icons.category_outlined, color: Colors.white),
+            icon: const Icon(LucideIcons.shapes, color: Colors.white),
             onPressed: () => context.push('/category-management', extra: _selectedStoreCode),
             tooltip: 'Quản lý danh mục',
           ),
           if (canManageNoteCatalog(_auth))
             IconButton(
-              icon: const Icon(Icons.sticky_note_2_outlined, color: Colors.white),
+              icon: const Icon(LucideIcons.stickyNote, color: Colors.white),
               tooltip: 'Danh mục note & topping',
               onPressed: _openNoteCatalog,
             ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            icon: const Icon(LucideIcons.ellipsisVertical, color: Colors.white),
             onSelected: (val) {
               if (val == 'COPY') _showCopyMenuDialog();
               if (val == 'CLEAR') _showClearMenuDialog();
@@ -465,7 +466,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 value: 'COPY',
                 child: Row(
                   children: [
-                    Icon(Icons.copy_all_outlined, size: 18, color: context.tc.primary),
+                    Icon(LucideIcons.copy, size: 18, color: context.tc.primary),
                     const SizedBox(width: 8),
                     const Text('Sao chép từ chi nhánh khác...'),
                   ],
@@ -475,7 +476,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 value: 'CLEAR',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_outlined, size: 18, color: context.tc.danger),
+                    Icon(LucideIcons.trash, size: 18, color: context.tc.danger),
                     const SizedBox(width: 8),
                     Text('Làm trống menu chi nhánh này', style: TextStyle(color: context.tc.danger)),
                   ],
@@ -506,7 +507,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Icon(Icons.storefront, color: context.tc.primary, size: 20),
+                Icon(LucideIcons.store, color: context.tc.primary, size: 20),
                 const SizedBox(width: 8),
                 Text('Chi nhánh:', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.textPrimary)),
                 const SizedBox(width: 10),
@@ -610,7 +611,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               ? const Center(child: CircularProgressIndicator())
               : _filtered.isEmpty
                 ? EmptyState(
-                    icon: Icons.restaurant_menu_outlined,
+                    icon: LucideIcons.utensils,
                     title: 'Chưa có sản phẩm cho chi nhánh $_selectedStoreCode',
                     subtitle: 'Thêm món mới hoặc sao chép từ chi nhánh khác.',
                     action: Row(
@@ -618,7 +619,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       children: [
                         ElevatedButton.icon(
                           onPressed: () => _showProductDialog(),
-                          icon: const Icon(Icons.add, color: Colors.white),
+                          icon: const Icon(LucideIcons.plus, color: Colors.white),
                           label: Text('Thêm sản phẩm', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(64, AppSpacing.minTapTarget),
@@ -630,7 +631,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         if (_canCopyMenu) OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
                           onPressed: _showCopyMenuDialog,
-                          icon: const Icon(Icons.copy_all),
+                          icon: const Icon(LucideIcons.copy),
                           label: const Text('Sao chép món'),
                         ),
                       ],
@@ -652,7 +653,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showProductDialog(),
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(LucideIcons.plus, color: Colors.white),
         label: Text('Thêm món mới', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
         backgroundColor: context.tc.primary,
         foregroundColor: Colors.white,
@@ -691,7 +692,7 @@ class _ProductItem extends StatelessWidget {
                   ? Image.memory(base64Decode(product.imageBase64!.contains(',') ? product.imageBase64!.split(',').last : product.imageBase64!), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: context.tc.cardElevated,
-                        child: Icon(Icons.restaurant, color: context.tc.textHint),
+                        child: Icon(LucideIcons.utensilsCrossed, color: context.tc.textHint),
                       ))
                   : (product.assetPath != null
                       ? Image.asset(
@@ -699,12 +700,12 @@ class _ProductItem extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: context.tc.cardElevated,
-                            child: Icon(Icons.restaurant, color: context.tc.textHint),
+                            child: Icon(LucideIcons.utensilsCrossed, color: context.tc.textHint),
                           ),
                         )
                       : Container(
                           color: context.tc.cardElevated,
-                          child: Icon(Icons.restaurant, color: context.tc.textHint),
+                          child: Icon(LucideIcons.utensilsCrossed, color: context.tc.textHint),
                         )),
               ),
             ),
@@ -853,7 +854,7 @@ class _ProductItem extends StatelessWidget {
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onToggleAvailability,
                   icon: Icon(
-                    product.isAvailable ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                    product.isAvailable ? LucideIcons.circleCheck : LucideIcons.circlePause,
                     color: product.isAvailable ? context.tc.success : context.tc.textHint,
                     size: 20,
                   ),
@@ -864,7 +865,7 @@ class _ProductItem extends StatelessWidget {
                   padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onEdit,
-                  icon: Icon(Icons.edit_outlined, color: context.tc.textSecondary, size: 20),
+                  icon: Icon(LucideIcons.pencil, color: context.tc.textSecondary, size: 20),
                   tooltip: 'Sửa món',
                 ),
                 IconButton(
@@ -872,7 +873,7 @@ class _ProductItem extends StatelessWidget {
                   padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline, color: context.tc.danger, size: 20),
+                  icon: Icon(LucideIcons.trash2, color: context.tc.danger, size: 20),
                   tooltip: 'Xóa khỏi chi nhánh',
                 ),
               ],

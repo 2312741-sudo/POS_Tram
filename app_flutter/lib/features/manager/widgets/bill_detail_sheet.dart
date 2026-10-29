@@ -10,6 +10,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/app_models.dart';
 import '../../../data/services/firebase_service.dart';
 import '../../../core/utils/share_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class BillDetailSheet extends StatelessWidget {
   final BillModel bill;
@@ -97,7 +98,7 @@ class BillDetailSheet extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(LucideIcons.x),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -145,7 +146,7 @@ class BillDetailSheet extends StatelessWidget {
                 // Danh sách món ăn chi tiết
                 Row(
                   children: [
-                    Icon(Icons.restaurant_menu, size: 20, color: context.tc.primary),
+                    Icon(LucideIcons.utensils, size: 20, color: context.tc.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Danh sách món ăn (${bill.items.length} món)',
@@ -240,7 +241,7 @@ class BillDetailSheet extends StatelessWidget {
                 if (bill.deletedItems.isNotEmpty) ...[
                   Row(
                     children: [
-                      Icon(Icons.remove_shopping_cart_outlined, size: 20, color: context.tc.danger),
+                      Icon(LucideIcons.shoppingCart, size: 20, color: context.tc.danger),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -273,7 +274,7 @@ class BillDetailSheet extends StatelessWidget {
                 if (bill.actionLogs.isNotEmpty) ...[
                   Row(
                     children: [
-                      Icon(Icons.history_toggle_off, size: 20, color: context.tc.info),
+                      Icon(LucideIcons.history, size: 20, color: context.tc.info),
                       const SizedBox(width: 8),
                       Text(
                         'Lịch sử thao tác đơn (${bill.actionLogs.length})',
@@ -323,7 +324,7 @@ class BillDetailSheet extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.all(12),
                     ),
-                    icon: Icon(bill.status == 'CANCELLED' ? Icons.delete_forever : Icons.cancel_outlined),
+                    icon: Icon(bill.status == 'CANCELLED' ? LucideIcons.trash2 : LucideIcons.circleX),
                     onPressed: () => _confirmCancelOrDeleteBill(context, bill, auth, fb),
                   ),
                   const SizedBox(width: 8),
@@ -335,7 +336,7 @@ class BillDetailSheet extends StatelessWidget {
                       side: BorderSide(color: context.tc.primary),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: Icon(Icons.file_download_outlined, color: context.tc.primary),
+                    icon: Icon(LucideIcons.download, color: context.tc.primary),
                     label: Text(
                       'Xuất / Chia Sẻ',
                       style: GoogleFonts.beVietnamPro(
@@ -364,7 +365,7 @@ class BillDetailSheet extends StatelessWidget {
                       backgroundColor: context.tc.primary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Icon(Icons.print, color: Colors.white),
+                    icon: const Icon(LucideIcons.printer, color: Colors.white),
                     label: Text(
                       'In Lại Bill',
                       style: GoogleFonts.beVietnamPro(
@@ -662,7 +663,7 @@ class BillDetailSheet extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: context.bg(Colors.red.shade50), shape: BoxShape.circle),
-                child: Icon(Icons.warning_amber_rounded, color: context.tc.danger, size: 24),
+                child: Icon(LucideIcons.triangleAlert, color: context.tc.danger, size: 24),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -752,7 +753,7 @@ class BillDetailSheet extends StatelessWidget {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.cancel_outlined, size: 16),
+                icon: const Icon(LucideIcons.circleX, size: 16),
                 label: const Text('Hủy hóa đơn'),
                 onPressed: () async {
                   final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
@@ -783,7 +784,7 @@ class BillDetailSheet extends StatelessWidget {
                   side: BorderSide(color: context.line(Colors.red.shade300)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.delete_forever, size: 16),
+                icon: const Icon(LucideIcons.trash2, size: 16),
                 label: const Text('Xóa hẳn khỏi máy'),
                 onPressed: () async {
                   final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;

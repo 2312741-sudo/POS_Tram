@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/format_utils.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ==================== SECTION HEADER ====================
 class SectionHeader extends StatelessWidget {
@@ -101,7 +102,7 @@ class StatCard extends StatelessWidget {
                     child: Icon(icon, color: color, size: 20),
                   ),
                   if (onTap != null)
-                    Icon(Icons.arrow_forward_ios, color: context.tc.textHint, size: 14),
+                    Icon(LucideIcons.chevronRight, color: context.tc.textHint, size: 14),
                 ],
               ),
               const Spacer(),
@@ -173,7 +174,7 @@ class AppScreen extends StatelessWidget {
         automaticallyImplyLeading: showBack,
         leading: showBack && Navigator.of(context).canPop()
             ? IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: const Icon(LucideIcons.arrowLeft),
                 tooltip: 'Quay lại',
                 onPressed: () => Navigator.of(context).maybePop(),
               )
@@ -281,7 +282,7 @@ class ErrorState extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(color: context.tc.dangerLight, shape: BoxShape.circle),
-                child: Icon(Icons.cloud_off_rounded, color: context.tc.danger, size: 40),
+                child: Icon(LucideIcons.cloudOff, color: context.tc.danger, size: 40),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(
@@ -303,7 +304,7 @@ class ErrorState extends StatelessWidget {
                   width: 200,
                   child: OutlinedButton.icon(
                     onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(LucideIcons.refreshCw),
                     label: const Text('Thử lại'),
                   ),
                 ),
@@ -385,13 +386,13 @@ class InfoBanner extends StatelessWidget {
   IconData get _defaultIcon {
     switch (tone) {
       case BannerTone.success:
-        return Icons.check_circle_outline;
+        return LucideIcons.circleCheck;
       case BannerTone.warning:
-        return Icons.warning_amber_rounded;
+        return LucideIcons.triangleAlert;
       case BannerTone.danger:
-        return Icons.error_outline;
+        return LucideIcons.circleAlert;
       case BannerTone.info:
-        return Icons.info_outline;
+        return LucideIcons.info;
     }
   }
 
@@ -436,7 +437,7 @@ class InfoBanner extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             TextButton.icon(
               onPressed: onAction,
-              icon: Icon(actionIcon ?? Icons.arrow_forward, size: 16),
+              icon: Icon(actionIcon ?? LucideIcons.arrowRight, size: 16),
               label: Text(actionLabel!),
               style: TextButton.styleFrom(
                 backgroundColor: solid ? context.tc.card : fg,
@@ -553,7 +554,7 @@ class QuantityStepper extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          btn(Icons.remove, onDecrement, context.tc.danger, 'Giảm'),
+          btn(LucideIcons.minus, onDecrement, context.tc.danger, 'Giảm'),
           ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 28),
             child: onTapValue == null
@@ -566,7 +567,7 @@ class QuantityStepper extends StatelessWidget {
                     ),
                   ),
           ),
-          btn(Icons.add, onIncrement, context.tc.primary, 'Tăng'),
+          btn(LucideIcons.plus, onIncrement, context.tc.primary, 'Tăng'),
         ],
       ),
     );
@@ -706,7 +707,7 @@ Future<bool?> showConfirmDialog(BuildContext context, {
       title: Row(
         children: [
           Icon(
-            isDanger ? Icons.warning_amber_rounded : Icons.help_outline,
+            isDanger ? LucideIcons.triangleAlert : LucideIcons.circleHelp,
             color: isDanger ? context.tc.danger : context.tc.primary,
           ),
           const SizedBox(width: AppSpacing.sm),
