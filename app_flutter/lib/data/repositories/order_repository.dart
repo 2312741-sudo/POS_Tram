@@ -2405,6 +2405,36 @@ class OrderRepository {
         .toList();
   }
 
+  /// Xoá dữ liệu đơn bếp đã hoàn thành (SOS/SLA) trong khoảng [fromMs, toMs] hoặc toàn bộ nếu không truyền.
+  /// Chỉ xoá các phiếu đã nấu xong (`isDone == true`), giữ nguyên các phiếu đang chờ chế biến trong bếp.
+  Future<int> clearKitchenSlaData({String? storeCode, int? fromMs, int? toMs}) async {
+    final sc = (storeCode != null && storeCode.trim().isNotEmpty) ? storeCode.trim().toUpperCase() : _currentStoreCode;
+    final ref = _root.child('stores').child(sc).child('kitchen_orders');
+    final DataSnapshot snap;
+    if (fromMs != null && toMs != null) {
+      snap = await ref.orderByChild('timestamp').startAt(fromMs).endAt(toMs).get();
+    } else {
+      snap = await ref.get();
+    }
+    final v = snap.value;
+    if (!snap.exists || v is! Map) return 0;
+
+    final Map<String, Object?> updates = {};
+    for (final entry in v.entries) {
+      final val = entry.value;
+      if (val is Map && val['isDone'] == true) {
+        final ts = (val['timestamp'] as num?)?.toInt() ?? 0;
+        if (fromMs != null && ts < fromMs) continue;
+        if (toMs != null && ts > toMs) continue;
+        updates[entry.key.toString()] = null;
+      }
+    }
+    if (updates.isEmpty) return 0;
+
+    await _commitWrite(ref.update(updates), 'xoá dữ liệu SOS bếp');
+    return updates.length;
+  }
+
   Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final staff = pickedUpBy ?? AuthService().currentUser?.fullName ?? AuthService().currentUser?.username;

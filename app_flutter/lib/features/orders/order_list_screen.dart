@@ -1255,11 +1255,15 @@ class _ProductListRow extends StatelessWidget {
                             ),
                           if (product.category.isNotEmpty) ...[
                             Text(' • ', style: TextStyle(color: context.tc.textHint)),
-                            Text(
-                              product.category,
-                              style: GoogleFonts.beVietnamPro(
-                                color: context.tc.textSecondary,
-                                fontSize: 12,
+                            Flexible(
+                              child: Text(
+                                product.category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.beVietnamPro(
+                                  color: context.tc.textSecondary,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -1268,18 +1272,16 @@ class _ProductListRow extends StatelessWidget {
                       const SizedBox(height: 4),
 
                       // Tags for options
-                      Row(
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
                         children: [
                           if (product.sizes.isNotEmpty)
                             _buildPillTag('Size S/M/L', context.ink(Colors.blue.shade700), context.bg(Colors.blue.shade50)),
-                          if (product.allowedToppings.isNotEmpty || hasOptions) ...[
-                            const SizedBox(width: 4),
+                          if (product.allowedToppings.isNotEmpty || hasOptions)
                             _buildPillTag('Topping', context.ink(Colors.orange.shade800), context.bg(Colors.orange.shade50)),
-                          ],
-                          if (product.hasIceSugarOptions || hasOptions) ...[
-                            const SizedBox(width: 4),
+                          if (product.hasIceSugarOptions || hasOptions)
                             _buildPillTag('Đường/Đá', context.ink(Colors.green.shade800), context.bg(Colors.green.shade50)),
-                          ],
                         ],
                       ),
                     ],

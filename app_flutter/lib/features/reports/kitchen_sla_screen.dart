@@ -46,6 +46,7 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
   String? _error;
   KitchenSlaSummary? _summary;
   bool _exporting = false;
+  bool _clearing = false;
 
   @override
   void initState() {
@@ -253,6 +254,79 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
     }
   }
 
+  Future<void> _confirmClearSlaData() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever, color: AppColors.danger),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Xoá dữ liệu báo cáo SOS',
+                style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Bạn muốn xoá lịch sử thời gian phục vụ bếp (SOS) theo khoảng đang lọc (${_dateFilter.label}) hay xoá toàn bộ dữ liệu SOS của chi nhánh ${_auth.currentStoreCode}?\n\nLưu ý: Các đơn đang chờ chế biến trong bếp sẽ được giữ nguyên.',
+          style: GoogleFonts.beVietnamPro(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Huỷ'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, 'range'),
+            child: Text('Xoá (${_dateFilter.label})'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, 'all'),
+            child: const Text('Xoá tất cả SOS'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    setState(() => _clearing = true);
+    final sm = ScaffoldMessenger.of(context);
+    try {
+      int deleted = 0;
+      if (choice == 'range') {
+        final range = _resolveRange();
+        deleted = await _fb.clearKitchenSlaData(
+          storeCode: _auth.currentStoreCode,
+          fromMs: range.start.millisecondsSinceEpoch,
+          toMs: range.end.millisecondsSinceEpoch,
+        );
+      } else {
+        deleted = await _fb.clearKitchenSlaData(
+          storeCode: _auth.currentStoreCode,
+        );
+      }
+      if (!mounted) return;
+      sm.showSnackBar(
+        SnackBar(
+          content: Text('Đã xoá $deleted bản ghi dữ liệu SOS thành công!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      await _loadData();
+    } catch (e) {
+      sm.showSnackBar(
+        SnackBar(content: Text('Lỗi xoá dữ liệu SOS: $e'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      if (mounted) setState(() => _clearing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final summary = _summary;
@@ -287,12 +361,19 @@ class _KitchenSlaScreenState extends State<KitchenSlaScreen> with SingleTickerPr
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.table_view_outlined, color: Colors.greenAccent),
             tooltip: 'Xuất file Excel báo cáo SOS',
-            onPressed: (_exporting || _loading) ? null : _exportExcel,
+            onPressed: (_exporting || _loading || _clearing) ? null : _exportExcel,
+          ),
+          IconButton(
+            icon: _clearing
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.delete_sweep_outlined, color: Colors.amberAccent),
+            tooltip: 'Xoá dữ liệu SOS',
+            onPressed: (_clearing || _loading || _exporting) ? null : _confirmClearSlaData,
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Tải lại',
-            onPressed: _loading ? null : _loadData,
+            onPressed: (_loading || _clearing) ? null : _loadData,
           ),
         ],
         bottom: TabBar(

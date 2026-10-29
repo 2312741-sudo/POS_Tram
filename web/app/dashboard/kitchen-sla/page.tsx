@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { onValue, ref } from "firebase/database";
+import { onValue, ref, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth, canAccessRoute } from "@/lib/auth";
 import { useDashboardData } from "@/lib/data-context";
@@ -23,6 +23,7 @@ import {
   Search,
   Filter,
   Flame,
+  Trash2,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -214,6 +215,37 @@ export default function KitchenSlaPage() {
     );
   };
 
+  const handleClearSlaData = async (mode: "range" | "all") => {
+    if (!storeCode || !rawTickets) return;
+    const entries = Object.entries(rawTickets);
+    const updates: Record<string, null> = {};
+    for (const [key, val] of entries) {
+      if (!val || typeof val !== "object") continue;
+      const ticket = val as Record<string, unknown>;
+      if (ticket.isDone !== true) continue;
+      const ts = Number(ticket.timestamp || 0);
+      if (mode === "range" && (ts < fromMs || ts > toMs)) continue;
+      updates[key] = null;
+    }
+    const count = Object.keys(updates).length;
+    if (count === 0) {
+      alert("Không có dữ liệu SOS nào để xoá!");
+      return;
+    }
+    const confirmMsg =
+      mode === "range"
+        ? `Bạn có chắc muốn xoá ${count} bản ghi SOS trong khoảng thời gian đang lọc của chi nhánh ${storeCode}?`
+        : `Bạn có chắc muốn xoá TOÀN BỘ (${count} bản ghi) dữ liệu SOS đã hoàn thành của chi nhánh ${storeCode}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await update(ref(db, `stores/${storeCode}/kitchen_orders`), updates);
+      alert(`Đã xoá ${count} bản ghi dữ liệu SOS thành công!`);
+    } catch (e: unknown) {
+      alert(`Lỗi khi xoá dữ liệu SOS: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   return (
     <div className="container" style={{ paddingBottom: "60px" }}>
       {/* Header */}
@@ -254,7 +286,7 @@ export default function KitchenSlaPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn-secondary"
@@ -263,6 +295,24 @@ export default function KitchenSlaPage() {
           >
             <FileSpreadsheet size={16} color="var(--success)" />
             Xuất Excel (.xlsx)
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => handleClearSlaData("range")}
+            style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--danger)", borderColor: "var(--danger)" }}
+          >
+            <Trash2 size={16} />
+            Xoá dữ liệu lọc
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => handleClearSlaData("all")}
+            style={{ display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            <Trash2 size={16} />
+            Xoá tất cả SOS
           </button>
         </div>
       </div>

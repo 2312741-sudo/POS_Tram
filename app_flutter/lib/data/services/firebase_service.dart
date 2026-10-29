@@ -586,6 +586,9 @@ class FirebaseService {
   Future<List<KitchenOrderModel>> kitchenOrdersInRange({String? storeCode, required int fromMs, required int toMs}) =>
       _orderRepo.kitchenOrdersInRange(storeCode: storeCode, fromMs: fromMs, toMs: toMs);
 
+  Future<int> clearKitchenSlaData({String? storeCode, int? fromMs, int? toMs}) =>
+      _orderRepo.clearKitchenSlaData(storeCode: storeCode, fromMs: fromMs, toMs: toMs);
+
   Future<void> markKitchenOrderPickedUp(String key, {String? pickedUpBy}) =>
       _orderRepo.markKitchenOrderPickedUp(key, pickedUpBy: pickedUpBy);
 
