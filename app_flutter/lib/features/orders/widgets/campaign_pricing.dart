@@ -123,9 +123,9 @@ class CartCampaignPricing {
   }
 
   /// Báo giá khi nhân viên bấm áp dụng / xem chương trình trên giỏ.
-  /// Khung giờ xét theo LÚC BẤM ([nowMs], mặc định giờ hiện tại) — không theo giờ mở bàn hay giờ gọi món:
-  /// nước gọi trước giờ combo, vào khung giờ vẫn áp được. Chương trình ĐÃ áp dụng ([isApplied]) thì bỏ qua
-  /// khung giờ để đơn treo qua hết giờ vẫn giữ giảm (khớp web: recalculateDiscounts).
+  /// Lúc bấm ([nowMs], mặc định giờ hiện tại) phải trong khung giờ, và chỉ các món GỌI trong khung giờ được tính
+  /// (nước gọi trước giờ combo thì bánh không được giảm — xem outsideScheduleMessage). Chương trình ĐÃ áp dụng
+  /// ([isApplied]) bỏ qua giờ bấm để đơn treo qua hết giờ vẫn giữ giảm (khớp web: recalculateDiscounts).
   static PriceQuoteModel quoteForApply(
     CampaignModel campaign, {
     required List<OrderItemModel> cart,
@@ -184,7 +184,7 @@ class CartCampaignPricing {
         final buyIds = cond.buyItemIds.toSet(), buyGroups = cond.buyGroupIds.toSet();
         final rewardIds = cond.rewardItemIds.toSet(), rewardGroups = cond.rewardGroupIds.toSet();
         if (cond.requiredBuyQty <= 0 || cond.rewardQty <= 0) continue;
-        final x = lns.where((l) => !l.isGift && matches(l, buyIds, buyGroups)).fold<int>(0, (s, l) => s + l.quantity);
+        final x = lns.where((l) => !l.isGift && l.orderedWithin(c) && matches(l, buyIds, buyGroups)).fold<int>(0, (s, l) => s + l.quantity);
         final bundles = cond.multiplyByBundle ? x ~/ cond.requiredBuyQty : (x >= cond.requiredBuyQty ? 1 : 0);
         if (bundles <= 0) continue;
         final cands = pick(rewardIds, rewardGroups);
@@ -196,7 +196,7 @@ class CartCampaignPricing {
       final inScopeAll = c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty;
       int base = 0;
       for (final l in lns) {
-        if (l.isGift || l.matchesAnyTarget(c.excludedItemIds)) continue;
+        if (l.isGift || !l.orderedWithin(c) || l.matchesAnyTarget(c.excludedItemIds)) continue;
         final inScope = inScopeAll || l.matchesAnyTarget(c.includedItemIds) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
         if (inScope) base += l.unitPrice * l.quantity - l.manualLineDiscount;
       }
@@ -208,6 +208,40 @@ class CartCampaignPricing {
       return (units: tier.maxRewardQty > 0 ? tier.maxRewardQty : 1, candidates: cands);
     }
     return null;
+  }
+
+  /// Món liên quan tới chương trình nhưng GỌI NGOÀI khung giờ áp dụng → không được tính KM.
+  /// Trả câu thông báo cho nhân viên (null = không có món nào như vậy).
+  static String? outsideScheduleMessage(
+    CampaignModel c, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+  }) {
+    final lns = lines(cart, products);
+    bool group(PricingLineItem l, Iterable<String> groups) =>
+        l.groupId != null && groups.any((g) => PricingLineItem.normGroup(g) == PricingLineItem.normGroup(l.groupId!));
+    bool related(PricingLineItem l) {
+      if (l.isGift || l.matchesAnyTarget(c.excludedItemIds)) return false;
+      final type = c.campaignType.toUpperCase().replaceAll('_', '');
+      if (type == 'BUYXGETY') {
+        return c.buyConditions.any((cond) =>
+            l.matchesAnyTarget(cond.buyItemIds) || group(l, cond.buyGroupIds) ||
+            l.matchesAnyTarget(cond.rewardItemIds) || group(l, cond.rewardGroupIds));
+      }
+      if (c.includedItemIds.isEmpty && c.includedGroupIds.isEmpty) return true;
+      return l.matchesAnyTarget(c.includedItemIds) || group(l, c.includedGroupIds);
+    }
+
+    String hm(int ms) {
+      final d = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).add(const Duration(hours: 7));
+      return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    }
+
+    final out = lns.where((l) => related(l) && !l.orderedWithin(c)).toList();
+    if (out.isEmpty) return null;
+    final names = out.map((l) => '${l.itemName ?? l.itemId} (gọi lúc ${hm(l.orderedAtMs!)})').join(', ');
+    return '$names gọi ngoài thời gian khuyến mãi (${c.schedule.summary()}) nên không được áp dụng. '
+        'Chỉ món gọi trong khung giờ mới được tính.';
   }
 
   /// Lý do chưa áp dụng (nếu có) của chương trình trong [quote]
@@ -261,14 +295,14 @@ class CartCampaignPricing {
         final rewardIds = cond.rewardItemIds.toSet(), rewardGroups = cond.rewardGroupIds.toSet();
         if (cond.requiredBuyQty <= 0 || cond.rewardQty <= 0) continue;
 
-        // Số lượng nước trong giỏ hàng
+        // Số lượng nước trong giỏ hàng (chỉ nước gọi trong khung giờ chương trình)
         final buyUnits = lns
-            .where((l) => !l.isGift && matches(l, buyIds, buyGroups))
+            .where((l) => !l.isGift && l.orderedWithin(c) && matches(l, buyIds, buyGroups))
             .fold<int>(0, (s, l) => s + l.quantity);
 
         // Số lượng bánh hiện có trong giỏ hàng
         final rewardUnitsInCart = lns
-            .where((l) => !l.isGift && matches(l, rewardIds, rewardGroups))
+            .where((l) => !l.isGift && l.orderedWithin(c) && matches(l, rewardIds, rewardGroups))
             .fold<int>(0, (s, l) => s + l.quantity);
 
         final bundles = cond.multiplyByBundle ? buyUnits ~/ cond.requiredBuyQty : (buyUnits >= cond.requiredBuyQty ? 1 : 0);

@@ -264,6 +264,13 @@ export interface PricingLine {
   discountUnitAmount?: number;
   /** Ghi đè giảm thủ công của dòng (dòng cũ chỉ có discountAmount cả dòng) */
   manualDiscount?: number;
+  /** Lúc gọi món (ms). KM có khung giờ chỉ tính dòng gọi TRONG khung giờ; trống = món mới (tính theo lúc bấm) */
+  orderedAtMs?: number | null;
+}
+
+/** Dòng gọi trong thời gian áp dụng của [c]? (món chưa có giờ gọi = món mới → luôn được tính). Khớp orderedWithin (Dart). */
+export function orderedWithin(l: PricingLine, c: Campaign): boolean {
+  return !l.orderedAtMs || l.orderedAtMs <= 0 || isEligibleAt(c, l.orderedAtMs);
 }
 
 export function stripAccents(str: string): string {
@@ -439,6 +446,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
   };
   const inScope = (c: Campaign, l: PricingLine) => {
     if (l.isGift) return false;
+    if (!orderedWithin(l, c)) return false;
     if (lineMatchesAnyTarget(l, c.excludedItemIds)) return false;
     if (c.includedItemIds.length === 0 && c.includedGroupIds.length === 0) return true;
     return lineMatchesAnyTarget(l, c.includedItemIds) || groupIn(l.groupId, c.includedGroupIds);
@@ -519,6 +527,8 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       );
       continue;
     }
+    // Chỉ món gọi TRONG khung giờ của chương trình mới được tính (món gọi ngoài giờ không đủ điều kiện)
+    const lines = input.lines.filter((l) => orderedWithin(l, campaign));
     const type = campaign.campaignType;
 
     if (isType(type, "BILLDISCOUNT")) {
@@ -546,7 +556,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
           continue;
         }
         let xo = 0, yo = 0, bo = 0; // chỉ X, chỉ Y, vừa X vừa Y
-        for (const l of input.lines) {
+        for (const l of lines) {
           if (l.isGift || lineMatchesAnyTarget(l, campaign.excludedItemIds)) continue;
           const isX = isBuy(l);
           const isY = isReward(l);
@@ -579,7 +589,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
           addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", `Đủ điều kiện: thêm ${bestB * rewardQty} món Y vào đơn để được hưởng ưu đãi`);
           continue;
         }
-        const candidates = input.lines.filter((l) => !l.isGift && isReward(l) && !lineMatchesAnyTarget(l, campaign.excludedItemIds));
+        const candidates = lines.filter((l) => !l.isGift && isReward(l) && !lineMatchesAnyTarget(l, campaign.excludedItemIds));
         campaignDiscount += distributeReward({
           candidates,
           units: bestReward,
@@ -599,7 +609,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       }
     } else if (isType(type, "ORDERVALUEITEMBENEFIT")) {
       let base = 0;
-      for (const l of input.lines) if (inScope(campaign, l)) base += afterManual[l.lineId] ?? 0;
+      for (const l of lines) if (inScope(campaign, l)) base += afterManual[l.lineId] ?? 0;
       const tiers = [...campaign.tiers].sort((a, b) => b.threshold - a.threshold);
       const tier = tiers.find((t) => base >= t.threshold);
       if (!tier) {
@@ -618,7 +628,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         continue;
       }
       const units = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1;
-      const candidates = input.lines.filter(
+      const candidates = lines.filter(
         (l) => !l.isGift && (lineMatchesAnyTarget(l, rewardIds) || groupIn(l.groupId, rewardGroups)) && !lineMatchesAnyTarget(l, campaign.excludedItemIds),
       );
       if (candidates.length === 0) {
@@ -637,7 +647,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         const tier = campaign.tiers[0];
         // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
         let applied = false;
-        for (const line of input.lines) {
+        for (const line of lines) {
           if (!inScope(campaign, line)) continue;
           const perUnit = unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
           if (perUnit <= 0) continue;
@@ -650,7 +660,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
           applied = true;
         }
         if (applied) markApplied(campaign.campaignId);
-        else if (!input.lines.some((l) => inScope(campaign, l))) addReason(campaign, "ITEM_NOT_IN_BILL", "Thêm món thuộc chương trình vào đơn để áp dụng");
+        else if (!lines.some((l) => inScope(campaign, l))) addReason(campaign, "ITEM_NOT_IN_BILL", "Thêm món thuộc chương trình vào đơn để áp dụng");
       }
     }
   }
@@ -773,7 +783,53 @@ export function linesFromOrder(
     quantity: lineQuantity(it),
     unitPrice: lineUnitPrice(it),
     manualDiscount: lineDiscountTotal(it),
+    orderedAtMs: toMs(it.orderedAt),
   }));
+}
+
+function toMs(v: unknown): number | null {
+  if (typeof v === "number") return v > 0 ? v : null;
+  if (typeof v === "string" && v) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+    const t = new Date(v).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  return null;
+}
+
+/** Mô tả lịch ngắn gọn: "18:00–20:00 • T2, T3" (khớp CampaignSchedule.summary bên Dart ở phần giờ / thứ) */
+export function scheduleSummary(c: Campaign): string {
+  const names: Record<number, string> = { 1: "T2", 2: "T3", 3: "T4", 4: "T5", 5: "T6", 6: "T7", 7: "CN" };
+  const parts: string[] = [];
+  if (c.schedule.timeSlots.length) parts.push(c.schedule.timeSlots.map((t) => `${t.startTime}–${t.endTime}`).join(", "));
+  if (c.schedule.daysOfWeek.length) parts.push([...c.schedule.daysOfWeek].sort((a, b) => a - b).map((d) => names[d] ?? String(d)).join(", "));
+  return parts.join(" • ") || "theo lịch chương trình";
+}
+
+/**
+ * Món liên quan tới chương trình nhưng GỌI NGOÀI khung giờ áp dụng → không được tính KM.
+ * Trả câu thông báo cho nhân viên (null = không có món nào như vậy). Khớp CartCampaignPricing.outsideScheduleMessage (Dart).
+ */
+export function outsideScheduleMessage(c: Campaign, lines: PricingLine[]): string | null {
+  const group = (l: PricingLine, groups: string[]) => !!l.groupId && groups.some((g) => normGroup(g) === normGroup(l.groupId!));
+  const related = (l: PricingLine) => {
+    if (l.isGift || lineMatchesAnyTarget(l, c.excludedItemIds)) return false;
+    if (c.campaignType.toUpperCase().replace(/_/g, "") === "BUYXGETY") {
+      return c.buyConditions.some((cond) =>
+        lineMatchesAnyTarget(l, cond.buyItemIds) || group(l, cond.buyGroupIds ?? []) || lineMatchesAnyTarget(l, cond.rewardItemIds) || group(l, cond.rewardGroupIds ?? []));
+    }
+    if (c.includedItemIds.length === 0 && c.includedGroupIds.length === 0) return true;
+    return lineMatchesAnyTarget(l, c.includedItemIds) || group(l, c.includedGroupIds);
+  };
+  const hm = (ms: number) => {
+    const d = new Date(ms + 7 * 3600_000);
+    return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  };
+  const out = lines.filter((l) => related(l) && !orderedWithin(l, c));
+  if (out.length === 0) return null;
+  const names = out.map((l) => `${l.itemName ?? l.itemId} (gọi lúc ${hm(l.orderedAtMs!)})`).join(", ");
+  return `${names} gọi ngoài thời gian khuyến mãi (${scheduleSummary(c)}) nên không được áp dụng. Chỉ món gọi trong khung giờ mới được tính.`;
 }
 
 /** Tính riêng 1 chương trình trên giỏ hàng */
@@ -839,7 +895,7 @@ export function recalculateDiscounts(
       out.push(d);
       continue;
     }
-    // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có trong giỏ
+    // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có (món gọi ngoài khung giờ không tính)
     const amt = quoteCampaign(c, lines, { ...ctx, ignoreSchedule: true }).totalPromotionDiscount;
     if (amt > 0) out.push({ ...d, amount: amt });
     else dropped.push(d.description);

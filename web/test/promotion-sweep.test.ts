@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAppliedDiscount, calculatePrice, isEligibleAt, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
+import { buildAppliedDiscount, calculatePrice, isEligibleAt, linesFromOrder, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
 const vn = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 7, mi);
@@ -182,23 +182,46 @@ describe("so khớp nhóm món chịu khác biệt dấu / hoa thường / kho�
   });
 });
 
-describe("Khung giờ xét theo LÚC BẤM ÁP DỤNG (không theo giờ gọi món / mở bàn)", () => {
+describe("Khung giờ: lúc bấm phải trong giờ VÀ chỉ món GỌI trong khung giờ mới được tính", () => {
   const ctx = (nowMs: number) => ({ branchId: "TRAM01", nowMs });
-  it("nước gọi lúc 17:50 (ngoài giờ), bấm KM lúc 18:30 (trong giờ) → được giảm", () => {
-    // Pricing không phụ thuộc giờ gọi món: chỉ xét giờ lúc bấm
+  const at = (l: PricingLine, ms: number, name?: string): PricingLine => ({ ...l, orderedAtMs: ms, itemName: name });
+  it("nước + bánh gọi trong giờ, bấm 18:30 → được giảm (món mới chưa có giờ gọi cũng tính)", () => {
+    const lines = [at(cart[0], vn(2026, 10, 22, 18, 10)), at(cart[1], vn(2026, 10, 22, 18, 25))];
+    expect(quoteCampaign(combo(), lines, ctx(vn(2026, 10, 22, 18, 30))).totalPromotionDiscount).toBe(10000);
     expect(quoteCampaign(combo(), cart, ctx(vn(2026, 10, 22, 18, 30))).totalPromotionDiscount).toBe(10000);
+    expect(outsideScheduleMessage(combo(), lines)).toBeNull();
+  });
+  it("nước gọi 17:50 (ngoài giờ), bấm 18:30 → bánh KHÔNG được giảm + có thông báo", () => {
+    const lines = [at(cart[0], vn(2026, 10, 22, 17, 50), "Trà Olong"), at(cart[1], vn(2026, 10, 22, 18, 30), "Bánh lăn")];
+    expect(quoteCampaign(combo(), lines, ctx(vn(2026, 10, 22, 18, 30))).totalPromotionDiscount).toBe(0);
+    const msg = outsideScheduleMessage(combo(), lines);
+    expect(msg).toContain("Trà Olong (gọi lúc 17:50)");
+    expect(msg).toContain("18:00–20:00");
+  });
+  it("2 nước: 1 gọi ngoài giờ, 1 trong giờ → chỉ được 1 combo", () => {
+    const lines = [
+      at(line("1", "5", 1, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 17, 40)),
+      at(line("2", "5", 1, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 18, 5)),
+      at(line("3", "77", 2, 30000, "BÁNH"), vn(2026, 10, 22, 18, 6)),
+    ];
+    expect(quoteCampaign(combo(), lines, ctx(vn(2026, 10, 22, 18, 10))).totalPromotionDiscount).toBe(10000);
+  });
+  it("linesFromOrder lấy giờ gọi món từ orderedAt", () => {
+    const [l] = linesFromOrder([{ productId: 5, name: "Trà", price: 45000, quantity: 1, orderedAt: 123 }]);
+    expect(l.orderedAtMs).toBe(123);
   });
   it("bấm KM ngoài khung giờ (17:50) → không áp dụng được", () => {
     expect(quoteCampaign(combo(), cart, ctx(vn(2026, 10, 22, 17, 50))).totalPromotionDiscount).toBe(0);
     expect(listEligibleCampaigns([combo()], "TRAM01", vn(2026, 10, 22, 17, 50))).toHaveLength(0);
   });
-  it("đã áp dụng lúc 19:50, treo đơn tới 20:30 (hết giờ) → vẫn giữ giảm khi tính lại", () => {
+  it("đã áp dụng lúc 19:50 (món gọi trong giờ), treo đơn tới 20:30 → vẫn giữ giảm", () => {
+    const lines = [at(cart[0], vn(2026, 10, 22, 19, 40)), at(cart[1], vn(2026, 10, 22, 19, 45))];
     const applied = [buildAppliedDiscount(combo(), 10000)];
-    const r = recalculateDiscounts(applied, { CAM_HD1: combo() }, cart, ctx(vn(2026, 10, 22, 20, 30)));
+    const r = recalculateDiscounts(applied, { CAM_HD1: combo() }, lines, ctx(vn(2026, 10, 22, 20, 30)));
     expect(r.discounts.map((d) => d.amount)).toEqual([10000]);
     expect(r.dropped).toEqual([]);
   });
-  it("đã áp dụng nhưng bỏ bớt món (hết nước) → gỡ, dù trong hay ngoài giờ", () => {
+  it("đã áp dụng nhưng bỏ bớt món (hết nước) → gỡ", () => {
     const applied = [buildAppliedDiscount(combo(), 10000)];
     const r = recalculateDiscounts(applied, { CAM_HD1: combo() }, [cart[1]], ctx(vn(2026, 10, 22, 20, 30)));
     expect(r.discounts).toEqual([]);

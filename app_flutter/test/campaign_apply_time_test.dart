@@ -3,7 +3,7 @@ import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/models/campaign_models.dart';
 import 'package:tram_flutter/features/orders/widgets/campaign_pricing.dart';
 
-/// Khung giờ khuyến mãi xét theo LÚC BẤM ÁP DỤNG, không theo giờ mở bàn / giờ gọi món.
+/// Khung giờ khuyến mãi: lúc bấm phải trong giờ VÀ chỉ món GỌI trong khung giờ mới được tính.
 void main() {
   // Giờ Việt Nam (UTC+7) → timestamp
   int vn(int h, [int m = 0]) => DateTime.utc(2026, 10, 22, h - 7, m).millisecondsSinceEpoch;
@@ -23,26 +23,50 @@ void main() {
     ProductModel(id: 5, name: 'Trà Olong - Chanh tươi', code: 'DR1', price: 45000, unit: 'Ly', category: 'TRÀ TRÁI CÂY'),
     ProductModel(id: 77, name: 'Bánh lăn choco', code: 'CK1', price: 30000, unit: 'Cái', category: 'BÁNH'),
   ];
-  final cart = [
-    OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1),
-    OrderItemModel(productId: 77, name: 'Bánh lăn choco', price: 30000, quantity: 1),
-  ];
-  int apply(int nowMs, {bool isApplied = false}) => CartCampaignPricing.quoteForApply(
-        combo, cart: cart, products: products, branchId: 'TRAM01', isApplied: isApplied, nowMs: nowMs,
+  // Nước gọi lúc [drinkAt], bánh gọi lúc [cakeAt] (null = món mới chưa có giờ gọi)
+  List<OrderItemModel> cart({int? drinkAt, int? cakeAt}) => [
+        OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: drinkAt),
+        OrderItemModel(productId: 77, name: 'Bánh lăn choco', price: 30000, quantity: 1, orderedAt: cakeAt),
+      ];
+  int apply(int nowMs, List<OrderItemModel> items, {bool isApplied = false}) => CartCampaignPricing.quoteForApply(
+        combo, cart: items, products: products, branchId: 'TRAM01', isApplied: isApplied, nowMs: nowMs,
       ).totalPromotionDiscount;
 
-  test('nước gọi 17:50 (bàn mở ngoài giờ), bấm KM 18:30 trong giờ → được giảm', () {
-    expect(apply(vn(18, 30)), 10000);
+  test('nước + bánh gọi trong khung giờ, bấm KM trong giờ → được giảm', () {
+    expect(apply(vn(18, 30), cart(drinkAt: vn(18, 10), cakeAt: vn(18, 25))), 10000);
+    expect(apply(vn(18, 30), cart()), 10000); // món mới chưa gửi
+    expect(CartCampaignPricing.outsideScheduleMessage(combo, cart: cart(drinkAt: vn(18, 10)), products: products), isNull);
   });
+
+  test('nước gọi 17:50 (ngoài giờ), bấm KM 18:30 → bánh KHÔNG được giảm + có thông báo', () {
+    final items = cart(drinkAt: vn(17, 50), cakeAt: vn(18, 30));
+    expect(apply(vn(18, 30), items), 0);
+    expect(CartCampaignPricing.getComboInfo(combo, cart: items, products: products)!.buyUnits, 0);
+    final msg = CartCampaignPricing.outsideScheduleMessage(combo, cart: items, products: products);
+    expect(msg, contains('Trà Olong - Chanh tươi (gọi lúc 17:50)'));
+    expect(msg, contains('18:00–20:00'));
+  });
+
+  test('2 nước: 1 gọi ngoài giờ, 1 trong giờ → chỉ được 1 combo', () {
+    final items = [
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: vn(17, 40)),
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: vn(18, 5)),
+      OrderItemModel(productId: 77, name: 'Bánh lăn choco', price: 30000, quantity: 2, orderedAt: vn(18, 6)),
+    ];
+    expect(apply(vn(18, 10), items), 10000);
+  });
+
   test('bấm KM ngoài khung giờ (17:50) → không áp dụng', () {
-    expect(apply(vn(17, 50)), 0);
+    expect(apply(vn(17, 50), cart()), 0);
     expect(combo.isEligibleAt(vn(17, 50)), isFalse);
   });
-  test('đã áp dụng lúc 19:50, treo đơn tới 20:30 → vẫn giữ giảm', () {
-    expect(apply(vn(20, 30), isApplied: true), 10000);
+
+  test('đã áp dụng lúc 19:50 (món gọi trong giờ), treo đơn tới 20:30 → vẫn giữ giảm', () {
+    final items = cart(drinkAt: vn(19, 40), cakeAt: vn(19, 45));
+    expect(apply(vn(20, 30), items, isApplied: true), 10000);
     final r = CartCampaignPricing.recalculate(
       [CartCampaignPricing.discount(combo, 10000)], {'CAM_HD1': combo},
-      cart: cart, products: products, branchId: 'TRAM01', orderTimestampMs: vn(20, 30), isExistingOrder: true,
+      cart: items, products: products, branchId: 'TRAM01', orderTimestampMs: vn(20, 30), isExistingOrder: true,
     );
     expect(r.discounts.map((d) => d.amount), [10000]);
   });

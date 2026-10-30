@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { get, onValue, ref } from "firebase/database";
-import { Tag, Ticket, X } from "lucide-react";
+import { Clock, Tag, Ticket, X } from "lucide-react";
 import { db } from "@/lib/firebase";
 import type { RawOrderLine } from "@/lib/order-math";
 import {
@@ -15,6 +15,7 @@ import {
   normalizeVoucherCodeInput,
   parseCampaign,
   parseVoucher,
+  outsideScheduleMessage,
   quoteCampaign,
   quoteReason,
   recalculateDiscounts,
@@ -95,8 +96,10 @@ export function usePromotions(args: {
   const clear = () => setSelection({ key: tableKey, list: [] });
 
   const quote = (c: Campaign) => quoteCampaign(c, lines, ctx);
+  /** Món liên quan gọi ngoài khung giờ của [c] → câu báo không áp dụng được */
+  const lateItems = (c: Campaign) => outsideScheduleMessage(c, lines);
 
-  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, ctx, nowMs };
+  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, ctx, nowMs };
 }
 
 type PromotionsState = ReturnType<typeof usePromotions>;
@@ -112,7 +115,8 @@ interface PanelProps {
 const box = { border: "1px solid var(--border)", borderRadius: "10px", background: "var(--surface)", padding: "12px 14px" } as const;
 
 export default function PromotionPanel({ state, storeCode, canApply, billId }: PanelProps) {
-  const { eligible, applied, dropped, quote, add, remove } = state;
+  const { eligible, applied, dropped, quote, lateItems, add, remove } = state;
+  const [blocked, setBlocked] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VoucherCheckResult | null>(null);
@@ -185,6 +189,13 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
 
   const toggle = (c: Campaign, amt: number, on: boolean) => {
     setNotice("");
+    setBlocked("");
+    if (on && amt <= 0) {
+      // Món gọi ngoài khung giờ → báo không áp dụng được
+      const late = lateItems(c);
+      if (late) setBlocked(`Không áp dụng được "${c.name}": ${late}`);
+      return;
+    }
     if (!on) {
       remove(c.campaignId);
       return;
@@ -249,6 +260,12 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
       )}
 
       {notice && <div style={{ fontSize: "12px", color: "var(--warning)", marginBottom: "8px" }}>{notice}</div>}
+      {blocked && (
+        <div role="alert" style={{ display: "flex", gap: "6px", alignItems: "flex-start", fontSize: "12px", fontWeight: 600, color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px" }}>
+          <Clock size={14} style={{ flexShrink: 0, marginTop: "1px" }} />
+          <span>{blocked}</span>
+        </div>
+      )}
       {dropped.length > 0 && (
         <div style={{ fontSize: "12px", color: "var(--warning)", marginBottom: "8px" }}>
           Tạm không tính (đơn chưa đủ điều kiện): {dropped.join(", ")}
@@ -291,12 +308,14 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
               const amt = q.totalPromotionDiscount;
               const reason = quoteReason(q, c);
               const selected = applied.some((d) => d.campaignId === c.campaignId);
+              // Món liên quan gọi ngoài khung giờ: vẫn cho bấm để hiện thông báo không áp dụng được
+              const late = amt <= 0 && !selected ? lateItems(c) : null;
               return (
                 <label key={c.campaignId} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 0", fontSize: "13px", opacity: amt > 0 || selected ? 1 : 0.6 }}>
                   <input
                     type="checkbox"
                     checked={selected}
-                    disabled={!(amt > 0 || selected)}
+                    disabled={!(amt > 0 || selected || late)}
                     onChange={(e) => toggle(c, amt, e.target.checked)}
                     style={{ marginTop: "3px" }}
                   />
@@ -304,8 +323,9 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
                     <strong>{c.name}</strong>
                     <span style={{ display: "block", fontSize: "11px", color: "var(--subtext)" }}>
                       {campaignTypeDisplay(c)} • {describeBenefit(c)}
-                      {amt > 0 ? ` → -${fmt(amt)}` : reason ? ` • ${reason}` : ""}
+                      {amt > 0 ? ` → -${fmt(amt)}` : late ? "" : reason ? ` • ${reason}` : ""}
                     </span>
+                    {late && <span style={{ display: "block", fontSize: "11px", color: "var(--danger)" }}>Món gọi ngoài khung giờ — không áp dụng được</span>}
                   </span>
                 </label>
               );

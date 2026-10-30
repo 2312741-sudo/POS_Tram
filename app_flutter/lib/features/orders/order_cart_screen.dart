@@ -1091,6 +1091,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     return true;
   }
 
+  /// Báo nhân viên: món liên quan gọi ngoài khung giờ KM nên không áp dụng được
+  Future<void> _showOutsideScheduleDialog(CampaignModel c, String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(LucideIcons.clockAlert, color: AppColors.danger),
+        title: const Text('Không áp dụng được khuyến mãi'),
+        content: Text('"${c.name}"\n\n$message'),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đã hiểu', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại (khung giờ theo lúc bấm — xem quoteForApply)
   PriceQuoteModel _quoteCampaign(CampaignModel c) {
     final isApplied = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
@@ -3847,6 +3866,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       final hasWater = isCombo && combo.buyUnits > 0;
                       final needsCakes = isCombo && hasWater && combo.remainingRewardUnits > 0;
                       final canAutoAdd = !isCombo && amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
+                      // Món liên quan gọi NGOÀI khung giờ → không được tính; bấm sẽ báo không áp dụng được
+                      final outsideMsg = CartCampaignPricing.outsideScheduleMessage(c, cart: _cart, products: _products);
+                      final blockedByOrderTime = outsideMsg != null && (isCombo ? !hasWater : amt <= 0 && !canAutoAdd);
 
                       String sub = '${c.typeDisplay} • ${describeCampaignBenefit(c)}';
                       if (!c.isStackable) {
@@ -3872,13 +3894,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         }
                       }
 
+                      if (blockedByOrderTime) {
+                        sub = '${c.typeDisplay} • Món gọi ngoài khung giờ (${c.schedule.summary()}) — không áp dụng được';
+                      }
                       if (!inSchedule) {
                         sub = '${c.typeDisplay} • Ngoài thời gian áp dụng (${c.schedule.summary()})';
                       }
 
                       return CheckboxListTile(
                         value: isSelected,
-                        enabled: !inSchedule ? isSelected : (isCombo ? hasWater : (amt > 0 || isSelected || canAutoAdd)),
+                        enabled: !inSchedule
+                            ? isSelected
+                            : (blockedByOrderTime || (isCombo ? hasWater : (amt > 0 || isSelected || canAutoAdd))),
                         title: Text(c.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
                         subtitle: Text(sub, style: GoogleFonts.beVietnamPro(fontSize: 11)),
                         secondary: (isCombo && hasWater && isSelected && combo.remainingRewardUnits > 0)
@@ -3906,6 +3933,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               )
                             : null,
                         onChanged: (val) async {
+                          if (val == true && blockedByOrderTime) {
+                            await _showOutsideScheduleDialog(c, outsideMsg);
+                            return;
+                          }
                           if (val == true) {
                             final stackCheck = CartCampaignPricing.checkStacking(
                               currentDiscounts: _appliedDiscounts,
@@ -3989,7 +4020,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             final newQ = _quoteCampaign(c);
                             final applyAmt = newQ.totalPromotionDiscount;
                             if (applyAmt <= 0) {
-                              if (context.mounted) {
+                              final late = CartCampaignPricing.outsideScheduleMessage(c, cart: _cart, products: _products);
+                              if (late != null) {
+                                await _showOutsideScheduleDialog(c, late);
+                              } else if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Chưa tính được ưu đãi cho chương trình này.')),
                                 );
