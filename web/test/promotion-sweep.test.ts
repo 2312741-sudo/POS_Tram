@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAppliedDiscount, calculatePrice, isEligibleAt, linesFromOrder, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
+import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
 const vn = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 7, mi);
@@ -205,6 +205,18 @@ describe("Khung giờ: lúc bấm phải trong giờ VÀ chỉ món GỌI trong 
       at(line("3", "77", 2, 30000, "BÁNH"), vn(2026, 10, 22, 18, 6)),
     ];
     expect(quoteCampaign(combo(), lines, ctx(vn(2026, 10, 22, 18, 10))).totalPromotionDiscount).toBe(10000);
+  });
+  it("tự báo: nước gọi ngoài giờ + bánh trong giờ → báo; đủ điều kiện / chưa có bánh thì không báo", () => {
+    const now = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 18, 30) };
+    expect(lateOrderBlock(combo(), [at(cart[0], vn(2026, 10, 22, 17, 50)), at(cart[1], vn(2026, 10, 22, 18, 30))], now)).toContain("gọi lúc 17:50");
+    expect(lateOrderBlock(combo(), [at(cart[0], vn(2026, 10, 22, 18, 10)), at(cart[1], vn(2026, 10, 22, 18, 30))], now)).toBeNull();
+    expect(lateOrderBlock(combo(), [at(cart[0], vn(2026, 10, 22, 17, 50))], now)).toBeNull();
+    const partial = lateOrderBlock(combo(), [
+      at(line("1", "5", 1, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 17, 40)),
+      at(line("2", "5", 1, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 18, 5)),
+      at(line("3", "77", 2, 30000, "BÁNH"), vn(2026, 10, 22, 18, 6)),
+    ], now);
+    expect(partial).toContain("chỉ được giảm 10.000đ thay vì 20.000đ");
   });
   it("linesFromOrder lấy giờ gọi món từ orderedAt", () => {
     const [l] = linesFromOrder([{ productId: 5, name: "Trà", price: 45000, quantity: 1, orderedAt: 123 }]);

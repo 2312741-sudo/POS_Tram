@@ -1216,6 +1216,35 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (newlyApplied.isNotEmpty && mounted) {
       setState(() {});
     }
+    _notifyLateOrderPromotions(now);
+  }
+
+  /// Đã báo (chương trình + món gọi ngoài giờ) nào rồi — không báo lặp khi giỏ đổi tiếp
+  final Set<String> _lateNotified = {};
+
+  /// Tự báo khi đơn LẼ RA được khuyến mãi (đang trong khung giờ) nhưng có món gọi ngoài khung giờ,
+  /// ví dụ nước gọi 15:50, 16:30 thêm bánh cho combo 16:00–18:00 → bánh không được giảm.
+  void _notifyLateOrderPromotions(int now) {
+    if (!mounted || _cart.isEmpty) return;
+    for (final c in _campaigns) {
+      if (c.hasCodes || !c.isEligibleAt(now)) continue;
+      final msg = CartCampaignPricing.lateOrderBlock(
+        c,
+        cart: _cart,
+        products: _products,
+        branchId: _fb.currentStoreCode,
+        guestCount: _guestCount,
+        customerBirthday: _selectedCustomer?.birthday,
+        nowMs: now,
+      );
+      if (msg == null) continue;
+      final key = '${c.campaignId}|$msg';
+      if (!_lateNotified.add(key)) continue;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showOutsideScheduleDialog(c, msg);
+      });
+      break; // mỗi lần chỉ hiện 1 hộp thoại
+    }
   }
 
   void _syncTableDiscounts() {

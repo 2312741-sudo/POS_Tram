@@ -244,6 +244,39 @@ class CartCampaignPricing {
         'Chỉ món gọi trong khung giờ mới được tính.';
   }
 
+  /// Giỏ hàng LẼ RA được giảm (nhiều hơn) nhưng bị chặn vì có món gọi ngoài khung giờ?
+  /// Trả câu thông báo (null = không bị ảnh hưởng). Dùng để tự báo nhân viên, không cần bấm vào chương trình.
+  static String? lateOrderBlock(
+    CampaignModel c, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+    required String branchId,
+    int? guestCount,
+    String? customerBirthday,
+    int? nowMs,
+  }) {
+    final msg = outsideScheduleMessage(c, cart: cart, products: products);
+    if (msg == null) return null;
+    PriceQuoteModel run(List<PricingLineItem> lns) => calculatePrice(
+          input: PricingInput(
+            branchId: branchId,
+            customerBirthday: customerBirthday,
+            guestCount: guestCount,
+            serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
+            lines: lns,
+          ),
+          activeCampaigns: [c],
+          counters: const {},
+          customerCounters: const {},
+        );
+    final lns = lines(cart, products);
+    final real = run(lns).totalPromotionDiscount;
+    final ignoringTime = run([for (final l in lns) l.withoutOrderTime()]).totalPromotionDiscount;
+    if (ignoringTime <= real) return null;
+    String vnd(int v) => '${v.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.')}đ';
+    return real > 0 ? '$msg Đơn chỉ được giảm ${vnd(real)} thay vì ${vnd(ignoringTime)}.' : msg;
+  }
+
   /// Lý do chưa áp dụng (nếu có) của chương trình trong [quote]
   static String? reason(PriceQuoteModel quote, CampaignModel campaign) =>
       quote.reasons.where((r) => r.campaignId == campaign.campaignId).map((r) => r.reasonMessage).firstOrNull;

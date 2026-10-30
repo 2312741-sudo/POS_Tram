@@ -832,6 +832,24 @@ export function outsideScheduleMessage(c: Campaign, lines: PricingLine[]): strin
   return `${names} gọi ngoài thời gian khuyến mãi (${scheduleSummary(c)}) nên không được áp dụng. Chỉ món gọi trong khung giờ mới được tính.`;
 }
 
+/**
+ * Giỏ hàng LẼ RA được giảm (nhiều hơn) nhưng bị chặn vì có món gọi ngoài khung giờ? Trả câu thông báo (null = không ảnh hưởng).
+ * Dùng để tự báo nhân viên, không cần bấm vào chương trình. Khớp CartCampaignPricing.lateOrderBlock (Dart).
+ */
+export function lateOrderBlock(
+  campaign: Campaign,
+  lines: PricingLine[],
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null }
+): string | null {
+  const msg = outsideScheduleMessage(campaign, lines);
+  if (!msg) return null;
+  const real = quoteCampaign(campaign, lines, ctx).totalPromotionDiscount;
+  const ignoringTime = quoteCampaign(campaign, lines.map((l) => ({ ...l, orderedAtMs: null })), ctx).totalPromotionDiscount;
+  if (ignoringTime <= real) return null;
+  const vnd = (v: number) => `${v.toLocaleString("vi-VN")}đ`;
+  return real > 0 ? `${msg} Đơn chỉ được giảm ${vnd(real)} thay vì ${vnd(ignoringTime)}.` : msg;
+}
+
 /** Tính riêng 1 chương trình trên giỏ hàng */
 export function quoteCampaign(
   campaign: Campaign,

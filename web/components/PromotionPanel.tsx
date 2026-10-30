@@ -15,6 +15,7 @@ import {
   normalizeVoucherCodeInput,
   parseCampaign,
   parseVoucher,
+  lateOrderBlock,
   outsideScheduleMessage,
   quoteCampaign,
   quoteReason,
@@ -98,8 +99,16 @@ export function usePromotions(args: {
   const quote = (c: Campaign) => quoteCampaign(c, lines, ctx);
   /** Món liên quan gọi ngoài khung giờ của [c] → câu báo không áp dụng được */
   const lateItems = (c: Campaign) => outsideScheduleMessage(c, lines);
+  /** Chương trình đang chạy mà đơn lẽ ra được giảm nhưng bị chặn vì món gọi ngoài khung giờ → tự báo */
+  const lateBlocks = useMemo(
+    () => listEligibleCampaigns(campaigns, storeCode, nowMs)
+      .filter((c) => !c.hasCodes)
+      .map((c) => ({ campaign: c, message: lateOrderBlock(c, lines, ctx) }))
+      .filter((x): x is { campaign: Campaign; message: string } => !!x.message),
+    [campaigns, storeCode, nowMs, lines, ctx]
+  );
 
-  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, ctx, nowMs };
+  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, ctx, nowMs };
 }
 
 type PromotionsState = ReturnType<typeof usePromotions>;
@@ -115,7 +124,7 @@ interface PanelProps {
 const box = { border: "1px solid var(--border)", borderRadius: "10px", background: "var(--surface)", padding: "12px 14px" } as const;
 
 export default function PromotionPanel({ state, storeCode, canApply, billId }: PanelProps) {
-  const { eligible, applied, dropped, quote, lateItems, add, remove } = state;
+  const { eligible, applied, dropped, quote, lateItems, lateBlocks, add, remove } = state;
   const [blocked, setBlocked] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -260,7 +269,13 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
       )}
 
       {notice && <div style={{ fontSize: "12px", color: "var(--warning)", marginBottom: "8px" }}>{notice}</div>}
-      {blocked && (
+      {lateBlocks.map(({ campaign, message }) => (
+        <div key={campaign.campaignId} role="alert" style={{ display: "flex", gap: "6px", alignItems: "flex-start", fontSize: "12px", fontWeight: 600, color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px" }}>
+          <Clock size={14} style={{ flexShrink: 0, marginTop: "1px" }} />
+          <span>Khuyến mãi &quot;{campaign.name}&quot; không được áp dụng: {message}</span>
+        </div>
+      ))}
+      {blocked && !lateBlocks.some((x) => blocked.includes(x.campaign.name)) && (
         <div role="alert" style={{ display: "flex", gap: "6px", alignItems: "flex-start", fontSize: "12px", fontWeight: 600, color: "var(--danger)", border: "1px solid var(--danger)", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px" }}>
           <Clock size={14} style={{ flexShrink: 0, marginTop: "1px" }} />
           <span>{blocked}</span>

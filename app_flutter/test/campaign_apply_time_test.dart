@@ -70,4 +70,19 @@ void main() {
     );
     expect(r.discounts.map((d) => d.amount), [10000]);
   });
+
+  test('tự báo: nước gọi ngoài giờ + thêm bánh trong giờ → báo không áp dụng; đủ điều kiện thì không báo', () {
+    String? block(List<OrderItemModel> items) => CartCampaignPricing.lateOrderBlock(
+          combo, cart: items, products: products, branchId: 'TRAM01', nowMs: vn(18, 30));
+    expect(block(cart(drinkAt: vn(17, 50), cakeAt: vn(18, 30))), contains('gọi lúc 17:50'));
+    expect(block(cart(drinkAt: vn(18, 10), cakeAt: vn(18, 30))), isNull);
+    // Chỉ có nước gọi ngoài giờ, chưa có bánh → chưa lẽ ra được giảm → không báo
+    expect(block([cart(drinkAt: vn(17, 50)).first]), isNull);
+    final partial = block([
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: vn(17, 40)),
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: vn(18, 5)),
+      OrderItemModel(productId: 77, name: 'Bánh lăn choco', price: 30000, quantity: 2, orderedAt: vn(18, 6)),
+    ]);
+    expect(partial, contains('chỉ được giảm 10.000đ thay vì 20.000đ'));
+  });
 }

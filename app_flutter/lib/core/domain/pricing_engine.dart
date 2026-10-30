@@ -92,6 +92,23 @@ class PricingLineItem {
         orderedAtMs: item.orderedAt,
       );
 
+  /// Bản sao bỏ giờ gọi món (để so sánh: nếu không xét giờ gọi thì chương trình có được áp dụng không)
+  PricingLineItem withoutOrderTime() => PricingLineItem(
+        lineId: lineId,
+        itemId: itemId,
+        itemName: itemName,
+        itemCode: itemCode,
+        dbKey: dbKey,
+        itemVariantId: itemVariantId,
+        groupId: groupId,
+        quantity: quantity,
+        unitPrice: unitPrice,
+        isGift: isGift,
+        discountedQuantity: discountedQuantity,
+        discountPercent: discountPercent,
+        discountUnitAmount: discountUnitAmount,
+      );
+
   /// Dòng này gọi trong thời gian áp dụng của [c]? (món chưa có giờ gọi = món mới → luôn được tính)
   bool orderedWithin(CampaignModel c) => orderedAtMs == null || orderedAtMs! <= 0 || c.isEligibleAt(orderedAtMs!);
 
