@@ -10,6 +10,10 @@ import {
   getUTC7Date,
   getBusinessBillTimestamp,
 } from "@/lib/reports";
+import { buildProductCodeMap } from "@/lib/product-code";
+import { buildToppingLookup } from "@/lib/topping-split";
+import { soldItemRows } from "@/lib/staff-sales-report";
+import type { ProductReportItem } from "@/lib/reports";
 import { exportEndOfDayZReport, exportProductSalesReport, ReportStoreInfo } from "@/lib/export";
 import {
   Calendar,
@@ -211,31 +215,56 @@ export default function EndOfDayReportPage() {
     };
   }, [activeTables]);
 
-  // Extract available staff list
+  // Từng dòng món đã bán kèm nhân viên order (dùng để liệt kê nhân viên và lọc theo nhân viên)
+  const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
+  const toppingLookup = useMemo(() => buildToppingLookup(products), [products]);
+  const soldRows = useMemo(() => soldItemRows(filteredBills, codeMap, undefined, toppingLookup), [filteredBills, codeMap, toppingLookup]);
+
+  /** Tên nhân viên của một dòng: có thể là danh sách "A, B" (hóa đơn nhiều người order) → tách riêng từng người */
+  const splitStaff = (raw: string): string[] => raw.split(",").map((x) => x.trim()).filter(Boolean);
+
+  // Danh sách nhân viên để lọc: tài khoản hiện có + người thật sự có món trong kỳ, mỗi người một dòng (không còn dòng ghép "A, B")
   const availableStaffList = useMemo(() => {
-    const staffSet = new Set<string>();
-    if (Array.isArray(usersList)) {
-      usersList.forEach((u) => {
-        const name = (u.fullName || u.username || "").trim();
-        if (name) staffSet.add(name);
-      });
-    }
-    historyData.forEach((b) => {
-      const billStaff = (b.orderStaff || b.staffFullName || b.cashierName || b.creatorName || b.createdBy || b.username || "").trim();
-      if (billStaff) staffSet.add(billStaff);
-      if (Array.isArray(b.items)) {
-        b.items.forEach((it) => {
-          const itStaff = (it.orderedByName || it.orderedBy || "").trim();
-          if (itStaff) staffSet.add(itStaff);
-        });
+    const byKey = new Map<string, string>();
+    const add = (name: string) => {
+      const n = name.trim();
+      if (!n || n === "Không rõ") return;
+      const k = n.toLocaleLowerCase("vi");
+      if (!byKey.has(k)) byKey.set(k, n);
+    };
+    if (Array.isArray(usersList)) usersList.forEach((u) => add(u.fullName || u.username || ""));
+    soldRows.forEach((r) => splitStaff(r.orderStaffName).forEach(add));
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [usersList, soldRows]);
+
+  // Hàng hóa theo nhân viên: gộp các dòng món do nhân viên đó order
+  const staffProductList = useMemo<ProductReportItem[] | null>(() => {
+    if (productStaffFilter === "ALL") return null;
+    const want = productStaffFilter.toLocaleLowerCase("vi");
+    const map = new Map<string, ProductReportItem>();
+    for (const r of soldRows) {
+      if (!splitStaff(r.orderStaffName).some((n) => n.toLocaleLowerCase("vi") === want)) continue;
+      const key = r.productCode || r.productName;
+      let e = map.get(key);
+      if (!e) {
+        const prod = productsMap[r.productName];
+        e = {
+          productId: key, productCode: r.productCode, productName: r.productName, category: r.category, unit: prod?.unit || "",
+          basePrice: 0, quantity: 0, grossRevenue: 0, itemDiscount: 0, netRevenue: 0, costPrice: 0, grossProfit: 0, grossProfitMarginPercent: 0,
+        };
+        map.set(key, e);
       }
-    });
-    return Array.from(staffSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [usersList, historyData]);
+      e.quantity += r.quantity;
+      e.grossRevenue += r.grossAmount;
+      e.itemDiscount += r.discountAmount;
+      e.netRevenue += r.netAmount;
+    }
+    return Array.from(map.values()).map((e) => ({ ...e, basePrice: e.quantity > 0 ? Math.round(e.grossRevenue / e.quantity) : 0 }));
+  }, [productStaffFilter, soldRows, productsMap]);
 
   // Tab 3: Filtered Product list
   const productSalesList = useMemo(() => {
-    let list = [...zReport.tab3_hangHoa.products];
+    let list = staffProductList ? [...staffProductList] : [...zReport.tab3_hangHoa.products];
 
     if (productSearch.trim()) {
       const q = productSearch.toLowerCase();
@@ -251,7 +280,7 @@ export default function EndOfDayReportPage() {
     }
 
     return list;
-  }, [zReport.tab3_hangHoa.products, productSearch, productSortBy]);
+  }, [zReport.tab3_hangHoa.products, staffProductList, productSearch, productSortBy]);
 
   const totalProductQty = useMemo(() => productSalesList.reduce((s, it) => s + it.quantity, 0), [productSalesList]);
   const totalProductRev = useMemo(() => productSalesList.reduce((s, it) => s + it.netRevenue, 0), [productSalesList]);

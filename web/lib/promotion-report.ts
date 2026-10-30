@@ -24,6 +24,48 @@ export interface CampaignBillRow {
   comboCount?: number;
 }
 
+/** Số liệu khuyến mãi theo nhân viên (người thanh toán / áp dụng khuyến mãi trên hóa đơn) */
+export interface StaffPromoRow {
+  staff: string;
+  billCount: number;
+  comboCount: number;
+  totalDiscount: number;
+  revenue: number;
+  vouchersUsed: number;
+  pointsUsed: number;
+}
+
+export const UNKNOWN_PROMO_STAFF = "Không rõ";
+
+/** Gộp các dòng hóa đơn theo nhân viên. Mỗi hóa đơn chỉ tính một lần cho số HĐ và doanh thu. */
+export function staffBreakdown(rows: CampaignBillRow[]): StaffPromoRow[] {
+  const map = new Map<string, StaffPromoRow & { _bills: Set<string> }>();
+  for (const r of rows) {
+    const name = (r.staff || "").trim() || UNKNOWN_PROMO_STAFF;
+    let e = map.get(name);
+    if (!e) {
+      e = { staff: name, billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, pointsUsed: 0, _bills: new Set() };
+      map.set(name, e);
+    }
+    e.totalDiscount += r.discount;
+    e.comboCount += r.comboCount || 0;
+    e.pointsUsed += r.pointsUsed || 0;
+    e.vouchersUsed += r.voucherCode ? r.voucherCode.split(", ").filter(Boolean).length : 0;
+    if (!e._bills.has(r.billId)) {
+      e._bills.add(r.billId);
+      e.billCount += 1;
+      e.revenue += r.finalAmount;
+    }
+  }
+  return Array.from(map.values())
+    .map((e) => {
+      const { _bills, ...rest } = e;
+      void _bills;
+      return rest;
+    })
+    .sort((a, b) => b.totalDiscount - a.totalDiscount || a.staff.localeCompare(b.staff, "vi"));
+}
+
 export interface CampaignSummary {
   key: string;
   campaignId: string;
@@ -41,12 +83,16 @@ export interface CampaignSummary {
   vouchersUsed: number;
   voucherCodes: string[];
   bills: CampaignBillRow[];
+  /** Số liệu theo nhân viên của riêng chương trình này */
+  staffRows: StaffPromoRow[];
   /** Tổng điểm khách đã đổi (chỉ dòng "Đổi điểm tích lũy") */
   pointsUsed?: number;
 }
 
 export interface CampaignReport {
   campaigns: CampaignSummary[];
+  /** Số liệu khuyến mãi theo nhân viên trên toàn báo cáo */
+  staffTotals: StaffPromoRow[];
   totalDiscount: number;
   /** Số hóa đơn (không trùng) có ít nhất một khuyến mãi */
   billCount: number;
@@ -141,6 +187,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
           vouchersUsed: 0,
           voucherCodes: [],
           bills: [],
+          staffRows: [],
           _bills: new Map(),
           _codes: new Set(),
         };
@@ -202,7 +249,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     if (!c) {
       c = {
         key: POINTS_ROW_KEY, campaignId: "", name: "Đổi điểm tích lũy", code: "DOI_DIEM", type: "POINTS", typeLabel: campaignTypeLabel("POINTS"),
-        billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
+        billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], staffRows: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
       };
       map.set(POINTS_ROW_KEY, c);
     }
@@ -222,16 +269,19 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
   const campaigns: CampaignSummary[] = Array.from(map.values())
     .map((c) => {
       const { _bills, _codes, ...rest } = c;
+      const billRows = Array.from(_bills.values()).sort((a, b) => b.timestamp - a.timestamp);
       return {
         ...rest,
         voucherCodes: Array.from(_codes).sort(),
-        bills: Array.from(_bills.values()).sort((a, b) => b.timestamp - a.timestamp),
+        bills: billRows,
+        staffRows: staffBreakdown(billRows),
       };
     })
     .sort((a, b) => b.totalDiscount - a.totalDiscount || a.name.localeCompare(b.name, "vi"));
 
   return {
     campaigns,
+    staffTotals: staffBreakdown(campaigns.flatMap((c) => c.bills)),
     totalDiscount,
     billCount: promoBills.size,
     comboCount: totalComboCount,

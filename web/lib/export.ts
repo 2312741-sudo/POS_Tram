@@ -949,6 +949,21 @@ export function exportCampaignReportExcel(data: CampaignReport, storeInfo?: Repo
   ws2["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết hóa đơn");
 
+  // Sheet theo nhân viên: tổng toàn báo cáo, rồi từng chương trình × nhân viên
+  const staffHeaders = ["Nhân viên", "Số hóa đơn có KM", "Số lượng combo", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)", "Lượt dùng voucher", "Điểm đã đổi"];
+  const staffAoa: (string | number)[][] = [
+    ...head("Khuyến mãi theo nhân viên"),
+    staffHeaders,
+    ...data.staffTotals.map((r) => [r.staff, r.billCount, r.comboCount > 0 ? r.comboCount : "—", r.totalDiscount, r.revenue, r.vouchersUsed, r.pointsUsed]),
+    [],
+    ["CHI TIẾT THEO TỪNG CHƯƠNG TRÌNH"],
+    ["Chương trình", "Nhân viên", "Số hóa đơn", "Số lượng combo", "Tổng giảm giá (VNĐ)", "Doanh thu các HĐ (VNĐ)"],
+    ...data.campaigns.flatMap((c) => c.staffRows.map((r) => [c.name, r.staff, r.billCount, r.comboCount > 0 ? r.comboCount : "—", r.totalDiscount, r.revenue])),
+  ];
+  const ws3 = XLSX.utils.aoa_to_sheet(staffAoa);
+  ws3["!cols"] = [{ wch: 32 }, { wch: 24 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 22 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws3, "Theo nhân viên");
+
   downloadWorkbook(wb, formatReportFileName("BC_KHUYENMAI_CT", storeInfo?.storeCode, range?.start, range?.end, "xlsx"));
 }
 
