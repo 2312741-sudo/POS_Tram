@@ -8,6 +8,7 @@
  *    orderedBy, orderedByName, pickedUp } — chỉ các món chưa gửi bếp
  *  - audit_logs: ghi nhật ký thao tác
  */
+import { isEligibleAt, type Campaign } from "./pricing-engine";
 import { lineQuantity, setLineQuantity, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT } from "./table-status";
 
@@ -54,6 +55,16 @@ export function makeOrderLine(product: OrderableProduct, quantity: number, note:
   return line;
 }
 
+/**
+ * Hai lần bấm món lúc [a] và [b] cùng nằm trong (hoặc cùng ngoài) thời gian của mọi chương trình KM?
+ * Chỉ khi đó mới gộp cùng dòng: KM khung giờ chỉ tính món gọi trong giờ nên phần gọi trong giờ phải là dòng riêng.
+ * Khớp CartCampaignPricing.sameOrderWindow (Dart).
+ */
+export function sameOrderWindow(a: number, b: number, campaigns: Campaign[]): boolean {
+  if (!a || !b) return true;
+  return campaigns.every((c) => isEligibleAt(c, a) === isEligibleAt(c, b));
+}
+
 /** Khóa tùy chọn của dòng: hai dòng chỉ gộp khi cùng size / đường / đá / topping */
 export function optionKey(l: RawOrderLine): string {
   const tops = Array.isArray(l.selectedToppings) ? l.selectedToppings.map(String).sort().join("|") : "";
@@ -64,10 +75,11 @@ export function optionKey(l: RawOrderLine): string {
  * Thêm dòng vào đơn: cộng dồn vào dòng CHƯA GỬI BẾP cùng món + cùng ghi chú + cùng tùy chọn + không giảm giá
  * (món đã gửi bếp luôn tạo dòng mới để phiếu bếp lần sau chỉ chứa phần mới).
  */
-export function addLineToOrder(lines: RawOrderLine[], line: RawOrderLine): RawOrderLine[] {
+export function addLineToOrder(lines: RawOrderLine[], line: RawOrderLine, campaigns: Campaign[] = []): RawOrderLine[] {
   const idx = lines.findIndex(
     (l) =>
       l.isSentKitchen !== true &&
+      sameOrderWindow(Number(l.orderedAt) || 0, Number(line.orderedAt) || 0, campaigns) &&
       String(l.productId) === String(line.productId) &&
       String(l.note ?? "") === String(line.note ?? "") &&
       optionKey(l) === optionKey(line) &&

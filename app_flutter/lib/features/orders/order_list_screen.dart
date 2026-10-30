@@ -9,6 +9,9 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../../data/models/campaign_models.dart';
+import '../../data/services/campaign_service.dart';
+import 'widgets/campaign_pricing.dart';
 import 'widgets/item_option_pickers.dart';
 import '../../core/utils/format_utils.dart';
 import '../cash_shift/cash_shift_dialog.dart';
@@ -108,8 +111,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
     super.dispose();
   }
 
+  /// Chương trình KM (để không gộp món bấm khác khung giờ KM vào cùng dòng)
+  List<CampaignModel> _campaigns = [];
+
   void _loadData() {
     final storeCode = _auth.currentStoreCode;
+    CampaignService().campaignsStream().listen((list) {
+      if (mounted) _campaigns = list.where((c) => c.active).toList();
+    }, onError: (_) {});
     _fb.productsStream(storeCode: storeCode).listen((products) {
       if (mounted) setState(() { _products = products; _loading = false; });
     });
@@ -193,6 +202,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       final idx = _cart.indexWhere((p) =>
           !p.isSentKitchen &&
           !p.hasDiscount &&
+          CartCampaignPricing.sameOrderWindow(p.orderedAt, now, _campaigns) &&
           p.productId == product.id &&
           p.name == product.name &&
           p.selectedSize.isEmpty &&
@@ -741,6 +751,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                                   final existingIdx = _cart.indexWhere((i) =>
                                       !i.isSentKitchen &&
                                       !i.hasDiscount &&
+                                      CartCampaignPricing.sameOrderWindow(i.orderedAt, now, _campaigns) &&
                                       i.productId == newItem.productId &&
                                       i.name == newItem.name &&
                                       i.selectedSize == newItem.selectedSize &&

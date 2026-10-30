@@ -4,6 +4,7 @@ import { ChefHat, Minus, Plus, Save, Search, StickyNote, Trash2 } from "lucide-r
 import ModalShell, { btnGhost, errorBox } from "./ModalShell";
 import { lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, type RawOrderLine } from "@/lib/order-math";
 import { addLineToOrder, makeOrderLine, type OrderActor } from "@/lib/web-order";
+import type { Campaign } from "@/lib/pricing-engine";
 import { isProductAvailable, type AvailabilityFields } from "@/lib/product-availability";
 import { toggleTopping, type ItemCatalog } from "@/lib/item-options";
 import {
@@ -37,6 +38,8 @@ interface Props {
   /** Danh mục note & topping của chi nhánh (chưa cấu hình/không truyền = cách hiển thị cũ) */
   catalog?: ItemCatalog;
   actor: OrderActor;
+  /** Chương trình KM của chi nhánh — không gộp món bấm khác khung giờ KM vào cùng dòng */
+  campaigns?: Campaign[];
   canSendKitchen: boolean;
   saving?: boolean;
   error?: string;
@@ -49,7 +52,7 @@ interface Props {
  * Món có size / topping / đường / đá sẽ mở bảng chọn tùy chọn (cùng quy tắc với POS).
  */
 export default function WebOrderDialog({
-  tableName, zone, opening, existingCount, products, categories: optionCategories, catalog, actor, canSendKitchen, saving, error, onCancel, onSubmit,
+  tableName, zone, opening, existingCount, products, categories: optionCategories, catalog, actor, campaigns = [], canSendKitchen, saving, error, onCancel, onSubmit,
 }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -82,7 +85,7 @@ export default function WebOrderDialog({
     if (!isProductAvailable(p)) return; // món đã báo hết: không cho thêm
     const opts = getProductOptions(p, optionCategories, products, catalog);
     if (!opts.hasAny) {
-      setLines((prev) => addLineToOrder(prev, makeOrderLine(p, 1, "", actor, Date.now())));
+      setLines((prev) => addLineToOrder(prev, makeOrderLine(p, 1, "", actor, Date.now()), campaigns));
       return;
     }
     setPicking({ product: p, opts, sel: defaultSelection(opts), qty: 1, note: "" });
@@ -91,7 +94,7 @@ export default function WebOrderDialog({
   const confirmPicking = () => {
     if (!picking) return;
     const line = makeConfiguredLine(picking.product, picking.opts, picking.sel, picking.qty, picking.note, actor, Date.now());
-    setLines((prev) => addLineToOrder(prev, line));
+    setLines((prev) => addLineToOrder(prev, line, campaigns));
     setPicking(null);
   };
   const changeQty = (i: number, delta: number) =>

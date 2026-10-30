@@ -2720,6 +2720,7 @@ function TablesPageContent() {
           categories={orderableCategories}
           catalog={orderCatalog}
           actor={orderActor}
+          campaigns={promo.campaigns.filter((c) => c.active)}
           canSendKitchen={canSendKitchenFromWeb}
           saving={orderSaving}
           error={orderError}

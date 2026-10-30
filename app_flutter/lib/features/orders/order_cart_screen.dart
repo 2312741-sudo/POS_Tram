@@ -301,13 +301,17 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   Future<void> _incrementItem(int index) async {
     if (!await _ensureShiftOpen() || !mounted) return;
     final item = _cart[index];
-    if (item.isSentKitchen || item.hasDiscount) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Khác khung giờ KM so với lúc gọi dòng này → tách dòng mới (KM khung giờ chỉ tính món gọi trong giờ)
+    bool sameWindow(OrderItemModel i) => CartCampaignPricing.sameOrderWindow(i.orderedAt, now, _campaigns);
+    if (item.isSentKitchen || item.hasDiscount || !sameWindow(item)) {
       // Dòng này đã gửi bếp hoặc đã có giảm giá món: không cộng dồn trực tiếp vào dòng này
       // (vì phần tăng thêm chưa gửi bếp và không tự động được hưởng giảm giá).
       // Tìm xem đã có dòng mới chưa gửi bếp & không giảm giá cùng loại món này chưa:
       final existingNewIdx = _cart.indexWhere((i) =>
           !i.isSentKitchen &&
           !i.hasDiscount &&
+          sameWindow(i) &&
           i.productId == item.productId &&
           i.name == item.name &&
           i.selectedSize == item.selectedSize &&
@@ -338,7 +342,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           note: item.note,
           orderedBy: staffUser,
           orderedByName: staffName,
-          orderedAt: DateTime.now().millisecondsSinceEpoch,
+          orderedAt: now,
           isSentKitchen: false,
         );
         setState(() {

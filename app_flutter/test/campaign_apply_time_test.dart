@@ -85,4 +85,22 @@ void main() {
     ]);
     expect(partial, contains('chỉ được giảm 10.000đ thay vì 20.000đ'));
   });
+
+  test('2 nước bấm ngoài giờ + 1 nước bấm trong giờ + 1 bánh → combo vẫn giảm 1 bánh, không báo lỗi', () {
+    final items = [
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 2, orderedAt: vn(17, 50)),
+      OrderItemModel(productId: 5, name: 'Trà Olong - Chanh tươi', price: 45000, quantity: 1, orderedAt: vn(18, 10)),
+      OrderItemModel(productId: 77, name: 'Bánh lăn choco', price: 30000, quantity: 1, orderedAt: vn(18, 12)),
+    ];
+    expect(apply(vn(18, 15), items), 10000);
+    expect(CartCampaignPricing.getComboInfo(combo, cart: items, products: products)!.buyUnits, 1);
+    expect(CartCampaignPricing.lateOrderBlock(combo, cart: items, products: products, branchId: 'TRAM01', nowMs: vn(18, 15)), isNull);
+  });
+
+  test('không gộp món bấm khác khung giờ KM vào cùng dòng', () {
+    expect(CartCampaignPricing.sameOrderWindow(vn(17, 50), vn(18, 10), [combo]), isFalse);
+    expect(CartCampaignPricing.sameOrderWindow(vn(18, 5), vn(18, 10), [combo]), isTrue);
+    expect(CartCampaignPricing.sameOrderWindow(vn(15, 0), vn(17, 59), [combo]), isTrue);
+    expect(CartCampaignPricing.sameOrderWindow(null, vn(18, 10), [combo]), isTrue);
+  });
 }

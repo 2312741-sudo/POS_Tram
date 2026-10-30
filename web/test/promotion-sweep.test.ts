@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { addLineToOrder, sameOrderWindow } from "../lib/web-order";
 import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
@@ -217,6 +218,23 @@ describe("Khung giờ: lúc bấm phải trong giờ VÀ chỉ món GỌI trong 
       at(line("3", "77", 2, 30000, "BÁNH"), vn(2026, 10, 22, 18, 6)),
     ], now);
     expect(partial).toContain("chỉ được giảm 10.000đ thay vì 20.000đ");
+  });
+  it("2 nước bấm ngoài giờ + 1 nước bấm trong giờ + 1 bánh → combo vẫn giảm 1 bánh, không báo lỗi", () => {
+    const now = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 18, 15) };
+    const lines = [
+      at(line("1", "5", 2, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 17, 50)),
+      at(line("2", "5", 1, 45000, "TRÀ TRÁI CÂY"), vn(2026, 10, 22, 18, 10)),
+      at(line("3", "77", 1, 30000, "BÁNH"), vn(2026, 10, 22, 18, 12)),
+    ];
+    expect(quoteCampaign(combo(), lines, now).totalPromotionDiscount).toBe(10000);
+    expect(lateOrderBlock(combo(), lines, now)).toBeNull();
+  });
+  it("không gộp món bấm khác khung giờ KM vào cùng dòng", () => {
+    const base = { productId: 5, name: "Trà", price: 45000, quantity: 2, orderedAt: vn(2026, 10, 22, 17, 50) };
+    const later = { ...base, quantity: 1, orderedAt: vn(2026, 10, 22, 18, 10) };
+    expect(addLineToOrder([base], later, [combo()])).toHaveLength(2);
+    expect(addLineToOrder([base], { ...later, orderedAt: vn(2026, 10, 22, 17, 55) }, [combo()])).toHaveLength(1);
+    expect(sameOrderWindow(vn(2026, 10, 22, 18, 5), vn(2026, 10, 22, 18, 10), [combo()])).toBe(true);
   });
   it("linesFromOrder lấy giờ gọi món từ orderedAt", () => {
     const [l] = linesFromOrder([{ productId: 5, name: "Trà", price: 45000, quantity: 1, orderedAt: 123 }]);

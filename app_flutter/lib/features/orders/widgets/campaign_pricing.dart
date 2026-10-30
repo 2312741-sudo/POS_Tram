@@ -210,6 +210,14 @@ class CartCampaignPricing {
     return null;
   }
 
+  /// Hai lần bấm món lúc [a] và [b] cùng nằm trong (hoặc cùng ngoài) thời gian của mọi chương trình có lịch?
+  /// Chỉ khi đó mới được gộp vào cùng 1 dòng — nếu không, phần gọi trong khung giờ phải là dòng riêng
+  /// (vd 2 nước bấm 15:50 + 1 nước bấm 16:10 cho combo 16:00–18:00 → 2 dòng, combo vẫn tính 1 ly).
+  static bool sameOrderWindow(int? a, int? b, Iterable<CampaignModel> campaigns) {
+    if (a == null || b == null || a <= 0 || b <= 0) return true;
+    return campaigns.every((c) => c.isEligibleAt(a) == c.isEligibleAt(b));
+  }
+
   /// Món liên quan tới chương trình nhưng GỌI NGOÀI khung giờ áp dụng → không được tính KM.
   /// Trả câu thông báo cho nhân viên (null = không có món nào như vậy).
   static String? outsideScheduleMessage(
