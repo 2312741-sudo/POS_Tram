@@ -51,6 +51,8 @@ export interface RawTier {
   maxRewardQty?: number;
   /** Số topping tặng kèm trên mỗi món tặng */
   rewardToppingQty?: number;
+  /** Topping luôn đi kèm món tặng */
+  rewardToppingIds?: string[];
   rewardItemIds?: string[];
   rewardGroupIds?: string[];
   sortOrder?: number;
@@ -131,6 +133,8 @@ export interface CampaignFormState {
   rewardQty: string;
   /** Số topping tặng kèm trên mỗi món tặng (tặng/giảm món theo giá trị đơn) */
   rewardToppingQty: string;
+  /** Topping luôn đi kèm món tặng (vd 'Tăng giá Grab 2K') — tự gắn vào dòng tặng và được tặng luôn */
+  rewardToppingIds: string[];
   rewardBenefit: RewardBenefit;
   /** % (khi PERCENT) hoặc VND (khi FIXED); bỏ qua khi FREEITEM */
   rewardValue: string;
@@ -156,7 +160,7 @@ export function emptyCampaignForm(): CampaignFormState {
     hasCodes: false, autoApply: true, requireStaffNote: false, birthdayOnly: false, blockPoints: false, stackingMode: "ENABLED", maxCampaignsPerOrder: "", priority: "0",
     discountType: "PERCENT", discountValue: "", maxDiscount: "", threshold: "",
     fixedPriceValue: "",
-    rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardToppingQty: "0", rewardBenefit: "FREEITEM", rewardValue: "",
+    rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardToppingQty: "0", rewardToppingIds: [], rewardBenefit: "FREEITEM", rewardValue: "",
     buyItemIds: [], buyGroupIds: [], buyQty: "1", multiplyByBundle: true,
     includedItemIds: [], includedGroupIds: [], daysOfWeek: [], timeSlots: [],
     branchIds: ["TRAM01", "TRAM02", "TRAM03", "TRAM04"],
@@ -255,6 +259,7 @@ export function campaignToForm(cam: StoredCampaign): CampaignFormState {
       form.rewardGroupIds = strList(tier.rewardGroupIds);
       form.rewardQty = posStr(num(tier.maxRewardQty)) || "1";
       form.rewardToppingQty = String(Math.max(0, num(tier.rewardToppingQty)));
+      form.rewardToppingIds = Array.isArray(tier.rewardToppingIds) ? tier.rewardToppingIds.map(String) : [];
       Object.assign(form, rewardFromMode(mode, value));
     }
   }
@@ -342,6 +347,7 @@ export function buildTier(p: {
   rewardItemIds?: string[];
   rewardGroupIds?: string[];
   rewardToppingQty?: number;
+  rewardToppingIds?: string[];
 }): RawTier {
   const sortOrder = 1;
   const maxDiscountMoney = p.maxDiscountMoney ?? 0;
@@ -359,6 +365,7 @@ export function buildTier(p: {
     maxBenefitValue: maxDiscountMoney,
     maxRewardQty: p.maxRewardQty ?? 0,
     ...(p.rewardToppingQty && p.rewardToppingQty > 0 ? { rewardToppingQty: p.rewardToppingQty } : {}),
+    ...(p.rewardToppingIds && p.rewardToppingIds.length > 0 ? { rewardToppingIds: [...p.rewardToppingIds] } : {}),
     rewardItemIds: p.rewardItemIds ?? [],
     rewardGroupIds: p.rewardGroupIds ?? [],
     sortOrder,
@@ -413,6 +420,7 @@ export function buildBenefitFields(
           tierId, threshold, benefitMode, value,
           maxRewardQty: Math.round(toInt(form.rewardQty) || 1),
           rewardToppingQty: Math.max(0, Math.round(toInt(form.rewardToppingQty) || 0)),
+          rewardToppingIds: [...form.rewardToppingIds],
           rewardItemIds: [...form.rewardItemIds],
           rewardGroupIds: [...form.rewardGroupIds],
         })],
@@ -471,7 +479,7 @@ export function describeCampaignBenefit(cam: StoredCampaign): string {
   if (type === "ITEMPRICERULE") return value > 0 ? `Đồng giá ${vnd(value)}` : "";
   if (type === "ORDERVALUEITEMBENEFIT") {
     const t = rewardText(mode, value);
-    const tops = num(tier.rewardToppingQty);
+    const tops = num(tier.rewardToppingQty) + (Array.isArray(tier.rewardToppingIds) ? tier.rewardToppingIds.length : 0);
     return `${t.charAt(0).toUpperCase()}${t.slice(1)} ${num(tier.maxRewardQty) || 1} món${tops > 0 ? ` kèm ${tops} topping` : ""}${from}`;
   }
   if (value <= 0) return "";

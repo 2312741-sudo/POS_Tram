@@ -281,7 +281,7 @@ function TablesPageContent() {
   const promoRewardProducts = useMemo(
     () =>
       products
-        .filter((p) => (p.storeCode || promoStoreCode) === promoStoreCode && !p.isTopping)
+        .filter((p) => (p.storeCode || promoStoreCode) === promoStoreCode)
         .map((p) => ({ id: p.id, name: p.name, price: Number(p.price) || 0, code: p.code, category: p.category, unit: p.unit, isTopping: p.isTopping })),
     [products, promoStoreCode]
   );

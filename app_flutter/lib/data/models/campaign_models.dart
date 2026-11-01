@@ -147,6 +147,12 @@ class CampaignTier {
   final int maxRewardQty; // Số lượng món thưởng tối đa
   /// Số topping được TẶNG KÈM trên mỗi phần món tặng (dòng tặng riêng). 0 = topping thêm vẫn tính tiền.
   final int rewardToppingQty;
+  /// Tổng số topping được tặng trên mỗi món tặng = topping kèm cố định + số topping nhân viên được chọn thêm
+  int get freeToppingCount => rewardToppingQty + rewardToppingIds.length;
+
+  /// Topping LUÔN đi kèm món tặng (vd 'Tăng giá Grab 2K') — tự gắn vào dòng tặng và được tặng luôn.
+  /// Lưu khóa / mã / tên món topping (tra bằng ToppingRef).
+  final List<String> rewardToppingIds;
   final List<String> rewardItemIds; // Món thưởng (for P-05, P-06)
   final List<String> rewardGroupIds; // Nhóm món thưởng (mọi món thuộc nhóm đều là món thưởng)
   final int sortOrder; // Thứ tự trong danh sách tiers
@@ -163,6 +169,7 @@ class CampaignTier {
     this.rewardGroupIds = const [],
     required this.sortOrder,
     this.rewardToppingQty = 0,
+    this.rewardToppingIds = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -180,6 +187,7 @@ class CampaignTier {
       'maxBenefitValue': maxDiscountMoney,
       'maxRewardQty': maxRewardQty,
       if (rewardToppingQty > 0) 'rewardToppingQty': rewardToppingQty,
+      if (rewardToppingIds.isNotEmpty) 'rewardToppingIds': rewardToppingIds,
       'rewardItemIds': rewardItemIds,
       'rewardGroupIds': rewardGroupIds,
       'sortOrder': sortOrder,
@@ -225,6 +233,9 @@ class CampaignTier {
       maxDiscountMoney: (rawMaxDiscount as num).toInt(),
       maxRewardQty: (map['maxRewardQty'] as num?)?.toInt() ?? 0,
       rewardToppingQty: (map['rewardToppingQty'] as num?)?.toInt() ?? 0,
+      rewardToppingIds: map['rewardToppingIds'] is List
+          ? (map['rewardToppingIds'] as List).where((e) => e != null).map((e) => e.toString()).toList()
+          : const [],
       rewardItemIds: List<String>.from(map['rewardItemIds'] ?? []),
       rewardGroupIds: List<String>.from(map['rewardGroupIds'] ?? []),
       sortOrder: (map['sortOrder'] as num?)?.toInt() ?? (map['tierIndex'] as num?)?.toInt() ?? 0,
@@ -243,6 +254,7 @@ class CampaignTier {
     List<String>? rewardGroupIds,
     int? sortOrder,
     int? rewardToppingQty,
+    List<String>? rewardToppingIds,
   }) {
     return CampaignTier(
       tierId: tierId ?? this.tierId,
@@ -256,6 +268,7 @@ class CampaignTier {
       rewardGroupIds: rewardGroupIds ?? this.rewardGroupIds,
       sortOrder: sortOrder ?? this.sortOrder,
       rewardToppingQty: rewardToppingQty ?? this.rewardToppingQty,
+      rewardToppingIds: rewardToppingIds ?? this.rewardToppingIds,
     );
   }
 }

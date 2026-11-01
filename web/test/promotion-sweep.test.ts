@@ -356,3 +356,26 @@ describe("rewardPlanFor: món có thể làm món tặng (web thêm dòng tặng
     expect(rewardPlanFor(parseCampaign("B", { campaignType: "BILL_DISCOUNT", tiers: [] } as never), prods)).toBeNull();
   });
 });
+
+describe("Topping luôn kèm món tặng (vd 'Tăng giá Grab 2K') — dòng tặng 22K về 0đ", () => {
+  const camp = parseCampaign("CAM_CHANH", {
+    campaignId: "CAM_CHANH", name: "Grab - Tặng 1 trà chanh", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+    tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardItemIds: ["8"], rewardToppingIds: ["-grab2k"] }],
+  } as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  it("rewardPlanFor trả topping kèm; dòng tặng chanh 20K + Grab 2K = 22K giảm đủ 22K; ly 27K khách gọi giữ nguyên", () => {
+    const prods = [
+      { id: "8", name: "Trà Olong - Chanh tươi", price: 20000 },
+      { id: "-grab2k", name: "Tăng giá Grab 2K (tính theo hoa hồng)", price: 2000, isTopping: true },
+    ];
+    expect(rewardPlanFor(camp, prods)?.toppings.map((t) => t.name)).toEqual(["Tăng giá Grab 2K (tính theo hoa hồng)"]);
+    const lines = linesFromOrder([
+      { productId: 4, name: "Bánh lăn choco - vừa", price: 30000, quantity: 3, selectedToppings: ["Tăng giá Grab 2K"], toppingPrice: 2000 },
+      { productId: 8, name: "Trà Olong - Chanh tươi", price: 20000, quantity: 1, selectedToppings: ["Thạch dừa", "Tăng giá Grab 2K"], toppingPrice: 7000 },
+      { productId: 8, name: "Trà Olong - Chanh tươi", price: 20000, quantity: 1, selectedToppings: ["Tăng giá Grab 2K (tính theo hoa hồng)"], toppingPrice: 2000, rewardCampaignId: "CAM_CHANH" },
+    ]);
+    const q = quoteCampaign(camp, lines, ctx);
+    expect(q.totalPromotionDiscount).toBe(22000);
+    expect(q.rewardBenefits.map((b) => b.lineId)).toEqual(["L2"]);
+  });
+});

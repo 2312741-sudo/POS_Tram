@@ -1017,6 +1017,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (picked == null) return false;
     final staffUser = _auth.currentUser?.username ?? 'staff';
     final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
+    // Topping luôn kèm món tặng (vd 'Tăng giá Grab 2K') — gắn sẵn vào dòng tặng, được tặng luôn
+    final fixedTops = <ProductModel>[
+      for (final t in c.tiers.expand((t) => t.rewardToppingIds))
+        if (ToppingRef.find(t, _products) case final p?) p,
+    ];
     setState(() {
       // Món tặng là dòng RIÊNG gắn chương trình (không gộp với món khách gọi, không tính vào mốc giá trị đơn)
       _cart.add(OrderItemModel(
@@ -1024,6 +1029,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         name: picked.name,
         price: picked.price,
         quantity: plan.units,
+        selectedToppings: [for (final p in fixedTops) p.name],
+        toppingPrice: fixedTops.fold<int>(0, (s, p) => s + p.price),
         note: 'Tặng KM: ${c.name}',
         orderedBy: staffUser,
         orderedByName: staffName,
@@ -1034,7 +1041,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     });
     widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
     await _fb.saveTable(widget.table).catchError((_) {});
-    // Chương trình tặng kèm topping: mở ngay bảng chọn size / đường / đá / topping cho dòng tặng
+    // Cho nhân viên chọn thêm topping tặng: mở ngay bảng chọn size / đường / đá / topping cho dòng tặng
     final freeToppings = c.tiers.fold<int>(0, (m, t) => t.rewardToppingQty > m ? t.rewardToppingQty : m);
     if (freeToppings > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

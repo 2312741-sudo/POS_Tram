@@ -1524,8 +1524,20 @@ function RewardEditor({ form, setForm, products, categories, title }: {
       </div>
       <FormField label="Số lượng món được tặng/giảm *" value={form.rewardQty} onChange={(v) => setForm(prev => ({ ...prev, rewardQty: v }))} type="number" placeholder="VD: 1" />
       {form.campaignType === "ORDERVALUEITEMBENEFIT" && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <ItemMultiPicker
+            label={`Topping luôn kèm món tặng — tặng luôn, vd "Tăng giá Grab 2K" (${form.rewardToppingIds.length})`}
+            color="#b45309"
+            products={products.filter((p) => p.isTopping || String(p.category ?? "").toLowerCase().includes("topping"))}
+            selected={form.rewardToppingIds}
+            onChange={(ids) => setForm(prev => ({ ...prev, rewardToppingIds: ids }))}
+            emptyText="Không kèm topping"
+          />
+        </div>
+      )}
+      {form.campaignType === "ORDERVALUEITEMBENEFIT" && (
         <FormField
-          label="Tặng kèm topping (số topping miễn phí mỗi món tặng)"
+          label="Cho chọn thêm topping tặng (số topping nhân viên được chọn thêm, miễn phí)"
           value={form.rewardToppingQty}
           onChange={(v) => setForm(prev => ({ ...prev, rewardToppingQty: v }))}
           type="number"

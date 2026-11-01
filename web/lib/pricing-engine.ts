@@ -26,6 +26,8 @@ export interface CampaignTier {
   sortOrder: number;
   /** Số topping TẶNG KÈM trên mỗi phần món tặng (dòng tặng riêng). 0 = topping thêm vẫn tính tiền */
   rewardToppingQty?: number;
+  /** Topping LUÔN đi kèm món tặng (vd 'Tăng giá Grab 2K') — khóa / mã / tên món topping; tự gắn và được tặng luôn */
+  rewardToppingIds?: string[];
 }
 
 export interface CampaignBuyCondition {
@@ -126,6 +128,7 @@ export function parseTier(raw: Record<string, unknown>): CampaignTier {
     rewardGroupIds: strList(raw.rewardGroupIds),
     sortOrder: toInt(raw.sortOrder ?? raw.tierIndex ?? 0),
     rewardToppingQty: Math.max(0, toInt(raw.rewardToppingQty ?? 0)),
+    rewardToppingIds: strList(raw.rewardToppingIds),
   };
 }
 
@@ -481,7 +484,8 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     } else {
       const count = line.toppingCount ?? 0;
       const topUnit = count > 0 ? Math.max(0, Math.min(line.toppingUnitPrice ?? 0, line.unitPrice)) : 0;
-      const freeTop = count > 0 ? Math.floor((topUnit * Math.min(freeToppings, count)) / count) : 0;
+      // Đủ số topping được tặng → tặng hết (chính xác); vượt số tặng → chia theo giá trung bình một topping
+      const freeTop = count === 0 ? 0 : freeToppings >= count ? topUnit : Math.floor((topUnit * freeToppings) / count);
       perUnit = Math.min(line.unitPrice, unitBenefit(mode, value, line.unitPrice - topUnit) + freeTop);
     }
     const amount = Math.min(perUnit * k, Math.floor((remaining * k) / avail));
@@ -671,7 +675,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         candidates, units, mode: tier.benefitMode, value: tier.value, campaignId: campaign.campaignId, tierId: tier.tierId,
         // Món tặng (dòng tặng riêng hoặc món có sẵn trong đơn) chỉ miễn phí giá món + size; topping / phụ thu
         // (vd 'Tăng giá Grab') chỉ tặng đúng số topping cấu hình (0 = tính tiền). Khớp Dart.
-        freeToppingsOf: () => tier.rewardToppingQty ?? 0,
+        freeToppingsOf: () => (tier.rewardToppingQty ?? 0) + (tier.rewardToppingIds?.length ?? 0),
       });
       if (d > 0) {
         totalDiscount += d;
@@ -946,7 +950,7 @@ export function buildAppliedDiscount(campaign: Campaign, amount: number, opts?: 
 export function rewardPlanFor<P extends { id: string; name: string; code?: string; category?: string; isTopping?: boolean }>(
   campaign: Campaign,
   products: P[]
-): { units: number; candidates: P[] } | null {
+): { units: number; candidates: P[]; toppings: P[] } | null {
   if (campaign.campaignType.toUpperCase().replace(/_/g, "") !== "ORDERVALUEITEMBENEFIT") return null;
   const tier = [...campaign.tiers].sort((a, b) => a.threshold - b.threshold)[0];
   if (!tier) return null;
@@ -961,7 +965,14 @@ export function rewardPlanFor<P extends { id: string; name: string; code?: strin
       (ids.has(lc(p.id)) || ids.has(lc(p.name)) || (!!p.code && ids.has(lc(p.code))) || (!!p.category && groups.has(normGroup(p.category))))
   );
   if (candidates.length === 0) return null;
-  return { units: tier.maxRewardQty > 0 ? tier.maxRewardQty : 1, candidates };
+  // Topping luôn kèm món tặng: tra trong thực đơn theo khóa / mã / tên (ưu tiên món topping)
+  const toppings = (tier.rewardToppingIds ?? [])
+    .map((ref) => {
+      const hits = products.filter((p) => String(p.id) === ref || lc(p.name) === lc(ref) || (!!p.code && lc(p.code) === lc(ref)));
+      return hits.find((p) => p.isTopping) ?? hits[0];
+    })
+    .filter((p): p is P => !!p);
+  return { units: tier.maxRewardQty > 0 ? tier.maxRewardQty : 1, candidates, toppings };
 }
 
 const isBillLevel = (c: Campaign) => c.campaignType.toUpperCase().replace(/_/g, "") === "BILLDISCOUNT";

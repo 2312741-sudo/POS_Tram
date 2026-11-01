@@ -330,7 +330,10 @@ PriceQuoteModel calculatePrice({
         ? _unitBenefit(mode, value, line.unitPrice)
         : (() {
             final topUnit = line.toppingCount > 0 ? max(0, min(line.toppingUnitPrice, line.unitPrice)) : 0;
-            final freeTop = line.toppingCount > 0 ? topUnit * min(freeToppings, line.toppingCount) ~/ line.toppingCount : 0;
+            // Đủ số topping được tặng → tặng hết (chính xác); vượt số tặng → chia theo giá trung bình một topping
+            final freeTop = line.toppingCount == 0
+                ? 0
+                : (freeToppings >= line.toppingCount ? topUnit : topUnit * freeToppings ~/ line.toppingCount);
             return min(line.unitPrice, _unitBenefit(mode, value, line.unitPrice - topUnit) + freeTop);
           })();
     final amount = min(perUnit * k, remaining * k ~/ avail);
@@ -538,7 +541,7 @@ PriceQuoteModel calculatePrice({
         tierId: tier.tierId,
         // Món tặng (dòng tặng riêng hoặc món có sẵn trong đơn) chỉ miễn phí giá món + size; topping / phụ thu
         // (vd 'Tăng giá Grab') chỉ tặng đúng số topping cấu hình (0 = tính tiền)
-        freeToppingsOf: (_) => tier.rewardToppingQty,
+        freeToppingsOf: (_) => tier.freeToppingCount,
       );
       if (d > 0) {
         totalDiscount += d;

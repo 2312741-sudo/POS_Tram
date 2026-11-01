@@ -120,4 +120,27 @@ void main() {
       expect({for (final d in r.discounts) d.campaignId: d.amount}, {'CAM_20': 27000, 'CAM_CHANH': 22000});
     });
   });
+
+  test('topping luôn kèm món tặng (Tăng giá Grab 2K): dòng tặng 20K + 2K = 22K giảm đủ về 0đ', () {
+    final c = CampaignModel.fromMap({
+      'campaignId': 'CAM_CHANH', 'programCode': 'KM/CHANH', 'name': 'Grab - Tặng 1 trà chanh',
+      'campaignType': 'ORDER_VALUE_ITEM_BENEFIT', 'active': true, 'branchIds': ['TRAM01'], 'hasCodes': false,
+      'stackingMode': 'ENABLED', 'priority': 0, 'createdAt': 1,
+      'tiers': [
+        {'tierId': 'T1', 'conditionBasis': 'TOTALAMOUNT', 'threshold': 100000, 'benefitMode': 'FREEITEM', 'value': 0,
+         'maxRewardQty': 1, 'rewardToppingIds': ['-grab2k'], 'rewardItemIds': ['8'], 'sortOrder': 1},
+      ],
+    });
+    expect(c.tiers.first.freeToppingCount, 1);
+    final cart = [
+      xoai(3),
+      OrderItemModel(productId: 8, name: 'Trà Olong - Chanh tươi', price: 20000, quantity: 1,
+          selectedToppings: ['Thạch dừa', 'Tăng giá Grab 2K'], toppingPrice: 7000),
+      OrderItemModel(productId: 8, name: 'Trà Olong - Chanh tươi', price: 20000, quantity: 1,
+          selectedToppings: ['Tăng giá Grab 2K'], toppingPrice: 2000, rewardCampaignId: 'CAM_CHANH'),
+    ];
+    final q = CartCampaignPricing.quoteForApply(c, cart: cart, products: products, branchId: 'TRAM01', isApplied: false, nowMs: 1000);
+    expect(q.totalPromotionDiscount, 22000);
+    expect(q.rewardBenefits.map((b) => b.lineId), ['L2']);
+  });
 }

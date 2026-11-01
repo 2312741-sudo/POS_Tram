@@ -147,6 +147,11 @@ export function usePromotions(args: {
       ...makeOrderLine(product, plan.units, `Tặng KM: ${c.name}`, actor ?? { username: "admin_web" }, now),
       rewardCampaignId: c.campaignId,
     };
+    // Topping luôn kèm món tặng (vd 'Tăng giá Grab 2K'): gắn sẵn vào dòng tặng — được tặng luôn
+    if (plan.toppings.length > 0) {
+      line.selectedToppings = plan.toppings.map((t) => t.name);
+      line.toppingPrice = plan.toppings.reduce((sum, t) => sum + Math.max(0, Math.trunc(t.price) || 0), 0);
+    }
     const next = await onAddLines([line]);
     if (!next) return 0;
     const others = effective.map((d) => byId[d.campaignId]).filter((x): x is Campaign => !!x && x.campaignId !== c.campaignId);
