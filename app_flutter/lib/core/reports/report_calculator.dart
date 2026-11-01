@@ -572,9 +572,8 @@ class ReportCalculator {
         final category = (p != null && p.category.isNotEmpty) ? p.category : 'Khác';
         final unit = (p != null && p.unit.isNotEmpty) ? p.unit : 'Ly';
         final basePrice = (p != null && p.price > 0) ? p.price : it.price;
-        final accKey = prodId > 0
-            ? 'id:$prodId'
-            : 'name:${prodName.trim().toLowerCase()}';
+        // Gom theo mã món: món trùng trong thực đơn và món gọi làm topping cùng về một dòng
+        final accKey = productMergeKey(prodCode, prodName);
 
         accMap.putIfAbsent(accKey, () => _ProdAccumulator(
           productId: prodId,
@@ -588,7 +587,7 @@ class ReportCalculator {
         // Topping tách thành dòng riêng (số bán + doanh thu), không cộng vào món gốc
         for (final part in _lineParts(it, p, productsMap, toppingCosts, mainKey: accKey)) {
           final acc = part.isTopping
-              ? accMap.putIfAbsent(part.key, () => _ProdAccumulator(
+              ? accMap.putIfAbsent(productMergeKey(part.code, part.name), () => _ProdAccumulator(
                     productId: part.productId,
                     productCode: part.code,
                     productName: part.name,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tram_flutter/core/reports/report_calculator.dart';
 import 'package:tram_flutter/core/reports/topping_split.dart';
 import 'package:tram_flutter/data/models/app_models.dart';
 import 'package:tram_flutter/data/models/product_model.dart';
@@ -32,5 +33,27 @@ void main() {
       ['A', 9000, 'Topping'],
       ['B', 9000, 'Topping'],
     ]);
+  });
+
+  test('báo cáo hàng hóa gom theo mã: Thạch dừa gọi riêng + làm topping + bản ghi trùng → MỘT dòng', () {
+    final pm = {
+      11: ProductModel(id: 11, name: 'Thạch dừa', code: 'PK202500044', price: 5000, unit: 'Phần', category: 'Topping', isTopping: true),
+      12: ProductModel(id: 12, name: 'Thạch dừa', code: 'PK202500044', price: 5000, unit: 'Phần', category: 'Khác'),
+      21: ProductModel(id: 21, name: 'Trà Olong - Xoài', code: 'DR202500003', price: 30000, unit: 'Ly', category: 'Trà'),
+      22: ProductModel(id: 22, name: 'Trà Olong - Xoài', code: 'DR202500003', price: 30000, unit: 'Ly', category: 'Khác'),
+    };
+    final bill = BillModel.fromMap({
+      'billCode': 'HD-1', 'status': 'PAID', 'closedAt': 1000, 'finalAmount': 135000, 'subTotal': 135000,
+      'items': [
+        {'productId': 21, 'name': 'Trà Olong - Xoài', 'price': 30000, 'quantity': 2, 'selectedToppings': ['Thạch dừa'], 'toppingPrice': 5000},
+        {'productId': 12, 'name': 'Thạch dừa', 'price': 5000, 'quantity': 3},
+        {'productId': 22, 'name': 'Trà Olong - Xoài', 'price': 30000, 'quantity': 1},
+      ],
+    }, 'B1');
+    final rows = ReportCalculator.calculateProductReport([bill], productsMap: pm);
+    List<List<Object>> pick(String n) => rows.where((r) => r.productName == n).map((r) => <Object>[r.productCode, r.quantity]).toList();
+    expect(pick('Thạch dừa'), [['PK202500044', 5]]);
+    expect(pick('Trà Olong - Xoài'), [['DR202500003', 3]]);
+    expect(productMergeKey('PK202500044', 'x'), productMergeKey(' pk202500044 ', 'y'));
   });
 }

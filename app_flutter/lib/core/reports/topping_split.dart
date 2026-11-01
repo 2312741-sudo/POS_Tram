@@ -44,6 +44,13 @@ class LinePart {
 
 String _norm(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
+/// Khóa gom dòng báo cáo hàng hóa: theo MÃ món (không có mã thì theo tên). Cùng một món dù gọi riêng hay làm
+/// topping, hay thực đơn có bản ghi trùng (cùng mã, khác id) đều về MỘT dòng. Khớp productMergeKey (web).
+String productMergeKey(String code, String name) {
+  final c = code.trim().toLowerCase();
+  return c.isNotEmpty ? 'code:$c' : 'name:${_norm(name)}';
+}
+
 /// Tra món topping trong thực đơn theo tên (ưu tiên món đánh dấu topping khi trùng tên)
 ProductModel? findToppingProduct(String name, Map<int, ProductModel>? productsMap) {
   if (productsMap == null || productsMap.isEmpty) return null;

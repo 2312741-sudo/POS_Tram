@@ -1,4 +1,4 @@
-import { buildToppingLookup, splitLineParts } from "./topping-split";
+import { buildToppingLookup, splitLineParts, productMergeKey } from "./topping-split";
 import { resolveProductCode } from "./product-code";
 import { businessDateOf, businessDayStartFor } from "./business-day";
 /**
@@ -1053,7 +1053,6 @@ export function calculateProductReport(
         let unit: string;
         let category: string;
         if (part.isTopping) {
-          key = part.key;
           pId = part.productId ?? 0;
           pCode = part.code;
           basePrice = part.quantity > 0 ? Math.round(part.grossRevenue / part.quantity) : 0;
@@ -1061,7 +1060,6 @@ export function calculateProductReport(
           category = part.category;
         } else {
           pId = it.productId != null ? it.productId : (it.name || "0");
-          key = String(pId);
           pCode = resolveProductCode({ productId: it.productId, name: it.name, productCode: it.productCode, code: it.code }, productsMap);
           basePrice = Number(it.price || 0);
           unit = it.unit || "Ly";
@@ -1074,6 +1072,8 @@ export function calculateProductReport(
           }
         }
 
+        // Gom theo mã món: món trùng trong thực đơn và món gọi làm topping cùng về một dòng
+        key = productMergeKey(pCode, part.name);
         if (!prodMap.has(key)) {
           prodMap.set(key, {
             productId: pId,

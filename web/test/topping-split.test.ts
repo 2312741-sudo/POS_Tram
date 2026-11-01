@@ -36,3 +36,26 @@ describe("Tách topping khỏi món gốc", () => {
     expect(by).toEqual({ "Trà đào": [2, 70000, 62708], "Trân châu": [2, 10000, 8958], "Kem cheese": [2, 16000, 14334] });
   });
 });
+
+describe("Báo cáo hàng hóa gom theo mã món", () => {
+  it("Thạch dừa gọi riêng + gọi làm topping + bản ghi trùng trong thực đơn → MỘT dòng", async () => {
+    const { calculateProductReport } = await import("../lib/reports");
+    const productsMap = {
+      "-Na": { id: "-Na", name: "Thạch dừa", code: "PK202500044", price: 5000, isTopping: true, category: "Topping" },
+      "-Nb": { id: "-Nb", name: "Thạch dừa", code: "PK202500044", price: 5000, category: "Khác" },
+      "-Nt": { id: "-Nt", name: "Trà Olong - Xoài", code: "DR202500003", price: 30000, category: "Trà" },
+      "-Nt2": { id: "-Nt2", name: "Trà Olong - Xoài", code: "DR202500003", price: 30000, category: "Khác" },
+    };
+    const bills = [
+      { id: "B1", status: "PAID", items: [
+        { productId: "-Nt", name: "Trà Olong - Xoài", price: 30000, quantity: 2, selectedToppings: ["Thạch dừa"], toppingPrice: 5000 },
+        { productId: "-Nb", name: "Thạch dừa", price: 5000, quantity: 3 },
+        { productId: "-Nt2", name: "Trà Olong - Xoài", price: 30000, quantity: 1 },
+      ] },
+    ];
+    const rows = calculateProductReport(bills as never, productsMap as never);
+    const pick = (n: string) => rows.filter((r) => r.productName === n).map((r) => [r.productCode, r.quantity]);
+    expect(pick("Thạch dừa")).toEqual([["PK202500044", 5]]);
+    expect(pick("Trà Olong - Xoài")).toEqual([["DR202500003", 3]]);
+  });
+});

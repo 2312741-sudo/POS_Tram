@@ -159,3 +159,12 @@ export function buildToppingLookup<T extends ToppingLookup & { name?: string; is
   }
   return (name: string) => byName.get(norm(name));
 }
+
+/**
+ * Khóa gom dòng báo cáo hàng hóa: theo MÃ món (không có mã thì theo tên). Cùng một món dù gọi riêng hay làm
+ * topping, hay thực đơn có bản ghi trùng (cùng mã, khác id) đều về MỘT dòng. Khớp productMergeKey (Dart).
+ */
+export function productMergeKey(code: string | null | undefined, name: string | null | undefined): string {
+  const c = String(code ?? "").trim().toLowerCase();
+  return c ? `code:${c}` : `name:${String(name ?? "").trim().toLowerCase().replace(/\s+/g, " ")}`;
+}

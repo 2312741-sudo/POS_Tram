@@ -439,7 +439,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
 
         // Topping tách thành dòng riêng (số bán + doanh thu), không gộp vào món gốc
         for (final part in splitLineParts(item, mainKey: item.name.trim(), mainUnitCost: 0, productsMap: _productsMap)) {
-          final key = part.isTopping ? part.key : item.name.trim();
+          // Gom theo mã món: Thạch dừa gọi riêng và gọi làm topping cùng một dòng
+          final key = part.isTopping ? productMergeKey(part.code, part.name) : productMergeKey(_codeOf(item.productId, item.name.trim()), item.name.trim());
           final entry = productMap.putIfAbsent(key, () => {
                 'name': part.isTopping ? part.name : key,
                 'code': part.isTopping ? part.code : _codeOf(item.productId, key),
@@ -908,7 +909,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             final pMap = staffMap[itemStaff]!;
             // Topping tách thành dòng riêng
             for (final part in splitLineParts(item, mainKey: item.name.trim(), mainUnitCost: 0, productsMap: _productsMap)) {
-              final key = part.isTopping ? part.key : item.name.trim();
+              // Gom theo mã món: Thạch dừa gọi riêng và gọi làm topping cùng một dòng
+          final key = part.isTopping ? productMergeKey(part.code, part.name) : productMergeKey(_codeOf(item.productId, item.name.trim()), item.name.trim());
               final e = pMap.putIfAbsent(key, () => {
                     'name': part.isTopping ? '${part.name} (topping)' : key,
                     'code': part.isTopping ? part.code : _codeOf(item.productId, key),
