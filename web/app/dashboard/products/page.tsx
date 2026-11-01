@@ -35,6 +35,7 @@ import { useItemCatalog } from "@/lib/note-catalog";
 import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isLegacyCatalog } from "@/lib/item-options";
 import GroupAttachmentPicker from "@/components/GroupAttachmentPicker";
+import MenuDedupeDialog from "@/components/MenuDedupeDialog";
 import { planToppingGroupFixes, planToppingRefFixes, toppingGroupFixUpdates, toppingRefFixUpdates, toppingRefsToNames } from "@/lib/topping-refs";
 
 function formatVND(amount: number) {
@@ -402,6 +403,17 @@ export default function ProductsPage() {
   );
   const toppingFixCount = toppingRefFixes.length + toppingGroupFixes.length;
   const toppingFixNames = [...toppingRefFixes.map((f) => `nhóm món ${f.categoryName}`), ...toppingGroupFixes.map((f) => f.groupName)];
+  // Món trùng mã trong thực đơn chi nhánh (báo cáo tách dòng / rơi nhóm "Khác") → công cụ dọn
+  const dupCount = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const p of allProducts) {
+      if (p.storeCode !== targetStoreCode) continue;
+      const c = String(p.code ?? p.productCode ?? "").trim().toLowerCase();
+      if (c) seen.set(c, (seen.get(c) ?? 0) + 1);
+    }
+    return [...seen.values()].filter((n) => n > 1).length;
+  }, [allProducts, targetStoreCode]);
+  const [showDedupe, setShowDedupe] = useState(false);
   const [toppingFixBusy, setToppingFixBusy] = useState(false);
   const [toppingFixMsg, setToppingFixMsg] = useState("");
   const fixToppingRefs = async () => {
@@ -775,6 +787,20 @@ export default function ProductsPage() {
             );
           })}
         </div>
+      )}
+
+      {dupCount > 0 && hasPermission(user, "MENU_MANAGEMENT") && (
+        <div role="alert" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", border: "1px solid var(--warning)", background: "var(--warning-bg)", borderRadius: "12px", padding: "12px 14px" }}>
+          <div style={{ fontSize: "13px", minWidth: 0 }}>
+            <b>Thực đơn {targetStoreCode} có {dupCount} món bị trùng mã</b> — báo cáo dễ tách dòng / rơi nhóm &quot;Khác&quot;, gọi món dễ chọn nhầm bản. Xem trước rồi dọn, mỗi mã giữ một bản.
+          </div>
+          <button className="btn-primary" onClick={() => setShowDedupe(true)}>
+            Xem & dọn món trùng
+          </button>
+        </div>
+      )}
+      {showDedupe && (
+        <MenuDedupeDialog storeCode={targetStoreCode} actor={{ username: user?.username, fullName: user?.fullName }} onClose={() => setShowDedupe(false)} />
       )}
 
       {/* Topping lưu bằng mã → app cũ hiện mã thay vì tên: sửa thẳng dữ liệu */}
