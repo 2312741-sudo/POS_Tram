@@ -85,6 +85,18 @@ function isDrinkCategory(category: string | undefined): boolean {
   return ["trà", "tea", "cà phê", "cafe", "coffee", "nước", "uống", "sinh tố", "đá xay", "sữa", "matcha"].some((k) => c.includes(k));
 }
 
+/**
+ * Chuỗi trông như MÃ chứ không phải tên topping: khóa push RTDB ("-Nx…"), số thuần, hoặc chuỗi liền không dấu cách
+ * có cả chữ lẫn số / gạch dưới (vd "p_1712", "TOP01"). Dùng để không hiện mã thô khi không tra được món.
+ */
+export function looksLikeRef(s: string): boolean {
+  const t = s.trim();
+  if (!t) return true;
+  if (/^-[A-Za-z0-9_-]{8,}$/.test(t)) return true;
+  if (/^\d+$/.test(t)) return true;
+  return !/\s/.test(t) && /[0-9_]/.test(t) && /[A-Za-z]/.test(t);
+}
+
 export function getProductOptions(
   product: OptionProduct,
   categories: OptionCategory[],
@@ -103,20 +115,25 @@ export function getProductOptions(
 
   // --- topping
   const toppingProducts = allProducts.filter((p) => p.isTopping || lc(p.category).includes("topping"));
-  const resolve = (ref: string): ToppingOption => {
+  // Tham chiếu topping: khóa RTDB của món (web lưu khi tích topping cho nhóm món), mã món hoặc tên. Ưu tiên món đánh dấu topping.
+  const resolve = (ref: string): ToppingOption | null => {
     const r = lc(ref);
-    const hit =
-      allProducts.find((p) => p.id === ref || (p.code && lc(p.code) === r) || lc(p.name) === r) ??
-      undefined;
-    if (hit) return { name: hit.name, price: Math.max(0, Math.trunc(hit.price) || 0) };
+    const matches = allProducts.filter(
+      (p) => String(p.id) === ref.trim() || (p.code && lc(p.code) === r) || lc(p.name) === r
+    );
+    const hit = matches.find((p) => p.isTopping) ?? matches[0];
+    if (hit) return { name: hit.name, price: Math.max(0, Math.trunc(Number(hit.price)) || 0) };
     const def = DEFAULT_FNB_TOPPINGS.find((t) => lc(t.name) === r);
-    return def ?? { name: ref, price: 5000 };
+    if (def) return def;
+    // Mã / khóa món không còn trong thực đơn → bỏ, KHÔNG hiện mã thô với giá 5.000đ
+    return looksLikeRef(ref) ? null : { name: ref, price: 5000 };
   };
+  const resolveAll = (refs: string[]) => refs.map(resolve).filter((t): t is ToppingOption => t !== null);
   const cat = categories.find((c) => lc(c.name) === lc(product.category));
   const rawToppings = isDefaultDrink(product.category) && !(product.allowedToppings?.length) ? DEFAULT_FNB_TOPPINGS.map((t) => t.name) : product.allowedToppings ?? [];
   let toppings: ToppingOption[];
-  if (cat?.allowedToppingIds && cat.allowedToppingIds.length > 0) toppings = cat.allowedToppingIds.map(resolve);
-  else if (rawToppings.length > 0) toppings = rawToppings.map(resolve);
+  if (cat?.allowedToppingIds && cat.allowedToppingIds.length > 0) toppings = resolveAll(cat.allowedToppingIds);
+  else if (rawToppings.length > 0) toppings = resolveAll(rawToppings);
   else {
     toppings = toppingProducts.map((p) => ({ name: p.name, price: Math.max(0, Math.trunc(p.price) || 0) }));
     for (const t of DEFAULT_FNB_TOPPINGS) if (!toppings.some((x) => lc(x.name) === lc(t.name))) toppings.push(t);

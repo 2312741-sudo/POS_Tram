@@ -4,6 +4,7 @@
  * Bản song song: app_flutter/lib/core/domain/note_catalog_migration.dart và scripts/migrate_note_catalog/plan.js.
  * Quy tắc: xem đầu file Dart / docs/NOTE_CATALOG.md.
  */
+import { looksLikeRef } from "./product-options";
 
 type Rec = Record<string, unknown>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -79,7 +80,10 @@ export function planNoteCatalogMigration(input: {
 
   const nameOf = (p: Rec, key: string) => (String(p.name ?? "").trim() ? String(p.name).trim() : key);
   const catOf = (p: unknown) => (isRec(p) ? String(p.category ?? "").trim() : "");
-  const toInt = (v: unknown) => (typeof v === "number" ? Math.trunc(v) : 0);
+  const toInt = (v: unknown) => {
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+  };
 
   const toppingProds: Item[] = [];
   const priceByName = new Map<string, number>();
@@ -92,6 +96,9 @@ export function planNoteCatalogMigration(input: {
     const price = toInt(p.price);
     const isTop = p.isTopping === true || catOf(p).toLowerCase().includes("topping");
     priceByName.set(name.toLowerCase(), price);
+    // Web lưu KHÓA RTDB của món topping (products/{key}) trong allowedToppingIds → tra cả theo khóa
+    priceByRef.set(k, price);
+    nameByRef.set(k, name);
     const id = p.id != null ? String(p.id) : "";
     if (id) {
       priceByRef.set(id, price);
@@ -115,12 +122,15 @@ export function planNoteCatalogMigration(input: {
     max: 0,
     items: itemsOf(items),
   });
-  const resolveRef = (ref: string): Item => {
+  const resolveRef = (ref: string): Item | null => {
     const r = ref.trim();
     const byRef = priceByRef.get(r) ?? priceByRef.get(r.toLowerCase());
     if (byRef !== undefined) return { name: nameByRef.get(r) ?? nameByRef.get(r.toLowerCase()) ?? r, price: byRef };
+    // Mã / khóa món không còn trong thực đơn → bỏ, KHÔNG tạo topping mang tên là mã
+    if (looksLikeRef(r) && !priceByName.has(r.toLowerCase())) return null;
     return { name: r, price: priceByName.get(r.toLowerCase()) ?? 5000 };
   };
+  const resolveAll = (refs: string[]): Item[] => refs.map(resolveRef).filter((e): e is Item => e !== null);
   const dedupe = (items: Item[]) => {
     const seen = new Set<string>();
     return items.filter((e) => {
@@ -171,7 +181,7 @@ export function planNoteCatalogMigration(input: {
     if (c.toppingGroupIds == null) {
       if (allowed.length > 0) {
         const gid = `legacy_cat_${sanitizeKey(k)}`;
-        addTopGroup(gid, toppingGroup(`Topping - ${cname}`, 2, dedupe(allowed.map(resolveRef))), `Topping - ${cname}`);
+        addTopGroup(gid, toppingGroup(`Topping - ${cname}`, 2, dedupe(resolveAll(allowed))), `Topping - ${cname}`);
         updates[`categories/${k}/toppingGroupIds`] = [gid];
         attach++;
       } else if (drink) {
@@ -190,7 +200,7 @@ export function planNoteCatalogMigration(input: {
     const own = strList(p.allowedToppings);
     if (own.length === 0 || p.toppingGroupIds != null) continue;
     if (catAllowed.get(catOf(p).toLowerCase()) === true) continue;
-    const items = dedupe(own.map(resolveRef)).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const items = dedupe(resolveAll(own)).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const gid = `legacy_set_${legacyHash(items.map((e) => e.name).join("|"))}`;
     addTopGroup(gid, toppingGroup(`Topping riêng (${items.slice(0, 2).map((e) => e.name).join(", ")}...)`, 3, items), gid);
     updates[`products/${k}/toppingGroupIds`] = [gid];

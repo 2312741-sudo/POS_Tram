@@ -1,5 +1,6 @@
 // lib/features/orders/order_cart_screen.dart
 import 'package:intl/intl.dart';
+import '../../core/domain/topping_ref.dart';
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/product_availability.dart';
 import '../crm/customer_management_screen.dart';
@@ -2983,27 +2984,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       }
     } else if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
       for (final tId in matchedCategory.allowedToppingIds) {
-        final match = _products.firstWhere(
-          (p) => p.id.toString() == tId ||
-              (p.code.isNotEmpty && p.code.toLowerCase() == tId.toLowerCase()) ||
-              p.name.toLowerCase() == tId.toLowerCase(),
-          orElse: () => defaultFnbToppings.firstWhere(
-            (p) => p.id.toString() == tId || p.name.toLowerCase() == tId.toLowerCase(),
-            orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
-          ),
-        );
+        // Web lưu khóa RTDB của món topping (products/{key}) → tra theo mọi định danh; không thấy thì bỏ qua,
+        // KHÔNG hiện mã thô với giá 5.000đ
+        final match = ToppingRef.find(tId, _products, defaults: defaultFnbToppings);
+        if (match == null) continue;
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) availableToppingNames.add(match.name);
       }
     } else if (originalProduct != null && originalProduct.allowedToppings.isNotEmpty) {
       for (final topName in originalProduct.allowedToppings) {
-        final match = _products.firstWhere(
-          (p) => p.name.toLowerCase() == topName.toLowerCase(),
-          orElse: () => defaultFnbToppings.firstWhere(
-            (p) => p.name.toLowerCase() == topName.toLowerCase(),
-            orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
-          ),
-        );
+        // Tên / mã / khóa món topping; tên cũ không còn trong thực đơn vẫn hiện (giá mặc định)
+        final match = ToppingRef.find(topName, _products, defaults: defaultFnbToppings) ??
+            ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true);
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) availableToppingNames.add(match.name);
       }

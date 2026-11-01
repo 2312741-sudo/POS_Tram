@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/domain/topping_ref.dart';
 import '../../core/domain/item_options.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -336,15 +337,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
       });
     } else if (matchedCategory != null && matchedCategory.allowedToppingIds.isNotEmpty) {
       for (final tId in matchedCategory.allowedToppingIds) {
-        final match = _products.firstWhere(
-          (p) => p.id.toString() == tId ||
-              (p.code.isNotEmpty && p.code.toLowerCase() == tId.toLowerCase()) ||
-              p.name.toLowerCase() == tId.toLowerCase(),
-          orElse: () => defaultFnbToppings.firstWhere(
-            (p) => p.id.toString() == tId || p.name.toLowerCase() == tId.toLowerCase(),
-            orElse: () => ProductModel(name: tId, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
-          ),
-        );
+        // Web lưu khóa RTDB của món topping (products/{key}) → tra theo mọi định danh; không thấy thì bỏ qua,
+        // KHÔNG hiện mã thô với giá 5.000đ
+        final match = ToppingRef.find(tId, _products, defaults: defaultFnbToppings);
+        if (match == null) continue;
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) {
           availableToppingNames.add(match.name);
@@ -352,14 +348,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       }
     } else if (product.allowedToppings.isNotEmpty) {
       for (final topName in product.allowedToppings) {
-        final match = _products.firstWhere(
-          (p) => p.name.toLowerCase() == topName.toLowerCase() ||
-              (p.code.isNotEmpty && p.code.toLowerCase() == topName.toLowerCase()),
-          orElse: () => defaultFnbToppings.firstWhere(
-            (p) => p.name.toLowerCase() == topName.toLowerCase(),
-            orElse: () => ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true),
-          ),
-        );
+        // Tên / mã / khóa món topping; tên cũ không còn trong thực đơn vẫn hiện (giá mặc định)
+        final match = ToppingRef.find(topName, _products, defaults: defaultFnbToppings) ??
+            ProductModel(name: topName, price: 5000, unit: 'phần', category: 'Topping', isTopping: true);
         toppingItemMap[match.name] = match;
         if (!availableToppingNames.contains(match.name)) {
           availableToppingNames.add(match.name);

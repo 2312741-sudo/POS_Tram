@@ -51,3 +51,20 @@ describe("nhập từ cấu hình cũ", () => {
     expect(legacyHash("Thạch dừa|Kem Cheese")).not.toBe(legacyHash("Kem Cheese|Thạch dừa"));
   });
 });
+
+describe("topping tham chiếu bằng KHÓA RTDB của món (web lưu khi tích topping cho nhóm món)", () => {
+  it("tra theo khóa: đúng tên + giá (giá dạng chữ cũng đọc được); khóa không còn món → bỏ, không tạo topping mang tên mã", () => {
+    const u = plan({
+      products: {
+        ...products,
+        "-NgrabUp5k": { name: "Tăng giá Grab 5K", price: "5000", category: "Topping", isTopping: true },
+        "-NgrabUp10k": { name: "Tăng giá Grab 10K", price: 10000, category: "Topping", isTopping: true },
+      },
+      categories: { ...categories, "Món Grab": { name: "Món Grab", allowedToppingIds: ["-NgrabUp5k", "-NgrabUp10k", "-NdaXoaMon123"] } },
+    }).updates as Record<string, { items: { name: string; price: number }[] }>;
+    expect(u["topping_groups/legacy_cat_Món_Grab"].items.map((e) => [e.name, e.price])).toEqual([
+      ["Tăng giá Grab 5K", 5000],
+      ["Tăng giá Grab 10K", 10000],
+    ]);
+  });
+});
