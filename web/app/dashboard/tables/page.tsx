@@ -1865,6 +1865,7 @@ function TablesPageContent() {
                           paddingTop: "10px",
                           borderTop: "1px solid var(--border-light)",
                           display: "flex",
+                          flexWrap: "wrap",
                           alignItems: "center",
                           justifyContent: "flex-end",
                           gap: "8px",
@@ -1873,7 +1874,7 @@ function TablesPageContent() {
                         {canOrderOnWeb && (
                           <button
                             className="btn-primary"
-                            style={{ padding: "6px 12px", fontSize: "12px" }}
+                            style={{ padding: "7px 12px", fontSize: "13px", flex: "1 1 100%", justifyContent: "center", whiteSpace: "nowrap" }}
                             onClick={() => openOrderDialog(t)}
                           >
                             <ChefHat size={14} />
