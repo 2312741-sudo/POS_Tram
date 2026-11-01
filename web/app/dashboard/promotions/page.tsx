@@ -1523,6 +1523,15 @@ function RewardEditor({ form, setForm, products, categories, title }: {
         />
       </div>
       <FormField label="Số lượng món được tặng/giảm *" value={form.rewardQty} onChange={(v) => setForm(prev => ({ ...prev, rewardQty: v }))} type="number" placeholder="VD: 1" />
+      {form.campaignType === "ORDERVALUEITEMBENEFIT" && (
+        <FormField
+          label="Tặng kèm topping (số topping miễn phí mỗi món tặng)"
+          value={form.rewardToppingQty}
+          onChange={(v) => setForm(prev => ({ ...prev, rewardToppingQty: v }))}
+          type="number"
+          placeholder="VD: 1 — 0 = topping thêm tính tiền"
+        />
+      )}
       <div>
         <label style={labelStyle}>Hình thức ưu đãi *</label>
         <select value={form.rewardBenefit} onChange={(e) => setForm(prev => ({ ...prev, rewardBenefit: e.target.value as RewardBenefit }))} style={inputStyle}>

@@ -81,7 +81,8 @@ String describeCampaignBenefit(CampaignModel c) {
   final from = t.threshold > 0 ? ' cho đơn từ ${money(t.threshold)}' : '';
   if (type == 'ORDERVALUEITEMBENEFIT') {
     final qty = t.maxRewardQty > 0 ? t.maxRewardQty : 1;
-    return '${benefit(t.benefitMode, t.value)} $qty món$from';
+    final tops = t.rewardToppingQty > 0 ? ' kèm ${t.rewardToppingQty} topping' : '';
+    return '${benefit(t.benefitMode, t.value)} $qty món$tops$from';
   }
   final cap = t.maxDiscountMoney > 0 ? ', tối đa ${money(t.maxDiscountMoney)}' : '';
   return '${benefit(t.benefitMode, t.value)} hóa đơn$cap$from';

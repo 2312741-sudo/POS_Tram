@@ -145,6 +145,8 @@ class CampaignTier {
   final int value; // % (basis points 0-10000) or VND or fixed price
   final int maxDiscountMoney; // Trần giảm giá (0 = no cap)
   final int maxRewardQty; // Số lượng món thưởng tối đa
+  /// Số topping được TẶNG KÈM trên mỗi phần món tặng (dòng tặng riêng). 0 = topping thêm vẫn tính tiền.
+  final int rewardToppingQty;
   final List<String> rewardItemIds; // Món thưởng (for P-05, P-06)
   final List<String> rewardGroupIds; // Nhóm món thưởng (mọi món thuộc nhóm đều là món thưởng)
   final int sortOrder; // Thứ tự trong danh sách tiers
@@ -160,6 +162,7 @@ class CampaignTier {
     required this.rewardItemIds,
     this.rewardGroupIds = const [],
     required this.sortOrder,
+    this.rewardToppingQty = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -176,6 +179,7 @@ class CampaignTier {
       'maxDiscountMoney': maxDiscountMoney,
       'maxBenefitValue': maxDiscountMoney,
       'maxRewardQty': maxRewardQty,
+      if (rewardToppingQty > 0) 'rewardToppingQty': rewardToppingQty,
       'rewardItemIds': rewardItemIds,
       'rewardGroupIds': rewardGroupIds,
       'sortOrder': sortOrder,
@@ -220,6 +224,7 @@ class CampaignTier {
       value: (rawVal as num).toInt(),
       maxDiscountMoney: (rawMaxDiscount as num).toInt(),
       maxRewardQty: (map['maxRewardQty'] as num?)?.toInt() ?? 0,
+      rewardToppingQty: (map['rewardToppingQty'] as num?)?.toInt() ?? 0,
       rewardItemIds: List<String>.from(map['rewardItemIds'] ?? []),
       rewardGroupIds: List<String>.from(map['rewardGroupIds'] ?? []),
       sortOrder: (map['sortOrder'] as num?)?.toInt() ?? (map['tierIndex'] as num?)?.toInt() ?? 0,
@@ -237,6 +242,7 @@ class CampaignTier {
     List<String>? rewardItemIds,
     List<String>? rewardGroupIds,
     int? sortOrder,
+    int? rewardToppingQty,
   }) {
     return CampaignTier(
       tierId: tierId ?? this.tierId,
@@ -249,6 +255,7 @@ class CampaignTier {
       rewardItemIds: rewardItemIds ?? this.rewardItemIds,
       rewardGroupIds: rewardGroupIds ?? this.rewardGroupIds,
       sortOrder: sortOrder ?? this.sortOrder,
+      rewardToppingQty: rewardToppingQty ?? this.rewardToppingQty,
     );
   }
 }

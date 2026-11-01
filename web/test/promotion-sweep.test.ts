@@ -284,3 +284,21 @@ describe("Tặng món theo giá trị đơn: món tặng là dòng RIÊNG (rewar
     expect(linesFromOrder([{ productId: 8, name: "Chanh", price: 30000, quantity: 1, rewardCampaignId: "CAM_CHANH" }])[0].rewardCampaignId).toBe("CAM_CHANH");
   });
 });
+
+describe("Tặng món theo giá trị đơn: tặng kèm topping trên dòng tặng", () => {
+  const raw = (n: number) => ({
+    campaignId: "CAM_CHANH", programCode: "KM/CHANH", name: "Tặng chanh kèm topping", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true,
+    branchIds: ["TRAM01"], hasCodes: false, stackingMode: "ENABLED", priority: 0, createdAt: 1, schedule: {},
+    tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardToppingQty: n, rewardItemIds: ["8"] }],
+  });
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  const lines = (tops: number, topPrice: number): PricingLine[] => [
+    line("1", "5", 3, 45000, "TRÀ"),
+    { ...line("2", "8", 1, 30000 + topPrice, "TRÀ"), rewardCampaignId: "CAM_CHANH", toppingUnitPrice: topPrice, toppingCount: tops },
+  ];
+  it("kèm 1 topping: ly + 1 topping miễn phí; topping thứ 2 tính tiền; 0 topping tặng thì topping tính tiền", () => {
+    expect(quoteCampaign(parseCampaign("C", raw(1) as never), lines(1, 5000), ctx).totalPromotionDiscount).toBe(35000);
+    expect(quoteCampaign(parseCampaign("C", raw(1) as never), lines(2, 10000), ctx).totalPromotionDiscount).toBe(35000);
+    expect(quoteCampaign(parseCampaign("C", raw(0) as never), lines(1, 5000), ctx).totalPromotionDiscount).toBe(30000);
+  });
+});

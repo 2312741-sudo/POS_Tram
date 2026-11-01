@@ -1034,6 +1034,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     });
     widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
     await _fb.saveTable(widget.table).catchError((_) {});
+    // Chương trình tặng kèm topping: mở ngay bảng chọn size / đường / đá / topping cho dòng tặng
+    final freeToppings = c.tiers.fold<int>(0, (m, t) => t.rewardToppingQty > m ? t.rewardToppingQty : m);
+    if (freeToppings > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Món tặng được kèm $freeToppings topping miễn phí — chọn topping cho ly tặng (thêm nữa sẽ tính tiền).'),
+      ));
+      await _showEditItemNoteAndToppingDialog(_cart.length - 1);
+    }
     return true;
   }
 

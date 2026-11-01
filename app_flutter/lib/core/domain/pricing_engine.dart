@@ -58,6 +58,10 @@ class PricingLineItem {
   /// Dòng MÓN TẶNG thêm riêng cho chương trình này (không tính vào mốc giá trị đơn; được ưu tiên nhận ưu đãi)
   final String? rewardCampaignId;
 
+  /// Tiền topping của MỘT phần (đã gồm trong unitPrice) và số topping — để tặng kèm đúng số topping cho món tặng
+  final int toppingUnitPrice;
+  final int toppingCount;
+
   PricingLineItem({
     required this.lineId,
     required this.itemId,
@@ -74,6 +78,8 @@ class PricingLineItem {
     this.discountUnitAmount = 0,
     this.orderedAtMs,
     this.rewardCampaignId,
+    this.toppingUnitPrice = 0,
+    this.toppingCount = 0,
   });
 
   /// Dựng từ dòng món của giỏ hàng (giữ cấu hình giảm giá theo phần)
@@ -98,6 +104,8 @@ class PricingLineItem {
         discountUnitAmount: item.discountUnitAmount,
         orderedAtMs: item.orderedAt,
         rewardCampaignId: item.rewardCampaignId.isEmpty ? null : item.rewardCampaignId,
+        toppingUnitPrice: item.toppingPrice,
+        toppingCount: item.selectedToppings.where((t) => t.trim().isNotEmpty).length,
       );
 
   /// Bản sao bỏ giờ gọi món (để so sánh: nếu không xét giờ gọi thì chương trình có được áp dụng không)
@@ -116,6 +124,8 @@ class PricingLineItem {
         discountPercent: discountPercent,
         discountUnitAmount: discountUnitAmount,
         rewardCampaignId: rewardCampaignId,
+        toppingUnitPrice: toppingUnitPrice,
+        toppingCount: toppingCount,
       );
 
   /// Dòng này gọi trong thời gian áp dụng của [c]? (món chưa có giờ gọi = món mới → luôn được tính)
@@ -301,12 +311,20 @@ PriceQuoteModel calculatePrice({
 
   /// Giảm [units] phần của dòng [line] theo cách tính lợi ích; tôn trọng giảm giá đã có trên dòng
   /// (không vượt quá giá trị còn lại tương ứng với số phần). Trả về số tiền đã giảm.
-  int rewardUnitsOnLine(PricingLineItem line, int units, String mode, int value, String campaignId, String tierId) {
+  int rewardUnitsOnLine(PricingLineItem line, int units, String mode, int value, String campaignId, String tierId, {int? freeToppings}) {
     final avail = line.quantity - (rewardedUnits[line.lineId] ?? 0);
     if (units <= 0 || avail <= 0) return 0;
     final k = min(units, avail);
     final remaining = max(0, lineFinalPrices[line.lineId] ?? 0);
-    final perUnit = _unitBenefit(mode, value, line.unitPrice);
+    // Dòng món tặng có topping: ưu đãi tính trên phần món (giá + size), cộng thêm tối đa [freeToppings] topping
+    // được tặng kèm (theo giá trung bình một topping của dòng); topping vượt số tặng vẫn tính tiền.
+    final perUnit = freeToppings == null
+        ? _unitBenefit(mode, value, line.unitPrice)
+        : (() {
+            final topUnit = line.toppingCount > 0 ? max(0, min(line.toppingUnitPrice, line.unitPrice)) : 0;
+            final freeTop = line.toppingCount > 0 ? topUnit * min(freeToppings, line.toppingCount) ~/ line.toppingCount : 0;
+            return min(line.unitPrice, _unitBenefit(mode, value, line.unitPrice - topUnit) + freeTop);
+          })();
     final amount = min(perUnit * k, remaining * k ~/ avail);
     rewardedUnits[line.lineId] = (rewardedUnits[line.lineId] ?? 0) + k;
     if (amount <= 0) return 0;
@@ -337,6 +355,7 @@ PriceQuoteModel calculatePrice({
     required String tierId,
     bool Function(PricingLineItem)? isBoth,
     int? maxFromBoth,
+    int? Function(PricingLineItem)? freeToppingsOf,
   }) {
     final sorted = List<PricingLineItem>.from(candidates)
       ..sort((a, b) {
@@ -354,7 +373,7 @@ PriceQuoteModel calculatePrice({
       var take = min(avail, left);
       if (both) take = min(take, bothLeft);
       if (take <= 0) continue;
-      total += rewardUnitsOnLine(l, take, mode, value, campaignId, tierId);
+      total += rewardUnitsOnLine(l, take, mode, value, campaignId, tierId, freeToppings: freeToppingsOf?.call(l));
       left -= take;
       if (both) bothLeft -= take;
     }
@@ -509,6 +528,8 @@ PriceQuoteModel calculatePrice({
         value: tier.value,
         campaignId: campaign.campaignId,
         tierId: tier.tierId,
+        // Dòng tặng riêng: chỉ tặng kèm đúng số topping cấu hình (0 = topping thêm tính tiền)
+        freeToppingsOf: (l) => isOwnReward(l) ? tier.rewardToppingQty : null,
       );
       if (d > 0) {
         totalDiscount += d;

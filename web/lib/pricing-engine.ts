@@ -24,6 +24,8 @@ export interface CampaignTier {
   /** Nhóm món thưởng (mọi món thuộc nhóm đều là món thưởng) */
   rewardGroupIds?: string[];
   sortOrder: number;
+  /** Số topping TẶNG KÈM trên mỗi phần món tặng (dòng tặng riêng). 0 = topping thêm vẫn tính tiền */
+  rewardToppingQty?: number;
 }
 
 export interface CampaignBuyCondition {
@@ -123,6 +125,7 @@ export function parseTier(raw: Record<string, unknown>): CampaignTier {
     rewardItemIds: strList(raw.rewardItemIds),
     rewardGroupIds: strList(raw.rewardGroupIds),
     sortOrder: toInt(raw.sortOrder ?? raw.tierIndex ?? 0),
+    rewardToppingQty: Math.max(0, toInt(raw.rewardToppingQty ?? 0)),
   };
 }
 
@@ -268,6 +271,9 @@ export interface PricingLine {
   orderedAtMs?: number | null;
   /** Dòng MÓN TẶNG được thêm riêng cho chương trình này (không tính vào mốc giá trị đơn; được ưu tiên nhận ưu đãi) */
   rewardCampaignId?: string | null;
+  /** Tiền topping của MỘT phần (đã gồm trong unitPrice) và số topping — để tặng kèm đúng số topping cho món tặng */
+  toppingUnitPrice?: number;
+  toppingCount?: number;
 }
 
 /** Dòng gọi trong thời gian áp dụng của [c]? (món chưa có giờ gọi = món mới → luôn được tính). Khớp orderedWithin (Dart). */
@@ -456,12 +462,22 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     return lineMatchesAnyTarget(l, c.includedItemIds) || groupIn(l.groupId, c.includedGroupIds);
   };
 
-  const rewardUnitsOnLine = (line: PricingLine, units: number, mode: string, value: number, campaignId: string, tierId: string): number => {
+  const rewardUnitsOnLine = (line: PricingLine, units: number, mode: string, value: number, campaignId: string, tierId: string, freeToppings?: number | null): number => {
     const avail = line.quantity - (rewardedUnits[line.lineId] ?? 0);
     if (units <= 0 || avail <= 0) return 0;
     const k = Math.min(units, avail);
     const remaining = Math.max(0, lineFinal[line.lineId] ?? 0);
-    const perUnit = unitBenefit(mode, value, line.unitPrice);
+    // Dòng món tặng có topping: ưu đãi trên phần món (giá + size) + tối đa [freeToppings] topping tặng kèm
+    // (theo giá trung bình một topping của dòng); topping vượt số tặng vẫn tính tiền. Khớp Dart.
+    let perUnit: number;
+    if (freeToppings == null) {
+      perUnit = unitBenefit(mode, value, line.unitPrice);
+    } else {
+      const count = line.toppingCount ?? 0;
+      const topUnit = count > 0 ? Math.max(0, Math.min(line.toppingUnitPrice ?? 0, line.unitPrice)) : 0;
+      const freeTop = count > 0 ? Math.floor((topUnit * Math.min(freeToppings, count)) / count) : 0;
+      perUnit = Math.min(line.unitPrice, unitBenefit(mode, value, line.unitPrice - topUnit) + freeTop);
+    }
     const amount = Math.min(perUnit * k, Math.floor((remaining * k) / avail));
     rewardedUnits[line.lineId] = (rewardedUnits[line.lineId] ?? 0) + k;
     if (amount <= 0) return 0;
@@ -489,6 +505,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     tierId: string;
     isBoth?: (l: PricingLine) => boolean;
     maxFromBoth?: number;
+    freeToppingsOf?: (l: PricingLine) => number | null;
   }): number => {
     const sorted = [...a.candidates].sort((x, y) => {
       const c = x.unitPrice - y.unitPrice;
@@ -506,7 +523,7 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       let take = Math.min(avail, left);
       if (both) take = Math.min(take, bothLeft);
       if (take <= 0) continue;
-      total += rewardUnitsOnLine(l, take, a.mode, a.value, a.campaignId, a.tierId);
+      total += rewardUnitsOnLine(l, take, a.mode, a.value, a.campaignId, a.tierId, a.freeToppingsOf?.(l));
       left -= take;
       if (both) bothLeft -= take;
     }
@@ -644,7 +661,11 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", "Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng");
         continue;
       }
-      const d = distributeReward({ candidates, units, mode: tier.benefitMode, value: tier.value, campaignId: campaign.campaignId, tierId: tier.tierId });
+      const d = distributeReward({
+        candidates, units, mode: tier.benefitMode, value: tier.value, campaignId: campaign.campaignId, tierId: tier.tierId,
+        // Dòng tặng riêng: chỉ tặng kèm đúng số topping cấu hình (0 = topping thêm tính tiền)
+        freeToppingsOf: (l) => (isOwnReward(l) ? tier.rewardToppingQty ?? 0 : null),
+      });
       if (d > 0) {
         totalDiscount += d;
         markApplied(campaign.campaignId);
@@ -794,6 +815,8 @@ export function linesFromOrder(
     manualDiscount: lineDiscountTotal(it),
     orderedAtMs: toMs(it.orderedAt),
     rewardCampaignId: it.rewardCampaignId != null && String(it.rewardCampaignId) ? String(it.rewardCampaignId) : null,
+    toppingUnitPrice: Math.max(0, Number(it.toppingPrice) || 0),
+    toppingCount: Array.isArray(it.selectedToppings) ? it.selectedToppings.filter((t) => String(t ?? "").trim()).length : 0,
   }));
 }
 

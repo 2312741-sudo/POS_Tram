@@ -54,4 +54,36 @@ void main() {
     expect(OrderItemModel.fromMap(m).rewardCampaignId, 'CAM_CHANH');
     expect(chanh().toMap().containsKey('rewardCampaignId'), isFalse);
   });
+
+  group('tặng kèm topping', () {
+    CampaignModel withTops(int n, {String mode = 'FREEITEM'}) => CampaignModel.fromMap({
+          'campaignId': 'CAM_CHANH', 'programCode': 'KM/CHANH', 'name': 'Tặng 1 chanh kèm topping',
+          'campaignType': 'ORDER_VALUE_ITEM_BENEFIT', 'active': true, 'branchIds': ['TRAM01'], 'hasCodes': false,
+          'stackingMode': 'ENABLED', 'priority': 0, 'createdAt': 1,
+          'tiers': [
+            {'tierId': 'T1', 'conditionBasis': 'TOTALAMOUNT', 'threshold': 100000, 'benefitMode': mode, 'value': 0,
+             'maxRewardQty': 1, 'rewardToppingQty': n, 'rewardItemIds': ['8'], 'sortOrder': 1},
+          ],
+        });
+    OrderItemModel giftWith(List<String> tops, int toppingPrice) => OrderItemModel(
+          productId: 8, name: 'Trà Olong - Chanh tươi', price: 30000, quantity: 1,
+          selectedToppings: tops, toppingPrice: toppingPrice, rewardCampaignId: 'CAM_CHANH');
+    int q(CampaignModel c, OrderItemModel gift) => CartCampaignPricing.quoteForApply(
+          c, cart: [xoai(3), gift], products: products, branchId: 'TRAM01', isApplied: false, nowMs: 1000,
+        ).totalPromotionDiscount;
+
+    test('tặng 1 chanh kèm 1 topping: ly + 1 topping miễn phí hết', () {
+      expect(q(withTops(1), giftWith(['Trân châu'], 5000)), 35000);
+    });
+    test('chọn 2 topping mà chỉ tặng 1 → topping thứ 2 tính tiền', () {
+      expect(q(withTops(1), giftWith(['Trân châu', 'Thạch'], 10000)), 35000);
+    });
+    test('không cấu hình tặng topping (0) → topping thêm trên ly tặng tính tiền', () {
+      expect(q(withTops(0), giftWith(['Trân châu'], 5000)), 30000);
+    });
+    test('mô tả chương trình ghi "kèm 1 topping"', () {
+      expect(withTops(1).tiers.first.rewardToppingQty, 1);
+      expect(withTops(1).tiers.first.toMap()['rewardToppingQty'], 1);
+    });
+  });
 }

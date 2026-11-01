@@ -130,3 +130,16 @@ describe("normalizeStackingMode", () => {
     expect(normalizeStackingMode("disabled")).toBe("DISABLED");
   });
 });
+
+describe("Tặng kèm topping (rewardToppingQty)", () => {
+  it("form → tier → form giữ số topping tặng kèm; 0 thì không ghi trường", async () => {
+    const m = await import("../lib/campaign-form");
+    const form = { ...m.emptyCampaignForm(), campaignType: "ORDERVALUEITEMBENEFIT" as const, threshold: "100000", rewardItemIds: ["8"], rewardQty: "1", rewardToppingQty: "1" };
+    const { tiers } = m.buildBenefitFields(form);
+    expect(tiers[0].rewardToppingQty).toBe(1);
+    const back = m.campaignToForm({ campaignType: "ORDERVALUEITEMBENEFIT", tiers } as never);
+    expect(back.rewardToppingQty).toBe("1");
+    const none = m.buildBenefitFields({ ...form, rewardToppingQty: "0" }).tiers[0];
+    expect("rewardToppingQty" in none).toBe(false);
+  });
+});
