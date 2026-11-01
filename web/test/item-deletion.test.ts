@@ -16,6 +16,7 @@ import {
   type DeletedItemEntry,
   billCancelledItems,
   billRemovedItems,
+  isUnpaidCancelledBill,
 } from "../lib/item-deletion";
 import { applyLineDiscount, setLineQuantity, type RawOrderLine } from "../lib/order-math";
 import { buildMergePayloads, buildTransferPayloads, CLEARED_TABLE_FIELDS } from "../lib/table-ops";
@@ -193,8 +194,9 @@ describe("báo cáo xóa món", () => {
     );
     expect(eod.tab1_tongHop.deletedItemsCount).toBe(3);
     expect(eod.tab1_tongHop.deletedItemsAmount).toBe(90000);
-    expect(eod.tab1_tongHop.cancelledBillsCount).toBe(1);
-    expect(eod.tab1_tongHop.cancelledBillsAmount).toBe(60000);
+    // Đơn hủy trên bàn khi chưa thanh toán (thành tiền 0đ) không tính là đơn hủy
+    expect(eod.tab1_tongHop.cancelledBillsCount).toBe(0);
+    expect(eod.tab1_tongHop.cancelledBillsAmount).toBe(0);
     expect(eod.tab1_tongHop.netRevenue).toBe(100000);
   });
 });
@@ -234,11 +236,17 @@ describe("Hủy đơn chưa thanh toán = hủy từng món trong đơn", () => 
     ]);
     expect(e.reduce((s, x) => s + x.quantity, 0)).toBe(5);
   });
-  it("cộng với món đã xóa trước khi hủy; đơn đã thanh toán không tính thêm", () => {
+  it("cộng với món đã xóa trước khi hủy; đơn đã thanh toán / hủy sau thanh toán không tính thêm món", () => {
     const r = deletionReportFromBills([cancelled, { ...cancelled, id: "B2", status: "PAID" }]);
     expect(r.quantity).toBe(1 + 5 + 1);
     expect(r.amount).toBe(25000 + 130000 + 25000);
     expect(billRemovedItems({ ...cancelled, status: "PAID" })).toHaveLength(1);
+    // Hủy hóa đơn ĐÃ thanh toán (giữ thành tiền) là đơn hủy, không đổ món vào số món hủy
+    expect(isUnpaidCancelledBill(cancelled)).toBe(true);
+    const paidCancel = { ...cancelled, id: "HD-9", finalAmount: 130000 };
+    expect(isUnpaidCancelledBill(paidCancel)).toBe(false);
+    expect(billRemovedItems(paidCancel)).toHaveLength(1);
+    expect(isUnpaidCancelledBill({ ...paidCancel, id: "BILL_CANCELLED_1" })).toBe(true);
   });
   it("đọc món từ itemsJson; không có lý do hủy → 'Hủy đơn'", () => {
     const e = billCancelledItems({ status: "CANCELLED", itemsJson: JSON.stringify([{ name: "X", price: 10000, quantity: 1 }]) });

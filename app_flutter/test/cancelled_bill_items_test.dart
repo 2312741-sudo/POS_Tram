@@ -38,4 +38,17 @@ void main() {
     expect(s.count, 1 + 5 + 1);
     expect(s.amount, 25000 + 130000 + 25000);
   });
+
+  test('hủy đơn trên bàn khi chưa thanh toán: chỉ là món hủy; hủy hóa đơn đã thanh toán mới là đơn hủy', () {
+    final unpaid = BillModel.fromMap(bill('1', 'CANCELLED'), 'BILL_CANCELLED_1');
+    final paidCancel = BillModel.fromMap({...bill('2', 'CANCELLED'), 'finalAmount': 130000}, 'HD-2');
+    expect(unpaid.isUnpaidCancel, isTrue);
+    expect(paidCancel.isPaidCancel, isTrue);
+    expect(paidCancel.removedItemsCount, 1); // món của hóa đơn đã thanh toán không đổ vào số món hủy
+    final o = ReportCalculator.calculateOverviewReport([unpaid, paidCancel]);
+    expect(o.cancelledBillsCount, 1);
+    final c = ReportCalculator.calculateCancellationReport([unpaid, paidCancel]);
+    expect(c.bills.map((b) => b.billId), ['HD-2']);
+    expect(ReportCalculator.calculateDeletedItems([unpaid, paidCancel]).count, 1 + 5 + 1);
+  });
 }

@@ -345,7 +345,15 @@ class BillModel {
 
   /// Món bị xóa + (đơn HỦY) mọi món còn trong đơn — dùng cho báo cáo "xóa/hủy món".
   /// deletedItemsCount/Amount bên dưới giữ nguyên nghĩa "món đã lưu bị xóa" (ghi lên hóa đơn).
-  List<DeletedItemEntry> get removedItems => status == 'CANCELLED'
+  /// Đơn hủy KHI CHƯA THANH TOÁN (xóa / hủy đơn trên bàn): mã BILL_CANCELLED_… hoặc thành tiền 0đ.
+  /// Chỉ tính vào SỐ MÓN HỦY, không tính là "đơn hủy" (hủy hóa đơn ĐÃ thanh toán mới là đơn hủy).
+  /// Khớp isUnpaidCancelledBill (web).
+  bool get isUnpaidCancel => status == 'CANCELLED' && (id.startsWith('BILL_CANCELLED_') || finalAmount <= 0);
+
+  /// Hủy hóa đơn ĐÃ thanh toán — dòng "đơn hủy" của báo cáo
+  bool get isPaidCancel => status == 'CANCELLED' && !isUnpaidCancel;
+
+  List<DeletedItemEntry> get removedItems => isUnpaidCancel
       ? [
           ...deletedItems,
           ...DeletedItemsLogic.fromCancelledBill(

@@ -5,11 +5,11 @@ import 'package:tram_flutter/data/models/bill_model.dart';
 
 int local(int m, int d, int h, int mi) => DateTime.utc(2026, m, d, h - 7, mi).millisecondsSinceEpoch;
 
-BillModel bill(String id, {required int createdAt, int? closedAt, int? cancelledAt, int subTotal = 0, String status = 'CANCELLED'}) =>
+BillModel bill(String id, {required int createdAt, int? closedAt, int? cancelledAt, int subTotal = 0, int finalAmount = 0, String status = 'CANCELLED'}) =>
     BillModel(
       id: id, billCode: id, tableName: 'Bàn 1', zone: 'A', createdAt: createdAt, closedAt: closedAt,
       cancelledAt: cancelledAt, status: status, staffUsername: 'u', staffFullName: 'U', items: const [],
-      subTotal: subTotal, finalAmount: 0,
+      subTotal: subTotal, finalAmount: finalAmount,
     );
 
 void main() {
@@ -17,13 +17,14 @@ void main() {
     final bills = [
       bill('HD-261011-180352-UBZF', createdAt: local(10, 11, 18, 3), closedAt: local(10, 12, 1, 4)),
       bill('HD-261009-015221', createdAt: local(10, 9, 1, 52), closedAt: local(10, 12, 1, 5)),
-      bill('HD-261012-0003', createdAt: local(10, 9, 14, 24), closedAt: local(10, 12, 1, 4), cancelledAt: local(10, 12, 1, 5), subTotal: 90000),
+      bill('HD-261012-0003', createdAt: local(10, 9, 14, 24), closedAt: local(10, 12, 1, 4), cancelledAt: local(10, 12, 1, 5), subTotal: 90000, finalAmount: 90000),
     ];
     for (final b in bills) {
       expect(ReportDateUtils.formatYmd(ReportDateUtils.billDateTime(b)), '2026-10-12');
     }
+    // 2 đơn hủy trên bàn khi chưa thanh toán (thành tiền 0đ) chỉ tính vào số món hủy, không phải đơn hủy
     final r = ReportCalculator.calculateCancellationReport(bills);
-    expect(r.cancelledBillsCount, 3);
+    expect(r.cancelledBillsCount, 1);
     expect(r.totalLossValue, 90000);
   });
 

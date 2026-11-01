@@ -273,7 +273,8 @@ class ReportCalculator {
     final bills = deduplicateBills(rawBills);
     final totalBillsCount = bills.length;
     final paidBills = bills.where((b) => b.status == 'PAID').toList();
-    final cancelledBills = bills.where((b) => b.status == 'CANCELLED').toList();
+    // Xóa / hủy đơn trên bàn khi CHƯA thanh toán chỉ tính vào số món hủy, không phải đơn hủy
+    final cancelledBills = bills.where((b) => b.isPaidCancel).toList();
     final refundedBills = bills.where((b) => b.status == 'REFUNDED').toList();
 
     final paidBillsCount = paidBills.length;
@@ -795,7 +796,8 @@ class ReportCalculator {
   /// BÁO CÁO 8: BÁO CÁO HỦY MÓN & HỦY ĐƠN HÀNG (CANCELLATION REPORT)
   static CancellationReportResult calculateCancellationReport(List<BillModel> rawBills) {
     final bills = deduplicateBills(rawBills);
-    final cancelledBills = bills.where((b) => b.status == 'CANCELLED').toList();
+    // Chỉ hóa đơn ĐÃ thanh toán rồi bị hủy; hủy đơn trên bàn khi chưa thanh toán tính vào số món hủy
+    final cancelledBills = bills.where((b) => b.isPaidCancel).toList();
 
     final List<CancelledBillItem> items = [];
     for (final b in cancelledBills) {

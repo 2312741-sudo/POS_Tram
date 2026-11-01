@@ -1613,7 +1613,7 @@
     "overview": {
       "totalBillsCount": 20,
       "paidBillsCount": 17,
-      "cancelledBillsCount": 2,
+      "cancelledBillsCount": 0,
       "refundedBillsCount": 1,
       "totalGuests": 39,
       "grossRevenue": 1167000,
@@ -1627,7 +1627,7 @@
       "refundAmount": 47000,
       "netRevenueWithoutRefund": 1157560,
       "avgRevenuePerPaidBill": 70856,
-      "cancelledTotalValue": 120000,
+      "cancelledTotalValue": 0,
       "totalCostPrice": 426000,
       "grossProfit": 696000,
       "grossProfitMarginPercent": 62.03
@@ -2138,34 +2138,10 @@
       }
     },
     "cancellationReport": {
-      "cancelledBillsCount": 2,
-      "totalLossValue": 120000,
-      "bills": [
-        {
-          "billId": "BILL_261004_003",
-          "billCode": "HD-261004-091000",
-          "tableName": "Bàn 03",
-          "staffFullName": "Nguyễn Thu Ngân",
-          "cancelledAt": 1791080100000,
-          "reason": "HỦY ĐƠN: Khách có việc gấp về sớm chưa kịp pha chế",
-          "items": [
-            "Bạc xỉu x2"
-          ],
-          "subTotal": 50000
-        },
-        {
-          "billId": "BILL_261004_015",
-          "billCode": "HD-261004-192000",
-          "tableName": "Mang về 02",
-          "staffFullName": "Trần Thu Ngân",
-          "cancelledAt": 1791116700000,
-          "reason": "HỦY ĐƠN: Khách hủy đơn mang về vì bận việc đột xuất",
-          "items": [
-            "Khô bò lá chanh x2"
-          ],
-          "subTotal": 70000
-        }
-      ]
+      "_note": "2 đơn hủy của bộ mẫu là hủy trên bàn khi CHƯA thanh toán (thành tiền 0đ) nên chỉ tính vào số món hủy (tab1.deletedItemsCount), không phải đơn hủy",
+      "cancelledBillsCount": 0,
+      "totalLossValue": 0,
+      "bills": []
     },
     "cashShiftsReport": [
       {
@@ -2230,8 +2206,8 @@
         "totalGuests": 39,
         "deletedItemsCount": 7,
         "deletedItemsAmount": 196000,
-        "cancelledBillsCount": 2,
-        "cancelledBillsAmount": 120000
+        "cancelledBillsCount": 0,
+        "cancelledBillsAmount": 0
       },
       "tab2_thuChi": {
         "cashSales": 588960,

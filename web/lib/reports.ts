@@ -7,7 +7,7 @@ import { businessDateOf, businessDayStartFor } from "./business-day";
  * Pure TypeScript functions, độc lập hoàn toàn với React, có thể kiểm thử 100%.
  */
 import { lineGross as rawLineGross, type RawOrderLine } from "./order-math";
-import { billDeletedItems, deletionReportFromBills } from "./item-deletion";
+import { billDeletedItems, deletionReportFromBills, isUnpaidCancelledBill } from "./item-deletion";
 
 export interface OrderItem {
   id?: number | string;
@@ -788,6 +788,8 @@ export function calculateOverviewReport(bills: HistoryOrder[], refundAmountParam
       }
       totalCostPrice += bCogs;
     } else if (status === "CANCELLED") {
+      // Xóa / hủy đơn trên bàn khi CHƯA thanh toán: chỉ tính vào số món hủy, không phải đơn hủy
+      if (isUnpaidCancelledBill(b as never)) continue;
       cancelledBillsCount++;
       cancelledTotalValue += cancelledBillValue(b);
     } else if (status === "REFUNDED") {
@@ -1402,7 +1404,8 @@ export function calculatePromotionsReport(
  */
 export function calculateCancellationReport(bills: HistoryOrder[]): CancellationReportResult {
   const deduped = deduplicateBills(bills);
-  const cancelledBills = deduped.filter((b) => (b.status || "").toUpperCase() === "CANCELLED");
+  // Chỉ hóa đơn ĐÃ thanh toán rồi bị hủy; hủy đơn trên bàn khi chưa thanh toán tính vào số món hủy
+  const cancelledBills = deduped.filter((b) => (b.status || "").toUpperCase() === "CANCELLED" && !isUnpaidCancelledBill(b as never));
 
   let totalLossValue = 0;
   const list: CancelledBillItem[] = [];

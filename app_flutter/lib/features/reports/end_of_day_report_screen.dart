@@ -257,7 +257,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   }
 
   List<BillModel> get _paidBills => _rangeBills.where((b) => b.status == 'PAID').toList();
-  List<BillModel> get _cancelledBills => _rangeBills.where((b) => b.status == 'CANCELLED').toList();
+  /// Hóa đơn ĐÃ thanh toán rồi bị hủy (hủy đơn trên bàn khi chưa thanh toán tính vào số món hủy)
+  List<BillModel> get _cancelledBills => ReportCalculator.deduplicateBills(_rangeBills).where((b) => b.isPaidCancel).toList();
 
   // Serving tables (current active state)
   List<TableModel> get _servingTables => _tables.where((t) => t.inUse).toList();
@@ -1595,7 +1596,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             _buildReportRow('Số lượng đơn hủy', _cancelledBills.length.toString()),
             _buildReportRow(
               'Giá trị hủy',
-              FormatUtils.vnd(_cancelledBills.fold(0, (s, b) => s + b.subTotal)),
+              FormatUtils.vnd(_cancelledBills.fold(0, (s, b) => s + ReportCalculator.cancelledBillValue(b))),
             ),
           ],
         ),

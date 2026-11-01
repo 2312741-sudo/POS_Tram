@@ -321,11 +321,21 @@ function billLines(bill: BillLike): RawOrderLine[] {
 }
 
 /**
+ * Đơn hủy KHI CHƯA THANH TOÁN (xóa / hủy đơn trên bàn): mã BILL_CANCELLED_… hoặc thành tiền 0đ.
+ * Loại này chỉ tính vào SỐ MÓN HỦY, không tính là "đơn hủy". Hủy hóa đơn ĐÃ thanh toán (giữ finalAmount) mới là đơn hủy.
+ * Khớp BillModel.isUnpaidCancel (Dart).
+ */
+export function isUnpaidCancelledBill(bill: BillLike): boolean {
+  if (String(bill.status || "").toUpperCase() !== "CANCELLED") return false;
+  return String(bill.id ?? "").startsWith("BILL_CANCELLED_") || num(bill.finalAmount) <= 0;
+}
+
+/**
  * Đơn HỦY (chưa thanh toán): mỗi món còn trong đơn tính như món bị xóa — đơn 5 món bị hủy = xóa/hủy 5 món.
  * Lý do "Hủy đơn: {lý do hủy}", nhân viên = người hủy, thời điểm = lúc hủy. Đơn khác trạng thái → rỗng.
  */
 export function billCancelledItems(bill: BillLike): DeletedItemEntry[] {
-  if (String(bill.status || "").toUpperCase() !== "CANCELLED") return [];
+  if (!isUnpaidCancelledBill(bill)) return [];
   const why = String(bill.cancelReason ?? bill.cancellationReason ?? "").trim();
   const ts = num(bill.cancelledAt) || num(bill.closedAt) || num(bill.timestamp);
   return billLines(bill).map((line) => {

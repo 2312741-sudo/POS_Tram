@@ -478,27 +478,31 @@ describe("Đơn hủy thuộc NGÀY HỦY (đặc tả 3.4) - 3 hóa đơn thậ
     expect(getBillTimestamp({ id: "o", status: "OPEN", createdAt: 1, closedAt: 2 } as unknown as HistoryOrder)).toBe(1);
   });
 
-  it("lọc 'Hôm nay' (12/10) giữ đủ 3 đơn hủy, 0đ doanh thu, giá trị hủy = max(subTotal, tiền món xóa)", () => {
+  it("lọc 'Hôm nay' (12/10) giữ đủ 3 đơn; chỉ hóa đơn ĐÃ thanh toán rồi hủy mới là đơn hủy", () => {
     const today = bills.filter((b) => dayOf(getBillTimestamp(b)) === "2026-10-12");
     expect(today.length).toBe(3);
+    // 2 đơn hủy trên bàn khi chưa thanh toán (thành tiền 0đ) chỉ tính vào số món hủy
     const cancel = calculateCancellationReport(today);
-    expect(cancel.cancelledBillsCount).toBe(3);
-    expect(cancel.totalLossValue).toBe(15000 + 50000 + 90000);
+    expect(cancel.cancelledBillsCount).toBe(1);
+    expect(cancel.totalLossValue).toBe(90000);
     const ov = calculateOverviewReport(today);
-    expect(ov.cancelledBillsCount).toBe(3);
+    expect(ov.cancelledBillsCount).toBe(1);
     expect(ov.netRevenue).toBe(0);
     expect(ov.paidBillsCount).toBe(0);
     const z = generateEndOfDayZReport(today, [], []);
     expect(z.tab1_tongHop.deletedItemsAmount).toBe(0); // không có mảng deletedItems chi tiết -> không đếm đôi
   });
 
-  it("deletedItems chi tiết: giá trị hủy lấy tiền món xóa, tổng tiền xóa món là dòng riêng", () => {
+  it("hủy đơn trên bàn khi chưa thanh toán: không là đơn hủy, món đã xóa vẫn vào tổng tiền xóa / hủy món", () => {
     const b = {
       id: "A", status: "CANCELLED", createdAt: L(10, 9, 1, 0), closedAt: L(10, 12, 1, 4), subTotal: 0,
       deletedItems: [{ name: "Trà", productId: 1, quantity: 1, unitPrice: 15000, amount: 15000, reason: "Nhập nhầm", timestamp: L(10, 12, 1, 3) }],
     } as unknown as HistoryOrder;
-    expect(calculateCancellationReport([b]).totalLossValue).toBe(15000);
+    expect(calculateCancellationReport([b]).totalLossValue).toBe(0);
     expect(generateEndOfDayZReport([b], [], []).tab1_tongHop.deletedItemsAmount).toBe(15000);
+    // Hủy hóa đơn ĐÃ thanh toán (giữ thành tiền): giá trị hủy = max(subTotal, tiền món xóa)
+    const paid = { ...b, id: "P", subTotal: 10000, finalAmount: 10000 } as unknown as HistoryOrder;
+    expect(calculateCancellationReport([paid]).totalLossValue).toBe(15000);
   });
 
   it("khử trùng lặp: bản ghi hủy (có cancelledAt) thắng bản chưa hủy cùng id", () => {
