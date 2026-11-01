@@ -63,3 +63,13 @@ describe("Reset dữ liệu bán hàng", () => {
     expect(flat.slice(firstTable).every((k) => k.includes("/tables/"))).toBe(true);
   });
 });
+
+describe("baseTableName — bàn tự tách gộp về bàn gốc trong báo cáo", () => {
+  it("bỏ hậu tố (số); giữ (Tách)", async () => {
+    const { baseTableName } = await import("../lib/table-status");
+    expect(baseTableName("Bàn 01 (2)")).toBe("Bàn 01");
+    expect(baseTableName("Mang về (3) ")).toBe("Mang về");
+    expect(baseTableName("Bàn 01")).toBe("Bàn 01");
+    expect(baseTableName("Bàn 01 (Tách)")).toBe("Bàn 01 (Tách)");
+  });
+});

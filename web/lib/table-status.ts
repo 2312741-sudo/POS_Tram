@@ -100,3 +100,12 @@ export function buildOrderItemsPayload(
   if (!orderItemsChanged(prev, next)) return null;
   return { currentOrderJson: JSON.stringify(next), ...CLEAR_PRE_PRINT };
 }
+
+/**
+ * Tên bàn GỐC của bàn tự tách khi 2 máy cùng thao tác một bàn ("Bàn 01 (2)" → "Bàn 01", "Mang về (3)" → "Mang về").
+ * Bàn tách tay "(Tách)" giữ nguyên. Khớp TableModel.isAutoSplit / BillModel.baseTableName (Dart).
+ */
+export function baseTableName(name: unknown): string {
+  const n = String(name ?? "").trim();
+  return n.replace(/\s\(\d+\)\s*$/, "").trim() || n;
+}

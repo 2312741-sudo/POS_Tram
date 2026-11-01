@@ -511,7 +511,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             }
           }
           final itemTotal = (price + toppingSum) * qty;
-          final tableName = table.zone.isNotEmpty ? '${table.name} (${table.zone})' : table.name;
+          // Bàn tự tách ('Bàn 01 (2)') gộp vào bàn gốc
+          final baseName = BillModel.baseTableName(table.name);
+          final tableName = table.zone.isNotEmpty ? '$baseName (${table.zone})' : baseName;
 
           if (!productMap.containsKey(name)) {
             productMap[name] = {

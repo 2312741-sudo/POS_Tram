@@ -243,7 +243,8 @@ class BillModel {
       if (splits.isEmpty) splits = null;
     }
 
-    final tableName = map['tableName']?.toString() ?? '';
+    // Bàn tự tách (2 máy cùng thao tác: 'Bàn 01 (2)') → báo cáo / lịch sử ghi nhận vào bàn gốc 'Bàn 01'
+    final tableName = baseTableName(map['tableName']?.toString() ?? '');
     final parentBillId = map['parentBillId']?.toString();
     int? closedAt = _asEpochMs(map['closedAt']);
     final cancelledAt = _asEpochMs(map['cancelledAt']);
@@ -319,6 +320,14 @@ class BillModel {
       deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
       cancelNote: (map['cancelReason'] ?? map['cancellationReason'])?.toString() ?? '',
     );
+  }
+
+  /// Tên bàn GỐC của bàn tự tách ('Bàn 01 (2)' → 'Bàn 01', 'Mang về (3)' → 'Mang về'); bàn tách tay '(Tách)' giữ nguyên.
+  /// Khớp TableModel.isAutoSplit và baseTableName (web).
+  static String baseTableName(String name) {
+    final n = name.trim();
+    final base = n.replaceFirst(RegExp(r'\s\(\d+\)\s*$'), '').trim();
+    return base.isEmpty ? n : base;
   }
 
   /// Mốc xếp NGÀY KINH DOANH (lùi theo giờ bắt đầu ngày của cửa hàng) — dùng cho lọc/gom theo ngày,

@@ -11,7 +11,7 @@ import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
 import { recordShiftSale } from "./cash-shift-run";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
-import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
+import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, baseTableName, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
 import { errorMessage } from "./errors";
 import { hasPermission, useAuth } from "./auth";
 import { scopeShifts } from "./shift-scope";
@@ -618,8 +618,14 @@ function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
   const guestCount = Number(raw.guestCount || 0);
   const cogs = raw.cogs != null ? Number(raw.cogs) : undefined;
 
+  // Bàn tự tách (2 máy cùng thao tác: "Bàn 01 (2)") → báo cáo ghi nhận vào bàn gốc; giữ tên thật ở splitTableName
+  const rawTableName = String(raw.tableName ?? "");
+  const tableName = baseTableName(rawTableName);
+
   return {
     ...raw,
+    tableName,
+    ...(tableName !== rawTableName.trim() ? { splitTableName: rawTableName } : {}),
     id,
     storeCode,
     items,
