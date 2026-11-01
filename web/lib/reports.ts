@@ -1087,12 +1087,12 @@ export function calculateProductReport(
           pId = it.productId != null ? it.productId : (it.name || "0");
           pCode = resolveProductCode({ productId: it.productId, name: it.name, productCode: it.productCode, code: it.code }, productsMap);
           basePrice = Number(it.price || 0);
-          unit = it.unit || "Ly";
           category = it.category || "Khác";
           const pDef = findProductForLine(it, productsMap);
+          // ĐVT lấy theo món trong thực đơn (bánh là "Cái", không mặc định "Ly")
+          unit = it.unit || pDef?.unit || "Ly";
           if (pDef) {
             if (!basePrice) basePrice = Number(pDef.price || 0);
-            if (!unit && pDef.unit) unit = pDef.unit;
             if ((!category || category === "Khác") && pDef.category) category = pDef.category;
           }
         }

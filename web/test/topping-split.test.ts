@@ -69,6 +69,9 @@ describe("Nhóm hàng tra theo id → mã → tên (món bấm trên app lưu id
     };
     const bills = [{ id: "B1", status: "PAID", items: [{ productId: 5, name: "Trà Olong - Xoài", price: 30000, quantity: 2 }] }];
     expect(calculateProductReport(bills as never, productsMap).map((r) => r.category)).toEqual(["TRÀ TRÁI CÂY"]);
+    const cake = { "-Nc": { name: "Bánh lăn choco - vừa", price: 30000, unit: "Cái", category: "BÁNH LĂN" } };
+    const cakeBills = [{ id: "B2", status: "PAID", items: [{ productId: 7, name: "Bánh lăn choco - vừa", price: 30000, quantity: 1 }] }];
+    expect(calculateProductReport(cakeBills as never, cake).map((r) => [r.category, r.unit])).toEqual([["BÁNH LĂN", "Cái"]]);
     expect(calculateCategoryReport(bills as never, productsMap).map((c) => c.category)).toEqual(["TRÀ TRÁI CÂY"]);
     expect(findProductForLine({ productId: 999, code: "dr202500003" }, productsMap)?.category).toBe("TRÀ TRÁI CÂY");
     expect(findProductForLine({ productId: 999, name: "Không có" }, productsMap)).toBeUndefined();
