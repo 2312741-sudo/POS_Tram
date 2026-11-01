@@ -666,7 +666,10 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       );
       // Ưu tiên dòng món tặng riêng; không có thì (trừ khi dedicatedRewardOnly) giảm trên món đã có như trước
       const dedicated = matching.filter(isOwnReward);
-      const candidates = dedicated.length > 0 ? dedicated : input.dedicatedRewardOnly ? [] : matching;
+      // Chỉ hình thức TẶNG (miễn phí) mới cần ly tặng riêng; giảm tiền / giảm % thì giảm thẳng trên món khách đã gọi
+      // (vd 'giảm 16K cho 1 ly xoài'). Khớp Dart.
+      const giftOnly = !!input.dedicatedRewardOnly && normalizeBenefitMode(tier.benefitMode) === "FREE";
+      const candidates = dedicated.length > 0 ? dedicated : giftOnly ? [] : matching;
       if (candidates.length === 0) {
         addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", "Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng");
         continue;

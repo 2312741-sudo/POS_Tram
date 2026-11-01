@@ -148,4 +148,20 @@ void main() {
     expect(q.totalPromotionDiscount, 22000);
     expect(q.rewardBenefits.map((b) => b.lineId), ['L2']);
   });
+
+  test('giảm 16K cho 1 ly xoài (giảm tiền, không phải tặng) → giảm thẳng 1 ly khách gọi', () {
+    final c = CampaignModel.fromMap({
+      'campaignId': 'X1', 'programCode': 'KM/X1', 'name': 'Giảm 16K 1 ly xoài', 'campaignType': 'ORDER_VALUE_ITEM_BENEFIT',
+      'active': true, 'branchIds': ['TRAM01'], 'hasCodes': false, 'stackingMode': 'ENABLED', 'priority': 0, 'createdAt': 1,
+      'tiers': [
+        {'tierId': 'T', 'conditionBasis': 'TOTALAMOUNT', 'threshold': 0, 'benefitMode': 'FIXED', 'value': 16000,
+         'maxRewardQty': 1, 'rewardItemIds': ['5'], 'sortOrder': 1},
+      ],
+    });
+    final q = CartCampaignPricing.quoteForApply(c, cart: [xoai(3)], products: products, branchId: 'TRAM01', isApplied: false, nowMs: 1000);
+    expect(q.totalPromotionDiscount, 16000);
+    expect(q.rewardBenefits.map((b) => b.quantity), [1]);
+    final st = CartCampaignPricing.quoteStacked([c], cart: [xoai(3)], products: products, branchId: 'TRAM01', nowMs: 1000);
+    expect(st['X1']!.totalPromotionDiscount, 16000);
+  });
 }

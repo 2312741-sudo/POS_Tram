@@ -527,7 +527,10 @@ PriceQuoteModel calculatePrice({
           .toList();
       // Ưu tiên dòng món tặng riêng; không có thì (trừ khi dedicatedRewardOnly) giảm trên món đã có như trước
       final dedicated = matching.where(isOwnReward).toList();
-      final candidates = dedicated.isNotEmpty ? dedicated : (input.dedicatedRewardOnly ? <PricingLineItem>[] : matching);
+      // Chỉ hình thức TẶNG (miễn phí) mới cần ly tặng riêng; giảm tiền / giảm % thì giảm thẳng trên món khách đã gọi
+      // (vd 'giảm 16K cho 1 ly xoài')
+      final giftOnly = input.dedicatedRewardOnly && normalizeBenefitMode(tier.benefitMode) == 'FREE';
+      final candidates = dedicated.isNotEmpty ? dedicated : (giftOnly ? <PricingLineItem>[] : matching);
       if (candidates.isEmpty) {
         addReason(campaign, 'REWARD_ITEM_NOT_IN_BILL', 'Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng');
         continue;

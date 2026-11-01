@@ -396,3 +396,16 @@ describe("recalculateDiscounts với dedicatedOnlyFor (trang bàn web)", () => {
     expect(recalculateDiscounts([buildAppliedDiscount(camp, 1)], { CAM_CHANH: camp }, small, ctx, { dedicatedOnlyFor: only }).dropped).toHaveLength(1);
   });
 });
+
+describe("Giảm 1 ly (giảm tiền / %) theo giá trị đơn: giảm thẳng món khách gọi, không cần ly tặng riêng", () => {
+  it("giảm 16K cho 1 ly xoài: chỉ 1 ly trong 3 ly được giảm, kể cả khi dedicatedOnly", () => {
+    const c = parseCampaign("X1", {
+      campaignId: "X1", name: "Giảm 16K 1 ly xoài", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+      tiers: [{ tierId: "T", threshold: 0, benefitMode: "FIXED", value: 16000, maxRewardQty: 1, rewardItemIds: ["XOAI"] }],
+    } as never);
+    const lines = [line("L0", "XOAI", 3, 45000, "TRÀ"), line("L1", "BANH", 2, 40000, "BÁNH")];
+    const q = quoteStacked([c], lines, { branchId: "B", nowMs: vn(2026, 10, 22, 10) }, { dedicatedOnlyFor: new Set(["X1"]) }).X1;
+    expect(q.totalPromotionDiscount).toBe(16000);
+    expect(q.rewardBenefits.map((b) => [b.lineId, b.quantity])).toEqual([["L0", 1]]);
+  });
+});
