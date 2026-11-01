@@ -67,3 +67,56 @@ export function planToppingRefFixes(categories: RefCategory[], products: RefProd
 export function toppingRefFixUpdates(fixes: ToppingRefFix[]): Record<string, string[] | null> {
   return Object.fromEntries(fixes.map((f) => [`stores/${f.storeCode}/categories/${f.categoryId}/allowedToppingIds`, f.to.length ? f.to : null]));
 }
+
+// ---------------------------------------------------------------------------
+// Danh mục note & topping: dòng topping mang tên là MÃ (do "nhập từ cấu hình cũ" bản trước tra khóa không ra)
+// ---------------------------------------------------------------------------
+
+export interface CatalogToppingItem {
+  id: string;
+  name: string;
+  price: number;
+}
+
+export interface ToppingGroupFix {
+  groupId: string;
+  groupName: string;
+  /** Số dòng được đổi tên/giá hoặc bị bỏ */
+  changed: number;
+  items: CatalogToppingItem[];
+}
+
+/** Dòng topping có tên là mã/khóa món → đổi sang tên + giá của món đó; không tra được thì bỏ dòng */
+export function planToppingGroupFixes(
+  groups: { id: string; name: string; items: CatalogToppingItem[] }[],
+  products: (RefProduct & { price?: number })[],
+  fallback: (RefProduct & { price?: number })[] = []
+): ToppingGroupFix[] {
+  const find = (list: (RefProduct & { price?: number })[], ref: string) => {
+    const r = lc(ref);
+    const matches = list.filter((p) => String(p.id) === ref.trim() || (p.code && lc(p.code) === r));
+    return matches.find((p) => p.isTopping) ?? matches[0];
+  };
+  const fixes: ToppingGroupFix[] = [];
+  for (const g of groups) {
+    let changed = 0;
+    const items: CatalogToppingItem[] = [];
+    for (const it of g.items) {
+      if (!looksLikeRef(it.name)) {
+        items.push(it);
+        continue;
+      }
+      changed++;
+      const hit = find(products, it.name) ?? find(fallback, it.name);
+      if (hit && !items.some((x) => lc(x.name) === lc(hit.name))) {
+        items.push({ id: it.id, name: hit.name.trim(), price: Math.max(0, Math.trunc(Number(hit.price)) || 0) });
+      }
+    }
+    if (changed > 0) fixes.push({ groupId: g.id, groupName: g.name, changed, items });
+  }
+  return fixes;
+}
+
+export function toppingGroupFixUpdates(storeCode: string, fixes: ToppingGroupFix[]): Record<string, CatalogToppingItem[]> {
+  return Object.fromEntries(fixes.map((f) => [`stores/${storeCode}/topping_groups/${f.groupId}/items`, f.items]));
+}

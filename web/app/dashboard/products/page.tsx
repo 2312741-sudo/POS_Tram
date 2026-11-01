@@ -35,7 +35,7 @@ import { useItemCatalog } from "@/lib/note-catalog";
 import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isLegacyCatalog } from "@/lib/item-options";
 import GroupAttachmentPicker from "@/components/GroupAttachmentPicker";
-import { planToppingRefFixes, toppingRefFixUpdates, toppingRefsToNames } from "@/lib/topping-refs";
+import { planToppingGroupFixes, planToppingRefFixes, toppingGroupFixUpdates, toppingRefFixUpdates, toppingRefsToNames } from "@/lib/topping-refs";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -395,14 +395,21 @@ export default function ProductsPage() {
     () => planToppingRefFixes(allCategories.filter((c) => currentStoreCode === "ALL" || c.storeCode === currentStoreCode), allProducts),
     [allCategories, allProducts, currentStoreCode]
   );
+  // Danh mục note & topping: dòng topping mang tên là mã (bản "nhập từ cấu hình cũ" trước đây tra khóa không ra)
+  const toppingGroupFixes = useMemo(
+    () => planToppingGroupFixes(bannerCatalog.toppingGroups, allProducts.filter((p) => p.storeCode === targetStoreCode), allProducts),
+    [bannerCatalog, allProducts, targetStoreCode]
+  );
+  const toppingFixCount = toppingRefFixes.length + toppingGroupFixes.length;
+  const toppingFixNames = [...toppingRefFixes.map((f) => `nhóm món ${f.categoryName}`), ...toppingGroupFixes.map((f) => f.groupName)];
   const [toppingFixBusy, setToppingFixBusy] = useState(false);
   const [toppingFixMsg, setToppingFixMsg] = useState("");
   const fixToppingRefs = async () => {
     setToppingFixBusy(true);
     setToppingFixMsg("");
     try {
-      await update(ref(db), toppingRefFixUpdates(toppingRefFixes));
-      setToppingFixMsg(`Đã sửa ${toppingRefFixes.length} nhóm món. Trên máy POS mở lại màn gọi món là thấy đúng tên và giá.`);
+      await update(ref(db), { ...toppingRefFixUpdates(toppingRefFixes), ...toppingGroupFixUpdates(targetStoreCode, toppingGroupFixes) });
+      setToppingFixMsg(`Đã sửa ${toppingFixCount} chỗ. Trên máy POS mở lại màn gọi món là thấy đúng tên và giá.`);
     } catch (e) {
       setToppingFixMsg(`Không sửa được: ${errorMessage(e)}`);
     } finally {
@@ -768,6 +775,23 @@ export default function ProductsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Topping lưu bằng mã → app cũ hiện mã thay vì tên: sửa thẳng dữ liệu */}
+      {toppingFixCount > 0 && (
+        <div role="alert" style={{ marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", border: "1px solid var(--warning)", background: "var(--warning-bg)", borderRadius: "12px", padding: "12px 14px" }}>
+          <div style={{ fontSize: "13px", minWidth: 0 }}>
+            <b>{toppingFixCount} chỗ đang lưu topping bằng mã</b> ({toppingFixNames.slice(0, 3).join(", ")}
+            {toppingFixNames.length > 3 ? "…" : ""}) — app trên máy POS hiện mã thay vì tên, giá 5.000đ. Bấm sửa để đổi sang tên món topping, không cần cập nhật app.
+            {toppingFixMsg && <div style={{ marginTop: "4px", fontWeight: 600 }}>{toppingFixMsg}</div>}
+          </div>
+          <button className="btn-primary" disabled={toppingFixBusy} onClick={fixToppingRefs}>
+            {toppingFixBusy ? "Đang sửa…" : "Sửa ngay"}
+          </button>
+        </div>
+      )}
+      {toppingFixCount === 0 && toppingFixMsg && (
+        <div style={{ fontSize: "13px", color: "var(--success)", fontWeight: 600, marginBottom: "16px" }}>{toppingFixMsg}</div>
       )}
 
       {/* ==================== TAB 1: PRODUCTS TABLE ==================== */}
@@ -1153,21 +1177,6 @@ export default function ProductsPage() {
       {/* ==================== TAB 2: CATEGORIES MANAGEMENT ==================== */}
       {activeTab === "categories" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {toppingRefFixes.length > 0 && (
-            <div role="alert" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", border: "1px solid var(--warning)", background: "var(--warning-bg)", borderRadius: "12px", padding: "12px 14px" }}>
-              <div style={{ fontSize: "13px", minWidth: 0 }}>
-                <b>{toppingRefFixes.length} nhóm món đang lưu topping bằng mã</b> ({toppingRefFixes.slice(0, 3).map((f) => f.categoryName).join(", ")}
-                {toppingRefFixes.length > 3 ? "…" : ""}) — app trên máy POS hiện mã thay vì tên, giá 5.000đ. Bấm sửa để đổi sang tên món topping, không cần cập nhật app.
-                {toppingFixMsg && <div style={{ marginTop: "4px", fontWeight: 600 }}>{toppingFixMsg}</div>}
-              </div>
-              <button className="btn-primary" disabled={toppingFixBusy} onClick={fixToppingRefs}>
-                {toppingFixBusy ? "Đang sửa…" : "Sửa ngay"}
-              </button>
-            </div>
-          )}
-          {toppingRefFixes.length === 0 && toppingFixMsg && (
-            <div style={{ fontSize: "13px", color: "var(--success)", fontWeight: 600 }}>{toppingFixMsg}</div>
-          )}
           {/* KPI Summary Cards */}
           <div
             style={{
