@@ -15,8 +15,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
 
-  static const String appVersion = '1.0.4';
-  static const String appBuild = '5';
+  static const String appVersion = '1.0.5';
+  static const String appBuild = '6';
   static const String bundleId = 'com.tramapp.tramFlutter';
   static const String teamId = 'W97CS7VC54';
   static const String hotline = '0865.062.205';

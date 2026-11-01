@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../about/about_app_screen.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -1848,7 +1849,7 @@ class _TableListScreenState extends State<TableListScreen> {
           ListTile(
             leading: Icon(LucideIcons.info, color: context.tc.primary),
             title: const Text('Thông Tin Ứng Dụng'),
-            subtitle: const Text('Phiên bản 1.0.4 (Build 5), hỗ trợ kỹ thuật & pháp lý'),
+            subtitle: Text('Phiên bản ${AboutAppScreen.appVersion} (Build ${AboutAppScreen.appBuild}), hỗ trợ kỹ thuật & pháp lý'),
             onTap: () {
               Navigator.pop(context);
               context.push('/about-app');
