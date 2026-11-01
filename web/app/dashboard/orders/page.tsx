@@ -33,6 +33,7 @@ import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
 import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
 import { billDeletedItems } from "@/lib/item-deletion";
+import { baseTableName } from "@/lib/table-status";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
 import { buildOrderReceiptHtml } from "@/lib/print-html";
 import { useAuth, hasPermission } from "@/lib/auth";
@@ -81,12 +82,13 @@ export default function OrdersPage() {
     const set = new Set<string>();
     tables.forEach((t) => {
       if (!filterZone || t.zone === filterZone || (filterZone === "Mang về" && (t.zone.toLowerCase().includes("mang về") || t.name.toLowerCase().includes("mang về")))) {
-        if (t.name) set.add(t.name);
+        // Bàn tự tách ('Mang về 01 (2)') gộp về bàn gốc — hóa đơn của chúng đã ghi theo bàn gốc
+        if (t.name) set.add(baseTableName(t.name));
       }
     });
     historyData.forEach((h) => {
       if (!filterZone || h.zone === filterZone || (filterZone === "Mang về" && isTakeaway(h))) {
-        if (h.tableName) set.add(h.tableName);
+        if (h.tableName) set.add(baseTableName(h.tableName));
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -134,7 +136,7 @@ export default function OrdersPage() {
         !filterZone ||
         (filterZone === "Mang về" ? isTakeaway(h) : (h.zone || "").toLowerCase() === filterZone.toLowerCase());
       const matchTable =
-        !filterTable || (h.tableName || "").toLowerCase() === filterTable.toLowerCase();
+        !filterTable || baseTableName(h.tableName).toLowerCase() === baseTableName(filterTable).toLowerCase();
       const matchStatus =
         !filterStatus || (h.status || "PAID").toUpperCase() === filterStatus;
 
