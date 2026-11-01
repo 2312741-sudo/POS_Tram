@@ -105,12 +105,15 @@ beforeEach(async () => {
 describe("POS Trạm - Security Rules: nền tảng", () => {
   it("1. Tài khoản tự đăng ký không có userIndex không được đọc/ghi dữ liệu quán", async () => {
     const unindexed = db("unindexed_uid");
-    await assertFails(unindexed.ref("stores/TRAM01/products").get());
+    // products / categories / storeInfo đọc công khai cho trang gọi món QR (xem PUB1) — kiểm tra bằng nút vận hành
+    await assertFails(unindexed.ref("stores/TRAM01/tables").get());
+    await assertFails(unindexed.ref("stores/TRAM01/bills").get());
     await assertFails(unindexed.ref("stores/TRAM01/products/p1").set({ name: "Hacked" }));
   });
 
   it("2. Người của Quán A không đọc được Quán B", async () => {
-    await assertFails(db("cashier_uid").ref("stores/TRAM02/products").get());
+    await assertFails(db("cashier_uid").ref("stores/TRAM02/tables").get());
+    await assertFails(db("cashier_uid").ref("stores/TRAM02/history").get());
   });
 
   it("3. Phục vụ và Bếp không được ghi products, promotions, users, customers", async () => {
@@ -214,7 +217,7 @@ describe("POS Trạm - Security Rules: tấn công leo thang quyền", () => {
   });
 
   it("16. Hồ sơ users/{uid} không có userIndex hoặc userIndex còn sót sau khi xóa hồ sơ -> không có quyền", async () => {
-    await assertFails(db("noindex_uid").ref("stores/TRAM01/products").get());
+    await assertFails(db("noindex_uid").ref("stores/TRAM01/tables").get());
     await assertFails(db("noindex_uid").ref("stores/TRAM01/products/p1").set({ name: "X" }));
     // deleted_uid có userIndex nhưng hồ sơ đã bị xóa
     await assertFails(db("deleted_uid").ref("stores/TRAM01/tables").get());
@@ -644,7 +647,7 @@ describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (khô
   });
 
   it("RC5. Nút con vẫn chặn người ngoài quán, tài khoản bị khóa và người chưa đăng nhập", async () => {
-    for (const node of ["tables", "products", "storeInfo", "users", "customers"]) {
+    for (const node of ["tables", "users", "customers", "bills", "online_orders"]) {
       await assertFails(db("storeB_uid").ref(`stores/TRAM01/${node}`).get());
       await assertFails(db("inactive_uid").ref(`stores/TRAM01/${node}`).get());
       await assertFails(env().unauthenticatedContext().database().ref(`stores/TRAM01/${node}`).get());
@@ -659,7 +662,7 @@ describe("POS Trạm - Security Rules: quyền đọc theo từng nút con (khô
       expect(typeof store[child][".read"], `stores/$storeCode/${child} thiếu .read`).toBe("string");
     }
     // Danh sách test RC1 + customers + point_history (chỉ Thu ngân trở lên đọc) phải phủ hết nút con (thêm nút mới → cập nhật test)
-    expect([...memberReadable, "customers", "point_history", "audit_logs"].sort()).toEqual(children.sort());
+    expect([...memberReadable, "customers", "point_history", "audit_logs", "staff_calls"].sort()).toEqual(children.sort());
     expect(children).not.toContain("login_attempts");
   });
 
@@ -787,7 +790,7 @@ describe("POS Trạm - Security Rules: sao chép thực đơn giữa chi nhánh 
     const owner = db("owner_uid");
     await assertFails(owner.ref("stores/TRAM02").update(menuUpdates));
     await assertFails(owner.ref("stores/TRAM02/products/Tra dao").set(menuUpdates["products/Tra dao"]));
-    await assertFails(owner.ref("stores/TRAM02/products").get());
+    await assertFails(owner.ref("stores/TRAM02/tables").get());
   });
 
   it("CM3. Thu ngân, phục vụ, bếp không ghi được món / nhóm / ghi chú mẫu (kể cả khi thuộc chi nhánh đích)", async () => {
@@ -801,7 +804,7 @@ describe("POS Trạm - Security Rules: sao chép thực đơn giữa chi nhánh 
 
   it("CM4. Quản lý bị khóa không sao chép được; người ngoài chi nhánh nguồn không đọc được nguồn", async () => {
     await assertFails(db("inactive_mgr_uid").ref("stores/TRAM01").update(menuUpdates));
-    await assertFails(db("storeB_uid").ref("stores/TRAM01/products").get());
+    await assertFails(db("storeB_uid").ref("stores/TRAM01/tables").get());
   });
 });
 
@@ -1299,5 +1302,28 @@ describe("POS Trạm - Security Rules: Reset dữ liệu bán hàng trên Web (R
     await seedSales();
     const plan = await planFor();
     await assertFails(db("cashier_uid").ref().update(plan.updates));
+  });
+});
+
+describe("POS Trạm - Security Rules: trang gọi món QR công khai (PUB)", () => {
+  it("PUB1. Ai cũng ĐỌC được thực đơn / nhóm món / thông tin quán, nhưng người ngoài KHÔNG GHI được", async () => {
+    const anon = env().unauthenticatedContext().database();
+    for (const node of ["products", "categories", "storeInfo"]) {
+      await assertSucceeds(anon.ref(`stores/TRAM01/${node}`).get());
+      await assertFails(anon.ref(`stores/TRAM01/${node}/x`).set({ name: "Hacked" }));
+      await assertFails(db("storeB_uid").ref(`stores/TRAM01/${node}/x`).set({ name: "Hacked" }));
+    }
+  });
+
+  it("PUB2. Khách gửi đơn QR và theo dõi ĐƠN CỦA MÌNH; không đọc được danh sách đơn online của quán", async () => {
+    const anon = env().unauthenticatedContext().database();
+    await assertSucceeds(anon.ref("stores/TRAM01/online_orders/o_khach1").set({ tableName: "Bàn 1", status: "PENDING", items: [] }));
+    await assertSucceeds(anon.ref("stores/TRAM01/online_orders/o_khach1").get());
+    await assertFails(anon.ref("stores/TRAM01/online_orders").get());
+    await assertFails(db("storeB_uid").ref("stores/TRAM01/online_orders").get());
+    // khách không sửa được đơn đã gửi
+    await assertFails(anon.ref("stores/TRAM01/online_orders/o_khach1/status").set("DONE"));
+    // nhân viên quán vẫn đọc danh sách
+    await assertSucceeds(db("cashier_uid").ref("stores/TRAM01/online_orders").get());
   });
 });
