@@ -4,7 +4,7 @@
  */
 import { resolveProductCode, type CodeLine, type ProductCodeMap } from "./product-code";
 import { splitLineParts, type ToppingLookup } from "./topping-split";
-import { billDeletedItems } from "./item-deletion";
+import { billRemovedItems } from "./item-deletion";
 import { calculateCampaignReport } from "./promotion-report";
 import { soldItemRows, staffItemSummary } from "./staff-sales-report";
 import {
@@ -234,9 +234,9 @@ export function buildHubTable(kind: ReportKind, ctx: HubContext): HubTable {
     case "bills": {
       const list = filterBillsByStatus(bills, ctx.billStatus);
       return {
-        columns: [T("Mã HĐ"), T("Thời gian"), T("Bàn"), T("Người nhận order"), T("Thu ngân"), T("Trạng thái"), M("Tiền hàng"), M("Giảm giá món"), M("Giảm giá đơn"), M("VAT"), M("Tổng thanh toán"), T("HTTT"), T("Mã voucher"), I("Số món xóa"), M("Tiền xóa món")],
+        columns: [T("Mã HĐ"), T("Thời gian"), T("Bàn"), T("Người nhận order"), T("Thu ngân"), T("Trạng thái"), M("Tiền hàng"), M("Giảm giá món"), M("Giảm giá đơn"), M("VAT"), M("Tổng thanh toán"), T("HTTT"), T("Mã voucher"), I("Số món xóa / hủy"), M("Tiền xóa / hủy món")],
         rows: list.map((b) => {
-          const del = billDeletedItems(b as never);
+          const del = billRemovedItems(b as never);
           return [
             b.billCode || b.orderCode || String(b.id || "").slice(0, 8), vnDateTime(getBillTimestamp(b)), b.tableName || "",
             b.orderStaff || "", b.staffFullName || b.cashierName || b.staffUsername || "", billStatusLabel(billStatusOf(b)),
@@ -278,7 +278,7 @@ export function buildHubTable(kind: ReportKind, ctx: HubContext): HubTable {
     case "deletedItems": {
       const rows: Cell[][] = [];
       for (const b of filterBillsByStatus(bills, ctx.billStatus)) {
-        for (const e of billDeletedItems(b as never)) {
+        for (const e of billRemovedItems(b as never)) {
           rows.push([
             b.billCode || b.orderCode || String(b.id || "").slice(0, 8), billStatusLabel(billStatusOf(b)), b.tableName || "", vnDateTime(e.timestamp),
             resolveProductCode({ productId: e.productId ?? undefined, name: e.name } as CodeLine, ctx.codeMap), e.name, e.quantity, e.unitPrice, e.amount,
@@ -336,8 +336,8 @@ export function buildHubTable(kind: ReportKind, ctx: HubContext): HubTable {
           ["Chuyển khoản QR thu được", z.tab2_thuChi.transferSales, "VietQR ngân hàng"],
           ["Tổng sản phẩm bán ra", `${z.tab3_hangHoa.totalItemsSold}`, "Gồm cả topping"],
           ["Số hóa đơn đã hủy", `${t1.cancelledBillsCount}`, `${t1.cancelledBillsAmount.toLocaleString("vi-VN")} đ`],
-          ["Số món xóa", `${t1.deletedItemsCount}`, "Món đã lưu bị xóa"],
-          ["Tổng tiền xóa món", t1.deletedItemsAmount, "Từ HĐ hoàn thành + đã hủy"],
+          ["Số món xóa / hủy", `${t1.deletedItemsCount}`, "Món đã lưu bị xóa + món của đơn hủy"],
+          ["Tổng tiền xóa / hủy món", t1.deletedItemsAmount, "Không cộng chung với giá trị đơn hủy"],
         ],
       };
     }

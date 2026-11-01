@@ -931,10 +931,11 @@ class ReportCalculator {
     );
   }
 
-  /// Món đã lưu bị xóa trong kỳ: gom `deletedItems` của HĐ PAID và CANCELLED.
+  /// Món xóa/hủy trong kỳ: `deletedItems` của HĐ PAID và CANCELLED + mọi món còn trong đơn bị HỦY
+  /// (đơn 5 món bị hủy = hủy 5 món).
   static DeletedItemsSummary calculateDeletedItems(List<BillModel> rawBills) {
     final bills = deduplicateBills(rawBills).where((b) => b.status == 'PAID' || b.status == 'CANCELLED');
-    return DeletedItemsLogic.summarize(bills.expand((b) => b.deletedItems));
+    return DeletedItemsLogic.summarize(bills.expand((b) => b.removedItems));
   }
 
   /// BÁO CÁO 12: HIỆU QUẢ THEO CHƯƠNG TRÌNH KHUYẾN MÃI (chỉ HĐ PAID).

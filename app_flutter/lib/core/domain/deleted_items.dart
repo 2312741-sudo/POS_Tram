@@ -199,6 +199,37 @@ class DeletedItemsLogic {
   /// Nối thêm [extra] vào chuỗi JSON [json] hiện có.
   static String append(String? json, List<DeletedItemEntry> extra) => encode([...decode(json), ...extra]);
 
+  /// Lý do ghi cho món trong đơn bị hủy
+  static const String cancelBillReason = 'Hủy đơn';
+
+  /// Đơn HỦY (chưa thanh toán): mỗi món còn trong đơn tính như món bị xóa — đơn 5 món bị hủy = xóa/hủy 5 món.
+  /// Lý do "Hủy đơn: {lý do hủy}", nhân viên = người hủy, thời điểm = lúc hủy. Khớp billCancelledItems (web).
+  static List<DeletedItemEntry> fromCancelledBill(
+    List<OrderItemModel> items, {
+    required String cancelReason,
+    required String staffUsername,
+    required String staffFullName,
+    required int timestamp,
+  }) {
+    final why = cancelReason.trim();
+    return [
+      for (final i in items)
+        if (i.quantity > 0)
+          DeletedItemEntry(
+            name: i.name,
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            amount: i.itemTotal < 0 ? 0 : i.itemTotal,
+            reason: why.isEmpty ? cancelBillReason : '$cancelBillReason: $why',
+            staffUsername: staffUsername,
+            staffFullName: staffFullName.isNotEmpty ? staffFullName : staffUsername,
+            timestamp: timestamp,
+            sentToKitchen: i.isSentKitchen,
+          ),
+    ];
+  }
+
   static DeletedItemsSummary summarize(Iterable<DeletedItemEntry> entries) {
     int c = 0, a = 0;
     for (final e in entries) {

@@ -75,6 +75,8 @@ class BillModel {
   List<OrderActionLogModel> actionLogs;
   /// Món đã lưu bị xóa trước khi chốt đơn (ghi cả với HĐ PAID và CANCELLED).
   List<DeletedItemEntry> deletedItems;
+  /// Lý do hủy đơn (cancelReason / cancellationReason) — dùng cho báo cáo xóa/hủy món
+  String cancelNote;
 
   BillModel({
     required this.id,
@@ -110,6 +112,7 @@ class BillModel {
     this.shiftId,
     this.actionLogs = const [],
     this.deletedItems = const [],
+    this.cancelNote = '',
   });
 
   static int? _asInt(Object? v) {
@@ -314,6 +317,7 @@ class BillModel {
       shiftId: map['shiftId']?.toString(),
       actionLogs: actionLogs,
       deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
+      cancelNote: (map['cancelReason'] ?? map['cancellationReason'])?.toString() ?? '',
     );
   }
 
@@ -338,6 +342,23 @@ class BillModel {
     if (createdAt > 0) return createdAt;
     return ok(closedAt) ? closedAt! : 0;
   }
+
+  /// Món bị xóa + (đơn HỦY) mọi món còn trong đơn — dùng cho báo cáo "xóa/hủy món".
+  /// deletedItemsCount/Amount bên dưới giữ nguyên nghĩa "món đã lưu bị xóa" (ghi lên hóa đơn).
+  List<DeletedItemEntry> get removedItems => status == 'CANCELLED'
+      ? [
+          ...deletedItems,
+          ...DeletedItemsLogic.fromCancelledBill(
+            items,
+            cancelReason: cancelNote,
+            staffUsername: staffUsername,
+            staffFullName: staffFullName,
+            timestamp: reportTimeMs,
+          ),
+        ]
+      : deletedItems;
+  int get removedItemsCount => DeletedItemsLogic.summarize(removedItems).count;
+  int get removedItemsAmount => DeletedItemsLogic.summarize(removedItems).amount;
 
   int get deletedItemsCount => DeletedItemsLogic.summarize(deletedItems).count;
   int get deletedItemsAmount => DeletedItemsLogic.summarize(deletedItems).amount;

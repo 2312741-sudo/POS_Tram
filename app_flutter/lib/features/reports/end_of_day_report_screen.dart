@@ -1344,8 +1344,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
         ['Số hóa đơn đã hủy', t1.cancelledBillsCount, 'Đơn'],
         ['Giá trị hóa đơn hủy', ReportExportService.formatCurrency(t1.cancelledBillsAmount), 'VND'],
-        ['Số món xóa', t1.deletedItemsCount, 'Món'],
-        ['Tổng tiền xóa món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
+        ['Số món xóa / hủy', t1.deletedItemsCount, 'Món'],
+        ['Tổng tiền xóa / hủy món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
       ];
       final now = DateTime.now();
       final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
@@ -1413,8 +1413,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         ['Tổng tiền hoàn trả khách', ReportExportService.formatCurrency(t2.refundTotal), 'VND'],
         ['Số hóa đơn đã hủy', t1.cancelledBillsCount, 'Đơn'],
         ['Giá trị hóa đơn hủy', ReportExportService.formatCurrency(t1.cancelledBillsAmount), 'VND'],
-        ['Số món xóa', t1.deletedItemsCount, 'Món'],
-        ['Tổng tiền xóa món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
+        ['Số món xóa / hủy', t1.deletedItemsCount, 'Món'],
+        ['Tổng tiền xóa / hủy món', ReportExportService.formatCurrency(t1.deletedItemsAmount), 'VND'],
       ];
       final now = DateTime.now();
       final start = _customStartDate ?? DateTime(now.year, now.month, now.day);
@@ -1608,9 +1608,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           return _buildSectionCard(
             title: 'XÓA MÓN',
             rows: [
-              _buildReportRow('Số món xóa', deleted.count.toString()),
+              _buildReportRow('Số món xóa / hủy', deleted.count.toString()),
               _buildReportRow(
-                'Tổng tiền xóa món',
+                'Tổng tiền xóa / hủy món',
                 FormatUtils.vnd(deleted.amount),
                 color: deleted.amount > 0 ? context.tc.danger : null,
               ),

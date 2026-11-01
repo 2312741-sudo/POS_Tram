@@ -45,7 +45,7 @@ import {
 } from "./reports";
 import { soldItemRows, staffItemSummary } from "./staff-sales-report";
 import { splitLineParts, type ToppingLookup } from "./topping-split";
-import { billDeletedItems, type DeletionReport } from "./item-deletion";
+import { billRemovedItems, type DeletionReport } from "./item-deletion";
 import type { CampaignReport } from "./promotion-report";
 
 export interface ReportStoreInfo {
@@ -1204,8 +1204,8 @@ export function exportEndOfDayZReport(data: EndOfDayReportData, storeInfo?: Repo
     ["1. TỔNG HỢP", "Giá trị trung bình / đơn", data.tab1_tongHop.avgRevenuePerBill],
     ["1. TỔNG HỢP", "Số hóa đơn đã hủy (không tính doanh thu)", data.tab1_tongHop.cancelledBillsCount],
     ["1. TỔNG HỢP", "Giá trị hóa đơn đã hủy", data.tab1_tongHop.cancelledBillsAmount],
-    ["1. TỔNG HỢP", "Số món xóa", data.tab1_tongHop.deletedItemsCount],
-    ["1. TỔNG HỢP", "Tổng tiền xóa món", data.tab1_tongHop.deletedItemsAmount],
+    ["1. TỔNG HỢP", "Số món xóa / hủy", data.tab1_tongHop.deletedItemsCount],
+    ["1. TỔNG HỢP", "Tổng tiền xóa / hủy món", data.tab1_tongHop.deletedItemsAmount],
 
     ["2. THU CHI", "Doanh số Tiền mặt", data.tab2_thuChi.cashSales],
     ["2. THU CHI", "Doanh số Chuyển khoản QR", data.tab2_thuChi.transferSales],
@@ -1373,7 +1373,7 @@ export function exportHistory(data: HistoryOrder[], productsMap?: ProductCodeMap
   const deletedRows: Array<Record<string, unknown>> = [];
   data.forEach((item) => {
     const billCode = item.billCode || item.orderCode || item.id?.slice(0, 8) || "";
-    billDeletedItems(item).forEach((d) => {
+    billRemovedItems(item).forEach((d) => {
       deletedRows.push({
         "Mã HĐ": billCode,
         "Bàn": item.tableName || "",

@@ -57,8 +57,8 @@ class BillReportRows {
     'Tổng thanh toán',
     'HTTT',
     'Mã voucher',
-    'Số món xóa',
-    'Tiền xóa món',
+    'Số món xóa / hủy',
+    'Tiền xóa / hủy món',
   ];
 
   static List<dynamic> summaryRow(BillModel b) => [
@@ -74,8 +74,8 @@ class BillReportRows {
         b.finalAmount,
         b.paymentMethod,
         voucherCodes(b),
-        b.deletedItemsCount,
-        b.deletedItemsAmount,
+        b.removedItemsCount,
+        b.removedItemsAmount,
       ];
 
   static const List<String> itemHeaders = [
@@ -130,7 +130,7 @@ class BillReportRows {
     'Đã gửi bếp',
   ];
 
-  static List<List<dynamic>> deletedRows(BillModel b, {Map<int, ProductModel>? productsMap}) => b.deletedItems
+  static List<List<dynamic>> deletedRows(BillModel b, {Map<int, ProductModel>? productsMap}) => b.removedItems
       .map((e) => <dynamic>[
             b.billCode,
             statusLabel(b.status),

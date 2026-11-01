@@ -806,9 +806,9 @@ export default function EndOfDayReportPage() {
                     valueColor="#C93B2B"
                     isBold
                   />
-                  <ReportRow label="Số món xóa" value={`${zReport.tab1_tongHop.deletedItemsCount} món`} />
+                  <ReportRow label="Số món xóa / hủy" value={`${zReport.tab1_tongHop.deletedItemsCount} món`} />
                   <ReportRow
-                    label="Tổng tiền xóa món"
+                    label="Tổng tiền xóa / hủy món"
                     value={formatVND(zReport.tab1_tongHop.deletedItemsAmount)}
                     valueColor="#C93B2B"
                     isBold

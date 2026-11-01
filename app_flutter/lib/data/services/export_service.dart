@@ -44,7 +44,7 @@ class ExportService {
     List<BillModel>? bills,
   }) async {
     try {
-      final actualHeaders = headers ?? ['Mã HĐ', 'Bàn', 'Khu vực', 'Thu ngân', 'Thời gian', 'Trạng thái', 'Tiền hàng', 'Giảm giá món', 'Giảm giá đơn', 'Tổng giảm giá', 'Điểm dùng', 'VAT', 'Tổng tiền', 'HTTT', 'Khách hàng', 'SĐT', 'Số món xóa', 'Tiền xóa món'];
+      final actualHeaders = headers ?? ['Mã HĐ', 'Bàn', 'Khu vực', 'Thu ngân', 'Thời gian', 'Trạng thái', 'Tiền hàng', 'Giảm giá món', 'Giảm giá đơn', 'Tổng giảm giá', 'Điểm dùng', 'VAT', 'Tổng tiền', 'HTTT', 'Khách hàng', 'SĐT', 'Số món xóa / hủy', 'Tiền xóa / hủy món'];
       final actualRows = rows ?? (bills?.map((b) => [
         b.billCode,
         b.tableName,
@@ -62,8 +62,8 @@ class ExportService {
         b.paymentMethod,
         b.customerName ?? '',
         b.customerPhone ?? '',
-        b.deletedItemsCount,
-        b.deletedItemsAmount,
+        b.removedItemsCount,
+        b.removedItemsAmount,
       ]).toList() ?? []);
 
       final excel = Excel.createExcel();

@@ -620,8 +620,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           ['Chuyển khoản QR thu được', ReportExportService.formatCurrency(z.tab2ThuChi.transferSales), 'VietQR ngân hàng'],
           ['Tổng sản phẩm bán ra', z.tab3HangHoa.totalItemsSold, 'Ly / Đĩa'],
           ['Số hóa đơn đã hủy', z.tab1TongHop.cancelledBillsCount, ReportExportService.formatCurrency(z.tab1TongHop.cancelledBillsAmount)],
-          ['Số món xóa', z.tab1TongHop.deletedItemsCount, 'Món đã lưu bị xóa'],
-          ['Tổng tiền xóa món', ReportExportService.formatCurrency(z.tab1TongHop.deletedItemsAmount), 'Từ HĐ hoàn thành + đã hủy'],
+          ['Số món xóa / hủy', z.tab1TongHop.deletedItemsCount, 'Món đã lưu bị xóa + món của đơn hủy'],
+          ['Tổng tiền xóa / hủy món', ReportExportService.formatCurrency(z.tab1TongHop.deletedItemsAmount), 'Không cộng chung với giá trị đơn hủy'],
         ];
     }
   }

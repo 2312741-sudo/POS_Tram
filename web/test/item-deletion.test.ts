@@ -14,6 +14,8 @@ import {
   reasonGroupOf,
   resolveDeletionReason,
   type DeletedItemEntry,
+  billCancelledItems,
+  billRemovedItems,
 } from "../lib/item-deletion";
 import { applyLineDiscount, setLineQuantity, type RawOrderLine } from "../lib/order-math";
 import { buildMergePayloads, buildTransferPayloads, CLEARED_TABLE_FIELDS } from "../lib/table-ops";
@@ -211,5 +213,35 @@ describe("trạng thái & giảm giá cấp đơn", () => {
     expect(billItemDiscount(bill({ items }))).toBe(5000);
     expect(billLevelDiscount(bill({ discountAmount: 15000, items }))).toBe(10000);
     expect(billLevelDiscount(bill({ totalDiscount: 0, items }))).toBe(0);
+  });
+});
+
+describe("Hủy đơn chưa thanh toán = hủy từng món trong đơn", () => {
+  const cancelled = {
+    id: "B1", status: "CANCELLED", billCode: "HD-1", tableName: "Bàn 2", cancelReason: "Khách về", cancelledAt: 1000,
+    staffUsername: "tn1", staffFullName: "Thu Ngân A",
+    items: [
+      { productId: 1, name: "Trà đào", price: 30000, quantity: 3, isSentKitchen: true },
+      { productId: 2, name: "Bánh mì", price: 20000, quantity: 2 },
+    ],
+    deletedItems: [{ name: "Cà phê", productId: 3, quantity: 1, unitPrice: 25000, amount: 25000, reason: "Nhập sai", timestamp: 900 }],
+  };
+  it("đơn 5 món bị hủy → 5 món hủy, lý do + người hủy + giờ hủy", () => {
+    const e = billCancelledItems(cancelled);
+    expect(e.map((x) => [x.name, x.quantity, x.amount, x.reason, x.staffFullName, x.timestamp, x.sentToKitchen])).toEqual([
+      ["Trà đào", 3, 90000, "Hủy đơn: Khách về", "Thu Ngân A", 1000, true],
+      ["Bánh mì", 2, 40000, "Hủy đơn: Khách về", "Thu Ngân A", 1000, false],
+    ]);
+    expect(e.reduce((s, x) => s + x.quantity, 0)).toBe(5);
+  });
+  it("cộng với món đã xóa trước khi hủy; đơn đã thanh toán không tính thêm", () => {
+    const r = deletionReportFromBills([cancelled, { ...cancelled, id: "B2", status: "PAID" }]);
+    expect(r.quantity).toBe(1 + 5 + 1);
+    expect(r.amount).toBe(25000 + 130000 + 25000);
+    expect(billRemovedItems({ ...cancelled, status: "PAID" })).toHaveLength(1);
+  });
+  it("đọc món từ itemsJson; không có lý do hủy → 'Hủy đơn'", () => {
+    const e = billCancelledItems({ status: "CANCELLED", itemsJson: JSON.stringify([{ name: "X", price: 10000, quantity: 1 }]) });
+    expect(e.map((x) => [x.name, x.quantity, x.reason])).toEqual([["X", 1, "Hủy đơn"]]);
   });
 });
