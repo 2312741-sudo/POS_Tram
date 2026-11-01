@@ -44,7 +44,10 @@ export default function MyOrdersPage() {
       .sort((a, c) => c.ts - a.ts);
   }, [mine, range, search, currentStoreCode]);
 
-  const total = rows.filter(({ b }) => (b.status || "PAID").toUpperCase() === "PAID").reduce((s, { b }) => s + (Number(b.finalAmount ?? b.totalAmount) || 0), 0);
+  // Số đơn chỉ đếm đơn đã thanh toán; đơn hủy (kể cả hủy khi chưa thanh toán) đếm riêng
+  const paidRows = rows.filter(({ b }) => (b.status || "PAID").toUpperCase() === "PAID");
+  const cancelledCount = rows.filter(({ b }) => (b.status || "").toUpperCase() === "CANCELLED").length;
+  const total = paidRows.reduce((s, { b }) => s + (Number(b.finalAmount ?? b.totalAmount) || 0), 0);
   const chip = (active: boolean) => ({
     padding: "6px 14px", borderRadius: 16, fontSize: 13, fontWeight: active ? 700 : 500, cursor: "pointer",
     border: active ? "1px solid var(--primary)" : "1px solid var(--border)", background: active ? "var(--primary)" : "var(--surface)", color: active ? "#fff" : "var(--subtext)",
@@ -70,7 +73,7 @@ export default function MyOrdersPage() {
       </div>
 
       <div style={{ fontSize: 13, color: "var(--subtext)", marginBottom: 8 }}>
-        {rows.length} đơn • Tổng đã thanh toán: <strong style={{ color: "var(--primary)" }}>{formatVND(total)}</strong>
+        {paidRows.length} đơn đã thanh toán{cancelledCount > 0 ? ` • ${cancelledCount} đã hủy (không tính)` : ""} • Tổng đã thanh toán: <strong style={{ color: "var(--primary)" }}>{formatVND(total)}</strong>
       </div>
 
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflowX: "auto" }}>

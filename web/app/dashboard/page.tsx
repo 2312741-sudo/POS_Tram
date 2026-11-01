@@ -32,6 +32,7 @@ import { nowMs } from "@/lib/kitchen";
 import { useDashboardData } from "@/lib/data-context";
 import { buildToppingLookup, splitLineParts } from "@/lib/topping-split";
 import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
+import { isRevenueBill } from "@/lib/reports";
 
 // Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render
 interface ChartTooltipProps {
@@ -73,7 +74,10 @@ export default function DashboardPage() {
   const todayStart = startOfDay(today).getTime();
   const todayEnd = endOfDay(today).getTime();
 
-  const todayHistory = historyData.filter((h) => {
+  // Chỉ hóa đơn ĐÃ THANH TOÁN: đơn hủy (kể cả hủy khi chưa thanh toán) không tính số hóa đơn / doanh thu / món bán
+  const paidHistory = historyData.filter(isRevenueBill);
+
+  const todayHistory = paidHistory.filter((h) => {
     const ts = (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()) - cutoffMs;
     return ts >= todayStart && ts <= todayEnd;
   });
@@ -97,7 +101,7 @@ export default function DashboardPage() {
     const date = subDays(today, 6 - i);
     const dayStart = startOfDay(date).getTime();
     const dayEnd = endOfDay(date).getTime();
-    const dayRevenue = historyData
+    const dayRevenue = paidHistory
       .filter((h) => {
         const ts = (typeof h.timestamp === "number" ? h.timestamp : new Date(h.timestamp || 0).getTime()) - cutoffMs;
         return ts >= dayStart && ts <= dayEnd;
@@ -111,7 +115,7 @@ export default function DashboardPage() {
 
   // Top products
   const productCountMap: { [key: string]: { name: string; count: number; total: number } } = {};
-  historyData.forEach((order) => {
+  paidHistory.forEach((order) => {
     if (order.items && Array.isArray(order.items)) {
       order.items.forEach((item) => {
         // Topping đếm riêng, không cộng vào món gốc
