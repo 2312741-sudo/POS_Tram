@@ -242,10 +242,13 @@ class VietQrImage extends StatelessWidget {
   final String? bankInfo;
   final String? orderInfo;
   final bool enableZoom;
+  /// url rỗng (chưa có tài khoản ngân hàng của cửa hàng) → hiện cảnh báo + nút thử lại
+  final Future<void> Function()? onRetry;
 
   const VietQrImage({
     super.key,
     required this.url,
+    this.onRetry,
     this.height = 280,
     this.width,
     this.amount,
@@ -257,6 +260,35 @@ class VietQrImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveWidth = width ?? height;
+    if (url.trim().isEmpty) {
+      return Container(
+        height: height,
+        width: effectiveWidth,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: context.tc.dangerLight, borderRadius: AppRadius.brMd),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.landmark, color: context.tc.danger, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Chưa tải được tài khoản ngân hàng của cửa hàng.\nKiểm tra mạng rồi thử lại — chưa tạo QR để tránh nhầm tài khoản.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.danger, fontWeight: FontWeight.w600),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(LucideIcons.refreshCw, size: 16),
+                label: const Text('Thử lại'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     final imageWidget = ClipRRect(
       borderRadius: AppRadius.brMd,
       child: Container(

@@ -205,7 +205,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           autoPrintBill: _autoPrintBill,
         );
         try {
-          await _fb.saveStoreInfo(updated);
+          // Chỉ ghi các trường máy in (không ghi lại cả storeInfo)
+          await _fb.updateStorePaths({
+            'storeInfo/printerType': updated.printerType,
+            'storeInfo/billPrinterIp': updated.billPrinterIp,
+            'storeInfo/kitchenPrinterIp': updated.kitchenPrinterIp,
+            'storeInfo/autoPrintBill': updated.autoPrintBill,
+          });
           await _auth.refreshRolesAndStoreInfo();
           _storeInfo = updated;
         } catch (_) {

@@ -213,6 +213,28 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     } catch (_) {}
   }
 
+  /// VietQR của CHÍNH cửa hàng đang bán. Chưa có tài khoản thật (chưa tải được storeInfo) → '' — KHÔNG tạo QR
+  /// bằng tài khoản mặc định / của cửa hàng khác.
+  String _vietQrUrl(int amount, String orderInfo) {
+    final s = _storeInfo;
+    if (s == null || !s.hasBankAccount || s.storeCode != _fb.currentStoreCode) return '';
+    return VietQrGenerator.generateImageUrl(
+      bankId: s.bankId,
+      bankAccount: s.bankAccount,
+      accountName: s.accountName,
+      amount: amount,
+      orderInfo: orderInfo,
+    );
+  }
+
+  /// Tải lại thông tin cửa hàng (nút "Thử lại" ở QR); bản tạm do mạng lỗi không đè bản thật đang có
+  Future<void> _reloadStoreInfo() async {
+    final info = await _fb.getStoreInfo();
+    if (!mounted) return;
+    if (info.isFallback && (_storeInfo?.hasBankAccount ?? false) && _storeInfo?.storeCode == info.storeCode) return;
+    setState(() => _storeInfo = info);
+  }
+
   Future<void> _loadStoreAndPromotions() async {
     try {
       final info = await _fb.getStoreInfo();
@@ -251,8 +273,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
       if (mounted) {
         setState(() {
-          _storeInfo = info;
-          _vatRate = (info.defaultVatRate == 8.0) ? 0.0 : info.defaultVatRate;
+          // Mạng lỗi → bản tạm: giữ thông tin thật đang có của đúng cửa hàng này
+          final keepCurrent = info.isFallback && _storeInfo != null && !_storeInfo!.isFallback && _storeInfo!.storeCode == info.storeCode;
+          if (!keepCurrent) _storeInfo = info;
+          _vatRate = (_storeInfo!.defaultVatRate == 8.0) ? 0.0 : _storeInfo!.defaultVatRate;
           _allPromotions = promos;
           _campaigns = campaigns;
           for (final c in campaigns) {
@@ -1487,13 +1511,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           }
 
           final splitQrUrl = (splitAction == 'PAY_NOW' && splitPayMethod == 'TRANSFER_QR' && totalSplitAmount > 0)
-              ? VietQrGenerator.generateImageUrl(
-                  bankId: _storeInfo?.bankId ?? 'MB',
-                  bankAccount: _storeInfo?.bankAccount ?? '0987654321',
-                  accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
-                  amount: totalSplitAmount,
-                  orderInfo: VietQrGenerator.buildOrderInfo(
-                    storeCode: _storeInfo?.storeCode ?? 'TRAM01',
+              ? _vietQrUrl(
+                  totalSplitAmount,
+                  VietQrGenerator.buildOrderInfo(
+                    storeCode: _storeInfo?.storeCode ?? _fb.currentStoreCode,
                     tableName: widget.table.name,
                     suffix: 'TACH',
                   ),
@@ -1796,6 +1817,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 Center(
                                   child: VietQrImage(
                                     url: splitQrUrl,
+                                    onRetry: () async {
+                                      await _reloadStoreInfo();
+                                      setDlgState(() {});
+                                    },
                                     height: 190,
                                     amount: totalSplitAmount,
                                     bankInfo:
@@ -4296,16 +4321,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
           final effectiveQrAmount = paymentMethod == 'SPLIT' ? splitQrAmount : _finalTotal;
           final orderInfoText = VietQrGenerator.buildOrderInfo(
-            storeCode: _storeInfo?.storeCode ?? 'TRAM01',
+            storeCode: _storeInfo?.storeCode ?? _fb.currentStoreCode,
             tableName: widget.table.name,
           );
-          final qrUrl = VietQrGenerator.generateImageUrl(
-            bankId: _storeInfo?.bankId ?? 'MB',
-            bankAccount: _storeInfo?.bankAccount ?? '0987654321',
-            accountName: _storeInfo?.accountName ?? 'CHU QUAN FNB',
-            amount: effectiveQrAmount,
-            orderInfo: orderInfoText,
-          );
+          final qrUrl = _vietQrUrl(effectiveQrAmount, orderInfoText);
 
           // Auto QR Check Listener Management
           void updatePaymentListener() {
@@ -4456,6 +4475,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           children: [
                             VietQrImage(
                               url: qrUrl,
+                              onRetry: () async {
+                                await _reloadStoreInfo();
+                                setSheetState(() {});
+                              },
                               height: 280,
                               amount: _finalTotal,
                               bankInfo: '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',
@@ -4552,6 +4575,10 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             children: [
                               VietQrImage(
                                 url: qrUrl,
+                                onRetry: () async {
+                                  await _reloadStoreInfo();
+                                  setSheetState(() {});
+                                },
                                 height: 230,
                                 amount: splitQrAmount,
                                 bankInfo: '${_storeInfo?.bankId} • ${_storeInfo?.bankAccount} • ${_storeInfo?.accountName}',

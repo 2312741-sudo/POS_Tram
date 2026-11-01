@@ -152,34 +152,43 @@ class ReportRepository {
     }
   }
 
+  /// Bản storeInfo đọc được gần nhất của TỪNG cửa hàng — mạng chậm thì dùng lại bản này thay vì bản mặc định
+  static final Map<String, StoreInfoModel> _lastGoodInfo = {};
+
+  StoreInfoModel _fallbackInfo(String code) =>
+      _lastGoodInfo[code] ??
+      StoreInfoModel(
+        storeCode: code,
+        storeName: code == 'TRAM02'
+            ? 'POS Trạm - Chi nhánh 02 (Sài Gòn)'
+            : (code == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - $code'),
+        isFallback: true,
+      );
+
   Future<StoreInfoModel> getStoreInfo() async {
+    final code = _currentStoreCode;
     try {
-      final snap = await storeInfoRef.get().timeout(const Duration(seconds: 2));
+      final snap = await storeInfoRef.get().timeout(const Duration(seconds: 5));
       if (!snap.exists || snap.value == null) {
-        return StoreInfoModel(
-          storeCode: _currentStoreCode,
-          storeName: _currentStoreCode == 'TRAM02'
-              ? 'POS Trạm - Chi nhánh 02 (Sài Gòn)'
-              : (_currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - $_currentStoreCode'),
-        );
+        return _fallbackInfo(code);
       }
       final map = Map<dynamic, dynamic>.from(snap.value as Map);
       if (map['defaultVatRate'] == 8 || map['defaultVatRate'] == 8.0) {
         map['defaultVatRate'] = 0.0;
         storeInfoRef.update({'defaultVatRate': 0.0}).catchError((_) {});
       }
-      return await _withChainLoyalty(StoreInfoModel.fromMap(map, _currentStoreCode));
+      final info = await _withChainLoyalty(StoreInfoModel.fromMap(map, code));
+      _lastGoodInfo[code] = info;
+      return info;
     } catch (_) {
-      return StoreInfoModel(
-        storeCode: _currentStoreCode,
-        storeName: _currentStoreCode == 'TRAM02'
-            ? 'POS Trạm - Chi nhánh 02 (Sài Gòn)'
-            : (_currentStoreCode == 'TRAM01' ? 'POS Trạm - Trụ sở 01 (Đà Lạt)' : 'POS Trạm - $_currentStoreCode'),
-      );
+      return _fallbackInfo(code);
     }
   }
 
   Future<void> saveStoreInfo(StoreInfoModel info) async {
+    if (info.isFallback) {
+      throw StateError('Chưa tải được thông tin cửa hàng — không lưu để tránh ghi đè tài khoản ngân hàng / máy in thật.');
+    }
     // Dùng update() thay vì set(): giữ nguyên các trường do máy chủ / trường khác ghi mà
     // model không quản lý (ownerId, chamCongStoreId, chamCongStoreName...).
     await storeInfoRef.update(info.toMap());
@@ -188,6 +197,9 @@ class ReportRepository {
   /// Cài đặt cửa hàng: ghi các trường chỉnh được ở màn Cài đặt cửa hàng (thông tin, VietQR, tùy chọn bán hàng,
   /// giờ bắt đầu ngày kinh doanh). Dùng update() nên không đụng các trường khác (máy in, điểm, Chấm Công…).
   Future<void> saveStoreSettings(StoreInfoModel info, {required int businessDayStartMinute}) async {
+    if (info.isFallback) {
+      throw StateError('Chưa tải được thông tin cửa hàng — tải lại rồi mới lưu.');
+    }
     final start = BusinessDay.normalize(businessDayStartMinute);
     await storeInfoRef.update({
       'storeName': info.storeName,
@@ -289,8 +301,6 @@ class ReportRepository {
         phone: '0987654321',
         wifiName: 'Tram_WiFi_Free',
         bankId: 'MB',
-        bankAccount: '0987654321',
-        accountName: 'CHU QUAN FNB',
         allowStackPromotions: true,
         defaultVatRate: 0.0,
       );

@@ -129,6 +129,11 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
   Future<void> _save() async {
     final info = _info;
     if (info == null || !_canEdit) return;
+    if (info.isFallback) {
+      _snack('Chưa tải được cài đặt cửa hàng (mạng chậm). Đang tải lại — lưu sau khi hiện đúng thông tin.', error: true);
+      await _load();
+      return;
+    }
     if (_nameCtrl.text.trim().isEmpty) {
       _snack('Vui lòng nhập tên cửa hàng', error: true);
       return;

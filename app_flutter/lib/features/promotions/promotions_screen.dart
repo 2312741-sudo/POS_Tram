@@ -72,23 +72,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
 
   Future<void> _toggleStackPromotions(bool value) async {
     if (_storeInfo == null) return;
-    final updated = StoreInfoModel(
-      storeCode: _storeInfo!.storeCode,
-      storeName: _storeInfo!.storeName,
-      address: _storeInfo!.address,
-      phone: _storeInfo!.phone,
-      wifiName: _storeInfo!.wifiName,
-      bankId: _storeInfo!.bankId,
-      bankAccount: _storeInfo!.bankAccount,
-      accountName: _storeInfo!.accountName,
-      allowStackPromotions: value,
-      defaultVatRate: _storeInfo!.defaultVatRate,
-      kitchenPrinterIp: _storeInfo!.kitchenPrinterIp,
-      billPrinterIp: _storeInfo!.billPrinterIp,
-      printerType: _storeInfo!.printerType,
-    );
-    await _fb.saveStoreInfo(updated);
-    setState(() => _storeInfo = updated);
+    // Chỉ ghi đúng trường này — ghi cả storeInfo từ bản trong máy có thể đè tài khoản ngân hàng / máy in thật
+    await _fb.updateStorePaths({'storeInfo/allowStackPromotions': value});
+    setState(() => _storeInfo = _storeInfo!.copyWith(allowStackPromotions: value));
 
     await _fb.logAction(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,

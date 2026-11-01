@@ -2557,13 +2557,20 @@ function TablesPageContent() {
 
                 {/* Khối VietQR nếu chọn Chuyển khoản */}
                 {paymentMethod === "TRANSFER" && (() => {
-                  const targetStore =
-                    stores.find(
-                      (s) => s.storeCode === (selectedTableForOrder.storeCode || currentStoreCode)
-                    ) || currentStore;
+                  // CHỈ tài khoản của đúng chi nhánh của bàn — không lấy chi nhánh đang chọn hay tài khoản mặc định
+                  const targetStore = stores.find(
+                    (s) => s.storeCode === (selectedTableForOrder.storeCode || currentStoreCode)
+                  );
                   const bankId = targetStore?.bankId || "MB";
-                  const bankAccount = targetStore?.bankAccount || "0987654321";
-                  const accountName = targetStore?.accountName || "CHU CUA HANG TRAM FNB";
+                  const bankAccount = (targetStore?.bankAccount || "").trim();
+                  const accountName = targetStore?.accountName || "";
+                  if (!bankAccount) {
+                    return (
+                      <div role="alert" style={{ marginTop: "12px", padding: "12px 14px", borderRadius: "12px", border: "1.5px dashed var(--danger)", color: "var(--danger)", fontSize: "12px", fontWeight: 600 }}>
+                        Chi nhánh {selectedTableForOrder.storeCode || currentStoreCode} chưa có tài khoản ngân hàng (Cài đặt cửa hàng → Thanh toán QR) — chưa tạo mã QR để tránh nhầm tài khoản.
+                      </div>
+                    );
+                  }
                   const orderTotal = Math.max(
                     0,
                     calculateTableTotal(parseOrderItems(selectedTableForOrder.currentOrderJson)) - promo.total - pointsDiscountNow

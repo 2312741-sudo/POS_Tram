@@ -41,8 +41,10 @@ class StoreInfoModel {
     this.phone = '',
     this.wifiName = '',
     this.bankId = 'MB',
-    this.bankAccount = '0987654321',
-    this.accountName = 'NGUYEN THANH TAM',
+    // KHÔNG đặt số tài khoản / chủ tài khoản mặc định: chưa tải được thông tin cửa hàng thì QR không được
+    // hiện tài khoản của người khác (lỗi TRAM02 hiện tài khoản cứng khi mạng chậm)
+    this.bankAccount = '',
+    this.accountName = '',
     this.allowStackPromotions = true,
     this.defaultVatRate = 0.0,
     this.kitchenPrinterIp = '192.168.1.200',
@@ -57,7 +59,14 @@ class StoreInfoModel {
     this.businessDayStartMinute = 0,
     this.chamCongStoreId = '',
     this.chamCongStoreName = '',
+    this.isFallback = false,
   });
+
+  /// true = KHÔNG đọc được storeInfo (mạng chậm / lỗi) — đây là bản tạm, không được dùng để tạo QR hay ghi ngược lên máy chủ
+  final bool isFallback;
+
+  /// Có tài khoản ngân hàng THẬT của cửa hàng để tạo VietQR
+  bool get hasBankAccount => !isFallback && bankAccount.trim().isNotEmpty;
 
   bool get isChamCongLinked => chamCongStoreId.isNotEmpty;
 
@@ -83,8 +92,8 @@ class StoreInfoModel {
       phone: map['phone']?.toString() ?? '',
       wifiName: map['wifiName']?.toString() ?? '',
       bankId: map['bankId']?.toString() ?? 'MB',
-      bankAccount: map['bankAccount']?.toString() ?? '0987654321',
-      accountName: map['accountName']?.toString() ?? 'CHU CUA HANG',
+      bankAccount: map['bankAccount']?.toString() ?? '',
+      accountName: map['accountName']?.toString() ?? '',
       allowStackPromotions: map['allowStackPromotions'] != false,
       defaultVatRate: rawVat == 8.0 ? 0.0 : rawVat,
       kitchenPrinterIp: map['kitchenPrinterIp']?.toString() ?? '192.168.1.200',
@@ -167,6 +176,7 @@ class StoreInfoModel {
       businessDayStartMinute: businessDayStartMinute,
       chamCongStoreId: chamCongStoreId,
       chamCongStoreName: chamCongStoreName,
+      isFallback: isFallback,
     );
   }
 
