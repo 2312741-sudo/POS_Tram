@@ -409,8 +409,11 @@ export function buildBenefitFields(
     }
     case "ITEMPRICERULE": {
       const v = Math.round(toInt(form.fixedPriceValue) || 0);
+      const isMangoTea = (form.code?.trim() || "") === "KM/G-003" || (form.name?.toLowerCase() || "").includes("trà xoài");
+      const defaultQty = isMangoTea ? 1 : 0;
+      const parsedQty = Math.round(toInt(form.itemMaxQty) || defaultQty);
       return {
-        tiers: [buildTier({ tierId, threshold: 0, benefitMode: "FIXEDPRICE", value: v, maxRewardQty: Math.max(0, Math.round(toInt(form.itemMaxQty) || 0)) })],
+        tiers: [buildTier({ tierId, threshold: 0, benefitMode: "FIXEDPRICE", value: v, maxRewardQty: Math.max(0, parsedQty) })],
         buyConditions: [],
         includedItemIds: form.includedItemIds,
         includedGroupIds: form.includedGroupIds,

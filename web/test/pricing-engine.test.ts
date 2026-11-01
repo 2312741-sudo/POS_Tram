@@ -491,6 +491,18 @@ describe("nhóm món & đồng giá/đồng giảm (bổ sung)", () => {
     expect(q(c, [line("1", "XOAI", 1, 32000), line("2", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(16000);
   });
 
+  it("Safeguard KM/G-003 Trà Xoài: dù maxRewardQty=0 trong DB thì 100 ly vẫn chỉ giảm đúng 1 ly (16K)", () => {
+    const c = camp({
+      campaignId: "CAM_1792678747107_dn5u",
+      programCode: "KM/G-003",
+      campaignType: "ITEMPRICERULE",
+      includedItemIds: ["Trà Olong - Xoài"],
+      tiers: [tier({ mode: "FIXEDPRICE", value: 16000, maxQty: 0 })],
+    });
+    const res = q(c, [line("1", "Trà Olong - Xoài", 100, 32000)]);
+    expect(res.totalPromotionDiscount).toBe(16000);
+  });
+
   it("Đồng giảm (PERCENT) cho món thuộc chương trình", () => {
     const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "PERCENT", value: 5000 })] });
     expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(32000);

@@ -116,7 +116,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     _isShiftOpen = _fb.activeShiftCache != null && _fb.activeShiftCache!.isOpen;
     widget.table.ensureCodes();
     _cart = List.from(widget.initialProducts.isNotEmpty ? widget.initialProducts : widget.table.currentItems);
-    _guestCount = widget.table.guestCount ?? 2;
+    _guestCount = widget.table.guestCount ?? 1;
     // Phục hồi ưu đãi khuyến mãi đã áp dụng từ bàn (giúp treo đơn qua giờ combo không bị mất)
     _appliedDiscounts = List.from(widget.table.currentDiscounts);
     if (_cart.isNotEmpty) {
@@ -2803,7 +2803,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             if (sel) {
                               setDlgState(() {
                                 discountMode = 'AMOUNT';
-                                if (valCtrl.text.isEmpty) valCtrl.text = '5000';
+                                if (valCtrl.text.isEmpty) valCtrl.text = '5,000';
                               });
                             }
                           },
@@ -2813,7 +2813,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: valCtrl,
+                    controller: valCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: discountMode == 'PERCENT' ? 'Tỷ lệ giảm mỗi phần (%)' : 'Số tiền giảm mỗi phần (VND)',
@@ -2836,7 +2836,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         : [5000, 10000, 20000, 50000].map((a) => ActionChip(
                             label: Text(FormatUtils.vnd(a)),
                             onPressed: () {
-                              valCtrl.text = '$a';
+                              valCtrl.text = moneyInputText(a);
                               setDlgState(() {});
                             },
                           )).toList(),
@@ -4212,7 +4212,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                         children: [
                           Expanded(
                             child: TextField(
-                              controller: manualValueCtrl,
+                              controller: manualValueCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 labelText: manualType == 'PERCENT' ? 'Giảm %' : 'Giảm số tiền VND',
@@ -4290,8 +4290,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (!await _ensureShiftOpen() || !mounted) return;
 
     String paymentMethod = 'CASH'; // 'CASH', 'TRANSFER_QR', 'SPLIT'
-    final cashGivenCtrl = TextEditingController(text: '$_finalTotal');
-    final cashSplitCtrl = TextEditingController(text: '${(_finalTotal ~/ 2)}');
+    final cashGivenCtrl = TextEditingController(text: moneyInputText(_finalTotal));
+    final cashSplitCtrl = TextEditingController(text: moneyInputText(_finalTotal ~/ 2));
     int changeAmount = 0;
     bool isProcessingPayment = false;
     String? paymentError; // Lỗi hiển thị ngay trong sheet
@@ -4518,7 +4518,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       onChanged: (m) => setSheetState(() {
                         paymentMethod = m;
                         if (m == 'SPLIT' && (cashSplitCtrl.text.isEmpty || cashSplitCtrl.text == '0')) {
-                          cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                          cashSplitCtrl.text = moneyInputText(_finalTotal ~/ 2);
                         }
                       }),
                     ),
@@ -4527,7 +4527,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                     // CASH CALCULATOR
                     if (paymentMethod == 'CASH') ...[
                       TextField(
-                        controller: cashGivenCtrl,
+                        controller: cashGivenCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                         keyboardType: TextInputType.number,
                         style: moneyInputStyle,
                         decoration: const InputDecoration(
@@ -4541,7 +4541,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       const SizedBox(height: 10),
                       QuickCashAmounts(
                         amountDue: _finalTotal,
-                        onPick: (v) => setSheetState(() => cashGivenCtrl.text = '$v'),
+                        onPick: (v) => setSheetState(() => cashGivenCtrl.text = moneyInputText(v)),
                       ),
                       const SizedBox(height: 12),
                       ChangeDueRow(change: changeAmount, shortBy: cashShortBy),
@@ -4590,7 +4590,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             Text('Phân bổ thanh toán hỗn hợp', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.bold, color: context.tc.info)),
                             const SizedBox(height: 10),
                             TextField(
-                              controller: cashSplitCtrl,
+                              controller: cashSplitCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                               keyboardType: TextInputType.number,
                               style: moneyInputStyle.copyWith(fontSize: 18),
                               decoration: const InputDecoration(
@@ -4607,7 +4607,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                                     onPressed: () {
-                                      cashSplitCtrl.text = '${(_finalTotal ~/ 2)}';
+                                      cashSplitCtrl.text = moneyInputText(_finalTotal ~/ 2);
                                       setSheetState(() {});
                                     },
                                     child: const Text('50% tiền mặt', style: TextStyle(fontSize: 13)),
@@ -4618,7 +4618,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                                     onPressed: () {
-                                      cashSplitCtrl.text = '$_finalTotal';
+                                      cashSplitCtrl.text = moneyInputText(_finalTotal);
                                       setSheetState(() {});
                                     },
                                     child: const Text('100% tiền mặt', style: TextStyle(fontSize: 13)),
@@ -4676,7 +4676,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       ],
                       const SizedBox(height: 10),
                       TextField(
-                        controller: cashGivenCtrl,
+                        controller: cashGivenCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                         keyboardType: TextInputType.number,
                         style: moneyInputStyle.copyWith(fontSize: 18),
                         decoration: InputDecoration(

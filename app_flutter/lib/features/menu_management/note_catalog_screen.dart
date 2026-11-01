@@ -2,6 +2,7 @@
 //
 // Danh mục note & topping của chi nhánh: nhóm note (câu ghi chú nhanh) và nhóm topping (tên + giá).
 // Gắn vào nhóm món / món ở hộp thoại sửa nhóm món & sửa món. Xem docs/NOTE_CATALOG.md.
+import '../../core/utils/text_formatters.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -157,7 +158,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
     final nameCtrl = TextEditingController(text: g?.name ?? '');
     final maxCtrl = TextEditingController(text: (g?.max ?? 0) > 0 ? '${g!.max}' : '');
     final names = <TextEditingController>[for (final t in g?.items ?? const <ToppingItem>[]) TextEditingController(text: t.name)];
-    final prices = <TextEditingController>[for (final t in g?.items ?? const <ToppingItem>[]) TextEditingController(text: '${t.price}')];
+    final prices = <TextEditingController>[for (final t in g?.items ?? const <ToppingItem>[]) TextEditingController(text: moneyInputText(t.price))];
     final ids = <String>[for (final t in g?.items ?? const <ToppingItem>[]) t.id];
     var active = g?.active ?? true;
     var multi = g?.multi ?? true;
@@ -186,7 +187,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                   Row(children: [
                     Expanded(flex: 3, child: TextField(controller: names[i], decoration: const InputDecoration(hintText: 'Tên'))),
                     const SizedBox(width: 8),
-                    Expanded(flex: 2, child: TextField(controller: prices[i], keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'Giá (đ)'))),
+                    Expanded(flex: 2, child: TextField(controller: prices[i], inputFormatters: [ThousandsSeparatorInputFormatter()], keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'Giá (đ)'))),
                     IconButton(icon: const Icon(LucideIcons.x, size: 18), onPressed: () => setSt(() {
                           names.removeAt(i);
                           prices.removeAt(i);
@@ -217,7 +218,7 @@ class _NoteCatalogScreenState extends State<NoteCatalogScreen> {
                 final list = <ToppingItem>[
                   for (var i = 0; i < names.length; i++)
                     if (names[i].text.trim().isNotEmpty)
-                      ToppingItem(id: ids[i], name: names[i].text.trim(), price: (int.tryParse(prices[i].text.trim()) ?? 0).clamp(0, 100000000)),
+                      ToppingItem(id: ids[i], name: names[i].text.trim(), price: (parseMoneyInput(prices[i].text) ?? 0).clamp(0, 100000000)),
                 ];
                 final saved = ToppingGroup(
                   id: g?.id ?? _newId('tg'),

@@ -365,7 +365,7 @@ interface DashboardContextType {
     }
   ) => Promise<{ success: boolean; billId?: string; billCode?: string; customerId?: string; error?: string }>;
   saveTable: (
-    tableData: { id?: string; name: string; zone: string; inUse?: boolean },
+    tableData: { id?: string; oldId?: string; name: string; zone: string; inUse?: boolean },
     storeCode?: string
   ) => Promise<{ success: boolean; error?: string }>;
   deleteTable: (tableId: string, storeCode?: string) => Promise<{ success: boolean; error?: string }>;
@@ -1968,20 +1968,62 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
   const saveTable = useCallback(
     async (
-      tableData: { id?: string; name: string; zone: string; inUse?: boolean },
+      tableData: { id?: string; oldId?: string; name: string; zone: string; inUse?: boolean },
       storeCode?: string
     ) => {
       try {
         const targetCode = storeCode || resolveWriteStoreCode(currentStoreCode);
-        const key = tableData.id || `${tableData.zone}_${tableData.name}`;
-        const payload = {
-          name: tableData.name,
-          zone: tableData.zone,
-          inUse: tableData.inUse ?? false,
-          currentOrderJson: "",
-        };
-        await set(ref(db, `stores/${targetCode}/tables/${key}`), payload);
-        return { success: true };
+        const name = tableData.name.trim();
+        const zone = tableData.zone.trim() || "Khu A";
+        const newKey = `${zone}_${name}`;
+        const oldKey = tableData.oldId || (tableData.id && tableData.id !== newKey ? tableData.id : null);
+
+        if (oldKey && oldKey !== newKey) {
+          // Đang đổi tên hoặc đổi khu vực của bàn
+          const newSnap = await get(ref(db, `stores/${targetCode}/tables/${newKey}`));
+          if (newSnap.exists()) {
+            return { success: false, error: `Bàn "${name}" trong khu "${zone}" đã tồn tại!` };
+          }
+          const oldSnap = await get(ref(db, `stores/${targetCode}/tables/${oldKey}`));
+          const oldVal = oldSnap.exists() ? (oldSnap.val() as Record<string, unknown>) : {};
+          const payload = {
+            ...oldVal,
+            name,
+            zone,
+            inUse: oldVal.inUse ?? tableData.inUse ?? false,
+            currentOrderJson: oldVal.currentOrderJson ?? "",
+          };
+
+          const updates: Record<string, unknown> = {};
+          updates[`stores/${targetCode}/tables/${newKey}`] = payload;
+          updates[`stores/${targetCode}/tables/${oldKey}`] = null;
+          await update(ref(db), updates);
+          return { success: true };
+        } else if (oldKey) {
+          // Cập nhật bàn đã có (không đổi khóa bàn)
+          await update(ref(db, `stores/${targetCode}/tables/${newKey}`), {
+            name,
+            zone,
+          });
+          return { success: true };
+        } else {
+          // Tạo mới bàn
+          const newSnap = await get(ref(db, `stores/${targetCode}/tables/${newKey}`));
+          if (newSnap.exists()) {
+            return { success: false, error: `Bàn "${name}" trong khu "${zone}" đã tồn tại!` };
+          }
+          const payload = {
+            name,
+            zone,
+            inUse: false,
+            currentOrderJson: "",
+            capacity: 4,
+            isReserved: false,
+            reservationDeposit: 0,
+          };
+          await set(ref(db, `stores/${targetCode}/tables/${newKey}`), payload);
+          return { success: true };
+        }
       } catch (e) {
         return { success: false, error: errorMessage(e) || "Lỗi lưu bàn" };
       }

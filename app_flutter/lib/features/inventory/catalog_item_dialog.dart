@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/text_formatters.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory_models.dart';
@@ -38,7 +39,7 @@ class _CatalogItemDialogState extends State<CatalogItemDialog> {
     _nameCtrl = TextEditingController(text: item?.name ?? '');
     _groupCtrl = TextEditingController(text: item?.managementGroup ?? '');
     _unitCtrl = TextEditingController(text: item?.baseUnitId ?? '');
-    _costCtrl = TextEditingController(text: item?.costPrice.toString() ?? '0');
+    _costCtrl = TextEditingController(text: moneyInputText(item?.costPrice ?? 0));
     _minStockCtrl = TextEditingController(text: item?.minStock.toString() ?? '0');
     _maxStockCtrl = TextEditingController(text: item?.maxStock.toString() ?? '0');
     _descCtrl = TextEditingController(text: item?.description ?? '');
@@ -75,7 +76,7 @@ class _CatalogItemDialogState extends State<CatalogItemDialog> {
         kind: _selectedKind,
         managementGroup: _groupCtrl.text,
         baseUnitId: _unitCtrl.text,
-        costPrice: int.tryParse(_costCtrl.text) ?? 0,
+        costPrice: parseMoneyInput(_costCtrl.text) ?? 0,
         minStock: int.tryParse(_minStockCtrl.text) ?? 0,
         maxStock: int.tryParse(_maxStockCtrl.text) ?? 0,
         trackStock: _trackStock,
@@ -160,7 +161,7 @@ class _CatalogItemDialogState extends State<CatalogItemDialog> {
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller: _costCtrl,
+                      controller: _costCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                       decoration: const InputDecoration(labelText: 'Giá vốn'),
                       keyboardType: TextInputType.number,
                     ),

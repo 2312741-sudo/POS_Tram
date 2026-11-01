@@ -517,7 +517,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   }
 
   Future<void> _showConfigPointRateDialog() async {
-    final redeemCtrl = TextEditingController(text: _pointRedeemRate.toString());
+    final redeemCtrl = TextEditingController(text: moneyInputText(_pointRedeemRate));
     final earnCtrl = TextEditingController(text: _pointEarnRate.toString());
 
     await showDialog(
@@ -544,7 +544,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: redeemCtrl,
+              controller: redeemCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Giá trị 1 điểm đổi thưởng (VNĐ)',

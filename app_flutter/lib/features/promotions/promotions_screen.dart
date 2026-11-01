@@ -1,4 +1,5 @@
 // lib/features/promotions/promotions_screen.dart
+import '../../core/utils/text_formatters.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -92,9 +93,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
     final codeCtrl = TextEditingController(text: promoToEdit?.code ?? '');
     final nameCtrl = TextEditingController(text: promoToEdit?.name ?? '');
     final descCtrl = TextEditingController(text: promoToEdit?.description ?? '');
-    final valueCtrl = TextEditingController(text: promoToEdit != null ? '${promoToEdit.value}' : '10');
-    final maxDiscCtrl = TextEditingController(text: promoToEdit != null ? '${promoToEdit.maxDiscountAmount}' : '0');
-    final minBillCtrl = TextEditingController(text: promoToEdit != null ? '${promoToEdit.minBillAmount}' : '0');
+    final valueCtrl = TextEditingController(text: promoToEdit != null ? moneyInputText(promoToEdit.value) : '10');
+    final maxDiscCtrl = TextEditingController(text: promoToEdit != null ? moneyInputText(promoToEdit.maxDiscountAmount) : '0');
+    final minBillCtrl = TextEditingController(text: promoToEdit != null ? moneyInputText(promoToEdit.minBillAmount) : '0');
     final maxUsageCtrl = TextEditingController(text: promoToEdit != null ? '${promoToEdit.maxUsage}' : '0');
 
     String selectedType = promoToEdit?.type ?? 'PERCENT_BILL';
@@ -155,7 +156,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: valueCtrl,
+                            controller: valueCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
                               labelText: selectedType == 'PERCENT_BILL' ? 'Mức giảm (%) *' : 'Số tiền giảm (VND) *',
@@ -167,7 +168,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
-                              controller: maxDiscCtrl,
+                              controller: maxDiscCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                               keyboardType: TextInputType.number,
                               decoration: const InputDecoration(
                                 labelText: 'Giảm tối đa (VND)',
@@ -183,7 +184,7 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: minBillCtrl,
+                            controller: minBillCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                               labelText: 'Đơn tối thiểu (VND)',
@@ -267,9 +268,9 @@ class _PromotionsScreenState extends State<PromotionsScreen> {
                     name: nameCtrl.text.trim(),
                     description: descCtrl.text.trim(),
                     type: selectedType,
-                    value: int.tryParse(valueCtrl.text.trim()) ?? 0,
-                    maxDiscountAmount: int.tryParse(maxDiscCtrl.text.trim()) ?? 0,
-                    minBillAmount: int.tryParse(minBillCtrl.text.trim()) ?? 0,
+                    value: parseMoneyInput(valueCtrl.text) ?? 0,
+                    maxDiscountAmount: parseMoneyInput(maxDiscCtrl.text) ?? 0,
+                    minBillAmount: parseMoneyInput(minBillCtrl.text) ?? 0,
                     maxUsage: int.tryParse(maxUsageCtrl.text.trim()) ?? 0,
                     startDate: startDate.millisecondsSinceEpoch,
                     endDate: endDate.millisecondsSinceEpoch,

@@ -557,7 +557,10 @@ PriceQuoteModel calculatePrice({
         var tier = campaign.tiers.first;
         // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
         // maxRewardQty > 0: chỉ áp cho tối đa N phần trong đơn (0 = mọi phần)
-        int unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1 << 30;
+        // Safeguard cho mã KM Trà Xoài (KM/G-003): luôn chỉ giảm tối đa 1 phần kể cả khi DB bị cấu hình 0 hoặc rỗng
+        final isMangoTeaSpecial = campaign.campaignId == 'CAM_1792678747107_dn5u' || campaign.programCode == 'KM/G-003';
+        final defaultMax = isMangoTeaSpecial ? 1 : 1 << 30;
+        int unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : defaultMax;
         bool applied = false;
         for (var line in lines) {
           if (unitsLeft <= 0) break;

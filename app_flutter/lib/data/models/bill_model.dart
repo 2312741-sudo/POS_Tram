@@ -259,7 +259,7 @@ class BillModel {
       closedAt = timestampFallback;
     }
     final isLegacySplitBill =
-        tableName.contains('(Tách)') || (parentBillId != null && parentBillId.trim().isNotEmpty);
+        (map['tableName']?.toString() ?? '').contains('(Tách)') || (parentBillId != null && parentBillId.trim().isNotEmpty);
     if (status == 'OPEN' && isLegacySplitBill) {
       status = 'PAID';
       closedAt ??= createdAt > 0 ? createdAt : null;
@@ -322,11 +322,15 @@ class BillModel {
     );
   }
 
-  /// Tên bàn GỐC của bàn tự tách ('Bàn 01 (2)' → 'Bàn 01', 'Mang về (3)' → 'Mang về'); bàn tách tay '(Tách)' giữ nguyên.
-  /// Khớp TableModel.isAutoSplit và baseTableName (web).
+  /// Tên bàn GỐC của bàn tách — tự tách ('Bàn 01 (2)') lẫn tách tay ('Mang về 01 (Tách)') đều về 'Bàn 01' / 'Mang về 01'.
+  /// Khớp baseTableName (web).
   static String baseTableName(String name) {
     final n = name.trim();
-    final base = n.replaceFirst(RegExp(r'\s\(\d+\)\s*$'), '').trim();
+    final suffix = RegExp(r'\s\((\d+|Tách)\)\s*$');
+    var base = n;
+    while (suffix.hasMatch(base)) {
+      base = base.replaceFirst(suffix, '').trim();
+    }
     return base.isEmpty ? n : base;
   }
 

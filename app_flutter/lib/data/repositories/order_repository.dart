@@ -257,7 +257,7 @@ class OrderRepository {
         capacity: current.capacity,
         isSplitTable: true,
         openedAt: now,
-        guestCount: (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 2,
+        guestCount: (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 1,
         orderingBy: cleanUser,
         orderingByName: cleanName,
         orderingAt: now,
@@ -272,7 +272,7 @@ class OrderRepository {
     final claimed = TableModel.fromMap(current.toMap(), current.firebaseKey);
     claimed.openedAt ??= now;
     if (claimed.guestCount == null || claimed.guestCount! <= 0) {
-      claimed.guestCount = (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 2;
+      claimed.guestCount = (requestedTable.guestCount != null && requestedTable.guestCount! > 0) ? requestedTable.guestCount : 1;
     }
     claimed.orderingBy = cleanUser;
     claimed.orderingByName = cleanName;
@@ -665,7 +665,7 @@ class OrderRepository {
       target.currentOrderJson = jsonEncode(combined.map((e) => e.toMap()).toList());
       target.clearPrePrint();
       target.openedAt ??= sourceTable.openedAt ?? now;
-      target.guestCount ??= 2;
+      target.guestCount ??= 1;
       target.ensureCodes();
       if (remainingItems.isEmpty && sourceTable.deletedItems.isNotEmpty) {
         target.deletedItemsJson = DeletedItemsLogic.append(target.deletedItemsJson, sourceTable.deletedItems);

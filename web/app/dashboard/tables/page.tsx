@@ -483,7 +483,7 @@ function TablesPageContent() {
       const tableKey = `${zone}_${name}`;
 
       const res = await saveTable({
-        id: editId || tableKey,
+        oldId: editId || undefined,
         name,
         zone,
       });
@@ -675,7 +675,7 @@ function TablesPageContent() {
         inUse: true,
         isReserved: false,
         openedAt: new Date().toISOString(),
-        guestCount: 2,
+        guestCount: 1,
         reservationCustomer: null,
         reservationPhone: null,
         reservationTime: null,

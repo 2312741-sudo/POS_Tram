@@ -691,7 +691,10 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         const tier = campaign.tiers[0];
         // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
         // maxRewardQty > 0: chỉ áp cho tối đa N phần trong đơn (0 = mọi phần)
-        let unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : Infinity;
+        // Safeguard cho mã KM Trà Xoài (KM/G-003): luôn chỉ giảm tối đa 1 phần kể cả khi DB bị cấu hình 0 hoặc rỗng
+        const isMangoTeaSpecial = campaign.campaignId === "CAM_1792678747107_dn5u" || campaign.programCode === "KM/G-003";
+        const defaultMax = isMangoTeaSpecial ? 1 : Infinity;
+        let unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : defaultMax;
         let applied = false;
         for (const line of lines) {
           if (unitsLeft <= 0) break;

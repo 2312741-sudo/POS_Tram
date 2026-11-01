@@ -1,4 +1,5 @@
 // lib/features/menu_management/menu_management_screen.dart
+import '../../core/utils/text_formatters.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -137,8 +138,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           : (existing == null ? 'SP${(_products.length + 1).toString().padLeft(3, '0')}' : ''),
     );
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final priceCtrl = TextEditingController(text: existing?.price.toString() ?? '');
-    final costPriceCtrl = TextEditingController(text: existing?.costPrice != null ? existing!.costPrice.toString() : '');
+    final priceCtrl = TextEditingController(text: existing != null ? moneyInputText(existing.price) : '');
+    final costPriceCtrl = TextEditingController(text: existing?.costPrice != null ? moneyInputText(existing!.costPrice!) : '');
     final unitCtrl = TextEditingController(text: existing?.unit ?? '');
     String selectedCat = existing?.category ?? (_categories.isNotEmpty ? _categories.first.name : '');
     String? base64Image = existing?.imageBase64;
@@ -218,11 +219,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 TextField(controller: nameCtrl, style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Tên sản phẩm *')),
                 const SizedBox(height: 12),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number,
+                TextField(controller: priceCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()], keyboardType: TextInputType.number,
                   style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Giá bán (đ) *')),
                 const SizedBox(height: 12),
-                TextField(controller: costPriceCtrl, keyboardType: TextInputType.number,
+                TextField(controller: costPriceCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()], keyboardType: TextInputType.number,
                   style: TextStyle(color: context.tc.textPrimary),
                   decoration: const InputDecoration(labelText: 'Giá vốn (đ, để tính lãi gộp)')),
                 const SizedBox(height: 12),
@@ -289,11 +290,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty || priceCtrl.text.trim().isEmpty) return;
-                final costParsed = int.tryParse(costPriceCtrl.text.trim());
+                final costParsed = parseMoneyInput(costPriceCtrl.text);
                 final baseProd = existing ?? ProductModel(
                   name: nameCtrl.text.trim(),
                   code: codeCtrl.text.trim(),
-                  price: int.tryParse(priceCtrl.text.trim()) ?? 0,
+                  price: parseMoneyInput(priceCtrl.text) ?? 0,
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
                   category: selectedCat.isEmpty ? 'Món khác' : selectedCat,
                   isTopping: isTopping,
@@ -301,7 +302,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 final product = baseProd.copyWith(
                   name: nameCtrl.text.trim(),
                   code: codeCtrl.text.trim(),
-                  price: int.tryParse(priceCtrl.text.trim()) ?? 0,
+                  price: parseMoneyInput(priceCtrl.text) ?? 0,
                   costPrice: costParsed,
                   unit: unitCtrl.text.trim().isEmpty ? 'phần' : unitCtrl.text.trim(),
                   category: selectedCat.isEmpty ? 'Món khác' : selectedCat,

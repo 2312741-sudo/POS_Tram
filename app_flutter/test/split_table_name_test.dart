@@ -7,7 +7,8 @@ void main() {
     expect(BillModel.baseTableName('Bàn 01 (2)'), 'Bàn 01');
     expect(BillModel.baseTableName('Mang về (3) '), 'Mang về');
     expect(BillModel.baseTableName('Bàn 01'), 'Bàn 01');
-    expect(BillModel.baseTableName('Bàn 01 (Tách)'), 'Bàn 01 (Tách)');
+    expect(BillModel.baseTableName('Bàn 01 (Tách)'), 'Bàn 01');
+    expect(BillModel.baseTableName('MANG VỀ 01 (Tách) (2)'), 'MANG VỀ 01');
   });
 
   test('hóa đơn của bàn tự tách đọc ra tên bàn gốc', () {

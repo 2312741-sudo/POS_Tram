@@ -102,10 +102,12 @@ export function buildOrderItemsPayload(
 }
 
 /**
- * Tên bàn GỐC của bàn tự tách khi 2 máy cùng thao tác một bàn ("Bàn 01 (2)" → "Bàn 01", "Mang về (3)" → "Mang về").
- * Bàn tách tay "(Tách)" giữ nguyên. Khớp TableModel.isAutoSplit / BillModel.baseTableName (Dart).
+ * Tên bàn GỐC của bàn tách — tự tách khi 2 máy cùng thao tác ("Bàn 01 (2)") lẫn tách tay ("Mang về 01 (Tách)")
+ * đều về "Bàn 01" / "Mang về 01". Khớp BillModel.baseTableName (Dart).
  */
 export function baseTableName(name: unknown): string {
   const n = String(name ?? "").trim();
-  return n.replace(/\s\(\d+\)\s*$/, "").trim() || n;
+  let base = n;
+  while (/\s\((\d+|Tách)\)\s*$/.test(base)) base = base.replace(/\s\((\d+|Tách)\)\s*$/, "").trim();
+  return base || n;
 }

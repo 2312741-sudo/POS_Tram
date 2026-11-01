@@ -482,6 +482,49 @@ void main() {
       expect(result.netMoney, 14000);
     });
 
+    test('A-22b: Khuyến mãi Trà Xoài CAM_1792678747107_dn5u dù đơn 100 ly vẫn chỉ giảm đúng 1 ly (16K)', () {
+      final lines = [
+        PricingLineItem(
+          lineId: 'L1',
+          itemId: 'DR202500003',
+          itemName: 'Trà Olong - Xoài',
+          unitPrice: 30000,
+          quantity: 100, // 100 ly trà xoài
+        ),
+      ];
+
+      final campaign = _createCampaign(
+        id: 'CAM_1792678747107_dn5u',
+        type: 'ITEMPRICERULE',
+        itemIds: ['Trà Olong - Xoài'],
+        tiers: [
+          CampaignTier(
+            tierId: 'TIER_1',
+            conditionBasis: 'TOTALAMOUNT',
+            threshold: 0,
+            benefitMode: 'FIXEDPRICE',
+            value: 14000,
+            maxDiscountMoney: 0,
+            maxRewardQty: 0, // Kể cả DB bị rỗng / = 0
+            rewardItemIds: [],
+            sortOrder: 1,
+          )
+        ],
+      );
+
+      final input = PricingInput(branchId: 'TRAM01', serverNowMs: 0, lines: lines);
+      final result = calculatePrice(
+        input: input,
+        activeCampaigns: [campaign],
+        counters: {},
+        customerCounters: {},
+      );
+
+      expect(result.appliedCampaignIds, contains('CAM_1792678747107_dn5u'));
+      expect(result.totalPromotionDiscount, 16000); // CHỈ GIẢM ĐÚNG 16K CHO 1 LY
+      expect(result.netMoney, 30000 * 100 - 16000);
+    });
+
     test('A-23: Khuyến mãi Trà Xoài khớp cả biến thể PRE và đối sánh không dấu', () {
       final lines = [
         PricingLineItem(

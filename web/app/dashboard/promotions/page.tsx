@@ -1404,6 +1404,21 @@ export default function PromotionsPage() {
 }
 
 // ==================== UI HELPERS ====================
+/**
+ * Món hiển thị trong ô chọn: ở chế độ "Tất cả chi nhánh" mỗi cửa hàng có một bản cùng tên,
+ * nên chỉ giữ 1 dòng cho mỗi tên món (khuyến mãi khớp món theo tên giữa các chi nhánh) và ẩn món đã chọn.
+ */
+function pickerOptions(products: ProductItem[], selected: string[]): ProductItem[] {
+  const norm = (v: string) => v.trim().toLowerCase();
+  const seen = new Set(selected.map((id) => norm(products.find((p) => String(p.id) === String(id))?.name ?? id)));
+  return products.filter((p) => {
+    const key = norm(p.name);
+    if (selected.includes(String(p.id)) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Chọn nhiều món (select + chip). */
 function ItemMultiPicker({ label, color, products, selected, onChange, emptyText }: {
   label: string; color: string; products: ProductItem[]; selected: string[];
@@ -1423,7 +1438,7 @@ function ItemMultiPicker({ label, color, products, selected, onChange, emptyText
           }}
         >
           <option value="">-- Bấm để thêm món --</option>
-          {products.filter(p => !selected.includes(String(p.id))).map(p => (
+          {pickerOptions(products, selected).map(p => (
             <option key={p.id} value={String(p.id)}>{p.name} {p.price ? `(${formatVND(p.price)})` : ""} {p.category ? `• ${p.category}` : ""}</option>
           ))}
         </select>

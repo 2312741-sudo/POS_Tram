@@ -69,3 +69,12 @@ class UpperCaseTextFormatter extends TextInputFormatter {
     );
   }
 }
+
+/// Đọc số tiền từ ô nhập có dấu phân cách (VD: '100,000' → 100000). Ô trống → null.
+int? parseMoneyInput(String text) {
+  final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+  return digits.isEmpty ? null : int.tryParse(digits);
+}
+
+/// Giá trị ban đầu của ô nhập tiền, có dấu phẩy phân cách (VD: 100000 → '100,000').
+String moneyInputText(num value) => NumberFormat('#,###', 'en_US').format(value);

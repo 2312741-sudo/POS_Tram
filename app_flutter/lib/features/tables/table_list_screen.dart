@@ -1,4 +1,5 @@
 // lib/features/tables/table_list_screen.dart
+import '../../core/utils/text_formatters.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1074,7 +1075,7 @@ class _TableListScreenState extends State<TableListScreen> {
               ),
               const SizedBox(height: 10),
               TextField(
-                controller: depositCtrl,
+                controller: depositCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Tiền đặt cọc (VND)',

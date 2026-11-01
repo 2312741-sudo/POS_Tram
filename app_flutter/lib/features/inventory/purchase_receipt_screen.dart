@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/text_formatters.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/permissions/app_permissions.dart';
@@ -148,7 +149,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
 
     CatalogItemModel selectedItem = items.first;
     final qtyCtrl = TextEditingController(text: '1');
-    final priceCtrl = TextEditingController(text: selectedItem.costPrice.toString());
+    final priceCtrl = TextEditingController(text: moneyInputText(selectedItem.costPrice));
 
     await showDialog(
       context: context,
@@ -172,7 +173,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
                     if (val != null) {
                       setDlgState(() {
                         selectedItem = val;
-                        priceCtrl.text = val.costPrice.toString();
+                        priceCtrl.text = moneyInputText(val.costPrice);
                       });
                     }
                   },
@@ -187,7 +188,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: priceCtrl,
+                  controller: priceCtrl, inputFormatters: [ThousandsSeparatorInputFormatter()],
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Đơn giá (VND)',
@@ -204,7 +205,7 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
             ElevatedButton(
               onPressed: () {
                 final int qty = int.tryParse(qtyCtrl.text.trim()) ?? 1;
-                final int price = int.tryParse(priceCtrl.text.trim()) ?? selectedItem.costPrice;
+                final int price = parseMoneyInput(priceCtrl.text) ?? selectedItem.costPrice;
                 if (qty <= 0) return;
 
                 setState(() {

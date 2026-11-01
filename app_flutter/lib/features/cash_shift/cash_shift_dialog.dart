@@ -43,7 +43,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   StreamSubscription<List<BillModel>>? _billsSub;
   List<BillModel> _shiftBills = [];
 
-  final _initialCashCtrl = TextEditingController(text: '1000000');
+  final _initialCashCtrl = TextEditingController(text: '1,000,000');
   final _adjustAmountCtrl = TextEditingController();
   final _adjustReasonCtrl = TextEditingController();
   final _actualCashCtrl = TextEditingController();
@@ -105,7 +105,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
       _currentShift = cached;
       _isLoading = false;
       if (_canViewDifference) {
-        _actualCashCtrl.text = cached.expectedCash.toString();
+        _actualCashCtrl.text = moneyInputText(cached.expectedCash);
       }
     } else {
       _currentShift = null;
@@ -120,7 +120,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         if (openShift != null && openShift.isOpen && (openShift.storeCode.isEmpty || openShift.storeCode == _auth.currentStoreCode)) {
           _currentShift = openShift;
           if (_actualCashCtrl.text.isEmpty && _canViewDifference) {
-            _actualCashCtrl.text = openShift.expectedCash.toString();
+            _actualCashCtrl.text = moneyInputText(openShift.expectedCash);
           }
         } else {
           _currentShift = null;
@@ -159,7 +159,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         if (shift != null && shift.isOpen && (shift.storeCode.isEmpty || shift.storeCode == _auth.currentStoreCode)) {
           _currentShift = shift;
           if (_canViewDifference) {
-            _actualCashCtrl.text = shift.expectedCash.toString();
+            _actualCashCtrl.text = moneyInputText(shift.expectedCash);
           } else {
             _actualCashCtrl.text = '';
           }

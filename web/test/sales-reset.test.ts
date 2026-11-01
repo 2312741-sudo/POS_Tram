@@ -70,6 +70,7 @@ describe("baseTableName — bàn tự tách gộp về bàn gốc trong báo cá
     expect(baseTableName("Bàn 01 (2)")).toBe("Bàn 01");
     expect(baseTableName("Mang về (3) ")).toBe("Mang về");
     expect(baseTableName("Bàn 01")).toBe("Bàn 01");
-    expect(baseTableName("Bàn 01 (Tách)")).toBe("Bàn 01 (Tách)");
+    expect(baseTableName("Bàn 01 (Tách)")).toBe("Bàn 01");
+    expect(baseTableName("MANG VỀ 01 (Tách) (2)")).toBe("MANG VỀ 01");
   });
 });
