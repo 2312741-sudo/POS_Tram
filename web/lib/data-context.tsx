@@ -1,7 +1,7 @@
 "use client";
 import { resolveStaffUid } from "./staff-key";
 import { normalizeBusinessDayStart, setBusinessDayConfig } from "./business-day";
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db, auth, functions } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
@@ -645,6 +645,20 @@ function sanitizeHistoryOrder(raw: RtdbNode, id: string): HistoryOrder {
 export function DashboardDataProvider({ children }: { children: React.ReactNode }) {
   // Người đang đăng nhập — dùng chốt chặn quyền hủy/xóa hóa đơn (CANCEL_BILL) ở tầng xử lý, ngoài UI và rules
   const { user: actingUser } = useAuth();
+  // Người thao tác ghi vào hóa đơn / nhật ký (trước đây luôn là "Quản trị viên Web"). Đọc qua ref để các callback
+  // không phải khai báo thêm phụ thuộc.
+  const actorRef = useRef(actingUser);
+  useEffect(() => {
+    actorRef.current = actingUser;
+  }, [actingUser]);
+  const webActor = useCallback(() => {
+    const u = actorRef.current;
+    return {
+      username: (u?.username || "").trim() || "admin_web",
+      fullName: (u?.fullName || "").trim() || (u?.username || "").trim() || "Quản trị viên Web",
+      role: (u?.roleId || u?.role || "").trim() || "ADMIN",
+    };
+  }, []);
   // Store management state
   // Store management state: hydrat hóa từ sessionStorage để render tức thì 0ms không nháy trắng
   const [stores, setStores] = useState<StoreItem[]>(() => {
@@ -1489,7 +1503,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           redeemRate,
         });
         const paymentMethod = options?.paymentMethod || "CASH";
-        const cashierName = options?.staffName || "Quản trị viên Web";
+        const cashierName = options?.staffName || webActor().fullName;
         const now = Date.now();
         // Mã hóa đơn tuần tự HD-yyMMdd-NNNN dùng chung bộ đếm với Flutter POS
         const billCode =
@@ -1501,7 +1515,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const actionLogs = parseActionLogs(table);
         actionLogs.push({
           timestamp: now,
-          staffUsername: "admin_web",
+          staffUsername: webActor().username,
           staffFullName: cashierName,
           action: "PAY_BILL",
           details: `Thanh toán hóa đơn ${billCode} bàn ${table.name}: ${new Intl.NumberFormat("vi-VN").format(finalAmount)}đ (${paymentMethod === "CASH" ? "Tiền mặt" : "Chuyển khoản VietQR"}) qua Web Admin`,
@@ -1541,7 +1555,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             : now,
           closedAt: now,
           cashierName: cashierName,
-          staffUsername: "admin_web",
+          staffUsername: webActor().username,
           staffFullName: cashierName,
           orderStaff: table.orderStaff || "POS Staff",
           items: items as unknown as OrderItem[],
@@ -1558,9 +1572,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
+          username: webActor().username,
           userFullName: cashierName,
-          userRole: "ADMIN",
+          userRole: webActor().role,
           action: "PAY_BILL",
           targetType: "BILL",
           targetId: billCode,
@@ -1585,7 +1599,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (promotions.length > 0) {
           reservedStore = targetStoreCode;
           reservations = await reserveAllPromotions(db, targetStoreCode, promotions, billId, {
-            username: "admin_web",
+            username: webActor().username,
             staffName: cashierName,
             billCode,
             tableName: table.name,
@@ -1639,7 +1653,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi khi thanh toán trả bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems, actingUser]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems, actingUser, webActor]
   );
 
   const cancelActiveTable = useCallback(
@@ -1657,7 +1671,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const items = parseOrderJson(table.currentOrderJson);
         const { subTotal: totalAmount } = summarizeOrderLines(items);
 
-        const cancellerName = staffName || "Quản trị viên Web";
+        const cancellerName = staffName || webActor().fullName;
         const now = Date.now();
         const billCode =
           table.currentBillId && table.currentBillId.startsWith("HD-")
@@ -1669,7 +1683,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const actionLogs = parseActionLogs(table);
         actionLogs.push({
           timestamp: now,
-          staffUsername: "admin_web",
+          staffUsername: webActor().username,
           staffFullName: cancellerName,
           action: "CANCEL_BILL",
           details: `${cancellerName} hủy đơn bàn ${table.name}. Lý do: ${reason}`,
@@ -1703,7 +1717,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             : now,
           closedAt: now,
           cashierName: cancellerName,
-          staffUsername: "admin_web",
+          staffUsername: webActor().username,
           staffFullName: cancellerName,
           orderStaff: table.orderStaff || "POS Staff",
           items: items as unknown as OrderItem[],
@@ -1720,9 +1734,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
+          username: webActor().username,
           userFullName: cancellerName,
-          userRole: "ADMIN",
+          userRole: webActor().role,
           action: "CANCEL_BILL",
           targetType: "BILL",
           targetId: billCode,
@@ -1755,7 +1769,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi khi hủy đơn bàn") };
       }
     },
-    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems]
+    [currentStoreCode, stores, currentStore, buildCloseTableUpdates, applyClosedTableLocally, readTableDeletedItems, webActor]
   );
 
   const updateTableOrderItems = useCallback(
@@ -1779,8 +1793,8 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (!payload) return { success: true };
 
         const now = Date.now();
-        const staffUsername = log.staffUsername || "admin_web";
-        const staffFullName = log.staffFullName || "Quản trị viên Web";
+        const staffUsername = log.staffUsername || webActor().username;
+        const staffFullName = log.staffFullName || webActor().fullName;
         const actionLogs = parseActionLogs(table);
         const suffix = approvalSuffix(log.approval);
         actionLogs.push({ timestamp: now, staffUsername, staffFullName, action: log.action, details: `${log.details}${suffix}` });
@@ -1824,7 +1838,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e, "Lỗi cập nhật món của bàn") };
       }
     },
-    [currentStoreCode, buildTableFieldUpdates]
+    [currentStoreCode, buildTableFieldUpdates, webActor]
   );
 
   const submitWebOrder = useCallback(
@@ -2174,9 +2188,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
-          userFullName: "Quản trị viên Web",
-          userRole: "ADMIN",
+          username: webActor().username,
+          userFullName: webActor().fullName,
+          userRole: webActor().role,
           action: "SAVE_USER",
           targetType: "USER",
           targetId: cleanUsername,
@@ -2208,7 +2222,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi lưu thông tin nhân viên" };
       }
     },
-    [currentStoreCode, stores]
+    [currentStoreCode, stores, webActor]
   );
 
   const deleteUser = useCallback(
@@ -2231,9 +2245,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
-          userFullName: "Quản trị viên Web",
-          userRole: "ADMIN",
+          username: webActor().username,
+          userFullName: webActor().fullName,
+          userRole: webActor().role,
           action: "DELETE_USER",
           targetType: "USER",
           targetId: cleanUsername,
@@ -2258,7 +2272,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi xóa nhân viên" };
       }
     },
-    [stores, currentStoreCode]
+    [stores, currentStoreCode, webActor]
   );
 
   const cancelOrder = useCallback(
@@ -2279,9 +2293,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         const cancelLog = {
           timestamp: now,
-          staffFullName: "Quản trị viên Web",
+          staffFullName: webActor().fullName,
           action: "CANCEL_BILL",
-          details: `Quản trị viên Web hủy hóa đơn ${order.billCode || order.orderCode || orderId}. Lý do: ${reason}`,
+          details: `${webActor().fullName} hủy hóa đơn ${order.billCode || order.orderCode || orderId}. Lý do: ${reason}`,
         };
 
         const updatedLogs = [...(order.actionLogs || []), cancelLog];
@@ -2291,7 +2305,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           cancelReason: reason,
           cancelledAt: now,
           closedAt: now,
-          cancelledBy: "Quản trị viên Web",
+          cancelledBy: webActor().fullName,
           actionLogs: updatedLogs,
           actionLogsJson: JSON.stringify(updatedLogs),
         };
@@ -2300,9 +2314,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
-          userFullName: "Quản trị viên Web",
-          userRole: "ADMIN",
+          username: webActor().username,
+          userFullName: webActor().fullName,
+          userRole: webActor().role,
           action: "CANCEL_BILL",
           targetType: "BILL",
           targetId: order.billCode || order.orderCode || orderId,
@@ -2341,7 +2355,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi khi hủy hóa đơn" };
       }
     },
-    [allHistory, currentStoreCode, actingUser]
+    [allHistory, currentStoreCode, actingUser, webActor]
   );
 
   const deleteOrder = useCallback(
@@ -2361,9 +2375,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         const logId = `log_${now}_${Math.floor(Math.random() * 1000)}`;
         const auditPayload = {
           timestamp: now,
-          username: "admin_web",
-          userFullName: "Quản trị viên Web",
-          userRole: "ADMIN",
+          username: webActor().username,
+          userFullName: webActor().fullName,
+          userRole: webActor().role,
           action: "DELETE_BILL",
           targetType: "BILL",
           targetId: order?.billCode || order?.orderCode || orderId,
@@ -2386,7 +2400,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         return { success: false, error: errorMessage(e) || "Lỗi khi xóa hóa đơn" };
       }
     },
-    [allHistory, currentStoreCode, actingUser]
+    [allHistory, currentStoreCode, actingUser, webActor]
   );
 
   const refreshAll = useCallback(() => {
