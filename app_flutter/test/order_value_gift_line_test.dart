@@ -44,8 +44,13 @@ void main() {
     expect(apply([xoai(2), chanh(reward: 'CAM_CHANH')]), 0);
   });
 
-  test('đơn cũ đã áp dụng theo cách cũ (không có dòng tặng riêng) → tính lại vẫn giữ giảm trên món có sẵn', () {
-    expect(apply([xoai(2), chanh()], isApplied: true), 30000);
+  test('đã áp dụng nhưng không còn ly tặng riêng (vd nhân viên xóa) → tính lại gỡ chương trình, KHÔNG trừ ly khách gọi', () {
+    final r = CartCampaignPricing.recalculate(
+      [CartCampaignPricing.discount(camp, 30000)], {'CAM_CHANH': camp},
+      cart: [xoai(2), chanh()], products: products, branchId: 'TRAM01', orderTimestampMs: 1000,
+    );
+    expect(r.discounts, isEmpty);
+    expect(r.dropped, hasLength(1));
   });
 
   test('rewardCampaignId lưu / đọc lại được trên dòng món', () {

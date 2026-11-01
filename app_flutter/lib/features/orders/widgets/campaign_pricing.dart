@@ -131,6 +131,8 @@ class CartCampaignPricing {
     );
   }
 
+  static bool _isOrderValueGift(CampaignModel c) => c.campaignType.toUpperCase().replaceAll('_', '') == 'ORDERVALUEITEMBENEFIT';
+
   static bool _isBillLevel(CampaignModel c) => c.campaignType.toUpperCase().replaceAll('_', '') == 'BILLDISCOUNT';
 
   /// Tính CỘNG DỒN nhiều chương trình trên cùng giỏ: KM theo món (tặng món, mua X tặng Y, đồng giá) trước,
@@ -162,7 +164,8 @@ class CartCampaignPricing {
           serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
           lines: lns,
           ignoreSchedule: ignoreScheduleFor.contains(c.campaignId),
-          dedicatedRewardOnly: dedicatedOnlyFor.contains(c.campaignId),
+          // Tặng món theo giá trị đơn LUÔN chỉ giảm trên dòng tặng riêng — không bao giờ trừ món khách đã gọi
+          dedicatedRewardOnly: dedicatedOnlyFor.contains(c.campaignId) || _isOrderValueGift(c),
           priorLineDiscounts: Map.of(prior),
         ),
         activeCampaigns: [c],

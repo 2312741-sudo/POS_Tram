@@ -1352,6 +1352,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     );
     final campById = {for (final d in campRes.discounts) d.campaignId: d};
     dropped.addAll(campRes.dropped);
+    // Đơn không còn đủ điều kiện → gỡ ly tặng CHƯA gửi bếp của các chương trình bị gỡ (không để thành ly tính tiền)
+    final droppedIds = {for (final d in campaignDs) if (!campById.containsKey(d.campaignId)) d.campaignId};
+    if (droppedIds.isNotEmpty && _cart.any((i) => droppedIds.contains(i.rewardCampaignId) && !i.isSentKitchen)) {
+      _cart.removeWhere((i) => droppedIds.contains(i.rewardCampaignId) && !i.isSentKitchen);
+      widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+      unawaited(_fb.saveTable(widget.table).catchError((_) {}));
+    }
     for (final d in _appliedDiscounts) {
       if (d.campaignId != null && _campaignById.containsKey(d.campaignId)) {
         final r = campById[d.campaignId];

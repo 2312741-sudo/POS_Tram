@@ -1016,14 +1016,15 @@ export function recalculateDiscounts(
   applied: AppliedDiscount[],
   campaignsById: Record<string, Campaign>,
   lines: PricingLine[],
-  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null }
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null },
+  opts: { dedicatedOnlyFor?: Set<string> } = {}
 ): { discounts: AppliedDiscount[]; dropped: string[] } {
   const out: AppliedDiscount[] = [];
   const dropped: string[] = [];
   // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có (món gọi ngoài khung giờ không tính).
   // Tính CỘNG DỒN cả nhóm (KM theo món trước, giảm hóa đơn sau, trên phần còn lại).
   const camps = applied.map((d) => campaignsById[d.campaignId]).filter((c): c is Campaign => !!c);
-  const stacked = quoteStacked(camps, lines, ctx, { ignoreScheduleFor: new Set(camps.map((c) => c.campaignId)) });
+  const stacked = quoteStacked(camps, lines, ctx, { ignoreScheduleFor: new Set(camps.map((c) => c.campaignId)), dedicatedOnlyFor: opts.dedicatedOnlyFor });
   for (const d of applied) {
     const c = campaignsById[d.campaignId];
     if (!c) {

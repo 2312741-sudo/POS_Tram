@@ -379,3 +379,20 @@ describe("Topping luôn kèm món tặng (vd 'Tăng giá Grab 2K') — dòng t�
     expect(q.rewardBenefits.map((b) => b.lineId)).toEqual(["L2"]);
   });
 });
+
+describe("recalculateDiscounts với dedicatedOnlyFor (trang bàn web)", () => {
+  const camp = parseCampaign("CAM_CHANH", {
+    campaignId: "CAM_CHANH", name: "Tặng chanh", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+    tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardItemIds: ["8"] }],
+  } as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  const only = new Set(["CAM_CHANH"]);
+  it("không có ly tặng riêng → gỡ (không trừ ly khách gọi); có ly tặng → giảm ly đó; dưới mốc → gỡ", () => {
+    const base = [line("1", "5", 3, 45000, "TRÀ"), line("2", "8", 1, 27000, "TRÀ")];
+    expect(recalculateDiscounts([buildAppliedDiscount(camp, 1)], { CAM_CHANH: camp }, base, ctx, { dedicatedOnlyFor: only }).discounts).toEqual([]);
+    const withGift = [...base, { ...line("3", "8", 1, 22000, "TRÀ"), rewardCampaignId: "CAM_CHANH" }];
+    expect(recalculateDiscounts([buildAppliedDiscount(camp, 1)], { CAM_CHANH: camp }, withGift, ctx, { dedicatedOnlyFor: only }).discounts.map((d) => d.amount)).toEqual([22000]);
+    const small = [line("1", "5", 1, 45000, "TRÀ"), { ...line("3", "8", 1, 22000, "TRÀ"), rewardCampaignId: "CAM_CHANH" }];
+    expect(recalculateDiscounts([buildAppliedDiscount(camp, 1)], { CAM_CHANH: camp }, small, ctx, { dedicatedOnlyFor: only }).dropped).toHaveLength(1);
+  });
+});

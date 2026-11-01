@@ -313,6 +313,16 @@ function TablesPageContent() {
       }
       return next;
     },
+    onRemoveRewardLines: async (campaignId) => {
+      const table = selectedTableForOrder;
+      if (!table) return;
+      const orderJson = table.currentOrderJson || "";
+      const items = parseOrderItems(orderJson) as unknown as RawOrderLine[];
+      const next = items.filter((l) => !(String(l.rewardCampaignId ?? "") === campaignId && l.isSentKitchen !== true));
+      if (next.length === items.length) return;
+      const err = await writeOrderLines(table, orderJson, next, "REMOVE_REWARD_ITEM", "Gỡ món tặng khuyến mãi (bỏ chương trình / đơn không còn đủ điều kiện)");
+      if (err) alert(err);
+    },
   });
   const canApplyPromotion = hasPermission(user, "APPLY_PROMOTION");
 

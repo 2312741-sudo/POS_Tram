@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { get, onValue, ref } from "firebase/database";
 import { Clock, Tag, Ticket, X } from "lucide-react";
 import { db } from "@/lib/firebase";
@@ -59,9 +59,11 @@ export function usePromotions(args: {
   rewardProducts?: RewardProduct[];
   /** Ghi thêm dòng vào đơn của bàn; trả danh sách món mới (null = lỗi). Không truyền = không thêm được món tặng */
   onAddLines?: (lines: RawOrderLine[]) => Promise<RawOrderLine[] | null>;
+  /** Gỡ các dòng món tặng CHƯA gửi bếp của chương trình khỏi đơn (bỏ chương trình / đơn hết đủ điều kiện) */
+  onRemoveRewardLines?: (campaignId: string) => Promise<void>;
   actor?: OrderActor;
 }) {
-  const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, actor } = args;
+  const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, onRemoveRewardLines, actor } = args;
   const [loaded, setLoaded] = useState<{ store: string; list: Campaign[] }>({ store: "", list: [] });
   const [selection, setSelection] = useState<{ key: string; list: AppliedDiscount[] }>({ key: "", list: [] });
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -95,10 +97,28 @@ export function usePromotions(args: {
   const lines = useMemo(() => linesFromOrder(items, groupOf), [items, groupOf]);
   const ctx = useMemo(() => ({ branchId: storeCode, guestCount, nowMs }), [storeCode, guestCount, nowMs]);
 
-  const chosen = useMemo(() => (selection.key === tableKey ? selection.list : []), [selection, tableKey]);
+  const selected = useMemo(() => (selection.key === tableKey ? selection.list : []), [selection, tableKey]);
+  // Đơn đã có dòng món tặng của chương trình (thêm từ app / lần trước) → chương trình đó coi như đang áp dụng
+  const chosen = useMemo(() => {
+    const ids = new Set(selected.map((d) => d.campaignId));
+    const implicit: AppliedDiscount[] = [];
+    for (const it of items) {
+      const id = it.rewardCampaignId ? String(it.rewardCampaignId) : "";
+      if (id && !ids.has(id) && byId[id]) {
+        ids.add(id);
+        implicit.push(buildAppliedDiscount(byId[id], 0));
+      }
+    }
+    return [...selected, ...implicit];
+  }, [selected, items, byId]);
+  // Thêm được dòng tặng riêng (trang bàn) → chương trình tặng món chỉ giảm trên dòng tặng, không lấy món khách gọi
+  const giftOnly = useMemo(
+    () => new Set(onAddLines ? campaigns.filter((c) => c.campaignType.toUpperCase().replace(/_/g, "") === "ORDERVALUEITEMBENEFIT").map((c) => c.campaignId) : []),
+    [campaigns, onAddLines]
+  );
   const { discounts: applied, dropped } = useMemo(
-    () => (campaignsLoaded ? recalculateDiscounts(chosen, byId, lines, ctx) : { discounts: chosen, dropped: [] as string[] }),
-    [chosen, byId, lines, ctx, campaignsLoaded]
+    () => (campaignsLoaded ? recalculateDiscounts(chosen, byId, lines, ctx, { dedicatedOnlyFor: giftOnly }) : { discounts: chosen, dropped: [] as string[] }),
+    [chosen, byId, lines, ctx, campaignsLoaded, giftOnly]
   );
   const effective = useMemo(() => applied.filter((d) => d.amount > 0), [applied]);
   const total = effective.reduce((s, d) => s + d.amount, 0);
@@ -111,8 +131,31 @@ export function usePromotions(args: {
     setSelection({ key: tableKey, list: r.discounts });
     return r.removed;
   };
-  const remove = (campaignId: string) =>
-    setSelection({ key: tableKey, list: chosen.filter((d) => d.campaignId !== campaignId) });
+  const remove = (campaignId: string) => {
+    setSelection({ key: tableKey, list: selected.filter((d) => d.campaignId !== campaignId) });
+    // Bỏ chương trình: gỡ luôn ly tặng chưa gửi bếp (không để thành ly tính tiền)
+    if (onRemoveRewardLines && items.some((l) => String(l.rewardCampaignId ?? "") === campaignId && l.isSentKitchen !== true)) {
+      void onRemoveRewardLines(campaignId);
+    }
+  };
+  // Đơn không còn đủ điều kiện (vd khách bớt món) → tự gỡ ly tặng chưa gửi bếp của chương trình đó
+  const removing = useRef(new Set<string>());
+  useEffect(() => {
+    if (!onRemoveRewardLines || !campaignsLoaded) return;
+    const live = new Set(applied.filter((d) => d.amount > 0).map((d) => d.campaignId));
+    const orphan = new Set(
+      items
+        .filter((l) => l.rewardCampaignId && l.isSentKitchen !== true && !live.has(String(l.rewardCampaignId)) && byId[String(l.rewardCampaignId)])
+        .map((l) => String(l.rewardCampaignId))
+    );
+    for (const id of orphan) {
+      if (removing.current.has(id)) continue;
+      removing.current.add(id);
+      void onRemoveRewardLines(id)
+        .then(() => setSelection((prev) => ({ ...prev, list: prev.list.filter((d) => d.campaignId !== id) })))
+        .finally(() => removing.current.delete(id));
+    }
+  }, [applied, items, byId, campaignsLoaded, onRemoveRewardLines]);
   const clear = () => setSelection({ key: tableKey, list: [] });
 
   // Cộng dồn: báo giá chương trình cùng các chương trình đang áp dụng khác (KM theo món trước, giảm hóa đơn sau)
@@ -129,6 +172,16 @@ export function usePromotions(args: {
     !!onAddLines &&
     q.reasons.some((r) => r.campaignId === c.campaignId && r.reasonCode === "REWARD_ITEM_NOT_IN_BILL") &&
     !!rewardPlanFor(c, rewardProducts);
+  /** Mô tả ly tặng sẽ thêm: "Trà Olong - Chanh tươi + Tăng giá Grab 2K (22.000đ → 0đ)" */
+  const rewardLabel = (c: Campaign): string => {
+    const plan = rewardPlanFor(c, rewardProducts);
+    if (!plan) return "";
+    const p = plan.candidates.length === 1 ? plan.candidates[0] : null;
+    const tops = plan.toppings.map((t) => t.name).join(", ");
+    const price = p ? p.price + plan.toppings.reduce((sum, t) => sum + (Number(t.price) || 0), 0) : 0;
+    const name = p ? p.name : `1 trong ${plan.candidates.length} món`;
+    return `${plan.units > 1 ? `${plan.units} x ` : ""}${name}${tops ? ` + ${tops}` : ""}${p ? ` (${price.toLocaleString("vi-VN")}đ → 0đ)` : ""}`;
+  };
   /** Thêm dòng món tặng riêng (ghi chú "Tặng KM: …") vào đơn rồi trả số tiền giảm tính trên đơn mới (0 = không được) */
   const addRewardLine = async (c: Campaign): Promise<number> => {
     const plan = rewardPlanFor(c, rewardProducts);
@@ -172,7 +225,7 @@ export function usePromotions(args: {
     [campaigns, storeCode, nowMs, lines, ctx]
   );
 
-  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, canAddReward, addRewardLine, ctx, nowMs };
+  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, canAddReward, addRewardLine, rewardLabel, ctx, nowMs };
 }
 
 type PromotionsState = ReturnType<typeof usePromotions>;
@@ -188,7 +241,7 @@ interface PanelProps {
 const box = { border: "1px solid var(--border)", borderRadius: "10px", background: "var(--surface)", padding: "12px 14px" } as const;
 
 export default function PromotionPanel({ state, storeCode, canApply, billId }: PanelProps) {
-  const { eligible, applied, dropped, quote, lateItems, lateBlocks, canAddReward, addRewardLine, add, remove } = state;
+  const { eligible, applied, dropped, quote, lateItems, lateBlocks, canAddReward, addRewardLine, rewardLabel, add, remove } = state;
   const [blocked, setBlocked] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -405,7 +458,7 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
               // Đủ điều kiện nhưng chưa có món tặng: bấm để thêm dòng tặng riêng vào đơn
               const addable = amt <= 0 && !selected && !late && canAddReward(c, q);
               return (
-                <label key={c.campaignId} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 0", fontSize: "13px", opacity: amt > 0 || selected ? 1 : 0.6 }}>
+                <label key={c.campaignId} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 0", fontSize: "13px", opacity: amt > 0 || selected || addable ? 1 : 0.6 }}>
                   <input
                     type="checkbox"
                     checked={selected}
@@ -417,9 +470,14 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
                     <strong>{c.name}</strong>
                     <span style={{ display: "block", fontSize: "11px", color: "var(--subtext)" }}>
                       {campaignTypeDisplay(c)} • {describeBenefit(c)}
-                      {amt > 0 ? ` → -${fmt(amt)}` : late ? "" : addable ? " • Đủ điều kiện — bấm để thêm món tặng vào đơn" : reason ? ` • ${reason}` : ""}
+                      {amt > 0 ? ` → -${fmt(amt)}` : late ? "" : addable ? "" : reason ? ` • ${reason}` : ""}
                     </span>
                     {late && <span style={{ display: "block", fontSize: "11px", color: "var(--danger)" }}>Món gọi ngoài khung giờ — không áp dụng được</span>}
+                    {addable && (
+                      <span style={{ display: "block", fontSize: "12px", color: "var(--success)", fontWeight: 700 }}>
+                        Đủ điều kiện — bấm để thêm: {rewardLabel(c) || "món tặng"}
+                      </span>
+                    )}
                   </span>
                 </label>
               );
