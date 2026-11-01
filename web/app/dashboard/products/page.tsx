@@ -20,7 +20,7 @@ import {
   FileText,
   Sparkles,
   Copy, ArrowUp, ArrowDown } from "lucide-react";
-import { ref, onValue, set, remove } from "firebase/database";
+import { ref, onValue, set, remove, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { exportProducts } from "@/lib/export";
 import { useDashboardData, ProductItem, CategoryItem, resolveWriteStoreCode } from "@/lib/data-context";
@@ -35,6 +35,7 @@ import { useItemCatalog } from "@/lib/note-catalog";
 import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isLegacyCatalog } from "@/lib/item-options";
 import GroupAttachmentPicker from "@/components/GroupAttachmentPicker";
+import { planToppingRefFixes, toppingRefFixUpdates, toppingRefsToNames } from "@/lib/topping-refs";
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
@@ -389,6 +390,26 @@ export default function ProductsPage() {
     } catch {}
   };
 
+  // Nhóm món lưu topping bằng KHÓA món (web cũ) → app cũ hiện mã thay vì tên; đổi sang tên ngay trên Firebase
+  const toppingRefFixes = useMemo(
+    () => planToppingRefFixes(allCategories.filter((c) => currentStoreCode === "ALL" || c.storeCode === currentStoreCode), allProducts),
+    [allCategories, allProducts, currentStoreCode]
+  );
+  const [toppingFixBusy, setToppingFixBusy] = useState(false);
+  const [toppingFixMsg, setToppingFixMsg] = useState("");
+  const fixToppingRefs = async () => {
+    setToppingFixBusy(true);
+    setToppingFixMsg("");
+    try {
+      await update(ref(db), toppingRefFixUpdates(toppingRefFixes));
+      setToppingFixMsg(`Đã sửa ${toppingRefFixes.length} nhóm món. Trên máy POS mở lại màn gọi món là thấy đúng tên và giá.`);
+    } catch (e) {
+      setToppingFixMsg(`Không sửa được: ${errorMessage(e)}`);
+    } finally {
+      setToppingFixBusy(false);
+    }
+  };
+
   // Open Category Modal
   const openAddCategory = () => {
     setEditCategoryOriginalName(null);
@@ -406,7 +427,12 @@ export default function ProductsPage() {
     setCategoryForm({
       name: c.name,
       storeCode: c.storeCode || (currentStoreCode !== "ALL" ? currentStoreCode : "ALL"),
-      allowedToppingIds: c.allowedToppingIds || [],
+      // Topping lưu bằng TÊN (app cũ chỉ đọc được tên); dữ liệu cũ lưu khóa được đổi sang tên khi mở
+      allowedToppingIds: toppingRefsToNames(
+        c.allowedToppingIds || [],
+        allProducts.filter((p) => p.storeCode === (c.storeCode || currentStoreCode)),
+        allProducts
+      ),
       noteGroupIds: c.noteGroupIds,
       toppingGroupIds: c.toppingGroupIds,
     });
@@ -1127,6 +1153,21 @@ export default function ProductsPage() {
       {/* ==================== TAB 2: CATEGORIES MANAGEMENT ==================== */}
       {activeTab === "categories" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {toppingRefFixes.length > 0 && (
+            <div role="alert" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", border: "1px solid var(--warning)", background: "var(--warning-bg)", borderRadius: "12px", padding: "12px 14px" }}>
+              <div style={{ fontSize: "13px", minWidth: 0 }}>
+                <b>{toppingRefFixes.length} nhóm món đang lưu topping bằng mã</b> ({toppingRefFixes.slice(0, 3).map((f) => f.categoryName).join(", ")}
+                {toppingRefFixes.length > 3 ? "…" : ""}) — app trên máy POS hiện mã thay vì tên, giá 5.000đ. Bấm sửa để đổi sang tên món topping, không cần cập nhật app.
+                {toppingFixMsg && <div style={{ marginTop: "4px", fontWeight: 600 }}>{toppingFixMsg}</div>}
+              </div>
+              <button className="btn-primary" disabled={toppingFixBusy} onClick={fixToppingRefs}>
+                {toppingFixBusy ? "Đang sửa…" : "Sửa ngay"}
+              </button>
+            </div>
+          )}
+          {toppingRefFixes.length === 0 && toppingFixMsg && (
+            <div style={{ fontSize: "13px", color: "var(--success)", fontWeight: 600 }}>{toppingFixMsg}</div>
+          )}
           {/* KPI Summary Cards */}
           <div
             style={{
@@ -1930,14 +1971,16 @@ export default function ProductsPage() {
                   {products
                     .filter((p) => p.isTopping || p.category?.toLowerCase() === "topping")
                     .map((top) => {
-                      const isChecked = (categoryForm.allowedToppingIds || []).includes(String(top.id));
+                      const isChecked = (categoryForm.allowedToppingIds || []).some((r) => r === top.name || r === String(top.id));
                       return (
                         <button
                           key={top.id}
                           type="button"
                           onClick={() => {
                             const cur = categoryForm.allowedToppingIds || [];
-                            const next = isChecked ? cur.filter((id) => id !== String(top.id)) : [...cur, String(top.id)];
+                            // Lưu TÊN món topping: app bản nào cũng đọc được, dùng chung được giữa các chi nhánh
+                            const rest = cur.filter((r) => r !== top.name && r !== String(top.id));
+                            const next = isChecked ? rest : [...rest, top.name];
                             setCategoryForm((f) => ({ ...f, allowedToppingIds: next }));
                           }}
                           style={{
