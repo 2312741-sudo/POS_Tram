@@ -178,6 +178,9 @@ export function buildVoucherRecord(voucherId: string, campaignId: string, code: 
   };
 }
 
+/** Danh sách 4 chi nhánh chính thức dùng chung voucher và CTKM Trạm */
+export const DEFAULT_LINKED_BRANCHES = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"] as const;
+
 /** Multi-path update (tương đối `stores/{s}`) tạo voucher + voucher_lookup, bật hasCodes. */
 export function buildVoucherCreateUpdates(
   campaignId: string,
@@ -196,6 +199,54 @@ export function buildVoucherCreateUpdates(
     updates[`campaigns/${campaignId}/updatedAt`] = now;
   }
   return updates;
+}
+
+/**
+ * Multi-path update đồng bộ trên TOÀN BỘ các chi nhánh liên kết (tương đối root RTDB).
+ * Cùng một mã voucher sẽ có CÙNG voucherId trên mọi chi nhánh để đảm bảo tính đồng nhất tuyệt đối.
+ */
+export function buildCrossBranchVoucherCreateUpdates(
+  campaignId: string,
+  codes: string[],
+  branchCodes: string[],
+  now: number = Date.now(),
+  makeId: (index: number) => string = (i) => newVoucherId(now, i),
+): Record<string, unknown> {
+  const targetBranches = branchCodes && branchCodes.length > 0 ? branchCodes : DEFAULT_LINKED_BRANCHES;
+  const items = codes.map((c, i) => ({
+    id: makeId(i),
+    code: normalizeVoucherCode(c),
+  }));
+
+  const rootUpdates: Record<string, unknown> = {};
+  for (const b of targetBranches) {
+    for (const item of items) {
+      rootUpdates[`stores/${b}/vouchers/${campaignId}/${item.id}`] = buildVoucherRecord(item.id, campaignId, item.code, now);
+      rootUpdates[`stores/${b}/voucher_lookup/${item.code}`] = { campaignId, voucherId: item.id };
+    }
+    if (items.length > 0) {
+      rootUpdates[`stores/${b}/campaigns/${campaignId}/hasCodes`] = true;
+      rootUpdates[`stores/${b}/campaigns/${campaignId}/updatedAt`] = now;
+    }
+  }
+  return rootUpdates;
+}
+
+/** Cập nhật hủy mã voucher trên tất cả các chi nhánh liên kết (tương đối root RTDB). */
+export function buildCrossBranchVoucherCancelUpdates(
+  campaignId: string,
+  voucherId: string,
+  branchCodes: string[],
+  now: number = Date.now(),
+): Record<string, unknown> {
+  const targetBranches = branchCodes && branchCodes.length > 0 ? branchCodes : DEFAULT_LINKED_BRANCHES;
+  const rootUpdates: Record<string, unknown> = {};
+  for (const b of targetBranches) {
+    rootUpdates[`stores/${b}/vouchers/${campaignId}/${voucherId}/state`] = "CANCELLED";
+    rootUpdates[`stores/${b}/vouchers/${campaignId}/${voucherId}/status`] = "CANCELLED";
+    rootUpdates[`stores/${b}/vouchers/${campaignId}/${voucherId}/cancelledAt`] = now;
+  }
+  return rootUpdates;
 }
 
 /** Trường cập nhật khi hủy mã (giữ voucher_lookup làm tombstone để mã không bị dùng lại). */

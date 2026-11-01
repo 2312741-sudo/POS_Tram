@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_LINKED_BRANCHES,
+  buildCrossBranchVoucherCancelUpdates,
+  buildCrossBranchVoucherCreateUpdates,
   buildVoucherCancelUpdate,
   buildVoucherCreateUpdates,
   canCancelVoucher,
@@ -113,5 +116,34 @@ describe("checkVoucher", () => {
     expect(checkVoucher("ABC", released, { ...cam, schedule: { absoluteStart: NOW + 1 } }, NOW).kind).toBe("CAMPAIGN_NOT_STARTED");
     expect(checkVoucher("ABC", released, { ...cam, active: false }, NOW).kind).toBe("CAMPAIGN_PAUSED");
     expect(checkVoucher("ABC", released, null, NOW).kind).toBe("CAMPAIGN_MISSING");
+  });
+});
+
+describe("cross-branch writes", () => {
+  it("builds consistent voucherId across all branches", () => {
+    const branches = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
+    const updates = buildCrossBranchVoucherCreateUpdates("CAM_TEST", ["VCH999"], branches, NOW, () => "VCH_ID_001");
+    for (const b of branches) {
+      expect(updates[`stores/${b}/vouchers/CAM_TEST/VCH_ID_001`]).toMatchObject({
+        voucherId: "VCH_ID_001",
+        campaignId: "CAM_TEST",
+        code: "VCH999",
+        normalizedCode: "VCH999",
+        state: "RELEASED",
+      });
+      expect(updates[`stores/${b}/voucher_lookup/VCH999`]).toEqual({
+        campaignId: "CAM_TEST",
+        voucherId: "VCH_ID_001",
+      });
+      expect(updates[`stores/${b}/campaigns/CAM_TEST/hasCodes`]).toBe(true);
+    }
+  });
+
+  it("builds cancel updates for all branches", () => {
+    const branches = ["TRAM01", "TRAM02"];
+    const cancelUpdates = buildCrossBranchVoucherCancelUpdates("CAM_TEST", "VCH_ID_001", branches, NOW);
+    expect(cancelUpdates["stores/TRAM01/vouchers/CAM_TEST/VCH_ID_001/state"]).toBe("CANCELLED");
+    expect(cancelUpdates["stores/TRAM02/vouchers/CAM_TEST/VCH_ID_001/state"]).toBe("CANCELLED");
+    expect(cancelUpdates["stores/TRAM01/vouchers/CAM_TEST/VCH_ID_001/cancelledAt"]).toBe(NOW);
   });
 });

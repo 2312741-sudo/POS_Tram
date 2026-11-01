@@ -6,7 +6,7 @@
  *   3. khách:    stores/{s}/customer_campaign_counters/{campaignId}_{customerId} → usedCount (+ maxUsesPerCustomer)
  * Nếu bất kỳ bước nào bị từ chối, các bước đã làm được hoàn tác; nếu ghi hóa đơn lỗi thì gọi rollback.
  */
-import { get, ref, runTransaction, type Database } from "firebase/database";
+import { get, ref, runTransaction, update, type Database } from "firebase/database";
 import {
   applyCampaignUsage,
   applyCustomerUsage,
@@ -76,8 +76,30 @@ export async function reservePromotionUsage(
 
   // 1. Voucher (mã dùng 1 lần)
   if (code) {
-    const lookup = await get(ref(db, `${base}/voucher_lookup/${code}`));
-    const lv = lookup.val() as { campaignId?: string; voucherId?: string } | null;
+    let lookup = await get(ref(db, `${base}/voucher_lookup/${code}`));
+    let lv = lookup.val() as { campaignId?: string; voucherId?: string } | null;
+
+    // Nếu chi nhánh hiện tại chưa có lookup, tra cứu chéo sang các chi nhánh liên kết
+    if (!lv?.campaignId || !lv?.voucherId) {
+      const fallbackStores = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"].filter((b) => b !== storeCode);
+      for (const fb of fallbackStores) {
+        try {
+          const fbLookup = await get(ref(db, `stores/${fb}/voucher_lookup/${code}`));
+          const fbVal = fbLookup.val() as { campaignId?: string; voucherId?: string } | null;
+          if (fbVal?.campaignId && fbVal?.voucherId) {
+            lv = fbVal;
+            // Đồng bộ lookup và voucher về chi nhánh hiện tại
+            await update(ref(db, `${base}/voucher_lookup/${code}`), fbVal).catch(() => {});
+            const fbVoucherSnap = await get(ref(db, `stores/${fb}/vouchers/${fbVal.campaignId}/${fbVal.voucherId}`));
+            if (fbVoucherSnap.exists()) {
+              await update(ref(db, `${base}/vouchers/${fbVal.campaignId}/${fbVal.voucherId}`), fbVoucherSnap.val()).catch(() => {});
+            }
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+
     if (!lv?.campaignId || !lv.voucherId) return fail(`Mã voucher ${code} không tồn tại`);
     r.voucherCampaignId = String(lv.campaignId);
     r.voucherId = String(lv.voucherId);
@@ -105,6 +127,21 @@ export async function reservePromotionUsage(
       }
     } else {
       r.voucherRedeemed = true;
+      // Đồng bộ trạng thái REDEEMED sang tất cả các chi nhánh liên kết
+      const redeemedData = res.snapshot.val();
+      const targetBranches = (campaign?.branchIds && campaign.branchIds.length > 0)
+        ? campaign.branchIds
+        : ["TRAM01", "TRAM02", "TRAM03", "TRAM04"];
+      const otherBranches = targetBranches.filter((b) => b !== storeCode);
+      if (otherBranches.length > 0 && redeemedData) {
+        const syncUpdates: Record<string, unknown> = {};
+        for (const b of otherBranches) {
+          syncUpdates[`stores/${b}/vouchers/${r.voucherCampaignId}/${r.voucherId}`] = redeemedData;
+        }
+        update(ref(db), syncUpdates).catch((e: unknown) => {
+          console.warn("[PromotionCommit] Cross-store voucher redeem sync warning:", e);
+        });
+      }
     }
   }
 
@@ -166,13 +203,22 @@ export async function rollbackPromotionUsage(db: Database, storeCode: string, r:
     r.counterApplied = false;
   }
   if (r.voucherRedeemed && r.voucherId && r.voucherCampaignId) {
-    await guard("Hoàn tác voucher", () =>
-      runTransaction(
+    await guard("Hoàn tác voucher", async () => {
+      const res = await runTransaction(
         ref(db, `${base}/vouchers/${r.voucherCampaignId}/${r.voucherId}`),
         (cur) => (cur === null ? null : (rollbackVoucherValue(cur, r.billId) ?? undefined)),
         { applyLocally: false }
-      )
-    );
+      );
+      if (res.committed && res.snapshot.val()) {
+        const releasedData = res.snapshot.val();
+        const otherBranches = ["TRAM01", "TRAM02", "TRAM03", "TRAM04"].filter((b) => b !== storeCode);
+        const syncUpdates: Record<string, unknown> = {};
+        for (const b of otherBranches) {
+          syncUpdates[`stores/${b}/vouchers/${r.voucherCampaignId}/${r.voucherId}`] = releasedData;
+        }
+        await update(ref(db), syncUpdates).catch(() => {});
+      }
+    });
     r.voucherRedeemed = false;
   }
   return errors;

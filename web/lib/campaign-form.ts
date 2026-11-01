@@ -99,6 +99,7 @@ export function tierValue(tier: RawTier | undefined): number {
 export interface CampaignFormState {
   name: string;
   programCode: string;
+  code?: string;
   description: string;
   campaignType: CampaignTypeCode;
   active: boolean;
@@ -409,7 +410,8 @@ export function buildBenefitFields(
     }
     case "ITEMPRICERULE": {
       const v = Math.round(toInt(form.fixedPriceValue) || 0);
-      const isMangoTea = (form.code?.trim() || "") === "KM/G-003" || (form.name?.toLowerCase() || "").includes("trà xoài");
+      const promoCode = (form.programCode || form.code || "").trim();
+      const isMangoTea = promoCode === "KM/G-003" || (form.name?.toLowerCase() || "").includes("trà xoài");
       const defaultQty = isMangoTea ? 1 : 0;
       const parsedQty = Math.round(toInt(form.itemMaxQty) || defaultQty);
       return {

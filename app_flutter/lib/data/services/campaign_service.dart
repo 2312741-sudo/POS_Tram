@@ -238,26 +238,70 @@ class CampaignService {
     }
   }
 
-  /// Hủy 1 voucher
-  Future<void> cancelVoucher(String campaignId, String voucherId) async {
+  /// Hủy 1 voucher trên tất cả chi nhánh liên kết
+  Future<void> cancelVoucher(String campaignId, String voucherId, {List<String>? branchIds}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    await _storeRef.child('vouchers/$campaignId/$voucherId').update({
+    final branches = (branchIds != null && branchIds.isNotEmpty)
+        ? branchIds
+        : const ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+    final cancelData = {
       'state': VoucherState.cancelled.toMap(),
       'cancelledAt': now,
       'status': 'CANCELLED',
-    });
+    };
+    final Map<String, Object?> updates = {};
+    for (final b in branches) {
+      updates['stores/$b/vouchers/$campaignId/$voucherId/state'] = cancelData['state'];
+      updates['stores/$b/vouchers/$campaignId/$voucherId/cancelledAt'] = cancelData['cancelledAt'];
+      updates['stores/$b/vouchers/$campaignId/$voucherId/status'] = cancelData['status'];
+    }
+    try {
+      await _db.ref().update(updates);
+    } catch (_) {
+      await _storeRef.child('vouchers/$campaignId/$voucherId').update(cancelData);
+    }
   }
 
-  /// Tra cứu voucher theo mã code
+  /// Tra cứu voucher theo mã code (đồng bộ chéo chi nhánh nếu chưa có)
   Future<VoucherModel?> lookupVoucherByCode(String code) async {
     final normalized = code.trim().toUpperCase();
     final lookupSnap = await _storeRef.child('voucher_lookup/$normalized').get();
     
-    if (lookupSnap.value == null) return null;
-    
-    final lookupData = Map<String, dynamic>.from(lookupSnap.value as Map<dynamic, dynamic>);
-    final campaignId = lookupData['campaignId'] as String;
-    final voucherId = lookupData['voucherId'] as String;
+    Map<String, dynamic>? lookupData;
+    if (lookupSnap.value != null && lookupSnap.value is Map) {
+      lookupData = Map<String, dynamic>.from(lookupSnap.value as Map<dynamic, dynamic>);
+    } else {
+      // Fallback tra cứu ở các chi nhánh liên kết
+      const chainStores = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+      for (final b in chainStores) {
+        if (b == _currentStoreCode) continue;
+        try {
+          final otherSnap = await _db.ref('stores/$b/voucher_lookup/$normalized').get();
+          if (otherSnap.value != null && otherSnap.value is Map) {
+            lookupData = Map<String, dynamic>.from(otherSnap.value as Map<dynamic, dynamic>);
+            final campId = lookupData['campaignId']?.toString();
+            final vchId = lookupData['voucherId']?.toString();
+            if (campId != null && vchId != null) {
+              final otherVoucherSnap = await _db.ref('stores/$b/vouchers/$campId/$vchId').get();
+              if (otherVoucherSnap.value != null && otherVoucherSnap.value is Map) {
+                final vchData = Map<String, dynamic>.from(otherVoucherSnap.value as Map<dynamic, dynamic>);
+                // Đồng bộ bản ghi và lookup về chi nhánh hiện tại
+                await _storeRef.update({
+                  'voucher_lookup/$normalized': lookupData,
+                  'vouchers/$campId/$vchId': vchData,
+                }).catchError((_) {});
+                return VoucherModel.fromMap(vchData);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (lookupData == null) return null;
+    final campaignId = lookupData['campaignId'] as String?;
+    final voucherId = lookupData['voucherId'] as String?;
+    if (campaignId == null || voucherId == null) return null;
     
     final voucherSnap = await _storeRef.child('vouchers/$campaignId/$voucherId').get();
     if (voucherSnap.value == null) return null;
@@ -334,7 +378,20 @@ class CampaignService {
       if (reason == 'MINE') return voucher;
       throw Exception(reason ?? 'Không tìm thấy mã voucher');
     }
-    return VoucherModel.fromMap(Map<String, dynamic>.from(res.snapshot.value as Map<dynamic, dynamic>));
+    final redeemedModel = VoucherModel.fromMap(Map<String, dynamic>.from(res.snapshot.value as Map<dynamic, dynamic>));
+    try {
+      final vData = Map<String, dynamic>.from(res.snapshot.value as Map<dynamic, dynamic>);
+      const branchList = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+      final otherBranches = branchList.where((b) => b != _currentStoreCode).toList();
+      if (otherBranches.isNotEmpty) {
+        final Map<String, Object?> crossUpdates = {};
+        for (final b in otherBranches) {
+          crossUpdates['stores/$b/vouchers/${voucher.campaignId}/${voucher.voucherId}'] = vData;
+        }
+        _db.ref().update(crossUpdates).catchError((_) {});
+      }
+    } catch (_) {}
+    return redeemedModel;
   }
 
   /// Giữ voucher (reserve) với TTL
@@ -501,7 +558,31 @@ class CampaignService {
     if (r.voucherCode != null) {
       try {
         if (offline) throw TimeoutException('offline');
-        final lookup = await store.child('voucher_lookup/${r.voucherCode}').get().timeout(timeout);
+        var lookup = await store.child('voucher_lookup/${r.voucherCode}').get().timeout(timeout);
+        if (lookup.value is! Map) {
+          // Tra cứu chéo nếu chi nhánh hiện tại chưa có lookup
+          const chainStores = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+          for (final b in chainStores) {
+            if (b == storeCode) continue;
+            try {
+              final otherLookup = await _db.ref('stores/$b/voucher_lookup/${r.voucherCode}').get().timeout(timeout);
+              if (otherLookup.value is Map) {
+                final m = Map<String, dynamic>.from(otherLookup.value as Map);
+                final cId = m['campaignId']?.toString();
+                final vId = m['voucherId']?.toString();
+                if (cId != null && vId != null) {
+                  await store.update({'voucher_lookup/${r.voucherCode}': m}).catchError((_) {});
+                  final vSnap = await _db.ref('stores/$b/vouchers/$cId/$vId').get().timeout(timeout);
+                  if (vSnap.value is Map) {
+                    await store.update({'vouchers/$cId/$vId': vSnap.value}).catchError((_) {});
+                  }
+                  lookup = otherLookup;
+                  break;
+                }
+              }
+            } catch (_) {}
+          }
+        }
         if (lookup.value is Map) {
           final m = Map<String, dynamic>.from(lookup.value as Map);
           r.voucherCampaignId = m['campaignId']?.toString();
@@ -533,6 +614,24 @@ class CampaignService {
           r.voucherRedeemed = true; // Đã xếp hàng, coi như áp dụng
         } else if (ok) {
           r.voucherRedeemed = true;
+          // Đồng bộ trạng thái REDEEMED sang toàn bộ các chi nhánh liên kết
+          try {
+            final vSnap = await store.child('vouchers/${r.voucherCampaignId}/${r.voucherId}').get();
+            if (vSnap.value is Map) {
+              final vData = Map<String, dynamic>.from(vSnap.value as Map);
+              final branchList = campaign?.branchIds.isNotEmpty == true
+                  ? campaign!.branchIds
+                  : const ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+              final otherBranches = branchList.where((b) => b != storeCode).toList();
+              if (otherBranches.isNotEmpty) {
+                final Map<String, Object?> crossUpdates = {};
+                for (final b in otherBranches) {
+                  crossUpdates['stores/$b/vouchers/${r.voucherCampaignId}/${r.voucherId}'] = vData;
+                }
+                _db.ref().update(crossUpdates).catchError((_) {});
+              }
+            }
+          } catch (_) {}
         } else if (reason == 'MINE') {
           r.voucherRedeemed = false; // đã đổi từ trước bởi chính hóa đơn này, không hoàn tác
         } else {
@@ -654,6 +753,23 @@ class CampaignService {
           m['version'] = ((m['version'] as num?)?.toInt() ?? 0) + 1;
           return Transaction.success(m);
         });
+        // Đồng bộ hoàn tác sang các chi nhánh liên kết
+        try {
+          final vSnap = await store.child('vouchers/${r.voucherCampaignId}/${r.voucherId}').get();
+          if (vSnap.value is Map) {
+            final vData = Map<String, dynamic>.from(vSnap.value as Map);
+            const branchList = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'];
+            final Map<String, Object?> crossUpdates = {};
+            for (final b in branchList) {
+              if (b != r.storeCode) {
+                crossUpdates['stores/$b/vouchers/${r.voucherCampaignId}/${r.voucherId}'] = vData;
+              }
+            }
+            if (crossUpdates.isNotEmpty) {
+              _db.ref().update(crossUpdates).catchError((_) {});
+            }
+          }
+        } catch (_) {}
       });
       r.voucherRedeemed = false;
     }

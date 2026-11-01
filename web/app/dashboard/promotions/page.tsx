@@ -1,7 +1,7 @@
 "use client";
 import { isEligibleAt, parseCampaign } from "@/lib/pricing-engine";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, Plus, Tag, Ticket } from "lucide-react";
+import { Search, Plus, Tag, Ticket, RefreshCw } from "lucide-react";
 import { ref, onValue, set, update, get } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useDashboardData, type ProductItem, type CategoryItem } from "@/lib/data-context";
@@ -13,6 +13,9 @@ import {
   normalizeStackingMode,
 } from "@/lib/campaign-form";
 import {
+  DEFAULT_LINKED_BRANCHES,
+  buildCrossBranchVoucherCancelUpdates,
+  buildCrossBranchVoucherCreateUpdates,
   buildVoucherCancelUpdate, buildVoucherCreateUpdates, canCancelVoucher, checkVoucher, filterVouchers,
   generateRandomCodes, newVoucherId, normalizeVoucherCode, parseVoucherCodes, toVoucherView,
   voucherStatusColor, voucherStatusText, voucherStats as computeVoucherStats, VOUCHER_CODE_RE,
@@ -283,10 +286,9 @@ export default function PromotionsPage() {
 
   const writeVoucherCodes = async (campaignId: string, codes: string[], targetBranches?: string[]) => {
     const now = Date.now();
-    const branches = targetBranches && targetBranches.length > 0 ? targetBranches : [targetStoreCode];
-    for (const b of branches) {
-      await update(ref(db, `stores/${b}`), buildVoucherCreateUpdates(campaignId, codes, now, (i) => newVoucherId(now, i)));
-    }
+    const branches = targetBranches && targetBranches.length > 0 ? targetBranches : [...DEFAULT_LINKED_BRANCHES];
+    const rootUpdates = buildCrossBranchVoucherCreateUpdates(campaignId, codes, branches, now);
+    await update(ref(db), rootUpdates);
   };
 
   // Handle Save Campaign
@@ -379,11 +381,64 @@ export default function PromotionsPage() {
   };
 
   const handleCancelVoucher = async (v: VoucherView) => {
-    if (!window.confirm(`Hủy mã ${v.code}? Mã đã hủy không thể dùng lại.`)) return;
+    if (!window.confirm(`Hủy mã ${v.code}? Mã đã hủy không thể dùng lại trên bất kỳ chi nhánh nào.`)) return;
     try {
-      await update(ref(db, `stores/${targetStoreCode}/vouchers/${v.campaignId}/${v.voucherId}`), buildVoucherCancelUpdate());
+      const cam = campaigns.find(c => c.campaignId === v.campaignId);
+      const branches = cam?.branchIds && cam.branchIds.length > 0 ? cam.branchIds : [...DEFAULT_LINKED_BRANCHES];
+      const rootUpdates = buildCrossBranchVoucherCancelUpdates(v.campaignId, v.voucherId, branches);
+      await update(ref(db), rootUpdates);
     } catch (e) {
       window.alert(errorMessage(e) || "Không hủy được mã");
+    }
+  };
+
+  const [syncingVouchers, setSyncingVouchers] = useState(false);
+  const handleSyncVouchersToAllBranches = async () => {
+    if (!selectedVoucherCampaign) {
+      window.alert("Vui lòng chọn một chương trình khuyến mãi để đồng bộ");
+      return;
+    }
+    const cam = campaigns.find(c => c.campaignId === selectedVoucherCampaign);
+    const targetBranches = cam?.branchIds && cam.branchIds.length > 0 ? cam.branchIds : [...DEFAULT_LINKED_BRANCHES];
+    if (vouchers.length === 0) {
+      window.alert("Chương trình này chưa có mã voucher nào để đồng bộ");
+      return;
+    }
+    if (!window.confirm(`Đồng bộ ${vouchers.length} mã voucher của chương trình "${cam?.name || selectedVoucherCampaign}" sang tất cả các chi nhánh (${targetBranches.join(", ")})?`)) return;
+
+    setSyncingVouchers(true);
+    try {
+      // Đọc toàn bộ node vouchers của campaign hiện tại từ store hiện tại
+      const snap = await get(ref(db, `stores/${targetStoreCode}/vouchers/${selectedVoucherCampaign}`));
+      const vouchersData = (snap.val() || {}) as Record<string, Record<string, unknown>>;
+      const updates: Record<string, unknown> = {};
+      const now = Date.now();
+
+      for (const [vId, vRecord] of Object.entries(vouchersData)) {
+        if (!vRecord) continue;
+        const code = normalizeVoucherCode(String(vRecord.normalizedCode || vRecord.code || ""));
+        for (const b of targetBranches) {
+          updates[`stores/${b}/vouchers/${selectedVoucherCampaign}/${vId}`] = vRecord;
+          if (code) {
+            updates[`stores/${b}/voucher_lookup/${code}`] = {
+              campaignId: selectedVoucherCampaign,
+              voucherId: vId,
+            };
+          }
+        }
+      }
+
+      for (const b of targetBranches) {
+        updates[`stores/${b}/campaigns/${selectedVoucherCampaign}/hasCodes`] = true;
+        updates[`stores/${b}/campaigns/${selectedVoucherCampaign}/updatedAt`] = now;
+      }
+
+      await update(ref(db), updates);
+      window.alert(`Đã đồng bộ thành công ${Object.keys(vouchersData).length} mã voucher sang các chi nhánh: ${targetBranches.join(", ")}`);
+    } catch (err) {
+      window.alert(`Lỗi đồng bộ voucher: ${errorMessage(err)}`);
+    } finally {
+      setSyncingVouchers(false);
     }
   };
 
@@ -757,6 +812,21 @@ export default function PromotionsPage() {
                   setFormError(""); setShowVoucherModal(true);
                 }} style={btnPrimary} disabled={!selectedVoucherCampaign}>
                   <Plus size={16} /> Thêm mã voucher
+                </button>
+                <button
+                  onClick={handleSyncVouchersToAllBranches}
+                  style={{
+                    ...btnSecondary,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: syncingVouchers ? "#f1f5f9" : "var(--surface)",
+                  }}
+                  disabled={!selectedVoucherCampaign || syncingVouchers}
+                  title="Đồng bộ danh sách mã voucher của chương trình này sang tất cả các chi nhánh liên kết"
+                >
+                  <RefreshCw size={16} style={{ animation: syncingVouchers ? "spin 1s linear infinite" : "none" }} />
+                  {syncingVouchers ? "Đang đồng bộ..." : "Đồng bộ sang tất cả chi nhánh"}
                 </button>
               </div>
 
