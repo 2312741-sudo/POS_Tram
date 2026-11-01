@@ -266,6 +266,8 @@ export interface PricingLine {
   manualDiscount?: number;
   /** Lúc gọi món (ms). KM có khung giờ chỉ tính dòng gọi TRONG khung giờ; trống = món mới (tính theo lúc bấm) */
   orderedAtMs?: number | null;
+  /** Dòng MÓN TẶNG được thêm riêng cho chương trình này (không tính vào mốc giá trị đơn; được ưu tiên nhận ưu đãi) */
+  rewardCampaignId?: string | null;
 }
 
 /** Dòng gọi trong thời gian áp dụng của [c]? (món chưa có giờ gọi = món mới → luôn được tính). Khớp orderedWithin (Dart). */
@@ -322,6 +324,8 @@ export interface PricingInput {
   manualDiscountMoney?: number;
   /** Bỏ qua khung giờ — dùng khi tính lại chương trình ĐÃ áp dụng (đơn treo qua hết giờ vẫn giữ giảm), giống Flutter */
   ignoreSchedule?: boolean;
+  /** Tặng/giảm món theo giá trị đơn: CHỈ giảm trên dòng món tặng riêng (rewardCampaignId), không lấy món khách đã gọi */
+  dedicatedRewardOnly?: boolean;
 }
 
 export interface QuoteReason {
@@ -608,8 +612,10 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         addReason(campaign, "NO_BENEFIT", "Ưu đãi món Y bằng 0đ");
       }
     } else if (isType(type, "ORDERVALUEITEMBENEFIT")) {
+      // Dòng món tặng của chính chương trình không tính vào mốc giá trị đơn
+      const isOwnReward = (l: PricingLine) => !!l.rewardCampaignId && l.rewardCampaignId === campaign.campaignId;
       let base = 0;
-      for (const l of lines) if (inScope(campaign, l)) base += afterManual[l.lineId] ?? 0;
+      for (const l of lines) if (inScope(campaign, l) && !isOwnReward(l)) base += afterManual[l.lineId] ?? 0;
       const tiers = [...campaign.tiers].sort((a, b) => b.threshold - a.threshold);
       const tier = tiers.find((t) => base >= t.threshold);
       if (!tier) {
@@ -628,9 +634,12 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         continue;
       }
       const units = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1;
-      const candidates = lines.filter(
+      const matching = lines.filter(
         (l) => !l.isGift && (lineMatchesAnyTarget(l, rewardIds) || groupIn(l.groupId, rewardGroups)) && !lineMatchesAnyTarget(l, campaign.excludedItemIds),
       );
+      // Ưu tiên dòng món tặng riêng; không có thì (trừ khi dedicatedRewardOnly) giảm trên món đã có như trước
+      const dedicated = matching.filter(isOwnReward);
+      const candidates = dedicated.length > 0 ? dedicated : input.dedicatedRewardOnly ? [] : matching;
       if (candidates.length === 0) {
         addReason(campaign, "REWARD_ITEM_NOT_IN_BILL", "Đơn đủ điều kiện: thêm món được tặng/giảm vào đơn để áp dụng");
         continue;
@@ -784,6 +793,7 @@ export function linesFromOrder(
     unitPrice: lineUnitPrice(it),
     manualDiscount: lineDiscountTotal(it),
     orderedAtMs: toMs(it.orderedAt),
+    rewardCampaignId: it.rewardCampaignId != null && String(it.rewardCampaignId) ? String(it.rewardCampaignId) : null,
   }));
 }
 

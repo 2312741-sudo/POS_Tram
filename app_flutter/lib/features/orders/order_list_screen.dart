@@ -203,6 +203,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       final idx = _cart.indexWhere((p) =>
           !p.isSentKitchen &&
           !p.hasDiscount &&
+          p.rewardCampaignId.isEmpty &&
           CartCampaignPricing.sameOrderWindow(p.orderedAt, now, _campaigns) &&
           p.productId == product.id &&
           p.name == product.name &&
@@ -742,6 +743,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                                   final existingIdx = _cart.indexWhere((i) =>
                                       !i.isSentKitchen &&
                                       !i.hasDiscount &&
+                                      i.rewardCampaignId.isEmpty &&
                                       CartCampaignPricing.sameOrderWindow(i.orderedAt, now, _campaigns) &&
                                       i.productId == newItem.productId &&
                                       i.name == newItem.name &&

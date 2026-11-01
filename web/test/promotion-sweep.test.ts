@@ -258,3 +258,29 @@ describe("Khung giờ: lúc bấm phải trong giờ VÀ chỉ món GỌI trong 
     expect(r.dropped).toHaveLength(1);
   });
 });
+
+describe("Tặng món theo giá trị đơn: món tặng là dòng RIÊNG (rewardCampaignId)", () => {
+  const raw = {
+    campaignId: "CAM_CHANH", programCode: "KM/CHANH", name: "Tặng 1 chanh đơn 100K", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true,
+    branchIds: ["TRAM01"], hasCodes: false, stackingMode: "ENABLED", priority: 0, createdAt: 1, schedule: {},
+    tiers: [{ tierId: "T1", conditionBasis: "TOTALAMOUNT", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardItemIds: ["8"], sortOrder: 1 }],
+  };
+  const c = () => parseCampaign("CAM_CHANH", raw as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  const xoai = line("1", "5", 2, 45000, "TRÀ");
+  const chanh = (id: string, reward?: string): PricingLine => ({ ...line(id, "8", 1, 30000, "TRÀ"), rewardCampaignId: reward ?? null });
+
+  it("dòng tặng riêng được ưu tiên; ly khách gọi không bị trừ; dòng tặng không tính mốc", () => {
+    const q = quoteCampaign(c(), [xoai, chanh("2"), chanh("3", "CAM_CHANH")], ctx);
+    expect(q.totalPromotionDiscount).toBe(30000);
+    expect(q.rewardBenefits.map((b) => b.lineId)).toEqual(["3"]);
+    expect(quoteCampaign(c(), [xoai, chanh("3", "CAM_CHANH")], ctx).totalPromotionDiscount).toBe(0);
+  });
+  it("chưa có dòng tặng: web (đơn cũ) vẫn giảm món có sẵn; dedicatedRewardOnly thì không", () => {
+    expect(quoteCampaign(c(), [xoai, chanh("2")], ctx).totalPromotionDiscount).toBe(30000);
+    expect(calculatePrice({ ...ctx, lines: [xoai, chanh("2")], dedicatedRewardOnly: true }, [c()]).totalPromotionDiscount).toBe(0);
+  });
+  it("linesFromOrder đọc rewardCampaignId", () => {
+    expect(linesFromOrder([{ productId: 8, name: "Chanh", price: 30000, quantity: 1, rewardCampaignId: "CAM_CHANH" }])[0].rewardCampaignId).toBe("CAM_CHANH");
+  });
+});

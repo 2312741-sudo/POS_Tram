@@ -79,6 +79,7 @@ export function addLineToOrder(lines: RawOrderLine[], line: RawOrderLine, campai
   const idx = lines.findIndex(
     (l) =>
       l.isSentKitchen !== true &&
+      !l.rewardCampaignId && // không gộp vào dòng món tặng khuyến mãi
       sameOrderWindow(Number(l.orderedAt) || 0, Number(line.orderedAt) || 0, campaigns) &&
       String(l.productId) === String(line.productId) &&
       String(l.note ?? "") === String(line.note ?? "") &&

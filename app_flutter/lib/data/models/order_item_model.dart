@@ -61,6 +61,10 @@ class OrderItemModel {
   String orderedByName; // Họ tên nhân viên nhận order món
   int? orderedAt; // Thời điểm nhận order món
 
+  /// Dòng MÓN TẶNG được thêm riêng cho chương trình khuyến mãi này (vd tặng 1 chanh cho đơn từ 100K).
+  /// Không tính vào mốc giá trị đơn, chỉ dòng này nhận ưu đãi, không gộp món gọi thêm vào dòng này.
+  String rewardCampaignId;
+
   OrderItemModel({
     required this.productId,
     required this.name,
@@ -86,6 +90,7 @@ class OrderItemModel {
     this.orderedBy = '',
     this.orderedByName = '',
     this.orderedAt,
+    this.rewardCampaignId = '',
   }) : discountedQuantity = (discountedQuantity ??
                 ((discountAmount > 0 || discountPercent > 0 || discountUnitAmount > 0) ? quantity : 0))
             .clamp(0, quantity < 0 ? 0 : quantity);
@@ -191,6 +196,7 @@ class OrderItemModel {
       orderedBy: map['orderedBy']?.toString() ?? '',
       orderedByName: map['orderedByName']?.toString() ?? '',
       orderedAt: asEpochMs(map['orderedAt']),
+      rewardCampaignId: map['rewardCampaignId']?.toString() ?? '',
     );
   }
 
@@ -201,6 +207,7 @@ class OrderItemModel {
     'quantity': quantity,
     'note': note,
     'isSentKitchen': isSentKitchen,
+    if (rewardCampaignId.isNotEmpty) 'rewardCampaignId': rewardCampaignId,
     // discountAmount = lineDiscountTotal = tổng giảm CẢ DÒNG (xem chú thích đầu file)
     'discountAmount': lineDiscountTotal,
     'lineDiscountTotal': lineDiscountTotal,
@@ -423,6 +430,7 @@ class OrderItemModel {
     String? orderedBy,
     String? orderedByName,
     int? orderedAt,
+    String? rewardCampaignId,
   }) {
     final nextQty = quantity ?? this.quantity;
     final next = OrderItemModel(
@@ -452,6 +460,7 @@ class OrderItemModel {
       orderedBy: orderedBy ?? this.orderedBy,
       orderedByName: orderedByName ?? this.orderedByName,
       orderedAt: orderedAt ?? this.orderedAt,
+      rewardCampaignId: rewardCampaignId ?? this.rewardCampaignId,
     );
     // Số lượng / đơn giá / cấu hình giảm thay đổi mà không truyền tổng giảm
     // tường minh → tính lại tổng giảm của dòng.

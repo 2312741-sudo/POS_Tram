@@ -106,6 +106,7 @@ class CartCampaignPricing {
     String? customerBirthday,
     int? nowMs,
     bool ignoreSchedule = false,
+    bool dedicatedRewardOnly = false,
   }) {
     return calculatePrice(
       input: PricingInput(
@@ -115,6 +116,7 @@ class CartCampaignPricing {
         serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
         lines: lines(cart, products),
         ignoreSchedule: ignoreSchedule,
+        dedicatedRewardOnly: dedicatedRewardOnly,
       ),
       activeCampaigns: [campaign],
       counters: const {},
@@ -145,6 +147,8 @@ class CartCampaignPricing {
         customerBirthday: customerBirthday,
         nowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
         ignoreSchedule: isApplied,
+        // Áp dụng mới: món tặng là dòng RIÊNG được thêm vào đơn, không trừ vào món khách đã gọi
+        dedicatedRewardOnly: !isApplied,
       );
 
   /// Chương trình "tặng/giảm món theo giá trị đơn" hoặc "Mua X tặng/giảm Y" đủ điều kiện nhưng món thưởng chưa có trong đơn?
@@ -197,6 +201,7 @@ class CartCampaignPricing {
       int base = 0;
       for (final l in lns) {
         if (l.isGift || !l.orderedWithin(c) || l.matchesAnyTarget(c.excludedItemIds)) continue;
+        if (l.rewardCampaignId == c.campaignId) continue; // món tặng không tính vào mốc giá trị đơn
         final inScope = inScopeAll || l.matchesAnyTarget(c.includedItemIds) || (l.groupId != null && c.includedGroupIds.contains(l.groupId));
         if (inScope) base += l.unitPrice * l.quantity - l.manualLineDiscount;
       }

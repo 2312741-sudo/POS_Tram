@@ -329,13 +329,14 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     final now = DateTime.now().millisecondsSinceEpoch;
     // Khác khung giờ KM so với lúc gọi dòng này → tách dòng mới (KM khung giờ chỉ tính món gọi trong giờ)
     bool sameWindow(OrderItemModel i) => CartCampaignPricing.sameOrderWindow(i.orderedAt, now, _campaigns);
-    if (item.isSentKitchen || item.hasDiscount || !sameWindow(item)) {
+    if (item.isSentKitchen || item.hasDiscount || !sameWindow(item) || item.rewardCampaignId.isNotEmpty) {
       // Dòng này đã gửi bếp hoặc đã có giảm giá món: không cộng dồn trực tiếp vào dòng này
       // (vì phần tăng thêm chưa gửi bếp và không tự động được hưởng giảm giá).
       // Tìm xem đã có dòng mới chưa gửi bếp & không giảm giá cùng loại món này chưa:
       final existingNewIdx = _cart.indexWhere((i) =>
           !i.isSentKitchen &&
           !i.hasDiscount &&
+          i.rewardCampaignId.isEmpty &&
           sameWindow(i) &&
           i.productId == item.productId &&
           i.name == item.name &&
@@ -1017,15 +1018,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     final staffUser = _auth.currentUser?.username ?? 'staff';
     final staffName = _auth.currentUser?.fullName ?? 'Nhân viên';
     setState(() {
+      // Món tặng là dòng RIÊNG gắn chương trình (không gộp với món khách gọi, không tính vào mốc giá trị đơn)
       _cart.add(OrderItemModel(
         productId: picked.id,
         name: picked.name,
         price: picked.price,
         quantity: plan.units,
+        note: 'Tặng KM: ${c.name}',
         orderedBy: staffUser,
         orderedByName: staffName,
         orderedAt: DateTime.now().millisecondsSinceEpoch,
         isSentKitchen: false,
+        rewardCampaignId: c.campaignId,
       ));
     });
     widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
@@ -4116,9 +4120,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               _appliedDiscounts = added.discounts;
                             });
                           } else {
+                            // Bỏ chương trình: gỡ luôn dòng món tặng CHƯA gửi bếp của nó (đã gửi bếp thì giữ, báo nhân viên)
+                            final rewardUnsent = _cart.where((i) => i.rewardCampaignId == c.campaignId && !i.isSentKitchen).length;
+                            final rewardSent = _cart.where((i) => i.rewardCampaignId == c.campaignId && i.isSentKitchen).length;
                             setDlgState(() {
                               _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
                             });
+                            if (rewardUnsent > 0) {
+                              setState(() => _cart.removeWhere((i) => i.rewardCampaignId == c.campaignId && !i.isSentKitchen));
+                              widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+                              await _fb.saveTable(widget.table).catchError((_) {});
+                            }
+                            if (rewardSent > 0 && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Món tặng của "${c.name}" đã gửi bếp vẫn còn trong đơn và sẽ tính tiền — xóa món nếu không tặng nữa.'),
+                              ));
+                            }
                           }
                         },
                       );
