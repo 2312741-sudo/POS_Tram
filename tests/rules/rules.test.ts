@@ -1250,3 +1250,54 @@ describe("POS Trạm - Security Rules: ca/két mở & chốt trên Web (CS)", ()
     await assertSucceeds(db("manager_uid").ref(S).update({ notes: "quản lý ghi chú" }));
   });
 });
+
+describe("POS Trạm - Security Rules: Reset dữ liệu bán hàng trên Web (RESET)", () => {
+  const seedSales = async () =>
+    env().withSecurityRulesDisabled(async (context) => {
+      const d = context.database();
+      await d.ref("stores/TRAM01/history/cancel_bill").set({ id: "cancel_bill", status: "CANCELLED", totalAmount: 30000 });
+      await d.ref("stores/TRAM01/bills/cancel_bill").set({ id: "cancel_bill", status: "CANCELLED", finalAmount: 0 });
+      await d.ref("stores/TRAM01/kitchen_orders/K1").set({ status: "DONE", tableName: "Bàn 1" });
+      await d.ref("stores/TRAM01/online_orders/O1").set({ status: "PENDING" });
+      await d.ref("stores/TRAM01/cash_shifts/S1").set({ shiftId: "S1", status: "CLOSED" });
+      await d.ref("stores/TRAM01/bill_stock_applied/paid_bill").set(true);
+      await d.ref("stores/TRAM01/tables/t1").set({ name: "Bàn 01", zone: "Trong", inUse: true, currentOrderJson: "[]", openedAt: 1 });
+      await d.ref("stores/TRAM01/tables/t2").set({ name: "Bàn 01 (2)", zone: "Trong", inUse: false, isSplitTable: true });
+    });
+
+  const planFor = async () => {
+    const { buildResetPlan, RESET_GROUPS } = await import("../../web/lib/sales-reset");
+    let data: Record<string, Record<string, unknown> | null> = {};
+    let tables: Record<string, unknown> | null = null;
+    await env().withSecurityRulesDisabled(async (c) => {
+      const d = c.database();
+      const nodes = [...new Set(RESET_GROUPS.flatMap((g) => g.nodes))];
+      data = Object.fromEntries(await Promise.all(nodes.map(async (n) => [n, (await d.ref(`stores/TRAM01/${n}`).get()).val()] as const)));
+      tables = (await d.ref("stores/TRAM01/tables").get()).val();
+    });
+    return buildResetPlan("TRAM01", RESET_GROUPS.filter((g) => g.defaultOn).map((g) => g.key), data, tables);
+  };
+
+  it("RESET1. Chủ quán chạy được toàn bộ lệnh reset (xóa hóa đơn PAID / đã hủy, phiếu bếp, ca, trả bàn)", async () => {
+    await seedSales();
+    const plan = await planFor();
+    expect(plan.updates["stores/TRAM01/history/paid_bill"]).toBeNull();
+    await assertSucceeds(db("owner_uid").ref().update(plan.updates));
+    await env().withSecurityRulesDisabled(async (c) => {
+      const d = c.database();
+      expect((await d.ref("stores/TRAM01/history").get()).exists()).toBe(false);
+      expect((await d.ref("stores/TRAM01/bills").get()).exists()).toBe(false);
+      expect((await d.ref("stores/TRAM01/cash_shifts").get()).exists()).toBe(false);
+      expect((await d.ref("stores/TRAM01/tables/t1/inUse").get()).val()).toBe(false);
+      expect((await d.ref("stores/TRAM01/tables/t1/name").get()).val()).toBe("Bàn 01");
+      expect((await d.ref("stores/TRAM01/tables/t2").get()).exists()).toBe(false);
+      expect((await d.ref("stores/TRAM01/stock_balances/TRAM01_ITEM1").get()).exists()).toBe(true);
+    });
+  });
+
+  it("RESET2. Thu ngân không chạy được lệnh reset", async () => {
+    await seedSales();
+    const plan = await planFor();
+    await assertFails(db("cashier_uid").ref().update(plan.updates));
+  });
+});

@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, CreditCard, Receipt, Settings, Store } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Clock, CreditCard, Receipt, RotateCcw, Settings, Store } from "lucide-react";
 import { nowMs } from "@/lib/kitchen";
 import { useDashboardData, type StoreItem } from "@/lib/data-context";
-import { useAuth, canAccessRoute } from "@/lib/auth";
+import { useAuth, canAccessRoute, normalizeRoleId, ROLE_OWNER } from "@/lib/auth";
 import { businessDateOf, formatMinutesAsTime, normalizeBusinessDayStart, parseTimeToMinutes } from "@/lib/business-day";
 
 const BANK_OPTIONS = [
@@ -48,6 +49,8 @@ export default function StoreSettingsPage() {
 
 function SettingsForm({ store }: { store: StoreItem }) {
   const { updateStore } = useDashboardData();
+  const { user } = useAuth();
+  const isOwner = !!user && (user.isRootOwner || normalizeRoleId(user.roleId || user.role || "") === ROLE_OWNER);
   const [storeName, setStoreName] = useState(store.storeName || "");
   const [address, setAddress] = useState(store.address || "");
   const [phone, setPhone] = useState(store.phone || "");
@@ -186,6 +189,18 @@ function SettingsForm({ store }: { store: StoreItem }) {
       <div>
         <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu cài đặt"}</button>
       </div>
+
+      {isOwner && (
+        <div style={{ border: "1px solid var(--danger)", borderRadius: 12, padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, color: "var(--danger)" }}>Reset dữ liệu bán hàng</div>
+            <div style={{ fontSize: 12, color: "var(--subtext)" }}>Xóa hóa đơn, phiếu bếp, ca két… để bắt đầu vận hành lại. Giữ thực đơn, bàn, nhân viên, khách hàng, kho.</div>
+          </div>
+          <Link href="/dashboard/settings/reset-data" className="btn-secondary" style={{ color: "var(--danger)", borderColor: "var(--danger)" }}>
+            <RotateCcw size={15} /> Mở công cụ reset
+          </Link>
+        </div>
+      )}
     </form>
   );
 }
