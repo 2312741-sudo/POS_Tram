@@ -41,8 +41,7 @@ import {
   calculateCancellationReport,
   calculateGrossProfitReport,
   deduplicateBills,
-  type ProductLookup,
-} from "./reports";
+  type ProductLookup, findProductForLine } from "./reports";
 import { soldItemRows, staffItemSummary } from "./staff-sales-report";
 import { splitLineParts, type ToppingLookup } from "./topping-split";
 import { billRemovedItems, type DeletionReport } from "./item-deletion";
@@ -1695,7 +1694,7 @@ export function buildReportsWorkbook(input: ReportsWorkbookInput): XLSX.WorkBook
     [22, 10, 16, 12, 16, 12, 14, 12]));
 
   // 6–8. Nhân viên
-  const sold = soldItemRows(bills, codeMap, undefined, lookupTopping);
+  const sold = soldItemRows(bills, codeMap, (it) => findProductForLine(it, productsMap)?.category || "", lookupTopping);
   const { items: staffItems, staff } = staffItemSummary(sold);
   const cashiers = calculateStaffPerformance(bills).cashierStaff;
   add("Nhân viên", reportSheet("NĂNG SUẤT NHÂN VIÊN", info,

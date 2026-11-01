@@ -59,3 +59,18 @@ describe("Báo cáo hàng hóa gom theo mã món", () => {
     expect(pick("Trà Olong - Xoài")).toEqual([["DR202500003", 3]]);
   });
 });
+
+describe("Nhóm hàng tra theo id → mã → tên (món bấm trên app lưu id số, web nạp thực đơn theo khóa)", () => {
+  it("không còn rơi về 'Khác': báo cáo hàng hóa + nhóm hàng ra đúng TRÀ TRÁI CÂY", async () => {
+    const { calculateProductReport, calculateCategoryReport, findProductForLine } = await import("../lib/reports");
+    const productsMap = {
+      "-Nt": { name: "Trà Olong - Xoài", code: "DR202500003", price: 30000, category: "TRÀ TRÁI CÂY" },
+      "-Nt2": { name: "Trà Olong - Xoài", code: "DR202500003", price: 30000, category: "Khác" },
+    };
+    const bills = [{ id: "B1", status: "PAID", items: [{ productId: 5, name: "Trà Olong - Xoài", price: 30000, quantity: 2 }] }];
+    expect(calculateProductReport(bills as never, productsMap).map((r) => r.category)).toEqual(["TRÀ TRÁI CÂY"]);
+    expect(calculateCategoryReport(bills as never, productsMap).map((c) => c.category)).toEqual(["TRÀ TRÁI CÂY"]);
+    expect(findProductForLine({ productId: 999, code: "dr202500003" }, productsMap)?.category).toBe("TRÀ TRÁI CÂY");
+    expect(findProductForLine({ productId: 999, name: "Không có" }, productsMap)).toBeUndefined();
+  });
+});

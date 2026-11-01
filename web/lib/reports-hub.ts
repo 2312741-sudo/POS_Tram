@@ -31,8 +31,7 @@ import {
   type CashShiftItem,
   type HistoryOrder,
   type ProductLookup,
-  type TableItem,
-} from "./reports";
+  type TableItem, findProductForLine } from "./reports";
 
 export type ReportKind =
   | "overview" | "periodRevenue" | "category" | "product" | "staff" | "staffItems" | "hourly" | "paymentMethods"
@@ -184,7 +183,7 @@ export function buildHubTable(kind: ReportKind, ctx: HubContext): HubTable {
     }
 
     case "staffItems": {
-      const { items } = staffItemSummary(soldItemRows(bills, ctx.codeMap, undefined, ctx.lookupTopping));
+      const { items } = staffItemSummary(soldItemRows(bills, ctx.codeMap, (it) => findProductForLine(it, productsMap)?.category || "", ctx.lookupTopping));
       return {
         columns: [T("Nhân viên order"), T("Mã món"), T("Tên món"), T("Nhóm"), I("Số lượng"), M("Doanh thu gộp"), M("Giảm giá"), M("Doanh thu thuần"), I("Số HĐ")],
         rows: items.map((r) => [r.orderStaffName, r.productCode, r.productName, r.category, r.quantity, r.grossAmount, r.discountAmount, r.netAmount, r.billCount]),

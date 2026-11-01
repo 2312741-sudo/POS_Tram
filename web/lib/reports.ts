@@ -178,6 +178,32 @@ export interface ProductLookup {
   costPrice?: number;
 }
 
+/**
+ * Món trong thực đơn của một dòng hóa đơn: id → mã món → tên (không phân biệt hoa thường / khoảng trắng thừa).
+ * Món bấm trên app lưu id SỐ còn web nạp thực đơn theo khóa RTDB, nên tra id thường trượt → phải tra tiếp mã / tên,
+ * nếu không nhóm hàng rơi về "Khác".
+ */
+export function findProductForLine(
+  it: { productId?: unknown; name?: unknown; code?: unknown; productCode?: unknown },
+  productsMap?: Record<string | number, ProductLookup>
+): ProductLookup | undefined {
+  if (!productsMap) return undefined;
+  const pid = it.productId;
+  if (pid != null && pid !== "" && productsMap[pid as string]) return productsMap[pid as string];
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const code = norm(it.productCode ?? it.code);
+  const name = norm(it.name);
+  const all = Object.values(productsMap);
+  // Thực đơn có bản trùng: ưu tiên bản có nhóm hàng thật (khác "Khác")
+  const best = (list: ProductLookup[]) => list.find((p) => p.category && norm(p.category) !== "khác") ?? list[0];
+  if (code) {
+    const byCode = best(all.filter((p) => norm(p.code ?? p.productCode) === code));
+    if (byCode) return byCode;
+  }
+  if (!name) return undefined;
+  return best(all.filter((p) => norm(p.name) === name));
+}
+
 export type PeriodType = "DAY" | "WEEK" | "MONTH" | "YEAR";
 
 // ==================== BÁO CÁO 1: EXECUTIVE OVERVIEW ====================
@@ -969,7 +995,7 @@ export function calculateCategoryReport(
       for (const part of splitLineParts(it, lookupTopping)) {
         let category = part.category.trim();
         if (!part.isTopping && !category && productsMap) {
-          const prod = productsMap[it.productId || it.name];
+          const prod = findProductForLine(it, productsMap);
           if (prod) category = (prod.category || "").trim();
         }
         if (!category) category = "Khác";
@@ -1046,7 +1072,6 @@ export function calculateProductReport(
     const items = extractBillItems(b);
     for (const it of items) {
       for (const part of splitLineParts(it, lookupTopping)) {
-        let key: string;
         let pId: number | string;
         let pCode: string;
         let basePrice: number;
@@ -1064,8 +1089,8 @@ export function calculateProductReport(
           basePrice = Number(it.price || 0);
           unit = it.unit || "Ly";
           category = it.category || "Khác";
-          if (productsMap && productsMap[pId]) {
-            const pDef = productsMap[pId];
+          const pDef = findProductForLine(it, productsMap);
+          if (pDef) {
             if (!basePrice) basePrice = Number(pDef.price || 0);
             if (!unit && pDef.unit) unit = pDef.unit;
             if ((!category || category === "Khác") && pDef.category) category = pDef.category;
@@ -1073,7 +1098,7 @@ export function calculateProductReport(
         }
 
         // Gom theo mã món: món trùng trong thực đơn và món gọi làm topping cùng về một dòng
-        key = productMergeKey(pCode, part.name);
+        const key = productMergeKey(pCode, part.name);
         if (!prodMap.has(key)) {
           prodMap.set(key, {
             productId: pId,

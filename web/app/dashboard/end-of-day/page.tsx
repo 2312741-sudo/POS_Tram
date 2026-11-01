@@ -8,8 +8,7 @@ import {
   formatVND,
   getBillTimestamp,
   getUTC7Date,
-  getBusinessBillTimestamp,
-} from "@/lib/reports";
+  getBusinessBillTimestamp, findProductForLine } from "@/lib/reports";
 import { buildProductCodeMap } from "@/lib/product-code";
 import { buildToppingLookup } from "@/lib/topping-split";
 import { soldItemRows } from "@/lib/staff-sales-report";
@@ -218,7 +217,7 @@ export default function EndOfDayReportPage() {
   // Từng dòng món đã bán kèm nhân viên order (dùng để liệt kê nhân viên và lọc theo nhân viên)
   const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
   const toppingLookup = useMemo(() => buildToppingLookup(products), [products]);
-  const soldRows = useMemo(() => soldItemRows(filteredBills, codeMap, undefined, toppingLookup), [filteredBills, codeMap, toppingLookup]);
+  const soldRows = useMemo(() => soldItemRows(filteredBills, codeMap, (it) => findProductForLine(it, productsMap)?.category || "", toppingLookup), [filteredBills, codeMap, toppingLookup, productsMap]);
 
   /** Tên nhân viên của một dòng: có thể là danh sách "A, B" (hóa đơn nhiều người order) → tách riêng từng người */
   const splitStaff = (raw: string): string[] => raw.split(",").map((x) => x.trim()).filter(Boolean);
