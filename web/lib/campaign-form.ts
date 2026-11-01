@@ -126,6 +126,8 @@ export interface CampaignFormState {
   threshold: string;
   // ITEMPRICERULE
   fixedPriceValue: string;
+  /** Số phần tối đa được áp giá trong 1 đơn (tier.maxRewardQty), "" = không giới hạn */
+  itemMaxQty: string;
   // ORDERVALUEITEMBENEFIT & BUYXGETY: món thưởng Y
   rewardItemIds: string[];
   /** Nhóm món thưởng Y (tên nhóm hàng) — mọi món trong nhóm đều là món thưởng */
@@ -159,7 +161,7 @@ export function emptyCampaignForm(): CampaignFormState {
     active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
     hasCodes: false, autoApply: true, requireStaffNote: false, birthdayOnly: false, blockPoints: false, stackingMode: "ENABLED", maxCampaignsPerOrder: "", priority: "0",
     discountType: "PERCENT", discountValue: "", maxDiscount: "", threshold: "",
-    fixedPriceValue: "",
+    fixedPriceValue: "", itemMaxQty: "",
     rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardToppingQty: "0", rewardToppingIds: [], rewardBenefit: "FREEITEM", rewardValue: "",
     buyItemIds: [], buyGroupIds: [], buyQty: "1", multiplyByBundle: true,
     includedItemIds: [], includedGroupIds: [], daysOfWeek: [], timeSlots: [],
@@ -254,6 +256,7 @@ export function campaignToForm(cam: StoredCampaign): CampaignFormState {
       form.discountValue = posStr(mode === "PERCENT" ? basisPointsToPercent(value) : value);
     } else if (type === "ITEMPRICERULE") {
       form.fixedPriceValue = posStr(value);
+      form.itemMaxQty = posStr(num(tier.maxRewardQty));
     } else if (type === "ORDERVALUEITEMBENEFIT") {
       form.rewardItemIds = strList(tier.rewardItemIds);
       form.rewardGroupIds = strList(tier.rewardGroupIds);
@@ -407,7 +410,7 @@ export function buildBenefitFields(
     case "ITEMPRICERULE": {
       const v = Math.round(toInt(form.fixedPriceValue) || 0);
       return {
-        tiers: [buildTier({ tierId, threshold: 0, benefitMode: "FIXEDPRICE", value: v })],
+        tiers: [buildTier({ tierId, threshold: 0, benefitMode: "FIXEDPRICE", value: v, maxRewardQty: Math.max(0, Math.round(toInt(form.itemMaxQty) || 0)) })],
         buyConditions: [],
         includedItemIds: form.includedItemIds,
         includedGroupIds: form.includedGroupIds,

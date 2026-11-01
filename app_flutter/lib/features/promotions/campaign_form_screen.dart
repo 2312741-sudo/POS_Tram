@@ -39,6 +39,8 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
   late TextEditingController _discountValueController;
   late TextEditingController _maxDiscountController;
   late TextEditingController _fixedPriceController;
+  // Đồng giá: số phần tối đa được áp giá trong 1 đơn (trống = mọi phần)
+  final TextEditingController _itemMaxQtyController = TextEditingController();
   String _discountType = 'PERCENT'; // 'PERCENT' | 'AMOUNT'
 
   CampaignType _campaignType = CampaignType.billDiscount;
@@ -133,6 +135,10 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
       _generateCode();
     }
 
+    if (_campaignType == CampaignType.itemPriceRule && _tiers.isNotEmpty && _tiers.first.maxRewardQty > 0) {
+      _itemMaxQtyController.text = _tiers.first.maxRewardQty.toString();
+    }
+
     _loadMeta();
   }
 
@@ -172,6 +178,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     _discountValueController.dispose();
     _maxDiscountController.dispose();
     _fixedPriceController.dispose();
+    _itemMaxQtyController.dispose();
     _codesController.dispose();
     super.dispose();
   }
@@ -257,7 +264,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
             benefitMode: 'FIXEDPRICE',
             value: fixedVal,
             maxDiscountMoney: 0,
-            maxRewardQty: 0,
+            maxRewardQty: (int.tryParse(_itemMaxQtyController.text.trim()) ?? 0).clamp(0, 999),
             rewardItemIds: const [],
             sortOrder: 1,
           )
@@ -690,6 +697,16 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                     hintText: 'VD: 19000 (Món sẽ được giảm về mức giá này)',
                     border: OutlineInputBorder(),
                     suffixText: 'VND',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _itemMaxQtyController,
+                  decoration: const InputDecoration(
+                    labelText: 'Số phần tối đa mỗi đơn (để trống = mọi phần)',
+                    hintText: 'VD: 1 (chỉ giảm 1 ly dù khách gọi nhiều ly)',
+                    border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
                 ),

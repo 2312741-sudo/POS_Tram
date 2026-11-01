@@ -690,14 +690,19 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       if (campaign.tiers.length > 0) {
         const tier = campaign.tiers[0];
         // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
+        // maxRewardQty > 0: chỉ áp cho tối đa N phần trong đơn (0 = mọi phần)
+        let unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : Infinity;
         let applied = false;
         for (const line of lines) {
+          if (unitsLeft <= 0) break;
           if (!inScope(campaign, line)) continue;
           const perUnit = unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
           if (perUnit <= 0) continue;
           const remaining = Math.max(0, lineFinal[line.lineId] ?? 0);
-          const discount = Math.min(perUnit * line.quantity, remaining);
+          const take = Math.min(line.quantity, unitsLeft);
+          const discount = Math.min(perUnit * take, remaining);
           if (discount <= 0) continue;
+          unitsLeft -= take;
           lineDisc[line.lineId] = (lineDisc[line.lineId] ?? 0) + discount;
           lineFinal[line.lineId] = remaining - discount;
           totalDiscount += discount;
@@ -1128,7 +1133,7 @@ export function describeBenefit(c: Campaign): string {
     const qty = t.maxRewardQty > 0 ? t.maxRewardQty : 1;
     return `${benefitText(t.benefitMode, t.value)} ${qty} món${from}`;
   }
-  if (type === "ITEMPRICERULE") return `đồng giá ${vnd(t.value)}`;
+  if (type === "ITEMPRICERULE") return `đồng giá ${vnd(t.value)}${t.maxRewardQty > 0 ? ` (tối đa ${t.maxRewardQty} phần/đơn)` : ""}`;
   const cap = t.maxDiscountMoney > 0 ? `, tối đa ${vnd(t.maxDiscountMoney)}` : "";
   return `${benefitText(t.benefitMode, t.value)} hóa đơn${cap}${from}`;
 }

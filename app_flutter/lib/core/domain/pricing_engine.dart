@@ -556,14 +556,19 @@ PriceQuoteModel calculatePrice({
       if (campaign.tiers.isNotEmpty) {
         var tier = campaign.tiers.first;
         // Đồng giá (FIXEDPRICE) hoặc đồng giảm: % / số tiền / tặng — tính theo từng phần của dòng
+        // maxRewardQty > 0: chỉ áp cho tối đa N phần trong đơn (0 = mọi phần)
+        int unitsLeft = tier.maxRewardQty > 0 ? tier.maxRewardQty : 1 << 30;
         bool applied = false;
         for (var line in lines) {
+          if (unitsLeft <= 0) break;
           if (!inScope(campaign, line)) continue;
           final perUnit = _unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
           if (perUnit <= 0) continue;
           final remaining = max(0, lineFinalPrices[line.lineId] ?? 0);
-          int discount = min(perUnit * line.quantity, remaining);
+          final take = min(line.quantity, unitsLeft);
+          int discount = min(perUnit * take, remaining);
           if (discount <= 0) continue;
+          unitsLeft -= take;
           lineDiscounts[line.lineId] = (lineDiscounts[line.lineId] ?? 0) + discount;
           lineFinalPrices[line.lineId] = remaining - discount;
           totalDiscount += discount;

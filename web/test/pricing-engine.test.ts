@@ -485,6 +485,12 @@ describe("nhóm món & đồng giá/đồng giảm (bổ sung)", () => {
     expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(36000);
   });
 
+  it("Đồng giá có giới hạn số phần/đơn: maxRewardQty=1 chỉ giảm 1 ly trong 6 ly", () => {
+    const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "FIXEDPRICE", value: 16000, maxQty: 1 })] });
+    expect(q(c, [line("1", "XOAI", 6, 32000)]).totalPromotionDiscount).toBe(16000);
+    expect(q(c, [line("1", "XOAI", 1, 32000), line("2", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(16000);
+  });
+
   it("Đồng giảm (PERCENT) cho món thuộc chương trình", () => {
     const c = camp({ campaignType: "ITEMPRICERULE", includedItemIds: ["XOAI"], tiers: [tier({ mode: "PERCENT", value: 5000 })] });
     expect(q(c, [line("1", "XOAI", 2, 32000)]).totalPromotionDiscount).toBe(32000);

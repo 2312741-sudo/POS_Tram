@@ -933,6 +933,8 @@ export default function PromotionsPage() {
               {campaignForm.campaignType === "ITEMPRICERULE" && (
                 <div style={{ background: "var(--surface-muted)", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
                   <FormField label="Giá đồng giá (VND) *" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" placeholder="VD: 25000" />
+                  <div style={{ height: "10px" }} />
+                  <FormField label="Số phần tối đa mỗi đơn (để trống = áp cho mọi phần)" value={campaignForm.itemMaxQty} onChange={(v) => setCampaignForm({ ...campaignForm, itemMaxQty: v })} type="number" placeholder="VD: 1" />
                 </div>
               )}
               {campaignForm.campaignType === "ORDERVALUEITEMBENEFIT" && (

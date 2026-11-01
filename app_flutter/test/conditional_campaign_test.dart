@@ -228,6 +228,26 @@ void main() {
       expect(quote.totalPromotionDiscount, 32000);
       expect(quote.appliedCampaignIds, contains('CP_FIXED'));
     });
+
+    test('maxRewardQty=1 chỉ áp giá cho 1 ly dù khách gọi 6 ly', () {
+      final rule = _c(
+        id: 'CP_ONE',
+        type: 'ITEMPRICERULE',
+        groups: ['Trà'],
+        tiers: [_t(mode: 'FIXEDPRICE', value: 16000, maxQty: 1)],
+      );
+      final quote = calculatePrice(
+        input: PricingInput(
+          branchId: 'B1',
+          serverNowMs: 1000,
+          lines: [PricingLineItem(lineId: 'L1', itemId: '10', groupId: 'Trà', quantity: 6, unitPrice: 32000)],
+        ),
+        activeCampaigns: [rule],
+        counters: const {},
+        customerCounters: const {},
+      );
+      expect(quote.totalPromotionDiscount, 16000);
+    });
   });
 
   group('CartCustomerBar UI Edit Action', () {
