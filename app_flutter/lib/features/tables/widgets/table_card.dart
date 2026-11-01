@@ -262,19 +262,32 @@ class TableCard extends StatelessWidget {
 
   Widget _buildFooter(BuildContext context, TableStatusStyle style, bool inUse, bool isReserved, int itemsCount, int totalAmount) {
     if (inUse) {
+      final int discountAmount = table.currentDiscounts.fold(0, (sum, d) => sum + d.amount);
+      final int payableAmount = (totalAmount - discountAmount).clamp(0, totalAmount);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '$itemsCount món',
-            style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary, fontWeight: FontWeight.w600),
+            '$itemsCount phần',
+            style: GoogleFonts.beVietnamPro(fontSize: 14, color: context.tc.textPrimary, fontWeight: FontWeight.w800),
           ),
+          // Có khuyến mãi / giảm giá: hiện giá gốc gạch ngang + giá thực khách phải trả
+          if (discountAmount > 0)
+            Text(
+              FormatUtils.vnd(totalAmount),
+              maxLines: 1,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                color: context.tc.textSecondary,
+                decoration: TextDecoration.lineThrough,
+              ),
+            ),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              FormatUtils.vnd(totalAmount),
+              FormatUtils.vnd(payableAmount),
               maxLines: 1,
               style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: context.isDarkMode ? style.ink : TramColors.primary),
             ),
