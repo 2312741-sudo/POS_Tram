@@ -669,8 +669,9 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
       }
       const d = distributeReward({
         candidates, units, mode: tier.benefitMode, value: tier.value, campaignId: campaign.campaignId, tierId: tier.tierId,
-        // Dòng tặng riêng: chỉ tặng kèm đúng số topping cấu hình (0 = topping thêm tính tiền)
-        freeToppingsOf: (l) => (isOwnReward(l) ? tier.rewardToppingQty ?? 0 : null),
+        // Món tặng (dòng tặng riêng hoặc món có sẵn trong đơn) chỉ miễn phí giá món + size; topping / phụ thu
+        // (vd 'Tăng giá Grab') chỉ tặng đúng số topping cấu hình (0 = tính tiền). Khớp Dart.
+        freeToppingsOf: () => tier.rewardToppingQty ?? 0,
       });
       if (d > 0) {
         totalDiscount += d;
@@ -938,6 +939,31 @@ export function buildAppliedDiscount(campaign: Campaign, amount: number, opts?: 
  * Tính lại các giảm giá khi giỏ hàng đổi. Trả về danh sách mới + tên chương trình bị gỡ
  * (không còn đủ điều kiện). Giảm giá không còn trong [campaignsById] được giữ nguyên (khớp Flutter).
  */
+/**
+ * Chương trình tặng/giảm món theo giá trị đơn: các món có thể làm món tặng + số phần (để thêm DÒNG TẶNG riêng).
+ * null nếu không phải loại này / chưa cấu hình. Khớp CartCampaignPricing.rewardPlan (Dart).
+ */
+export function rewardPlanFor<P extends { id: string; name: string; code?: string; category?: string; isTopping?: boolean }>(
+  campaign: Campaign,
+  products: P[]
+): { units: number; candidates: P[] } | null {
+  if (campaign.campaignType.toUpperCase().replace(/_/g, "") !== "ORDERVALUEITEMBENEFIT") return null;
+  const tier = [...campaign.tiers].sort((a, b) => a.threshold - b.threshold)[0];
+  if (!tier) return null;
+  const lc = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const ids = new Set(tier.rewardItemIds.map(lc));
+  const groups = new Set((tier.rewardGroupIds ?? []).map(normGroup));
+  const excluded = new Set(campaign.excludedItemIds.map(lc));
+  const candidates = products.filter(
+    (p) =>
+      !p.isTopping &&
+      !excluded.has(lc(p.id)) && !excluded.has(lc(p.name)) &&
+      (ids.has(lc(p.id)) || ids.has(lc(p.name)) || (!!p.code && ids.has(lc(p.code))) || (!!p.category && groups.has(normGroup(p.category))))
+  );
+  if (candidates.length === 0) return null;
+  return { units: tier.maxRewardQty > 0 ? tier.maxRewardQty : 1, candidates };
+}
+
 const isBillLevel = (c: Campaign) => c.campaignType.toUpperCase().replace(/_/g, "") === "BILLDISCOUNT";
 
 /**

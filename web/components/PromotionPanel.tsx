@@ -4,6 +4,7 @@ import { get, onValue, ref } from "firebase/database";
 import { Clock, Tag, Ticket, X } from "lucide-react";
 import { db } from "@/lib/firebase";
 import type { RawOrderLine } from "@/lib/order-math";
+import { makeOrderLine, type OrderActor } from "@/lib/web-order";
 import {
   addWithStacking,
   buildAppliedDiscount,
@@ -18,6 +19,8 @@ import {
   lateOrderBlock,
   outsideScheduleMessage,
   quoteStacked,
+  rewardPlanFor,
+  type PriceQuote,
   quoteReason,
   recalculateDiscounts,
   type AppliedDiscount,
@@ -33,6 +36,17 @@ const VOUCHER_RE = /^[A-Z0-9_-]{3,32}$/;
  * (không tự áp dụng). Số tiền giảm luôn được tính lại từ giỏ hàng hiện tại bằng pricing engine:
  * thêm/bớt món thì số tiền đổi theo, chương trình hết đủ điều kiện thì tạm không tính.
  */
+/** Món trong thực đơn có thể làm món tặng */
+export interface RewardProduct {
+  id: string;
+  name: string;
+  price: number;
+  code?: string;
+  category?: string;
+  unit?: string;
+  isTopping?: boolean;
+}
+
 export function usePromotions(args: {
   storeCode: string;
   /** Khóa bàn — đổi bàn thì danh sách đã chọn được làm mới */
@@ -41,8 +55,13 @@ export function usePromotions(args: {
   groupOf?: (it: RawOrderLine) => string | null | undefined;
   guestCount?: number;
   allowStack: boolean;
+  /** Thực đơn của chi nhánh — để thêm DÒNG MÓN TẶNG riêng (tặng/giảm món theo giá trị đơn) */
+  rewardProducts?: RewardProduct[];
+  /** Ghi thêm dòng vào đơn của bàn; trả danh sách món mới (null = lỗi). Không truyền = không thêm được món tặng */
+  onAddLines?: (lines: RawOrderLine[]) => Promise<RawOrderLine[] | null>;
+  actor?: OrderActor;
 }) {
-  const { storeCode, tableKey, items, groupOf, guestCount, allowStack } = args;
+  const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, actor } = args;
   const [loaded, setLoaded] = useState<{ store: string; list: Campaign[] }>({ store: "", list: [] });
   const [selection, setSelection] = useState<{ key: string; list: AppliedDiscount[] }>({ key: "", list: [] });
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -101,7 +120,41 @@ export function usePromotions(args: {
     const others = effective.filter((d) => d.campaignId !== c.campaignId).map((d) => byId[d.campaignId]).filter((x): x is Campaign => !!x);
     const isApplied = effective.some((d) => d.campaignId === c.campaignId);
     const ignore = new Set([...others.map((o) => o.campaignId), ...(isApplied ? [c.campaignId] : [])]);
-    return quoteStacked([...others, c], lines, ctx, { ignoreScheduleFor: ignore })[c.campaignId];
+    // Thêm được dòng tặng riêng (trang bàn) → áp dụng mới KHÔNG lấy món khách đã gọi làm món tặng (giống app)
+    const dedicated = new Set(onAddLines && !isApplied ? [c.campaignId] : []);
+    return quoteStacked([...others, c], lines, ctx, { ignoreScheduleFor: ignore, dedicatedOnlyFor: dedicated })[c.campaignId];
+  };
+  /** Đủ điều kiện nhưng chưa có món tặng → thêm được dòng tặng riêng? */
+  const canAddReward = (c: Campaign, q: PriceQuote) =>
+    !!onAddLines &&
+    q.reasons.some((r) => r.campaignId === c.campaignId && r.reasonCode === "REWARD_ITEM_NOT_IN_BILL") &&
+    !!rewardPlanFor(c, rewardProducts);
+  /** Thêm dòng món tặng riêng (ghi chú "Tặng KM: …") vào đơn rồi trả số tiền giảm tính trên đơn mới (0 = không được) */
+  const addRewardLine = async (c: Campaign): Promise<number> => {
+    const plan = rewardPlanFor(c, rewardProducts);
+    if (!plan || !onAddLines) return 0;
+    let product = plan.candidates[0];
+    if (plan.candidates.length > 1) {
+      const pick = window.prompt(
+        `Chọn món tặng (${plan.units} phần) — nhập số:\n` + plan.candidates.map((p, i) => `${i + 1}. ${p.name} (${p.price.toLocaleString("vi-VN")}đ)`).join("\n"),
+        "1"
+      );
+      if (pick == null) return 0;
+      product = plan.candidates[Math.max(0, Math.min(plan.candidates.length - 1, (parseInt(pick, 10) || 1) - 1))];
+    }
+    const now = Date.now();
+    const line: RawOrderLine = {
+      ...makeOrderLine(product, plan.units, `Tặng KM: ${c.name}`, actor ?? { username: "admin_web" }, now),
+      rewardCampaignId: c.campaignId,
+    };
+    const next = await onAddLines([line]);
+    if (!next) return 0;
+    const others = effective.map((d) => byId[d.campaignId]).filter((x): x is Campaign => !!x && x.campaignId !== c.campaignId);
+    const q = quoteStacked([...others, c], linesFromOrder(next, groupOf), ctx, {
+      ignoreScheduleFor: new Set(others.map((o) => o.campaignId)),
+      dedicatedOnlyFor: new Set([c.campaignId]),
+    })[c.campaignId];
+    return q.totalPromotionDiscount;
   };
   /** Món liên quan gọi ngoài khung giờ của [c] → câu báo không áp dụng được */
   const lateItems = (c: Campaign) => outsideScheduleMessage(c, lines);
@@ -114,7 +167,7 @@ export function usePromotions(args: {
     [campaigns, storeCode, nowMs, lines, ctx]
   );
 
-  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, ctx, nowMs };
+  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, canAddReward, addRewardLine, ctx, nowMs };
 }
 
 type PromotionsState = ReturnType<typeof usePromotions>;
@@ -130,7 +183,7 @@ interface PanelProps {
 const box = { border: "1px solid var(--border)", borderRadius: "10px", background: "var(--surface)", padding: "12px 14px" } as const;
 
 export default function PromotionPanel({ state, storeCode, canApply, billId }: PanelProps) {
-  const { eligible, applied, dropped, quote, lateItems, lateBlocks, add, remove } = state;
+  const { eligible, applied, dropped, quote, lateItems, lateBlocks, canAddReward, addRewardLine, add, remove } = state;
   const [blocked, setBlocked] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -202,9 +255,22 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
     }
   };
 
-  const toggle = (c: Campaign, amt: number, on: boolean) => {
+  const toggle = async (c: Campaign, amt: number, on: boolean, addReward = false) => {
     setNotice("");
     setBlocked("");
+    if (on && amt <= 0 && addReward) {
+      // Đủ điều kiện: thêm dòng món tặng riêng vào đơn rồi áp dụng (không trừ món khách đã gọi)
+      setBusy(true);
+      try {
+        amt = await addRewardLine(c);
+      } finally {
+        setBusy(false);
+      }
+      if (amt <= 0) {
+        setNotice(`Chưa thêm được món tặng cho "${c.name}".`);
+        return;
+      }
+    }
     if (on && amt <= 0) {
       // Món gọi ngoài khung giờ → báo không áp dụng được
       const late = lateItems(c);
@@ -331,20 +397,22 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
               const selected = applied.some((d) => d.campaignId === c.campaignId);
               // Món liên quan gọi ngoài khung giờ: vẫn cho bấm để hiện thông báo không áp dụng được
               const late = amt <= 0 && !selected ? lateItems(c) : null;
+              // Đủ điều kiện nhưng chưa có món tặng: bấm để thêm dòng tặng riêng vào đơn
+              const addable = amt <= 0 && !selected && !late && canAddReward(c, q);
               return (
                 <label key={c.campaignId} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 0", fontSize: "13px", opacity: amt > 0 || selected ? 1 : 0.6 }}>
                   <input
                     type="checkbox"
                     checked={selected}
-                    disabled={!(amt > 0 || selected || late)}
-                    onChange={(e) => toggle(c, amt, e.target.checked)}
+                    disabled={busy || !(amt > 0 || selected || late || addable)}
+                    onChange={(e) => void toggle(c, amt, e.target.checked, addable)}
                     style={{ marginTop: "3px" }}
                   />
                   <span>
                     <strong>{c.name}</strong>
                     <span style={{ display: "block", fontSize: "11px", color: "var(--subtext)" }}>
                       {campaignTypeDisplay(c)} • {describeBenefit(c)}
-                      {amt > 0 ? ` → -${fmt(amt)}` : late ? "" : reason ? ` • ${reason}` : ""}
+                      {amt > 0 ? ` → -${fmt(amt)}` : late ? "" : addable ? " • Đủ điều kiện — bấm để thêm món tặng vào đơn" : reason ? ` • ${reason}` : ""}
                     </span>
                     {late && <span style={{ display: "block", fontSize: "11px", color: "var(--danger)" }}>Món gọi ngoài khung giờ — không áp dụng được</span>}
                   </span>

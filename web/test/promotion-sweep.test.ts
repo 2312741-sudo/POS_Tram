@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { addLineToOrder, sameOrderWindow } from "../lib/web-order";
-import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, quoteStacked, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
+import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, quoteStacked, rewardPlanFor, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
 const vn = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 7, mi);
@@ -320,5 +320,39 @@ describe("Cộng dồn KM: giảm hóa đơn KHÔNG tính lại trên ly đã t�
     expect(st.CAM_20.totalPromotionDiscount).toBe(27000);
     const r = recalculateDiscounts([buildAppliedDiscount(bill20, 1), buildAppliedDiscount(gift, 1)], { CAM_20: bill20, CAM_CHANH: gift }, lines, ctx);
     expect(Object.fromEntries(r.discounts.map((d) => [d.campaignId, d.amount]))).toEqual({ CAM_20: 27000, CAM_CHANH: 22000 });
+  });
+});
+
+describe("Món tặng chỉ miễn phí giá món + size, topping / phụ thu Grab vẫn tính tiền", () => {
+  const gift = parseCampaign("CAM_CHANH", {
+    campaignId: "CAM_CHANH", name: "Grab - Tặng 1 trà chanh đơn trên 100K", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+    tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardItemIds: ["8"] }],
+  } as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  it("đơn trong ảnh: 3 bánh 32K + trà chanh 27K (20K + thạch dừa 5K + Grab 2K) → giảm 20.000đ, không 27.000đ", () => {
+    const lines = linesFromOrder([
+      { productId: 4, name: "Bánh lăn choco - vừa", price: 30000, quantity: 3, selectedToppings: ["Tăng giá Grab 2K"], toppingPrice: 2000 },
+      { productId: 8, name: "Trà Olong - Chanh tươi", price: 20000, quantity: 1, selectedToppings: ["Thạch dừa", "Tăng giá Grab 2K"], toppingPrice: 7000 },
+    ]);
+    expect(quoteCampaign(gift, lines, ctx).totalPromotionDiscount).toBe(20000);
+  });
+});
+
+describe("rewardPlanFor: món có thể làm món tặng (web thêm dòng tặng riêng)", () => {
+  it("theo mã món / nhóm món; bỏ topping & món loại trừ", () => {
+    const c = parseCampaign("G", {
+      campaignId: "G", name: "Tặng chanh", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], schedule: {}, excludedItemIds: ["X"],
+      tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 2, rewardItemIds: ["DR2"], rewardGroupIds: ["Bánh"] }],
+    } as never);
+    const prods = [
+      { id: "-a", name: "Trà Olong - Chanh tươi", code: "DR2", price: 22000 },
+      { id: "-b", name: "Bánh A", category: "BÁNH", price: 30000 },
+      { id: "-c", name: "Thạch", code: "DR2X", price: 5000, isTopping: true, category: "Bánh" },
+      { id: "X", name: "Bánh loại trừ", category: "Bánh", price: 1 },
+    ];
+    const plan = rewardPlanFor(c, prods);
+    expect(plan?.units).toBe(2);
+    expect(plan?.candidates.map((p) => p.id)).toEqual(["-a", "-b"]);
+    expect(rewardPlanFor(parseCampaign("B", { campaignType: "BILL_DISCOUNT", tiers: [] } as never), prods)).toBeNull();
   });
 });

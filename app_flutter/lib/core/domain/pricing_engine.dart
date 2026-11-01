@@ -536,8 +536,9 @@ PriceQuoteModel calculatePrice({
         value: tier.value,
         campaignId: campaign.campaignId,
         tierId: tier.tierId,
-        // Dòng tặng riêng: chỉ tặng kèm đúng số topping cấu hình (0 = topping thêm tính tiền)
-        freeToppingsOf: (l) => isOwnReward(l) ? tier.rewardToppingQty : null,
+        // Món tặng (dòng tặng riêng hoặc món có sẵn trong đơn) chỉ miễn phí giá món + size; topping / phụ thu
+        // (vd 'Tăng giá Grab') chỉ tặng đúng số topping cấu hình (0 = tính tiền)
+        freeToppingsOf: (_) => tier.rewardToppingQty,
       );
       if (d > 0) {
         totalDiscount += d;

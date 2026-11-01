@@ -278,6 +278,13 @@ function TablesPageContent() {
     [categoryById]
   );
   const promoStore = stores.find((s) => s.storeCode === promoStoreCode) || currentStore;
+  const promoRewardProducts = useMemo(
+    () =>
+      products
+        .filter((p) => (p.storeCode || promoStoreCode) === promoStoreCode && !p.isTopping)
+        .map((p) => ({ id: p.id, name: p.name, price: Number(p.price) || 0, code: p.code, category: p.category, unit: p.unit, isTopping: p.isTopping })),
+    [products, promoStoreCode]
+  );
   const promo = usePromotions({
     storeCode: promoStoreCode,
     tableKey: selectedTableForOrder ? `${promoStoreCode}/${selectedTableForOrder.id}` : "",
@@ -285,6 +292,27 @@ function TablesPageContent() {
     groupOf: promoGroupOf,
     guestCount: selectedTableForOrder?.guestCount,
     allowStack: promoStore?.allowStackPromotions ?? true,
+    // Tặng món theo giá trị đơn: thêm DÒNG TẶNG riêng vào đơn của bàn (không trừ món khách đã gọi) — giống app
+    rewardProducts: promoRewardProducts,
+    actor: { username: user?.username || "admin_web", fullName: user?.fullName, role: user?.roleId || user?.role },
+    onAddLines: async (lines) => {
+      const table = selectedTableForOrder;
+      if (!table) return null;
+      const orderJson = table.currentOrderJson || "";
+      const next = [...(parseOrderItems(orderJson) as unknown as RawOrderLine[]), ...lines];
+      const err = await writeOrderLines(
+        table,
+        orderJson,
+        next,
+        "ADD_ITEM",
+        `Thêm món tặng KM: ${lines.map((l) => `${String(l.quantity ?? 1)} x ${String(l.name ?? "")}`).join(", ")}`
+      );
+      if (err) {
+        alert(err);
+        return null;
+      }
+      return next;
+    },
   });
   const canApplyPromotion = hasPermission(user, "APPLY_PROMOTION");
 
