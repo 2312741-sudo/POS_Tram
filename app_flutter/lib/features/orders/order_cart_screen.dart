@@ -1154,15 +1154,48 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   /// Pricing Engine cho 1 chương trình trên giỏ hàng hiện tại (khung giờ theo lúc bấm — xem quoteForApply)
   PriceQuoteModel _quoteCampaign(CampaignModel c) {
     final isApplied = _appliedDiscounts.any((d) => d.campaignId == c.campaignId);
-    return CartCampaignPricing.quoteForApply(
-      c,
+    // Cộng dồn: tính cùng các chương trình đang áp dụng khác (KM theo món trước, giảm hóa đơn sau) để chương
+    // trình này chỉ giảm trên phần còn lại
+    final others = <CampaignModel>[
+      for (final d in _appliedDiscounts)
+        if (d.campaignId != null && d.campaignId != c.campaignId && _campaignById[d.campaignId] != null) _campaignById[d.campaignId]!,
+    ];
+    final stacked = CartCampaignPricing.quoteStacked(
+      [...others, c],
       cart: _cart,
       products: _products,
       branchId: _fb.currentStoreCode,
       guestCount: _guestCount,
       customerBirthday: _selectedCustomer?.birthday,
-      isApplied: isApplied,
+      ignoreScheduleFor: {for (final o in others) o.campaignId, if (isApplied) c.campaignId},
+      dedicatedOnlyFor: {if (!isApplied) c.campaignId},
     );
+    return stacked[c.campaignId]!;
+  }
+
+  /// Cập nhật lại số tiền của mọi chương trình đang áp dụng theo cách tính cộng dồn (sau khi thêm / bỏ chương trình)
+  void _restackAppliedAmounts() {
+    final camps = <CampaignModel>[
+      for (final d in _appliedDiscounts)
+        if (d.campaignId != null && _campaignById[d.campaignId] != null) _campaignById[d.campaignId]!,
+    ];
+    if (camps.isEmpty) return;
+    final stacked = CartCampaignPricing.quoteStacked(
+      camps,
+      cart: _cart,
+      products: _products,
+      branchId: _fb.currentStoreCode,
+      guestCount: _guestCount,
+      customerBirthday: _selectedCustomer?.birthday,
+      ignoreScheduleFor: {for (final c in camps) c.campaignId},
+    );
+    _appliedDiscounts = [
+      for (final d in _appliedDiscounts)
+        if (d.campaignId != null && stacked[d.campaignId] != null)
+          d.copyWith(amount: stacked[d.campaignId]!.totalPromotionDiscount)
+        else
+          d,
+    ];
   }
 
   /// Đơn đang dùng chương trình KM khóa tích điểm?
@@ -1196,7 +1229,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       added.add(c.name);
     }
     if (added.isNotEmpty) {
-      setState(() {});
+      setState(_restackAppliedAmounts);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Sinh nhật khách: đã tự áp dụng ${added.join(", ")}'),
         backgroundColor: AppColors.success,
@@ -1255,7 +1288,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
 
     if (newlyApplied.isNotEmpty && mounted) {
-      setState(() {});
+      setState(_restackAppliedAmounts);
     }
     _notifyLateOrderPromotions(now);
   }
@@ -1297,22 +1330,25 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   void _recalculateDiscounts() {
     final List<BillDiscountModel> valid = [];
     final List<String> dropped = [];
+    // Chương trình KM mới: tính lại CỘNG DỒN cả nhóm bằng Pricing Engine (bỏ qua khung giờ nếu đã áp dụng)
+    final campaignDs = _appliedDiscounts.where((d) => d.campaignId != null && _campaignById.containsKey(d.campaignId)).toList();
+    final campRes = CartCampaignPricing.recalculate(
+      campaignDs,
+      _campaignById,
+      cart: _cart,
+      products: _products,
+      branchId: _fb.currentStoreCode,
+      guestCount: _guestCount,
+      customerBirthday: _selectedCustomer?.birthday,
+      orderTimestampMs: widget.table.openedAt,
+      isExistingOrder: true,
+    );
+    final campById = {for (final d in campRes.discounts) d.campaignId: d};
+    dropped.addAll(campRes.dropped);
     for (final d in _appliedDiscounts) {
       if (d.campaignId != null && _campaignById.containsKey(d.campaignId)) {
-        // Chương trình KM mới: tính lại bằng Pricing Engine (bỏ qua khung giờ nếu đơn đã áp dụng trước đó)
-        final r = CartCampaignPricing.recalculate(
-          [d],
-          _campaignById,
-          cart: _cart,
-          products: _products,
-          branchId: _fb.currentStoreCode,
-          guestCount: _guestCount,
-          customerBirthday: _selectedCustomer?.birthday,
-          orderTimestampMs: widget.table.openedAt,
-          isExistingOrder: true,
-        );
-        valid.addAll(r.discounts);
-        dropped.addAll(r.dropped);
+        final r = campById[d.campaignId];
+        if (r != null) valid.add(r);
       } else if (d.promoId != null) {
         final p = _allPromotions.where((pr) => pr.id == d.promoId).firstOrNull;
         if (p != null) {
@@ -3821,6 +3857,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 allowStackPromotions: allowStack,
                               );
                               _appliedDiscounts = added.discounts;
+                              _restackAppliedAmounts();
                             });
                             voucherCtrl.clear();
                           },
@@ -3989,6 +4026,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                         newAmt,
                                         comboCount: comboCnt > 0 ? comboCnt : null,
                                       ));
+                                      _restackAppliedAmounts();
                                     });
                                   }
                                 },
@@ -4126,6 +4164,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                 allowStackPromotions: allowStack,
                               );
                               _appliedDiscounts = added.discounts;
+                              _restackAppliedAmounts();
                             });
                           } else {
                             // Bỏ chương trình: gỡ luôn dòng món tặng CHƯA gửi bếp của nó (đã gửi bếp thì giữ, báo nhân viên)
@@ -4133,6 +4172,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             final rewardSent = _cart.where((i) => i.rewardCampaignId == c.campaignId && i.isSentKitchen).length;
                             setDlgState(() {
                               _appliedDiscounts.removeWhere((d) => d.campaignId == c.campaignId);
+                              _restackAppliedAmounts();
                             });
                             if (rewardUnsent > 0) {
                               setState(() => _cart.removeWhere((i) => i.rewardCampaignId == c.campaignId && !i.isSentKitchen));

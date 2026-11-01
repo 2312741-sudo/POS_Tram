@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { addLineToOrder, sameOrderWindow } from "../lib/web-order";
-import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
+import { buildAppliedDiscount, calculatePrice, isEligibleAt, lateOrderBlock, linesFromOrder, quoteStacked, outsideScheduleMessage, parseCampaign, listEligibleCampaigns, quoteCampaign, recalculateDiscounts, type Campaign, type PricingLine } from "../lib/pricing-engine";
 
 // Giờ Việt Nam (UTC+7) → timestamp
 const vn = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 7, mi);
@@ -300,5 +300,25 @@ describe("Tặng món theo giá trị đơn: tặng kèm topping trên dòng t�
     expect(quoteCampaign(parseCampaign("C", raw(1) as never), lines(1, 5000), ctx).totalPromotionDiscount).toBe(35000);
     expect(quoteCampaign(parseCampaign("C", raw(1) as never), lines(2, 10000), ctx).totalPromotionDiscount).toBe(35000);
     expect(quoteCampaign(parseCampaign("C", raw(0) as never), lines(1, 5000), ctx).totalPromotionDiscount).toBe(30000);
+  });
+});
+
+describe("Cộng dồn KM: giảm hóa đơn KHÔNG tính lại trên ly đã tặng", () => {
+  const gift = parseCampaign("CAM_CHANH", {
+    campaignId: "CAM_CHANH", name: "Tặng chanh", campaignType: "ORDER_VALUE_ITEM_BENEFIT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+    tiers: [{ tierId: "T1", threshold: 100000, benefitMode: "FREEITEM", value: 0, maxRewardQty: 1, rewardItemIds: ["8"] }],
+  } as never);
+  const bill20 = parseCampaign("CAM_20", {
+    campaignId: "CAM_20", name: "Giảm 20%", campaignType: "BILL_DISCOUNT", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {},
+    tiers: [{ tierId: "B1", threshold: 0, benefitMode: "PERCENT", value: 2000 }],
+  } as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  const lines: PricingLine[] = [line("1", "5", 3, 45000, "TRÀ"), { ...line("2", "8", 1, 22000, "TRÀ"), rewardCampaignId: "CAM_CHANH" }];
+  it("tặng chanh 22K + giảm 20% → 20% chỉ trên 135K (27.000đ); recalculate cũng vậy bất kể thứ tự", () => {
+    const st = quoteStacked([bill20, gift], lines, ctx);
+    expect(st.CAM_CHANH.totalPromotionDiscount).toBe(22000);
+    expect(st.CAM_20.totalPromotionDiscount).toBe(27000);
+    const r = recalculateDiscounts([buildAppliedDiscount(bill20, 1), buildAppliedDiscount(gift, 1)], { CAM_20: bill20, CAM_CHANH: gift }, lines, ctx);
+    expect(Object.fromEntries(r.discounts.map((d) => [d.campaignId, d.amount]))).toEqual({ CAM_20: 27000, CAM_CHANH: 22000 });
   });
 });

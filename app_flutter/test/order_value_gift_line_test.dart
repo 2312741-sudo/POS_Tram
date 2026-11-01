@@ -86,4 +86,38 @@ void main() {
       expect(withTops(1).tiers.first.toMap()['rewardToppingQty'], 1);
     });
   });
+
+  group('cộng dồn: giảm hóa đơn KHÔNG tính lại trên ly đã tặng', () {
+    final bill20 = CampaignModel.fromMap({
+      'campaignId': 'CAM_20', 'programCode': 'KM/20', 'name': 'Giảm 20% hóa đơn',
+      'campaignType': 'BILL_DISCOUNT', 'active': true, 'branchIds': ['TRAM01'], 'hasCodes': false,
+      'stackingMode': 'ENABLED', 'priority': 0, 'createdAt': 1,
+      'tiers': [
+        {'tierId': 'B1', 'conditionBasis': 'TOTALAMOUNT', 'threshold': 0, 'benefitMode': 'PERCENT', 'value': 2000, 'maxDiscountMoney': 0, 'maxRewardQty': 0, 'rewardItemIds': [], 'sortOrder': 1},
+      ],
+    });
+    final p22 = [
+      products[0],
+      ProductModel(id: 8, name: 'Trà Olong - Chanh tươi', code: 'DR2', price: 22000, unit: 'Ly', category: 'TRÀ'),
+    ];
+    final cart = [
+      OrderItemModel(productId: 5, name: 'Trà Olong - Xoài', price: 45000, quantity: 3),
+      OrderItemModel(productId: 8, name: 'Trà Olong - Chanh tươi', price: 22000, quantity: 1, rewardCampaignId: 'CAM_CHANH'),
+    ];
+    final byId = {'CAM_CHANH': camp, 'CAM_20': bill20};
+
+    test('tặng chanh 22K (0đ) + giảm 20% hóa đơn → 20% chỉ tính trên 135K còn lại (27.000đ), không 31.400đ', () {
+      final st = CartCampaignPricing.quoteStacked([bill20, camp], cart: cart, products: p22, branchId: 'TRAM01', nowMs: 1000);
+      expect(st['CAM_CHANH']!.totalPromotionDiscount, 22000);
+      expect(st['CAM_20']!.totalPromotionDiscount, 27000);
+    });
+
+    test('tính lại khi giỏ đổi (recalculate) cũng cộng dồn đúng, bất kể thứ tự áp dụng', () {
+      final r = CartCampaignPricing.recalculate(
+        [CartCampaignPricing.discount(bill20, 1), CartCampaignPricing.discount(camp, 1)], byId,
+        cart: cart, products: p22, branchId: 'TRAM01', orderTimestampMs: 1000,
+      );
+      expect({for (final d in r.discounts) d.campaignId: d.amount}, {'CAM_20': 27000, 'CAM_CHANH': 22000});
+    });
+  });
 }

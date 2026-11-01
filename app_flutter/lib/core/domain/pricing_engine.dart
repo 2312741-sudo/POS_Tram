@@ -18,6 +18,9 @@ class PricingInput {
   final bool ignoreSchedule;
   /// Tặng/giảm món theo giá trị đơn: CHỈ giảm trên dòng món tặng riêng (rewardCampaignId), không lấy món khách đã gọi
   final bool dedicatedRewardOnly;
+  /// Tiền đã giảm trên từng dòng (lineId) bởi các chương trình áp dụng TRƯỚC (cộng dồn KM): chương trình này chỉ
+  /// giảm trên phần còn lại — vd ly chanh đã tặng 0đ thì giảm 20% hóa đơn không tính lại trên ly đó.
+  final Map<String, int> priorLineDiscounts;
 
   PricingInput({
     required this.branchId,
@@ -31,6 +34,7 @@ class PricingInput {
     this.pricingPolicyVersion = 1,
     this.ignoreSchedule = false,
     this.dedicatedRewardOnly = false,
+    this.priorLineDiscounts = const {},
   });
 }
 
@@ -284,6 +288,10 @@ PriceQuoteModel calculatePrice({
   }
   // Giá trị dòng sau giảm thủ công (dùng làm cơ sở ngưỡng giá trị đơn)
   final afterManual = Map<String, int>.from(lineFinalPrices);
+  // Cộng dồn KM: trừ phần các chương trình trước đã giảm (mốc giá trị đơn vẫn xét trên giá sau giảm thủ công)
+  input.priorLineDiscounts.forEach((id, d) {
+    if (d > 0 && lineFinalPrices.containsKey(id)) lineFinalPrices[id] = max(0, lineFinalPrices[id]! - d);
+  });
   // Số phần của dòng đã được dùng làm món thưởng (tránh giảm 2 lần)
   final rewardedUnits = <String, int>{};
 

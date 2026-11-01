@@ -47,20 +47,27 @@ class CartCampaignPricing {
     final result = <int, List<({String campaignName, int discountAmount, int quantity, bool isGift})>>{};
     if (cart.isEmpty || appliedDiscounts.isEmpty) return result;
 
+    // Cộng dồn: KM theo món trước, giảm hóa đơn sau (trên phần còn lại) — khớp số tiền trên hóa đơn
+    final camps = <CampaignModel>[
+      for (final d in appliedDiscounts)
+        if (d.campaignId != null && campaignsById[d.campaignId] != null) campaignsById[d.campaignId]!,
+    ];
+    final stacked = quoteStacked(
+      camps,
+      cart: cart,
+      products: products,
+      branchId: branchId,
+      guestCount: guestCount,
+      customerBirthday: customerBirthday,
+      nowMs: orderTimestampMs,
+      ignoreScheduleFor: isExistingOrder ? {for (final c in camps) c.campaignId} : const {},
+    );
+
     for (final d in appliedDiscounts) {
       final c = d.campaignId != null ? campaignsById[d.campaignId] : null;
       if (c == null) continue;
 
-      final q = quote(
-        c,
-        cart: cart,
-        products: products,
-        branchId: branchId,
-        guestCount: guestCount,
-        customerBirthday: customerBirthday,
-        nowMs: orderTimestampMs,
-        ignoreSchedule: isExistingOrder,
-      );
+      final q = stacked[c.campaignId]!;
 
       final seenLines = <String>{};
       for (final rb in q.rewardBenefits) {
@@ -122,6 +129,54 @@ class CartCampaignPricing {
       counters: const {},
       customerCounters: const {},
     );
+  }
+
+  static bool _isBillLevel(CampaignModel c) => c.campaignType.toUpperCase().replaceAll('_', '') == 'BILLDISCOUNT';
+
+  /// Tính CỘNG DỒN nhiều chương trình trên cùng giỏ: KM theo món (tặng món, mua X tặng Y, đồng giá) trước,
+  /// giảm giá hóa đơn sau; mỗi chương trình chỉ giảm trên PHẦN CÒN LẠI của từng dòng sau các chương trình trước.
+  /// (Trước đây mỗi chương trình tính riêng trên giá gốc rồi cộng → ly chanh tặng 0đ vẫn bị giảm thêm 20%.)
+  /// [ignoreScheduleFor]: chương trình đã áp dụng (bỏ qua giờ bấm); [dedicatedOnlyFor]: áp dụng mới (chỉ dòng tặng riêng).
+  static Map<String, PriceQuoteModel> quoteStacked(
+    List<CampaignModel> campaigns, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+    required String branchId,
+    int? guestCount,
+    String? customerBirthday,
+    int? nowMs,
+    Set<String> ignoreScheduleFor = const {},
+    Set<String> dedicatedOnlyFor = const {},
+  }) {
+    final ordered = [...campaigns.where((c) => !_isBillLevel(c)), ...campaigns.where(_isBillLevel)];
+    final lns = lines(cart, products);
+    final manual = {for (final l in lns) l.lineId: l.manualLineDiscount};
+    final prior = <String, int>{};
+    final out = <String, PriceQuoteModel>{};
+    for (final c in ordered) {
+      final q = calculatePrice(
+        input: PricingInput(
+          branchId: branchId,
+          customerBirthday: customerBirthday,
+          guestCount: guestCount,
+          serverNowMs: nowMs ?? DateTime.now().millisecondsSinceEpoch,
+          lines: lns,
+          ignoreSchedule: ignoreScheduleFor.contains(c.campaignId),
+          dedicatedRewardOnly: dedicatedOnlyFor.contains(c.campaignId),
+          priorLineDiscounts: Map.of(prior),
+        ),
+        activeCampaigns: [c],
+        counters: const {},
+        customerCounters: const {},
+      );
+      out[c.campaignId] = q;
+      for (final lb in q.lineBenefits) {
+        if (lb.campaignId.isNotEmpty) continue;
+        final promo = lb.discountMoney - (manual[lb.lineId] ?? 0);
+        if (promo > 0) prior[lb.lineId] = (prior[lb.lineId] ?? 0) + promo;
+      }
+    }
+    return out;
   }
 
   /// Báo giá khi nhân viên bấm áp dụng / xem chương trình trên giỏ.
@@ -436,24 +491,29 @@ class CartCampaignPricing {
   }) {
     final out = <BillDiscountModel>[];
     final dropped = <String>[];
+    // Tính CỘNG DỒN mọi chương trình đang áp dụng (KM theo món trước, giảm hóa đơn sau, trên phần còn lại).
+    // Đơn đã áp dụng (treo qua giờ combo) bỏ qua khung giờ, chỉ tính theo món thực tế trong giỏ.
+    final camps = <CampaignModel>[
+      for (final d in applied)
+        if (d.campaignId != null && campaignsById[d.campaignId] != null) campaignsById[d.campaignId]!,
+    ];
+    final stacked = quoteStacked(
+      camps,
+      cart: cart,
+      products: products,
+      branchId: branchId,
+      guestCount: guestCount,
+      customerBirthday: customerBirthday,
+      nowMs: orderTimestampMs,
+      ignoreScheduleFor: isExistingOrder ? {for (final c in camps) c.campaignId} : const {},
+    );
     for (final d in applied) {
       final c = d.campaignId == null ? null : campaignsById[d.campaignId];
       if (c == null) {
         out.add(d);
         continue;
       }
-      // Với đơn đã áp dụng CTKM (khi treo đơn qua giờ combo):
-      // Bỏ qua giới hạn khung giờ (ignoreSchedule: true), chỉ tính toán dựa trên món thực tế trong giỏ.
-      final q = quote(
-        c,
-        cart: cart,
-        products: products,
-        branchId: branchId,
-        guestCount: guestCount,
-        customerBirthday: customerBirthday,
-        nowMs: orderTimestampMs,
-        ignoreSchedule: isExistingOrder,
-      );
+      final q = stacked[c.campaignId]!;
       final amt = q.totalPromotionDiscount;
       if (amt > 0) {
         final comboCnt = q.rewardBenefits

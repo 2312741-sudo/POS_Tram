@@ -332,6 +332,8 @@ export interface PricingInput {
   ignoreSchedule?: boolean;
   /** Tặng/giảm món theo giá trị đơn: CHỈ giảm trên dòng món tặng riêng (rewardCampaignId), không lấy món khách đã gọi */
   dedicatedRewardOnly?: boolean;
+  /** Tiền đã giảm trên từng dòng bởi các chương trình áp dụng TRƯỚC (cộng dồn KM) — chỉ giảm trên phần còn lại */
+  priorLineDiscounts?: Record<string, number>;
 }
 
 export interface QuoteReason {
@@ -447,6 +449,10 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
     lineDisc[l.lineId] = manual;
   }
   const afterManual: Record<string, number> = { ...lineFinal };
+  // Cộng dồn KM: trừ phần các chương trình trước đã giảm (mốc giá trị đơn vẫn xét trên giá sau giảm thủ công)
+  for (const [id, d] of Object.entries(input.priorLineDiscounts ?? {})) {
+    if (d > 0 && id in lineFinal) lineFinal[id] = Math.max(0, lineFinal[id] - d);
+  }
   const rewardedUnits: Record<string, number> = {};
 
   const addReason = (c: Campaign, code: string, msg: string) =>
@@ -932,6 +938,43 @@ export function buildAppliedDiscount(campaign: Campaign, amount: number, opts?: 
  * Tính lại các giảm giá khi giỏ hàng đổi. Trả về danh sách mới + tên chương trình bị gỡ
  * (không còn đủ điều kiện). Giảm giá không còn trong [campaignsById] được giữ nguyên (khớp Flutter).
  */
+const isBillLevel = (c: Campaign) => c.campaignType.toUpperCase().replace(/_/g, "") === "BILLDISCOUNT";
+
+/**
+ * Tính CỘNG DỒN nhiều chương trình trên cùng giỏ: KM theo món (tặng món, mua X tặng Y, đồng giá) trước, giảm giá hóa
+ * đơn sau; mỗi chương trình chỉ giảm trên PHẦN CÒN LẠI của từng dòng (trước đây tính riêng trên giá gốc rồi cộng →
+ * ly chanh tặng 0đ vẫn bị giảm thêm 20%). Khớp CartCampaignPricing.quoteStacked (Dart).
+ */
+export function quoteStacked(
+  campaigns: Campaign[],
+  lines: PricingLine[],
+  ctx: { branchId: string; guestCount?: number | null; nowMs: number; customerBirthday?: string | null },
+  opts: { ignoreScheduleFor?: Set<string>; dedicatedOnlyFor?: Set<string> } = {}
+): Record<string, PriceQuote> {
+  const ordered = [...campaigns.filter((c) => !isBillLevel(c)), ...campaigns.filter(isBillLevel)];
+  const manual: Record<string, number> = Object.fromEntries(lines.map((l) => [l.lineId, manualLineDiscount(l)]));
+  const prior: Record<string, number> = {};
+  const out: Record<string, PriceQuote> = {};
+  for (const c of ordered) {
+    const q = calculatePrice(
+      {
+        branchId: ctx.branchId, guestCount: ctx.guestCount, nowMs: ctx.nowMs, customerBirthday: ctx.customerBirthday, lines,
+        ignoreSchedule: opts.ignoreScheduleFor?.has(c.campaignId) ?? false,
+        dedicatedRewardOnly: opts.dedicatedOnlyFor?.has(c.campaignId) ?? false,
+        priorLineDiscounts: { ...prior },
+      },
+      [c]
+    );
+    out[c.campaignId] = q;
+    for (const lb of q.lineBenefits) {
+      if (lb.campaignId) continue;
+      const promo = lb.discountMoney - (manual[lb.lineId] ?? 0);
+      if (promo > 0) prior[lb.lineId] = (prior[lb.lineId] ?? 0) + promo;
+    }
+  }
+  return out;
+}
+
 export function recalculateDiscounts(
   applied: AppliedDiscount[],
   campaignsById: Record<string, Campaign>,
@@ -940,14 +983,17 @@ export function recalculateDiscounts(
 ): { discounts: AppliedDiscount[]; dropped: string[] } {
   const out: AppliedDiscount[] = [];
   const dropped: string[] = [];
+  // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có (món gọi ngoài khung giờ không tính).
+  // Tính CỘNG DỒN cả nhóm (KM theo món trước, giảm hóa đơn sau, trên phần còn lại).
+  const camps = applied.map((d) => campaignsById[d.campaignId]).filter((c): c is Campaign => !!c);
+  const stacked = quoteStacked(camps, lines, ctx, { ignoreScheduleFor: new Set(camps.map((c) => c.campaignId)) });
   for (const d of applied) {
     const c = campaignsById[d.campaignId];
     if (!c) {
       out.push(d);
       continue;
     }
-    // Đã áp dụng trong khung giờ → giữ khi qua giờ; chỉ tính lại theo món hiện có (món gọi ngoài khung giờ không tính)
-    const amt = quoteCampaign(c, lines, { ...ctx, ignoreSchedule: true }).totalPromotionDiscount;
+    const amt = stacked[c.campaignId].totalPromotionDiscount;
     if (amt > 0) out.push({ ...d, amount: amt });
     else dropped.push(d.description);
   }

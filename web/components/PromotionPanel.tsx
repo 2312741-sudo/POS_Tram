@@ -17,7 +17,7 @@ import {
   parseVoucher,
   lateOrderBlock,
   outsideScheduleMessage,
-  quoteCampaign,
+  quoteStacked,
   quoteReason,
   recalculateDiscounts,
   type AppliedDiscount,
@@ -96,7 +96,13 @@ export function usePromotions(args: {
     setSelection({ key: tableKey, list: chosen.filter((d) => d.campaignId !== campaignId) });
   const clear = () => setSelection({ key: tableKey, list: [] });
 
-  const quote = (c: Campaign) => quoteCampaign(c, lines, ctx);
+  // Cộng dồn: báo giá chương trình cùng các chương trình đang áp dụng khác (KM theo món trước, giảm hóa đơn sau)
+  const quote = (c: Campaign) => {
+    const others = effective.filter((d) => d.campaignId !== c.campaignId).map((d) => byId[d.campaignId]).filter((x): x is Campaign => !!x);
+    const isApplied = effective.some((d) => d.campaignId === c.campaignId);
+    const ignore = new Set([...others.map((o) => o.campaignId), ...(isApplied ? [c.campaignId] : [])]);
+    return quoteStacked([...others, c], lines, ctx, { ignoreScheduleFor: ignore })[c.campaignId];
+  };
   /** Món liên quan gọi ngoài khung giờ của [c] → câu báo không áp dụng được */
   const lateItems = (c: Campaign) => outsideScheduleMessage(c, lines);
   /** Chương trình đang chạy mà đơn lẽ ra được giảm nhưng bị chặn vì món gọi ngoài khung giờ → tự báo */
