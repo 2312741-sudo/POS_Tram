@@ -207,7 +207,7 @@ export default function ReportsHubPage() {
 
   // Danh sách nhân viên đầy đủ và không trùng lặp (ưu tiên Họ và tên)
   const staffEntries = useMemo(
-    () => buildHubStaffEntries(storeBills, usersList, cashShifts),
+    () => buildHubStaffEntries(storeBills, usersList, cashShifts, { activeOnly: true }),
     [storeBills, usersList, cashShifts]
   );
   const activeStaffEntry = useMemo(

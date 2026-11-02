@@ -356,6 +356,17 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       aliases: e.aliases,
     )).toList();
 
+    // Chỉ giữ người còn tài khoản (bỏ tài khoản đã xóa còn sót trong hóa đơn/ca cũ); chi nhánh khác thì không có danh sách tài khoản để so
+    if (_userList.isNotEmpty && _selectedStoreCode == _auth.currentStoreCode) {
+      final active = <String>{
+        for (final u in _userList) ...[
+          if (u.username.trim().isNotEmpty) u.username.trim().toLowerCase(),
+          if (u.fullName.trim().isNotEmpty) u.fullName.trim().toLowerCase(),
+        ],
+      };
+      list.removeWhere((o) => !o.aliases.any((a) => active.contains(a.trim().toLowerCase())));
+    }
+
     list.sort((a, b) => a.displayName.compareTo(b.displayName));
     return list;
   }

@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from "react";
 import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData, ProductItem } from "@/lib/data-context";
+import { activeStaffNameSet } from "@/lib/reports-hub";
 import {
   generateEndOfDayZReport,
   calculateCancellationReport,
@@ -232,7 +233,10 @@ export default function EndOfDayReportPage() {
       if (!byKey.has(k)) byKey.set(k, n);
     };
     if (Array.isArray(usersList)) usersList.forEach((u) => add(u.fullName || u.username || ""));
-    soldRows.forEach((r) => splitStaff(r.orderStaffName).forEach(add));
+    const active = Array.isArray(usersList) && usersList.length > 0 ? activeStaffNameSet(usersList) : null;
+    soldRows.forEach((r) => splitStaff(r.orderStaffName).forEach((n) => {
+      if (!active || active.has(n.trim().toLowerCase())) add(n);
+    }));
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "vi"));
   }, [usersList, soldRows]);
 

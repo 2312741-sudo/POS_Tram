@@ -3,6 +3,7 @@ import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { BadgePercent, Calendar, Users, ChevronDown, ChevronRight, Download, Receipt, Store, Ticket, TrendingUp } from "lucide-react";
 import { useDashboardData } from "@/lib/data-context";
+import { activeStaffNameSet } from "@/lib/reports-hub";
 import { businessDayStartFor } from "@/lib/business-day";
 import { formatNumber, formatVND, getBusinessBillTimestamp, getUTC7Date } from "@/lib/reports";
 import { calculateCampaignReport, UNKNOWN_PROMO_STAFF } from "@/lib/promotion-report";
@@ -31,7 +32,7 @@ const selectStyle = {
 } as const;
 
 export default function PromotionReportPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, historyData, historyLoaded } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, historyData, historyLoaded, usersList } = useDashboardData();
   const [dateRange, setDateRange] = useState<RangeKey>("TODAY");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -91,7 +92,13 @@ export default function PromotionReportPage() {
 
   // Danh sách nhân viên có áp dụng khuyến mãi trong kỳ (dựa trên toàn bộ hóa đơn của kỳ, không phụ thuộc bộ lọc nhân viên)
   const fullReport = useMemo(() => calculateCampaignReport(bills), [bills]);
-  const staffOptions = useMemo(() => fullReport.staffTotals.map((r) => r.staff), [fullReport]);
+  const staffOptions = useMemo(() => {
+    const names = fullReport.staffTotals.map((r) => r.staff);
+    if (!Array.isArray(usersList) || usersList.length === 0) return names;
+    // Bỏ tài khoản đã xóa còn sót trong hóa đơn cũ
+    const active = activeStaffNameSet(usersList);
+    return names.filter((n) => n === UNKNOWN_PROMO_STAFF || active.has(n.trim().toLowerCase()));
+  }, [fullReport, usersList]);
   const billStaffOf = (b: { cashierName?: string; staffFullName?: string; staffUsername?: string }) =>
     (b.cashierName || b.staffFullName || b.staffUsername || "").trim() || UNKNOWN_PROMO_STAFF;
   // Bộ lọc nhân viên (người thanh toán / áp dụng khuyến mãi): tính lại toàn bộ số liệu chỉ với hóa đơn của người đó

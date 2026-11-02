@@ -6,6 +6,7 @@ import {
   CASHIER_ONLY_KINDS,
   filterHubBills,
   hubStaffOptions,
+  buildHubStaffEntries,
   percentChange,
   previousRange,
 } from "../lib/reports-hub";
@@ -95,5 +96,27 @@ describe("Báo cáo khuyến mãi lọc nhân viên theo NGƯỜI THU TIỀN", (
     expect(filterHubBills([own, other], "ALL", "Khoa").map((b) => b.id)).toEqual(["P1", "P2"]);
     expect(filterHubBills([own, other], "ALL", "Khoa", { cashierOnly: true }).map((b) => b.id)).toEqual(["P1"]);
     expect(CASHIER_ONLY_KINDS.has("campaigns") && CASHIER_ONLY_KINDS.has("promotions")).toBe(true);
+  });
+});
+
+describe("buildHubStaffEntries activeOnly", () => {
+  const bs = [
+    bill("a", vn(2026, 10, 29, 9), [{ productId: 1, name: "X", price: 1, quantity: 1, orderedBy: "old", orderedByName: "Đã Xóa" }]),
+  ];
+  const users = [{ username: "tn1", fullName: "Thu Ngân A" }];
+
+  it("mặc định giữ cả tài khoản đã xóa", () => {
+    const labels = buildHubStaffEntries(bs, users).map((e) => e.label);
+    expect(labels).toContain("Đã Xóa");
+  });
+
+  it("activeOnly bỏ tài khoản không còn trong danh mục users", () => {
+    const labels = buildHubStaffEntries(bs, users, undefined, { activeOnly: true }).map((e) => e.label);
+    expect(labels).toEqual(["Thu Ngân A"]);
+  });
+
+  it("activeOnly không lọc khi chưa tải được users", () => {
+    const labels = buildHubStaffEntries(bs, [], undefined, { activeOnly: true }).map((e) => e.label);
+    expect(labels).toContain("Đã Xóa");
   });
 });

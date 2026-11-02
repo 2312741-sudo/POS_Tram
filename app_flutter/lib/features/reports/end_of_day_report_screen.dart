@@ -72,6 +72,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     _selectedStoreCode = _auth.currentStoreCode;
     _loadStores();
     _loadProducts();
+    _loadActiveStaff();
     _loadData();
   }
 
@@ -83,6 +84,25 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     _shiftsSub?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Tên (họ tên + username, viết thường) các tài khoản còn tồn tại ở cửa hàng hiện tại;
+  /// null nếu chưa tải được hoặc đang xem chi nhánh khác (khi đó không lọc).
+  Set<String>? _activeStaffNames;
+
+  Future<void> _loadActiveStaff() async {
+    try {
+      final users = await _fb.getUsers();
+      if (!mounted || users.isEmpty) return;
+      setState(() {
+        _activeStaffNames = {
+          for (final u in users) ...[
+            if (u.fullName.trim().isNotEmpty) u.fullName.trim().toLowerCase(),
+            if (u.username.trim().isNotEmpty) u.username.trim().toLowerCase(),
+          ],
+        };
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadProducts() async {
@@ -366,7 +386,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         if (it.orderedByName.isNotEmpty) staffSet.add(it.orderedByName);
       }
     }
-    final list = staffSet.toList();
+    final active = _selectedStoreCode == _auth.currentStoreCode ? _activeStaffNames : null;
+    final list = staffSet
+        .where((n) => active == null || active.contains(n.trim().toLowerCase()))
+        .toList();
     list.sort();
     return list;
   }

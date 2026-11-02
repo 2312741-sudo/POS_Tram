@@ -416,6 +416,18 @@ export interface HubStaffEntry {
   aliases: string[]; // ["dangkhoa", "TRẦN HỮU ĐĂNG KHOA"]
 }
 
+/** Tập tên (username + họ tên, viết thường) của các tài khoản còn tồn tại. */
+export function activeStaffNameSet(users: { username?: string; fullName?: string; name?: string }[]): Set<string> {
+  const set = new Set<string>();
+  for (const u of users) {
+    const un = String(u.username || "").trim().toLowerCase();
+    const fn = String(u.fullName || u.name || "").trim().toLowerCase();
+    if (un) set.add(un);
+    if (fn) set.add(fn);
+  }
+  return set;
+}
+
 /**
  * Dựng danh sách nhân viên đầy đủ và không trùng lặp cho bộ lọc:
  * Gom theo danh tính người (ưu tiên hiển thị Họ và tên thay vì username).
@@ -424,7 +436,8 @@ export interface HubStaffEntry {
 export function buildHubStaffEntries(
   bills: HistoryOrder[],
   users?: { username?: string; fullName?: string; name?: string }[],
-  shifts?: { staffUsername?: string; staffFullName?: string }[]
+  shifts?: { staffUsername?: string; staffFullName?: string }[],
+  opts?: { activeOnly?: boolean }
 ): HubStaffEntry[] {
   const userToFull = new Map<string, string>();
   const fullToUser = new Map<string, string>();
@@ -519,11 +532,17 @@ export function buildHubStaffEntries(
     }
   }
 
-  const entries: HubStaffEntry[] = Array.from(map.values()).map((e) => ({
+  let entries: HubStaffEntry[] = Array.from(map.values()).map((e) => ({
     id: e.label,
     label: e.label,
     aliases: Array.from(e.aliases),
   }));
+
+  // Chỉ giữ người còn tài khoản (bỏ tài khoản đã xóa còn sót trong hóa đơn/ca cũ)
+  if (opts?.activeOnly && users && users.length > 0) {
+    const active = activeStaffNameSet(users);
+    entries = entries.filter((e) => e.aliases.some((a) => active.has(a.trim().toLowerCase())));
+  }
 
   entries.sort((a, b) => a.label.localeCompare(b.label, "vi"));
   return entries;

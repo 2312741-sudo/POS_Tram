@@ -24,12 +24,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final _auth = AuthService();
 
   String _search = '';
+  Set<String>? _activeUsernames; // null = chưa tải được → không lọc tài khoản đã xóa
   String? _staffFilter; // chủ/quản lý: lọc theo tài khoản thu tiền
   DateTime _selectedDate = BusinessDay.now();
   final String _selectedPaymentMethod = 'ALL';
   String _selectedStatus = 'ALL'; // 'ALL', 'PAID', 'CANCELLED'
 
   List<BillModel> _currentFiltered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (_auth.canViewAllBillsHistory) _loadActiveUsernames();
+  }
+
+  Future<void> _loadActiveUsernames() async {
+    try {
+      final users = await _fb.getUsers();
+      if (!mounted || users.isEmpty) return;
+      setState(() => _activeUsernames = {for (final u in users) u.username.trim().toLowerCase()});
+    } catch (_) {}
+  }
 
   Widget _buildFilterChip(String label, String value, int count) {
     final isSelected = _selectedStatus == value;
@@ -100,9 +115,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final streamBills = snapshot.data ?? [];
           // Nhân viên chỉ thấy HĐ của mình; chủ/quản lý (VIEW_ALL_BILLS_HISTORY) thấy hết + lọc theo tài khoản
           final allBills = _fb.scopeVisibleBills(streamBills, filterUsername: _staffFilter);
+          final activeUsers = _activeUsernames;
           final staffOptions = <String, String>{
             for (final b in streamBills)
-              if (b.staffUsername.isNotEmpty)
+              if (b.staffUsername.isNotEmpty && (activeUsers == null || activeUsers.contains(b.staffUsername.trim().toLowerCase())))
                 b.staffUsername: b.staffFullName.isNotEmpty ? '${b.staffFullName} (${b.staffUsername})' : b.staffUsername,
           };
           final filtered = allBills.where((b) {
