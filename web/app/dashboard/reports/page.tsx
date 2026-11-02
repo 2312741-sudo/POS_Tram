@@ -56,6 +56,7 @@ import {
 import {
   REPORT_KINDS,
   buildHubTable,
+  CASHIER_ONLY_KINDS,
   filterHubBills,
   hubStaffOptions,
   paymentLabel,
@@ -204,6 +205,11 @@ export default function ReportsHubPage() {
   );
   const rangeBills = useMemo(() => storeBills.filter((b) => inReportRange(b, range)), [storeBills, range]);
   const bills = useMemo(() => filterHubBills(rangeBills, shiftId, staff), [rangeBills, shiftId, staff]);
+  // Báo cáo khuyến mãi: lọc nhân viên theo người thu tiền (người áp khuyến mãi)
+  const tableBills = useMemo(
+    () => (CASHIER_ONLY_KINDS.has(kind) ? filterHubBills(rangeBills, shiftId, staff, { cashierOnly: true }) : bills),
+    [kind, rangeBills, shiftId, staff, bills]
+  );
   const prevBills = useMemo(
     () => (compare ? filterHubBills(storeBills.filter((b) => inReportRange(b, prevRange)), shiftId, staff) : []),
     [compare, storeBills, prevRange, shiftId, staff]
@@ -242,11 +248,11 @@ export default function ReportsHubPage() {
 
   const table = useMemo(
     () => buildHubTable(kind, {
-      bills, shifts, tables, productsMap, codeMap, lookupTopping: toppingLookup,
+      bills: tableBills, shifts, tables, productsMap, codeMap, lookupTopping: toppingLookup,
       storeCode: storeInfo.storeCode, storeName: storeInfo.storeName, date: range.to,
       billStatus, productSearch, productSort,
     }),
-    [kind, bills, shifts, tables, productsMap, codeMap, toppingLookup, storeInfo, range.to, billStatus, productSearch, productSort]
+    [kind, tableBills, shifts, tables, productsMap, codeMap, toppingLookup, storeInfo, range.to, billStatus, productSearch, productSort]
   );
 
   const chartData = useMemo(() => {

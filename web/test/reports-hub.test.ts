@@ -3,6 +3,7 @@ import {
   REPORT_KINDS,
   buildHubTable,
   filterBillsByStatus,
+  CASHIER_ONLY_KINDS,
   filterHubBills,
   hubStaffOptions,
   percentChange,
@@ -79,5 +80,19 @@ describe("Trung tâm báo cáo web (giống app)", () => {
     expect(percentChange(120, 100)).toBe(20);
     expect(percentChange(50, 200)).toBe(-75);
     expect(percentChange(10, 0)).toBeNull();
+  });
+});
+
+describe("Báo cáo khuyến mãi lọc nhân viên theo NGƯỜI THU TIỀN", () => {
+  it("đơn người khác thu mà nhân viên chỉ order giúp 1 món không tính vào khuyến mãi của nhân viên đó", () => {
+    const own = bill("P1", vn(2026, 10, 29, 9), [{ name: "A", price: 10000, orderedBy: "kh", orderedByName: "Khoa" }], {
+      staffUsername: "kh", staffFullName: "Khoa", shiftId: "S1", discounts: [{ campaignId: "C", description: "Combo", amount: 10000, comboCount: 1 }],
+    } as never);
+    const other = bill("P2", vn(2026, 10, 29, 10), [{ name: "A", price: 10000, orderedBy: "kh", orderedByName: "Khoa" }], {
+      staffUsername: "an", staffFullName: "An", shiftId: "S2", discounts: [{ campaignId: "C", description: "Combo", amount: 10000, comboCount: 1 }],
+    } as never);
+    expect(filterHubBills([own, other], "ALL", "Khoa").map((b) => b.id)).toEqual(["P1", "P2"]);
+    expect(filterHubBills([own, other], "ALL", "Khoa", { cashierOnly: true }).map((b) => b.id)).toEqual(["P1"]);
+    expect(CASHIER_ONLY_KINDS.has("campaigns") && CASHIER_ONLY_KINDS.has("promotions")).toBe(true);
   });
 });
