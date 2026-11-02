@@ -242,30 +242,43 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
   // ==================== FILTERING LOGIC ====================
 
+  /// Danh sách nhân viên cho bộ lọc (thu ngân + người order món)
+  List<String> get _staffOptions {
+    final set = <String>{};
+    for (final b in _allBills) {
+      final c = b.staffUsername.isNotEmpty ? b.staffUsername : b.staffFullName;
+      if (c.isNotEmpty) set.add(c);
+      for (final it in b.items) {
+        final o = (it.orderedBy != null && it.orderedBy!.isNotEmpty)
+            ? it.orderedBy!
+            : it.orderedByName;
+        if (o.isNotEmpty) set.add(o);
+      }
+    }
+    final list = set.toList();
+    list.sort();
+    return list;
+  }
+
   /// Lọc danh sách hóa đơn theo Store, Ngày, Ca và Nhân viên
-  List<BillModel> _filterBills(List<BillModel> bills, {DateTime? customStart, DateTime? customEnd}) {
+  List<BillModel> _filterBills(List<BillModel> bills, {DateTime? customStart, DateTime? customEnd, bool? cashierOnly}) {
     final start = customStart ?? _startDate;
     final end = customEnd ?? _endDate;
 
-    return bills.where((b) {
-      // 1. Lọc ngày
+    final dateFiltered = bills.where((b) {
       final dt = ReportDateUtils.billDateTime(b);
-      if (!ReportDateUtils.isInRange(dt, start, end)) return false;
-
-      // 2. Lọc ca
-      if (_selectedShiftId != 'ALL') {
-        if (b.shiftId != _selectedShiftId) return false;
-      }
-
-      // 3. Lọc nhân viên
-      if (_selectedStaff != 'ALL') {
-        final matchesCashier = b.staffUsername == _selectedStaff || b.staffFullName == _selectedStaff;
-        final matchesOrder = b.items.any((it) => it.orderedBy == _selectedStaff || it.orderedByName == _selectedStaff);
-        if (!matchesCashier && !matchesOrder) return false;
-      }
-
-      return true;
+      return ReportDateUtils.isInRange(dt, start, end);
     }).toList();
+
+    final onlyCashier = cashierOnly ??
+        (_selectedKind == ReportKind.promotions || _selectedKind == ReportKind.campaigns);
+
+    return ReportCalculator.filterHubBills(
+      dateFiltered,
+      shiftId: _selectedShiftId,
+      staff: _selectedStaff,
+      cashierOnly: onlyCashier,
+    );
   }
 
   /// Danh sách hóa đơn của kỳ hiện tại
@@ -848,7 +861,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   key: ValueKey<Object?>(_selectedStaff),
-                  initialValue: _selectedStaff,
+                  initialValue: _staffOptions.contains(_selectedStaff) ? _selectedStaff : 'ALL',
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Nhân viên',
@@ -858,11 +871,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                   ),
                   items: [
                     const DropdownMenuItem(value: 'ALL', child: Text('Tất cả nhân viên', style: TextStyle(fontSize: 11))),
-                    ..._allBills
-                        .map((b) => b.staffUsername.isNotEmpty ? b.staffUsername : b.staffFullName)
-                        .where((u) => u.isNotEmpty)
-                        .toSet()
-                        .map((u) => DropdownMenuItem(
+                    ..._staffOptions.map((u) => DropdownMenuItem(
                       value: u,
                       child: Text(u, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
                     )),

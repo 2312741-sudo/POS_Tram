@@ -197,6 +197,91 @@ void main() {
       expect(comboReport.comboCount, equals(4)); // 3 + 1 = 4 combo
       expect(comboReport.discountAmount, equals(40000));
     });
+
+    test('filterHubBills với cashierOnly = true giúp tính đúng số combo từng nhân viên khi lọc Tất cả ca', () {
+      // Đơn 1: Khoa thu ngân ở Ca 1, bán 2 combo
+      final billKhoa = BillModel(
+        id: 'B_KHOA',
+        billCode: 'HD001',
+        tableName: 'Bàn 1',
+        zone: 'Khu A',
+        shiftId: 'SHIFT_1',
+        staffUsername: 'khoatran',
+        staffFullName: 'Trần Hữu Đăng Khoa',
+        items: [
+          OrderItemModel(productId: 101, name: 'Trà Đào', price: 35000, quantity: 2, orderedBy: 'khoatran', orderedByName: 'Trần Hữu Đăng Khoa'),
+        ],
+        status: 'PAID',
+        createdAt: 1000,
+        closedAt: 1000,
+        subTotal: 70000,
+        finalAmount: 50000,
+        discounts: [
+          BillDiscountModel(
+            campaignId: 'COMBO_1',
+            campaignName: 'Combo Nước + Bánh',
+            description: 'Combo Nước + Bánh',
+            amount: 20000,
+            comboCount: 2,
+          ),
+        ],
+      );
+
+      // Đơn 2: An thu ngân ở Ca 2, bán 5 combo. Khoa chỉ order giúp 1 món trước khi hết ca.
+      final billAn = BillModel(
+        id: 'B_AN',
+        billCode: 'HD002',
+        tableName: 'Bàn 2',
+        zone: 'Khu A',
+        shiftId: 'SHIFT_2',
+        staffUsername: 'anthi',
+        staffFullName: 'Thi An',
+        items: [
+          OrderItemModel(productId: 101, name: 'Trà Đào', price: 35000, quantity: 1, orderedBy: 'khoatran', orderedByName: 'Trần Hữu Đăng Khoa'),
+          OrderItemModel(productId: 201, name: 'Bánh Croissant', price: 30000, quantity: 5, orderedBy: 'anthi', orderedByName: 'Thi An'),
+        ],
+        status: 'PAID',
+        createdAt: 2000,
+        closedAt: 2000,
+        subTotal: 185000,
+        finalAmount: 135000,
+        discounts: [
+          BillDiscountModel(
+            campaignId: 'COMBO_1',
+            campaignName: 'Combo Nước + Bánh',
+            description: 'Combo Nước + Bánh',
+            amount: 50000,
+            comboCount: 5,
+          ),
+        ],
+      );
+
+      final allBills = [billKhoa, billAn];
+
+      // Khi lọc ca cụ thể của Khoa: SHIFT_1 -> luôn đúng (2 combo)
+      final shiftBills = ReportCalculator.filterHubBills(allBills, shiftId: 'SHIFT_1', staff: 'Trần Hữu Đăng Khoa', cashierOnly: true);
+      final shiftReport = ReportCalculator.calculateCampaignReport(shiftBills);
+      expect(shiftReport.first.comboCount, equals(2));
+
+      // Khi lọc 'Tất cả các ca' (shiftId = 'ALL'):
+      // Nếu KHÔNG có cashierOnly (như bug cũ): Khoa bị nhận cả đơn của An -> 2 + 5 = 7 combo (sai)
+      final oldBugBills = ReportCalculator.filterHubBills(allBills, shiftId: 'ALL', staff: 'Trần Hữu Đăng Khoa', cashierOnly: false);
+      expect(oldBugBills.length, equals(2)); // Cả 2 đơn đều lọt vào vì Khoa có order 1 món ở B_AN
+
+      // Với cashierOnly = true (đã sửa): Khoa CHỈ nhận đơn mình thu ngân -> đúng 2 combo khớp với khi lọc Ca 1!
+      final fixedBills = ReportCalculator.filterHubBills(allBills, shiftId: 'ALL', staff: 'Trần Hữu Đăng Khoa', cashierOnly: true);
+      expect(fixedBills.length, equals(1));
+      expect(fixedBills.first.id, equals('B_KHOA'));
+
+      final fixedReport = ReportCalculator.calculateCampaignReport(fixedBills);
+      expect(fixedReport.first.comboCount, equals(2));
+      expect(fixedReport.first.discountAmount, equals(20000));
+
+      // Kiểm tra với staffUsername 'khoatran' cũng khớp
+      final fixedByUsername = ReportCalculator.filterHubBills(allBills, shiftId: 'ALL', staff: 'khoatran', cashierOnly: true);
+      expect(fixedByUsername.length, equals(1));
+      expect(fixedByUsername.first.id, equals('B_KHOA'));
+    });
   });
 
   group('ComboRewardPickerSheet Widget Tests', () {
