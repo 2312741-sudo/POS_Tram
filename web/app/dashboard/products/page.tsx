@@ -31,7 +31,8 @@ import { isProductAvailable, soldOutNote } from "@/lib/product-availability";
 import { writeSoldOut } from "@/lib/product-availability-run";
 import CopyMenuDialog from "./copy-menu-dialog";
 import { errorMessage } from "@/lib/errors";
-import { useItemCatalog } from "@/lib/note-catalog";
+import { saveToppingGroup, useItemCatalog } from "@/lib/note-catalog";
+import { syncCategoryToppingGroup } from "@/lib/category-topping-sync";
 import { canManageNoteCatalog } from "@/lib/note-catalog-access";
 import { isLegacyCatalog } from "@/lib/item-options";
 import GroupAttachmentPicker from "@/components/GroupAttachmentPicker";
@@ -491,6 +492,21 @@ export default function ProductsPage() {
         setCategoryError(res.error || "Lỗi lưu danh mục");
         setCategorySaving(false);
         return;
+      }
+      // Danh mục đã gắn nhóm topping: POS chỉ đọc nhóm → ghi topping đã tích vào nhóm riêng của danh mục
+      if (allowCatalog && categoryForm.storeCode && categoryForm.storeCode !== "ALL" && categoryForm.toppingGroupIds?.length) {
+        const store = categoryForm.storeCode;
+        const synced = syncCategoryToppingGroup({
+          categoryName: cleanName,
+          toppingGroupIds: categoryForm.toppingGroupIds,
+          allowedToppings: categoryForm.allowedToppingIds || [],
+          groups: editCatalog.toppingGroups,
+          otherCategoryGroupIds: allCategories
+            .filter((c) => c.storeCode === store && c.name !== cleanName && c.name !== editCategoryOriginalName)
+            .map((c) => c.toppingGroupIds ?? []),
+          products: allProducts.filter((p) => p.storeCode === store),
+        });
+        if (synced) await saveToppingGroup(store, synced);
       }
       closeCategoryModal();
     } catch (e) {
