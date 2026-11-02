@@ -1,0 +1,1950 @@
+{
+ "_note": "Bộ tình huống đối chiếu khuyến mãi app (Dart) ↔ web (TS). Kết quả mong đợi: pricing_parity_expected.json (sinh từ web: UPDATE_PARITY=1 npx vitest run test/pricing-parity.test.ts).",
+ "cases": [
+  {
+   "name": "Giảm 20% đơn từ 100K",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "programCode": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 100000,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Giảm 20% — chưa đạt 100K",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "programCode": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 100000,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Giảm 200K đơn 215K (không âm)",
+   "campaigns": [
+    {
+     "campaignId": "bill200k",
+     "programCode": "bill200k",
+     "name": "bill200k",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 200000,
+       "benefitMode": "FIXED",
+       "value": 200000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 5,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 65000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Giảm 10% trần 15K",
+   "campaigns": [
+    {
+     "campaignId": "bill10cap",
+     "programCode": "bill10cap",
+     "name": "bill10cap",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 1000,
+       "maxDiscountMoney": 15000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 6,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Nhiều mốc: chọn mốc cao nhất đạt",
+   "campaigns": [
+    {
+     "campaignId": "billTiers",
+     "programCode": "billTiers",
+     "name": "billTiers",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "a",
+       "threshold": 100000,
+       "benefitMode": "FIXED",
+       "value": 10000
+      },
+      {
+       "tierId": "b",
+       "threshold": 200000,
+       "benefitMode": "FIXED",
+       "value": 30000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 7,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Theo số khách: đủ 4 khách",
+   "campaigns": [
+    {
+     "campaignId": "billGuests",
+     "programCode": "billGuests",
+     "name": "billGuests",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "g",
+       "conditionBasis": "GUESTCOUNT",
+       "threshold": 4,
+       "benefitMode": "PERCENT",
+       "value": 1000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": 4,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Theo số khách: thiếu",
+   "campaigns": [
+    {
+     "campaignId": "billGuests",
+     "programCode": "billGuests",
+     "name": "billGuests",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "g",
+       "conditionBasis": "GUESTCOUNT",
+       "threshold": 4,
+       "benefitMode": "PERCENT",
+       "value": 1000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": 2,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Sai chi nhánh",
+   "campaigns": [
+    {
+     "campaignId": "billOther",
+     "programCode": "billOther",
+     "name": "billOther",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM02"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 5000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Ngoài khung giờ 18-22h",
+   "campaigns": [
+    {
+     "campaignId": "billEvening",
+     "programCode": "billEvening",
+     "name": "billEvening",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "schedule": {
+      "timeSlots": [
+       {
+        "startTime": "18:00",
+        "endTime": "22:00"
+       }
+      ],
+      "daysOfWeek": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7
+      ]
+     },
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 1000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Ngoài khung giờ nhưng đã áp dụng (bỏ qua giờ)",
+   "campaigns": [
+    {
+     "campaignId": "billEvening",
+     "programCode": "billEvening",
+     "name": "billEvening",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "schedule": {
+      "timeSlots": [
+       {
+        "startTime": "18:00",
+        "endTime": "22:00"
+       }
+      ],
+      "daysOfWeek": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7
+      ]
+     },
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 1000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [
+    "billEvening"
+   ],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Khung giờ qua đêm 22h-16h lúc 15h",
+   "campaigns": [
+    {
+     "campaignId": "billNight",
+     "programCode": "billNight",
+     "name": "billNight",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "schedule": {
+      "timeSlots": [
+       {
+        "startTime": "22:00",
+        "endTime": "16:00"
+       }
+      ],
+      "daysOfWeek": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7
+      ]
+     },
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "FIXED",
+       "value": 5000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Xoài giảm 16K/ly, ly 37K có topping, tối đa 1 ly",
+   "campaigns": [
+    {
+     "campaignId": "mangoFixed",
+     "programCode": "mangoFixed",
+     "name": "mangoFixed",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedItemIds": [
+      "Trà Olong - Xoài"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXED",
+       "value": 16000,
+       "maxRewardQty": 1
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "x",
+     "itemId": "x",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Xoài đồng giá 16K: chỉ tính trên giá ly",
+   "campaigns": [
+    {
+     "campaignId": "mangoPrice",
+     "programCode": "mangoPrice",
+     "name": "mangoPrice",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedItemIds": [
+      "Trà Olong - Xoài"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXEDPRICE",
+       "value": 16000,
+       "maxRewardQty": 1
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "x",
+     "itemId": "x",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Xoài giảm 50% mỗi ly (không dấu, không giới hạn)",
+   "campaigns": [
+    {
+     "campaignId": "mangoPct",
+     "programCode": "mangoPct",
+     "name": "mangoPct",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedItemIds": [
+      "tra olong - xoai"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "PERCENT",
+       "value": 5000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "x",
+     "itemId": "x",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Xoài KM/G-003 luôn tối đa 1 ly",
+   "campaigns": [
+    {
+     "campaignId": "CAM_1792678747107_dn5u",
+     "programCode": "KM/G-003",
+     "name": "CAM_1792678747107_dn5u",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedItemIds": [
+      "Trà Olong - Xoài"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXED",
+       "value": 16000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "x1",
+     "itemId": "x1",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    },
+    {
+     "lineId": "x2",
+     "itemId": "x2",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Đồng giá theo nhóm (trừ món loại trừ)",
+   "campaigns": [
+    {
+     "campaignId": "groupPrice",
+     "programCode": "groupPrice",
+     "name": "groupPrice",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedGroupIds": [
+      "tra trai cay"
+     ],
+     "excludedItemIds": [
+      "Trà Olong - Chanh"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXEDPRICE",
+       "value": 25000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "c",
+     "itemId": "c",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Combo nước + bánh giảm 10K",
+   "campaigns": [
+    {
+     "campaignId": "combo",
+     "programCode": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000,
+       "multiplyByBundle": true
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 3,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Combo nhiều giá bánh: giảm bánh rẻ trước",
+   "campaigns": [
+    {
+     "campaignId": "combo",
+     "programCode": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000,
+       "multiplyByBundle": true
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b1",
+     "itemId": "b1",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b2",
+     "itemId": "b2",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 20000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Combo khung giờ: nước gọi ngoài giờ không tính",
+   "campaigns": [
+    {
+     "campaignId": "comboTime",
+     "programCode": "comboTime",
+     "name": "comboTime",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "schedule": {
+      "timeSlots": [
+       {
+        "startTime": "14:00",
+        "endTime": "17:00"
+       }
+      ],
+      "daysOfWeek": [
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7
+      ]
+     },
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "PERCENT",
+       "value": 5000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d1",
+     "itemId": "d1",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 30000,
+     "orderedAtMs": 1793588400000
+    },
+    {
+     "lineId": "d2",
+     "itemId": "d2",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 30000,
+     "orderedAtMs": 1793604600000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 2,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Combo thiếu món mua",
+   "campaigns": [
+    {
+     "campaignId": "combo",
+     "programCode": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000,
+       "multiplyByBundle": true
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 2,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Mua 2 tặng 1 cùng món",
+   "campaigns": [
+    {
+     "campaignId": "b2g1",
+     "programCode": "b2g1",
+     "name": "b2g1",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyItemIds": [
+        "Trà Đào"
+       ],
+       "requiredBuyQty": 2,
+       "rewardItemIds": [
+        "Trà Đào"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FREE",
+       "value": 0,
+       "multiplyByBundle": true
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 6,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Mua 2 tặng 1 — chỉ 1 lần",
+   "campaigns": [
+    {
+     "campaignId": "b2g1once",
+     "programCode": "b2g1once",
+     "name": "b2g1once",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyItemIds": [
+        "Trà Đào"
+       ],
+       "requiredBuyQty": 2,
+       "rewardItemIds": [
+        "Trà Đào"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FREE",
+       "value": 0,
+       "multiplyByBundle": false
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 6,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Tặng chanh đơn từ 100K: dòng tặng riêng có Grab 2K",
+   "campaigns": [
+    {
+     "campaignId": "giftChanh",
+     "programCode": "giftChanh",
+     "name": "giftChanh",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 100000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ],
+       "rewardToppingIds": [
+        "Tăng giá Grab 2K"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 4,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "g",
+     "itemId": "g",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000,
+     "rewardCampaignId": "giftChanh",
+     "toppingUnitPrice": 2000,
+     "toppingCount": 1
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "giftChanh"
+   ]
+  },
+  {
+   "name": "Tặng chanh: chưa có dòng tặng → không trừ ly khách gọi",
+   "campaigns": [
+    {
+     "campaignId": "giftChanh",
+     "programCode": "giftChanh",
+     "name": "giftChanh",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 100000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ],
+       "rewardToppingIds": [
+        "Tăng giá Grab 2K"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "c",
+     "itemId": "c",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "giftChanh"
+   ]
+  },
+  {
+   "name": "Tặng chanh: dòng tặng không tính vào mốc 100K",
+   "campaigns": [
+    {
+     "campaignId": "giftChanh",
+     "programCode": "giftChanh",
+     "name": "giftChanh",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 100000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ],
+       "rewardToppingIds": [
+        "Tăng giá Grab 2K"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "g",
+     "itemId": "g",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000,
+     "rewardCampaignId": "giftChanh"
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "giftChanh"
+   ]
+  },
+  {
+   "name": "Tặng chanh 2 mốc: đơn 200K tặng 2",
+   "campaigns": [
+    {
+     "campaignId": "giftChanh2",
+     "programCode": "giftChanh2",
+     "name": "giftChanh2",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "a",
+       "threshold": 100000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ]
+      },
+      {
+       "tierId": "b",
+       "threshold": 200000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 2,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 7,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "g",
+     "itemId": "g",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 22000,
+     "rewardCampaignId": "giftChanh2"
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "giftChanh2"
+   ]
+  },
+  {
+   "name": "Giảm 5K 1 ly theo giá trị đơn (giảm thẳng ly đã gọi)",
+   "campaigns": [
+    {
+     "campaignId": "discOneCup",
+     "programCode": "discOneCup",
+     "name": "discOneCup",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 50000,
+       "benefitMode": "FIXED",
+       "value": 5000,
+       "maxRewardQty": 1,
+       "rewardGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "discOneCup"
+   ]
+  },
+  {
+   "name": "Sinh nhật khách đúng ngày",
+   "campaigns": [
+    {
+     "campaignId": "bday",
+     "programCode": "bday",
+     "name": "bday",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "birthdayOnly": true,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": "1995-11-02",
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Sinh nhật: chưa gắn khách",
+   "campaigns": [
+    {
+     "campaignId": "bday",
+     "programCode": "bday",
+     "name": "bday",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "birthdayOnly": true,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Dữ liệu cũ (thresholdValue/benefitType)",
+   "campaigns": [
+    {
+     "campaignId": "legacyTier",
+     "programCode": "legacyTier",
+     "name": "legacyTier",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "thresholdValue": 50000,
+       "benefitType": "DISCOUNT_AMOUNT",
+       "benefitValue": 7000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 2,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Giảm tay trên dòng + giảm 20% đơn",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "programCode": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 100000,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 4,
+     "unitPrice": 30000,
+     "discountedQuantity": 1,
+     "discountPercent": 50
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Cộng dồn: tặng chanh rồi giảm 20% (không giảm lại ly 0đ)",
+   "campaigns": [
+    {
+     "campaignId": "giftChanh",
+     "programCode": "giftChanh",
+     "name": "giftChanh",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 100000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà Olong - Chanh"
+       ],
+       "rewardToppingIds": [
+        "Tăng giá Grab 2K"
+       ]
+      }
+     ]
+    },
+    {
+     "campaignId": "bill20",
+     "programCode": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 100000,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 4,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "g",
+     "itemId": "g",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000,
+     "rewardCampaignId": "giftChanh",
+     "toppingUnitPrice": 2000,
+     "toppingCount": 1
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": [
+    "giftChanh"
+   ]
+  },
+  {
+   "name": "Cộng dồn: xoài 16K + giảm 200K đơn trên 200K",
+   "campaigns": [
+    {
+     "campaignId": "mangoFixed",
+     "programCode": "mangoFixed",
+     "name": "mangoFixed",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedItemIds": [
+      "Trà Olong - Xoài"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXED",
+       "value": 16000,
+       "maxRewardQty": 1
+      }
+     ]
+    },
+    {
+     "campaignId": "bill200k",
+     "programCode": "bill200k",
+     "name": "bill200k",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 200000,
+       "benefitMode": "FIXED",
+       "value": 200000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "x",
+     "itemId": "x",
+     "itemName": "Trà Olong - Xoài",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 37000,
+     "toppingUnitPrice": 7000,
+     "toppingCount": 2
+    },
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 6,
+     "unitPrice": 30000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Cộng dồn: combo + đồng giá + giảm 10% trần",
+   "campaigns": [
+    {
+     "campaignId": "bill10cap",
+     "programCode": "bill10cap",
+     "name": "bill10cap",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 1000,
+       "maxDiscountMoney": 15000
+      }
+     ]
+    },
+    {
+     "campaignId": "combo",
+     "programCode": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ TRÁI CÂY"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000,
+       "multiplyByBundle": true
+      }
+     ]
+    },
+    {
+     "campaignId": "groupPrice",
+     "programCode": "groupPrice",
+     "name": "groupPrice",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "includedGroupIds": [
+      "tra trai cay"
+     ],
+     "excludedItemIds": [
+      "Trà Olong - Chanh"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXEDPRICE",
+       "value": 25000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "c",
+     "itemId": "c",
+     "itemName": "Trà Olong - Chanh",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 1,
+     "unitPrice": 22000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 2,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  },
+  {
+   "name": "Cộng dồn: mua 2 tặng 1 + giảm 20%",
+   "campaigns": [
+    {
+     "campaignId": "b2g1",
+     "programCode": "b2g1",
+     "name": "b2g1",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyItemIds": [
+        "Trà Đào"
+       ],
+       "requiredBuyQty": 2,
+       "rewardItemIds": [
+        "Trà Đào"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FREE",
+       "value": 0,
+       "multiplyByBundle": true
+      }
+     ]
+    },
+    {
+     "campaignId": "bill20",
+     "programCode": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "priority": 0,
+     "createdAt": 1,
+     "tiers": [
+      {
+       "tierId": "t1",
+       "threshold": 100000,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "lineId": "d",
+     "itemId": "d",
+     "itemName": "Trà Đào",
+     "groupId": "TRÀ TRÁI CÂY",
+     "quantity": 3,
+     "unitPrice": 30000
+    },
+    {
+     "lineId": "b",
+     "itemId": "b",
+     "itemName": "Bánh bông lan",
+     "groupId": "BÁNH",
+     "quantity": 1,
+     "unitPrice": 25000
+    }
+   ],
+   "nowMs": 1793606400000,
+   "branchId": "TRAM01",
+   "guestCount": null,
+   "customerBirthday": null,
+   "ignoreScheduleFor": [],
+   "dedicatedOnlyFor": []
+  }
+ ]
+}

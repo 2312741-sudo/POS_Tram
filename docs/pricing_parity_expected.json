@@ -1,0 +1,654 @@
+{
+ "Giảm 20% đơn từ 100K": {
+  "bill20": {
+   "total": 23000,
+   "applied": true,
+   "lines": {
+    "d": 18000,
+    "b": 5000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     23000,
+     {
+      "b": 5000,
+      "d": 18000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Giảm 20% — chưa đạt 100K": {
+  "bill20": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "ORDER_VALUE_NOT_REACHED"
+   ]
+  }
+ },
+ "Giảm 200K đơn 215K (không âm)": {
+  "bill200k": {
+   "total": 200000,
+   "applied": true,
+   "lines": {
+    "d": 139535,
+    "b": 60465
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     200000,
+     {
+      "b": 60465,
+      "d": 139535
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Giảm 10% trần 15K": {
+  "bill10cap": {
+   "total": 15000,
+   "applied": true,
+   "lines": {
+    "d": 15000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     15000,
+     {
+      "d": 15000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Nhiều mốc: chọn mốc cao nhất đạt": {
+  "billTiers": {
+   "total": 30000,
+   "applied": true,
+   "lines": {
+    "d": 30000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "b",
+     30000,
+     {
+      "d": 30000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Theo số khách: đủ 4 khách": {
+  "billGuests": {
+   "total": 6000,
+   "applied": true,
+   "lines": {
+    "d": 6000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "g",
+     6000,
+     {
+      "d": 6000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Theo số khách: thiếu": {
+  "billGuests": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "GUEST_COUNT_REQUIRED"
+   ]
+  }
+ },
+ "Sai chi nhánh": {
+  "billOther": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "BRANCH_NOT_SUPPORTED"
+   ]
+  }
+ },
+ "Ngoài khung giờ 18-22h": {
+  "billEvening": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "OUTSIDE_SCHEDULE"
+   ]
+  }
+ },
+ "Ngoài khung giờ nhưng đã áp dụng (bỏ qua giờ)": {
+  "billEvening": {
+   "total": 6000,
+   "applied": true,
+   "lines": {
+    "d": 6000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     6000,
+     {
+      "d": 6000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Khung giờ qua đêm 22h-16h lúc 15h": {
+  "billNight": {
+   "total": 5000,
+   "applied": true,
+   "lines": {
+    "d": 5000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     5000,
+     {
+      "d": 5000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Xoài giảm 16K/ly, ly 37K có topping, tối đa 1 ly": {
+  "mangoFixed": {
+   "total": 16000,
+   "applied": true,
+   "lines": {
+    "x": 16000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Xoài đồng giá 16K: chỉ tính trên giá ly": {
+  "mangoPrice": {
+   "total": 14000,
+   "applied": true,
+   "lines": {
+    "x": 14000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Xoài giảm 50% mỗi ly (không dấu, không giới hạn)": {
+  "mangoPct": {
+   "total": 45000,
+   "applied": true,
+   "lines": {
+    "x": 45000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Xoài KM/G-003 luôn tối đa 1 ly": {
+  "CAM_1792678747107_dn5u": {
+   "total": 16000,
+   "applied": true,
+   "lines": {
+    "x1": 16000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Đồng giá theo nhóm (trừ món loại trừ)": {
+  "groupPrice": {
+   "total": 10000,
+   "applied": true,
+   "lines": {
+    "d": 10000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Combo nước + bánh giảm 10K": {
+  "combo": {
+   "total": 20000,
+   "applied": true,
+   "lines": {
+    "b": 20000
+   },
+   "rewards": [
+    [
+     "b",
+     20000,
+     2
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Combo nhiều giá bánh: giảm bánh rẻ trước": {
+  "combo": {
+   "total": 10000,
+   "applied": true,
+   "lines": {
+    "b2": 10000
+   },
+   "rewards": [
+    [
+     "b2",
+     10000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Combo khung giờ: nước gọi ngoài giờ không tính": {
+  "comboTime": {
+   "total": 12500,
+   "applied": true,
+   "lines": {
+    "b": 12500
+   },
+   "rewards": [
+    [
+     "b",
+     12500,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Combo thiếu món mua": {
+  "combo": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "INSUFFICIENT_BUY_ITEMS"
+   ]
+  }
+ },
+ "Mua 2 tặng 1 cùng món": {
+  "b2g1": {
+   "total": 60000,
+   "applied": true,
+   "lines": {
+    "d": 60000
+   },
+   "rewards": [
+    [
+     "d",
+     60000,
+     2
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Mua 2 tặng 1 — chỉ 1 lần": {
+  "b2g1once": {
+   "total": 30000,
+   "applied": true,
+   "lines": {
+    "d": 30000
+   },
+   "rewards": [
+    [
+     "d",
+     30000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Tặng chanh đơn từ 100K: dòng tặng riêng có Grab 2K": {
+  "giftChanh": {
+   "total": 22000,
+   "applied": true,
+   "lines": {
+    "g": 22000
+   },
+   "rewards": [
+    [
+     "g",
+     22000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Tặng chanh: chưa có dòng tặng → không trừ ly khách gọi": {
+  "giftChanh": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "REWARD_ITEM_NOT_IN_BILL"
+   ]
+  }
+ },
+ "Tặng chanh: dòng tặng không tính vào mốc 100K": {
+  "giftChanh": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "ORDER_VALUE_NOT_REACHED"
+   ]
+  }
+ },
+ "Tặng chanh 2 mốc: đơn 200K tặng 2": {
+  "giftChanh2": {
+   "total": 44000,
+   "applied": true,
+   "lines": {
+    "g": 44000
+   },
+   "rewards": [
+    [
+     "g",
+     44000,
+     2
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Giảm 5K 1 ly theo giá trị đơn (giảm thẳng ly đã gọi)": {
+  "discOneCup": {
+   "total": 5000,
+   "applied": true,
+   "lines": {
+    "d": 5000
+   },
+   "rewards": [
+    [
+     "d",
+     5000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Sinh nhật khách đúng ngày": {
+  "bday": {
+   "total": 12000,
+   "applied": true,
+   "lines": {
+    "d": 12000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t",
+     12000,
+     {
+      "d": 12000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Sinh nhật: chưa gắn khách": {
+  "bday": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "BIRTHDAY_CUSTOMER_REQUIRED"
+   ]
+  }
+ },
+ "Dữ liệu cũ (thresholdValue/benefitType)": {
+  "legacyTier": {
+   "total": 7000,
+   "applied": true,
+   "lines": {
+    "d": 7000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t",
+     7000,
+     {
+      "d": 7000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Giảm tay trên dòng + giảm 20% đơn": {
+  "bill20": {
+   "total": 26000,
+   "applied": true,
+   "lines": {
+    "d": 36000,
+    "b": 5000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     26000,
+     {
+      "b": 5000,
+      "d": 21000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Cộng dồn: tặng chanh rồi giảm 20% (không giảm lại ly 0đ)": {
+  "giftChanh": {
+   "total": 22000,
+   "applied": true,
+   "lines": {
+    "g": 22000
+   },
+   "rewards": [
+    [
+     "g",
+     22000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  },
+  "bill20": {
+   "total": 24000,
+   "applied": true,
+   "lines": {
+    "d": 24000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     24000,
+     {
+      "d": 24000
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Cộng dồn: xoài 16K + giảm 200K đơn trên 200K": {
+  "mangoFixed": {
+   "total": 16000,
+   "applied": true,
+   "lines": {
+    "x": 16000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  },
+  "bill200k": {
+   "total": 200000,
+   "applied": true,
+   "lines": {
+    "x": 20896,
+    "d": 179104
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     200000,
+     {
+      "d": 179104,
+      "x": 20896
+     }
+    ]
+   ],
+   "reasons": []
+  }
+ },
+ "Cộng dồn: combo + đồng giá + giảm 10% trần": {
+  "bill10cap": {
+   "total": 12700,
+   "applied": true,
+   "lines": {
+    "d": 7500,
+    "c": 2200,
+    "b": 3000
+   },
+   "rewards": [],
+   "bill": [
+    [
+     "t1",
+     12700,
+     {
+      "b": 3000,
+      "c": 2200,
+      "d": 7500
+     }
+    ]
+   ],
+   "reasons": []
+  },
+  "combo": {
+   "total": 20000,
+   "applied": true,
+   "lines": {
+    "b": 20000
+   },
+   "rewards": [
+    [
+     "b",
+     20000,
+     2
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  },
+  "groupPrice": {
+   "total": 15000,
+   "applied": true,
+   "lines": {
+    "d": 15000
+   },
+   "rewards": [],
+   "bill": [],
+   "reasons": []
+  }
+ },
+ "Cộng dồn: mua 2 tặng 1 + giảm 20%": {
+  "b2g1": {
+   "total": 30000,
+   "applied": true,
+   "lines": {
+    "d": 30000
+   },
+   "rewards": [
+    [
+     "d",
+     30000,
+     1
+    ]
+   ],
+   "bill": [],
+   "reasons": []
+  },
+  "bill20": {
+   "total": 0,
+   "applied": false,
+   "lines": {},
+   "rewards": [],
+   "bill": [],
+   "reasons": [
+    "ORDER_VALUE_NOT_REACHED"
+   ]
+  }
+ }
+}

@@ -150,8 +150,31 @@ class CartCampaignPricing {
     Set<String> ignoreScheduleFor = const {},
     Set<String> dedicatedOnlyFor = const {},
   }) {
+    return quoteStackedLines(
+      campaigns,
+      lines(cart, products),
+      branchId: branchId,
+      guestCount: guestCount,
+      customerBirthday: customerBirthday,
+      nowMs: nowMs,
+      ignoreScheduleFor: ignoreScheduleFor,
+      dedicatedOnlyFor: dedicatedOnlyFor,
+    );
+  }
+
+  /// Lõi của [quoteStacked] trên dòng tính giá — khớp quoteStacked (web/lib/pricing-engine.ts);
+  /// test đối chiếu app ↔ web: test/pricing_parity_test.dart + web/test/pricing-parity.test.ts.
+  static Map<String, PriceQuoteModel> quoteStackedLines(
+    List<CampaignModel> campaigns,
+    List<PricingLineItem> lns, {
+    required String branchId,
+    int? guestCount,
+    String? customerBirthday,
+    int? nowMs,
+    Set<String> ignoreScheduleFor = const {},
+    Set<String> dedicatedOnlyFor = const {},
+  }) {
     final ordered = [...campaigns.where((c) => !_isBillLevel(c)), ...campaigns.where(_isBillLevel)];
-    final lns = lines(cart, products);
     final manual = {for (final l in lns) l.lineId: l.manualLineDiscount};
     final prior = <String, int>{};
     final out = <String, PriceQuoteModel>{};
