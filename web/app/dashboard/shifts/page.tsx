@@ -90,58 +90,41 @@ function ShiftsContent() {
         if (!matchCode && !matchStaff) return false;
       }
 
-      // Lọc theo ngày / thời gian
+      // Lọc theo ngày MỞ ca két (s.openedAt) - không tính theo ngày đóng ca két
       const shiftCutoff = businessDayStartFor(s.storeCode || currentStoreCode) * 60_000;
       const dtOpen = new Date(s.openedAt - shiftCutoff);
-      const dtClose = s.closedAt ? new Date(s.closedAt - shiftCutoff) : null;
 
       let matchDate = true;
       if (datePreset === "ALL") {
         matchDate = true;
       } else if (datePreset === "TODAY") {
-        const isOpen = s.status === "OPEN";
-        const isOpenedToday =
+        matchDate =
           dtOpen.getFullYear() === now.getFullYear() &&
           dtOpen.getMonth() === now.getMonth() &&
           dtOpen.getDate() === now.getDate();
-        const isClosedToday = dtClose
-          ? dtClose.getFullYear() === now.getFullYear() &&
-            dtClose.getMonth() === now.getMonth() &&
-            dtClose.getDate() === now.getDate()
-          : false;
-        matchDate = isOpen || isOpenedToday || isClosedToday;
       } else if (datePreset === "YESTERDAY") {
         const yest = new Date(today);
         yest.setDate(yest.getDate() - 1);
-        const matchOpen =
+        matchDate =
           dtOpen.getFullYear() === yest.getFullYear() &&
           dtOpen.getMonth() === yest.getMonth() &&
           dtOpen.getDate() === yest.getDate();
-        const matchClose = dtClose
-          ? dtClose.getFullYear() === yest.getFullYear() &&
-            dtClose.getMonth() === yest.getMonth() &&
-            dtClose.getDate() === yest.getDate()
-          : false;
-        matchDate = matchOpen || matchClose;
       } else if (datePreset === "7DAYS") {
         const d7 = new Date(today);
         d7.setDate(d7.getDate() - 7);
-        matchDate =
-          (dtOpen >= d7 && dtOpen <= now) ||
-          (dtClose ? dtClose >= d7 && dtClose <= now : false);
+        matchDate = dtOpen >= d7 && dtOpen <= now;
       } else if (datePreset === "THIS_MONTH") {
         matchDate =
-          (dtOpen.getFullYear() === now.getFullYear() && dtOpen.getMonth() === now.getMonth()) ||
-          (dtClose ? dtClose.getFullYear() === now.getFullYear() && dtClose.getMonth() === now.getMonth() : false);
+          dtOpen.getFullYear() === now.getFullYear() &&
+          dtOpen.getMonth() === now.getMonth();
       } else if (datePreset === "LAST_MONTH") {
         const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         matchDate =
-          (dtOpen.getFullYear() === lm.getFullYear() && dtOpen.getMonth() === lm.getMonth()) ||
-          (dtClose ? dtClose.getFullYear() === lm.getFullYear() && dtClose.getMonth() === lm.getMonth() : false);
+          dtOpen.getFullYear() === lm.getFullYear() &&
+          dtOpen.getMonth() === lm.getMonth();
       } else if (datePreset === "CUSTOM") {
         const dateStrOpen = format(dtOpen, "yyyy-MM-dd");
-        const dateStrClose = dtClose ? format(dtClose, "yyyy-MM-dd") : "";
-        matchDate = !filterDate || dateStrOpen === filterDate || dateStrClose === filterDate;
+        matchDate = !filterDate || dateStrOpen === filterDate;
       }
 
       return matchDate;

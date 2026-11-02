@@ -56,6 +56,7 @@ import {
 import {
   REPORT_KINDS,
   buildHubTable,
+  buildHubStaffEntries,
   CASHIER_ONLY_KINDS,
   filterHubBills,
   hubStaffOptions,
@@ -173,7 +174,7 @@ function Kpi({ title, value, sub, icon: Icon, color, delta }: { title: string; v
 }
 
 export default function ReportsHubPage() {
-  const { stores, currentStoreCode, setCurrentStoreCode, historyData, historyLoaded, products, cashShifts, tables } = useDashboardData();
+  const { stores, currentStoreCode, setCurrentStoreCode, historyData, historyLoaded, products, cashShifts, tables, usersList } = useDashboardData();
   const [kind, setKind] = useState<ReportKind>("overview");
   const [preset, setPreset] = useState<ReportRangePreset>("TODAY");
   const [customFrom, setCustomFrom] = useState("");
@@ -203,16 +204,34 @@ export default function ReportsHubPage() {
     () => historyData.filter((b) => currentStoreCode === "ALL" || !b.storeCode || b.storeCode === currentStoreCode),
     [historyData, currentStoreCode]
   );
+
+  // Danh sách nhân viên đầy đủ và không trùng lặp (ưu tiên Họ và tên)
+  const staffEntries = useMemo(
+    () => buildHubStaffEntries(storeBills, usersList, cashShifts),
+    [storeBills, usersList, cashShifts]
+  );
+  const activeStaffEntry = useMemo(
+    () => staffEntries.find((s) => s.id === staff),
+    [staffEntries, staff]
+  );
+  const staffFilterOpts = useMemo(
+    () => ({ staffAliases: activeStaffEntry ? activeStaffEntry.aliases : undefined }),
+    [activeStaffEntry]
+  );
+
   const rangeBills = useMemo(() => storeBills.filter((b) => inReportRange(b, range)), [storeBills, range]);
-  const bills = useMemo(() => filterHubBills(rangeBills, shiftId, staff), [rangeBills, shiftId, staff]);
+  const bills = useMemo(
+    () => filterHubBills(rangeBills, shiftId, staff, staffFilterOpts),
+    [rangeBills, shiftId, staff, staffFilterOpts]
+  );
   // Báo cáo khuyến mãi: lọc nhân viên theo người thu tiền (người áp khuyến mãi)
   const tableBills = useMemo(
-    () => (CASHIER_ONLY_KINDS.has(kind) ? filterHubBills(rangeBills, shiftId, staff, { cashierOnly: true }) : bills),
-    [kind, rangeBills, shiftId, staff, bills]
+    () => (CASHIER_ONLY_KINDS.has(kind) ? filterHubBills(rangeBills, shiftId, staff, { ...staffFilterOpts, cashierOnly: true }) : bills),
+    [kind, rangeBills, shiftId, staff, staffFilterOpts, bills]
   );
   const prevBills = useMemo(
-    () => (compare ? filterHubBills(storeBills.filter((b) => inReportRange(b, prevRange)), shiftId, staff) : []),
-    [compare, storeBills, prevRange, shiftId, staff]
+    () => (compare ? filterHubBills(storeBills.filter((b) => inReportRange(b, prevRange)), shiftId, staff, staffFilterOpts) : []),
+    [compare, storeBills, prevRange, shiftId, staff, staffFilterOpts]
   );
 
   const shifts = useMemo(() => {
@@ -223,7 +242,6 @@ export default function ReportsHubPage() {
       return d >= range.from && d <= range.to;
     });
   }, [cashShifts, currentStoreCode, range]);
-  const staffOptions = useMemo(() => hubStaffOptions(rangeBills), [rangeBills]);
 
   const productsMap = useMemo(() => {
     const map: Record<string | number, ProductLookup> = {};
@@ -357,7 +375,7 @@ export default function ReportsHubPage() {
           <Field label="Nhân viên">
             <select aria-label="Nhân viên" value={staff} onChange={(e) => setStaff(e.target.value)} style={{ ...bare, cursor: "pointer" }}>
               <option value="ALL">Tất cả nhân viên</option>
-              {staffOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              {staffEntries.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </Field>
         </div>

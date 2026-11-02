@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/domain/shift_scope.dart';
+import '../../core/domain/business_day.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -286,16 +287,9 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
       }
 
       if (_selectedDate != null) {
-        final dtOpen = DateTime.fromMillisecondsSinceEpoch(s.openedAt);
-        final dtClose = s.closedAt != null
-            ? DateTime.fromMillisecondsSinceEpoch(s.closedAt!)
-            : null;
-        final matchesOpen = _isSameDay(dtOpen, _selectedDate!);
-        final matchesClose = dtClose != null && _isSameDay(dtClose, _selectedDate!);
-        final isToday = _isSameDay(_selectedDate!, DateTime.now());
-        final isOpenToday = s.isOpen && isToday;
-
-        if (!matchesOpen && !matchesClose && !isOpenToday) {
+        // Lọc theo ngày MỞ ca két (s.openedAt) - không tính theo ngày đóng ca két
+        final dtOpen = DateTime.fromMillisecondsSinceEpoch(BusinessDay.shiftMs(s.openedAt));
+        if (!_isSameDay(dtOpen, _selectedDate!)) {
           return false;
         }
       }
@@ -868,7 +862,7 @@ Ghi chú: ${shift.notes}
   }
 
   Widget _buildDateFilterChips() {
-    final now = DateTime.now();
+    final now = BusinessDay.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
 

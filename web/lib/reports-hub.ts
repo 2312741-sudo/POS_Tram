@@ -359,13 +359,46 @@ export function previousRange(range: { from: string; to: string }): { from: stri
 }
 
 /** Lọc ca + nhân viên như app: nhân viên khớp thu ngân (username / họ tên) HOẶC người order một món trong đơn */
-export function filterHubBills(bills: HistoryOrder[], shiftId = "ALL", staff = "ALL", opts: { cashierOnly?: boolean } = {}): HistoryOrder[] {
+export function filterHubBills(
+  bills: HistoryOrder[],
+  shiftId = "ALL",
+  staff = "ALL",
+  opts: { cashierOnly?: boolean; staffAliases?: Iterable<string> } = {}
+): HistoryOrder[] {
+  const targets = new Set<string>();
+  if (staff !== "ALL") {
+    targets.add(staff);
+    targets.add(staff.toLowerCase());
+  }
+  if (opts.staffAliases) {
+    for (const a of opts.staffAliases) {
+      if (a) {
+        targets.add(a);
+        targets.add(a.toLowerCase());
+      }
+    }
+  }
+
   return bills.filter((b) => {
     if (shiftId !== "ALL" && b.shiftId !== shiftId) return false;
     if (staff !== "ALL") {
-      const cashier = b.staffUsername === staff || b.staffFullName === staff || b.cashierName === staff;
+      const cashier =
+        targets.has(String(b.staffUsername || "")) ||
+        targets.has(String(b.staffUsername || "").toLowerCase()) ||
+        targets.has(String(b.staffFullName || "")) ||
+        targets.has(String(b.cashierName || ""));
       if (opts.cashierOnly) return cashier;
-      if (!cashier && !extractBillItems(b).some((it) => it.orderedBy === staff || it.orderedByName === staff)) return false;
+      if (
+        !cashier &&
+        !extractBillItems(b).some(
+          (it) =>
+            targets.has(String(it.orderedBy || "")) ||
+            targets.has(String(it.orderedBy || "").toLowerCase()) ||
+            targets.has(String(it.orderedByName || ""))
+        )
+      ) {
+        return false;
+      }
     }
     return true;
   });
@@ -377,16 +410,130 @@ export function filterHubBills(bills: HistoryOrder[], shiftId = "ALL", staff = "
  */
 export const CASHIER_ONLY_KINDS: ReadonlySet<ReportKind> = new Set<ReportKind>(["promotions", "campaigns"]);
 
-/** Danh sách nhân viên cho bộ lọc (thu ngân + người order món) */
-export function hubStaffOptions(bills: HistoryOrder[]): string[] {
-  const set = new Set<string>();
-  for (const b of bills) {
-    const c = b.staffUsername || b.staffFullName;
-    if (c) set.add(c);
-    for (const it of extractBillItems(b)) {
-      const o = it.orderedByName || it.orderedBy;
-      if (o) set.add(String(o));
+export interface HubStaffEntry {
+  id: string; // display name / full name
+  label: string; // Họ và tên
+  aliases: string[]; // ["dangkhoa", "TRẦN HỮU ĐĂNG KHOA"]
+}
+
+/**
+ * Dựng danh sách nhân viên đầy đủ và không trùng lặp cho bộ lọc:
+ * Gom theo danh tính người (ưu tiên hiển thị Họ và tên thay vì username).
+ * Hợp nhất từ bills, danh mục người dùng (users) và ca làm việc (shifts).
+ */
+export function buildHubStaffEntries(
+  bills: HistoryOrder[],
+  users?: { username?: string; fullName?: string; name?: string }[],
+  shifts?: { staffUsername?: string; staffFullName?: string }[]
+): HubStaffEntry[] {
+  const userToFull = new Map<string, string>();
+  const fullToUser = new Map<string, string>();
+
+  // 1. Thu thập ánh xạ từ danh mục users
+  if (users) {
+    for (const u of users) {
+      const un = String(u.username || "").trim().toLowerCase();
+      const fn = String(u.fullName || u.name || "").trim();
+      if (un && fn) {
+        userToFull.set(un, fn);
+        fullToUser.set(fn.toLowerCase(), String(u.username || "").trim());
+      }
     }
   }
-  return [...set].sort((a, b) => a.localeCompare(b, "vi"));
+
+  // 2. Thu thập từ ca làm việc (shifts)
+  if (shifts) {
+    for (const s of shifts) {
+      const un = String(s.staffUsername || "").trim().toLowerCase();
+      const fn = String(s.staffFullName || "").trim();
+      if (un && fn) {
+        if (!userToFull.has(un)) userToFull.set(un, fn);
+        if (!fullToUser.has(fn.toLowerCase())) fullToUser.set(fn.toLowerCase(), String(s.staffUsername || "").trim());
+      }
+    }
+  }
+
+  // 3. Thu thập từ hóa đơn (bills)
+  for (const b of bills) {
+    const un = String(b.staffUsername || "").trim().toLowerCase();
+    const fn = String(b.staffFullName || b.cashierName || "").trim();
+    if (un && fn) {
+      if (!userToFull.has(un)) userToFull.set(un, fn);
+      if (!fullToUser.has(fn.toLowerCase())) fullToUser.set(fn.toLowerCase(), String(b.staffUsername || "").trim());
+    }
+    for (const it of extractBillItems(b)) {
+      const iun = String(it.orderedBy || "").trim().toLowerCase();
+      const ifn = String(it.orderedByName || "").trim();
+      if (iun && ifn) {
+        if (!userToFull.has(iun)) userToFull.set(iun, ifn);
+        if (!fullToUser.has(ifn.toLowerCase())) fullToUser.set(ifn.toLowerCase(), String(it.orderedBy || "").trim());
+      }
+    }
+  }
+
+  // 4. Gom nhóm không trùng theo Họ và tên
+  const map = new Map<string, { label: string; aliases: Set<string> }>();
+
+  function addPerson(uRaw?: string, fRaw?: string) {
+    const u = String(uRaw || "").trim();
+    const f = String(fRaw || "").trim();
+    if (!u && !f) return;
+
+    const resolvedFull = f || (u ? userToFull.get(u.toLowerCase()) : "") || "";
+    const label = resolvedFull || u;
+    const groupKey = label.toLowerCase();
+
+    let entry = map.get(groupKey);
+    if (!entry) {
+      entry = { label, aliases: new Set<string>() };
+      map.set(groupKey, entry);
+    }
+    if (u) {
+      entry.aliases.add(u);
+      entry.aliases.add(u.toLowerCase());
+    }
+    if (f) entry.aliases.add(f);
+    if (resolvedFull) entry.aliases.add(resolvedFull);
+
+    const mappedUser = fullToUser.get(label.toLowerCase());
+    if (mappedUser) {
+      entry.aliases.add(mappedUser);
+      entry.aliases.add(mappedUser.toLowerCase());
+    }
+  }
+
+  for (const b of bills) {
+    addPerson(b.staffUsername, b.staffFullName || b.cashierName);
+    for (const it of extractBillItems(b)) {
+      addPerson(String(it.orderedBy || ""), it.orderedByName);
+    }
+  }
+  if (shifts) {
+    for (const s of shifts) {
+      addPerson(s.staffUsername, s.staffFullName);
+    }
+  }
+  if (users) {
+    for (const u of users) {
+      addPerson(u.username, u.fullName || u.name);
+    }
+  }
+
+  const entries: HubStaffEntry[] = Array.from(map.values()).map((e) => ({
+    id: e.label,
+    label: e.label,
+    aliases: Array.from(e.aliases),
+  }));
+
+  entries.sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  return entries;
+}
+
+/** Danh sách tên nhân viên (Họ và tên) cho bộ lọc (thu ngân + người order món) */
+export function hubStaffOptions(
+  bills: HistoryOrder[],
+  users?: { username?: string; fullName?: string; name?: string }[],
+  shifts?: { staffUsername?: string; staffFullName?: string }[]
+): string[] {
+  return buildHubStaffEntries(bills, users, shifts).map((e) => e.label);
 }

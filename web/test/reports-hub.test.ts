@@ -70,7 +70,8 @@ describe("Trung tâm báo cáo web (giống app)", () => {
     expect(filterHubBills(bills, "ALL", "tn2").map((b) => b.id)).toEqual(["2"]);
     expect(filterHubBills(bills, "ALL", "Phục Vụ 2").map((b) => b.id)).toEqual(["1"]);
     expect(filterHubBills(bills, "ALL", "pv1").map((b) => b.id)).toEqual(["1", "2", "3"]);
-    expect(hubStaffOptions(bills)).toEqual(["Phục Vụ 1", "Phục Vụ 2", "pv1", "tn1", "tn2"]);
+    // Không bị trùng lặp username + họ tên, gom về Họ và tên đầy đủ
+    expect(hubStaffOptions(bills)).toEqual(["Phục Vụ 1", "Phục Vụ 2", "Thu Ngân A", "Thu Ngân B"]);
   });
 
   it("so sánh kỳ trước", () => {
