@@ -254,12 +254,22 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         }
       });
 
-      _usersSub = _fb.usersStream().listen((users) {
-        if (mounted) setState(() => _userList = users);
-      }, onError: (_) {});
-      _fb.getUsers().then((users) {
-        if (mounted && _userList.isEmpty) setState(() => _userList = users);
-      }).catchError((_) {});
+      _usersSub?.cancel();
+      _usersSub = null;
+      final usersStore = _selectedStoreCode;
+      if (usersStore == _auth.currentStoreCode) {
+        _usersSub = _fb.usersStream().listen((users) {
+          if (mounted) setState(() => _userList = users);
+        }, onError: (_) {});
+        _fb.getUsers().then((users) {
+          if (mounted && _userList.isEmpty) setState(() => _userList = users);
+        }).catchError((_) {});
+      } else {
+        // Chi nhánh khác chi nhánh đang đăng nhập: tải tài khoản của đúng chi nhánh đang xem
+        _fb.getUsersOfStore(usersStore).then((users) {
+          if (mounted && usersStore == _selectedStoreCode) setState(() => _userList = users);
+        }).catchError((_) {});
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -356,8 +366,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       aliases: e.aliases,
     )).toList();
 
-    // Chỉ giữ người còn tài khoản (bỏ tài khoản đã xóa còn sót trong hóa đơn/ca cũ); chi nhánh khác thì không có danh sách tài khoản để so
-    if (_userList.isNotEmpty && _selectedStoreCode == _auth.currentStoreCode) {
+    // Chỉ giữ người còn tài khoản (bỏ tài khoản đã xóa còn sót trong hóa đơn/ca cũ)
+    if (_userList.isNotEmpty) {
       final active = <String>{
         for (final u in _userList) ...[
           if (u.username.trim().isNotEmpty) u.username.trim().toLowerCase(),
@@ -909,6 +919,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                             _selectedStoreCode = val;
                             _selectedShiftId = 'ALL';
                             _selectedStaff = 'ALL';
+                            _userList = [];
                           });
                           _loadInitialData();
                         }

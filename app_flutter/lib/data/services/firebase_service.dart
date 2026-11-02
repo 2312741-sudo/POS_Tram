@@ -189,6 +189,8 @@ class FirebaseService {
 
   Future<List<UserModel>> getUsers() => _authRepo.getUsers();
 
+  Future<List<UserModel>> getUsersOfStore(String storeCode) => _authRepo.getUsersOfStore(storeCode);
+
   Future<void> saveUser(UserModel user) => _authRepo.saveUser(user);
 
   Future<void> deleteUser(String username) => _authRepo.deleteUser(username);

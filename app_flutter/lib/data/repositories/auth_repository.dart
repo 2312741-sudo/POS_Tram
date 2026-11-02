@@ -128,6 +128,22 @@ class AuthRepository {
     }).handleError((_) => <UserModel>[]);
   }
 
+  /// Tài khoản của một chi nhánh bất kỳ (chỉ đọc, không dọn node thừa) — dùng cho bộ lọc báo cáo
+  /// khi xem chi nhánh khác chi nhánh đang đăng nhập. Lỗi/không đủ quyền → danh sách rỗng.
+  Future<List<UserModel>> getUsersOfStore(String storeCode) async {
+    try {
+      final snap = await root.child('stores').child(storeCode).child('users').get().timeout(const Duration(seconds: 4));
+      if (snap.exists && snap.value is Map) {
+        final map = snap.value as Map;
+        return deduplicateUsers([
+          for (final e in map.entries)
+            if (e.value is Map) UserModel.fromMap(e.value as Map, e.key.toString()),
+        ]);
+      }
+    } catch (_) {}
+    return [];
+  }
+
   Future<List<UserModel>> getUsers() async {
     try {
       final snap = await usersRef.get().timeout(const Duration(seconds: 3));

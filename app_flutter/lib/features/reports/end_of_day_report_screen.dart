@@ -91,9 +91,14 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   Set<String>? _activeStaffNames;
 
   Future<void> _loadActiveStaff() async {
+    final store = _selectedStoreCode;
     try {
-      final users = await _fb.getUsers();
-      if (!mounted || users.isEmpty) return;
+      final users = store == _auth.currentStoreCode ? await _fb.getUsers() : await _fb.getUsersOfStore(store);
+      if (!mounted || store != _selectedStoreCode) return;
+      if (users.isEmpty) {
+        setState(() => _activeStaffNames = null);
+        return;
+      }
       setState(() {
         _activeStaffNames = {
           for (final u in users) ...[
@@ -386,7 +391,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         if (it.orderedByName.isNotEmpty) staffSet.add(it.orderedByName);
       }
     }
-    final active = _selectedStoreCode == _auth.currentStoreCode ? _activeStaffNames : null;
+    final active = _activeStaffNames;
     final list = staffSet
         .where((n) => active == null || active.contains(n.trim().toLowerCase()))
         .toList();
@@ -702,8 +707,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                       setState(() {
                         _selectedStoreCode = newCode;
                         _loading = true;
+                        _activeStaffNames = null;
                       });
                       _loadProducts();
+                      _loadActiveStaff();
                       _loadData();
                     }
                     Navigator.pop(ctx);
