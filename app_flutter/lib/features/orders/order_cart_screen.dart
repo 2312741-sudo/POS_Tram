@@ -1304,35 +1304,6 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (newlyApplied.isNotEmpty && mounted) {
       setState(_restackAppliedAmounts);
     }
-    _notifyLateOrderPromotions(now);
-  }
-
-  /// Đã báo (chương trình + món gọi ngoài giờ) nào rồi — không báo lặp khi giỏ đổi tiếp
-  final Set<String> _lateNotified = {};
-
-  /// Tự báo khi đơn LẼ RA được khuyến mãi (đang trong khung giờ) nhưng có món gọi ngoài khung giờ,
-  /// ví dụ nước gọi 15:50, 16:30 thêm bánh cho combo 16:00–18:00 → bánh không được giảm.
-  void _notifyLateOrderPromotions(int now) {
-    if (!mounted || _cart.isEmpty) return;
-    for (final c in _campaigns) {
-      if (c.hasCodes || !c.isEligibleAt(now)) continue;
-      final msg = CartCampaignPricing.lateOrderBlock(
-        c,
-        cart: _cart,
-        products: _products,
-        branchId: _fb.currentStoreCode,
-        guestCount: _guestCount,
-        customerBirthday: _selectedCustomer?.birthday,
-        nowMs: now,
-      );
-      if (msg == null) continue;
-      final key = '${c.campaignId}|$msg';
-      if (!_lateNotified.add(key)) continue;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showOutsideScheduleDialog(c, msg);
-      });
-      break; // mỗi lần chỉ hiện 1 hộp thoại
-    }
   }
 
   void _syncTableDiscounts() {
@@ -3789,6 +3760,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                                     quote: newQuote,
                                   );
                                 }
+                              } else {
+                                final lateMsg = CartCampaignPricing.lateOrderBlock(
+                                      campaign,
+                                      cart: _cart,
+                                      products: _products,
+                                      branchId: _fb.currentStoreCode,
+                                      guestCount: _guestCount,
+                                      customerBirthday: _selectedCustomer?.birthday,
+                                      nowMs: DateTime.now().millisecondsSinceEpoch,
+                                    ) ??
+                                    CartCampaignPricing.outsideScheduleMessage(campaign, cart: _cart, products: _products);
+                                if (lateMsg != null) {
+                                  await _showOutsideScheduleDialog(campaign, lateMsg);
+                                }
                               }
                             }
                             setDlgState(() => voucherResult = currentResult);
@@ -4000,7 +3985,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       final needsCakes = isCombo && hasWater && combo.remainingRewardUnits > 0;
                       final canAutoAdd = !isCombo && amt <= 0 && CartCampaignPricing.needsRewardItems(q, c);
                       // Món liên quan gọi NGOÀI khung giờ → không được tính; bấm sẽ báo không áp dụng được
-                      final outsideMsg = CartCampaignPricing.outsideScheduleMessage(c, cart: _cart, products: _products);
+                      final outsideMsg = CartCampaignPricing.lateOrderBlock(
+                            c,
+                            cart: _cart,
+                            products: _products,
+                            branchId: _fb.currentStoreCode,
+                            guestCount: _guestCount,
+                            customerBirthday: _selectedCustomer?.birthday,
+                            nowMs: nowMs,
+                          ) ??
+                          CartCampaignPricing.outsideScheduleMessage(c, cart: _cart, products: _products);
                       final blockedByOrderTime = outsideMsg != null && (isCombo ? !hasWater : amt <= 0 && !canAutoAdd);
 
                       String sub = '${c.typeDisplay} • ${describeCampaignBenefit(c)}';
