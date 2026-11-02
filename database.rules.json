@@ -428,6 +428,12 @@
     "loyalty_config": {
       ".read": "auth != null && root.child('userIndex').child(auth.uid).exists()",
       ".write": false
+    },
+    "system_config": {
+      "app_update": {
+        ".read": true,
+        ".write": "auth != null && root.child('userIndex').child(auth.uid).exists()"
+      }
     }
   }
 }

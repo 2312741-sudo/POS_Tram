@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../about/about_app_screen.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/app_update_service.dart';
+import '../../core/widgets/app_update_dialog.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
@@ -260,12 +262,32 @@ class _TableListScreenState extends State<TableListScreen> {
     super.dispose();
   }
 
+  static bool _hasCheckedUpdateThisSession = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkInitialCashShift();
+      _checkAppUpdate();
     });
+  }
+
+  Future<void> _checkAppUpdate() async {
+    if (_hasCheckedUpdateThisSession) return;
+    _hasCheckedUpdateThisSession = true;
+    try {
+      final res = await AppUpdateService().checkForUpdate();
+      if (res.hasUpdate && res.info != null && mounted) {
+        await AppUpdateDialog.show(
+          context,
+          info: res.info!,
+          isMandatory: res.isMandatory,
+          currentVersion: res.currentVersion,
+          currentBuild: res.currentBuild,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkInitialCashShift() async {

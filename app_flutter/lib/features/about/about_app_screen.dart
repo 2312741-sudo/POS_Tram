@@ -8,6 +8,8 @@ import '../../core/utils/format_utils.dart';
 import '../../core/utils/share_utils.dart';
 import '../../data/models/user_model.dart';
 import '../auth/delete_account_dialog.dart';
+import '../../core/services/app_update_service.dart';
+import '../../core/widgets/app_update_dialog.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Màn hình Thông tin ứng dụng POS Trạm (About App Screen)
@@ -46,6 +48,60 @@ class AboutAppScreen extends StatelessWidget {
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  Future<void> _checkUpdateManually(BuildContext context) async {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text('Đang kiểm tra phiên bản mới...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final res = await AppUpdateService().checkForUpdate();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (res.hasUpdate && res.info != null) {
+        await AppUpdateDialog.show(
+          context,
+          info: res.info!,
+          isMandatory: res.isMandatory,
+          currentVersion: res.currentVersion,
+          currentBuild: res.currentBuild,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ứng dụng đã là phiên bản mới nhất (${res.currentVersion})'),
+            backgroundColor: context.tc.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi kiểm tra cập nhật: $e'),
+          backgroundColor: context.tc.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -218,6 +274,19 @@ class AboutAppScreen extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: context.tc.primary,
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _checkUpdateManually(context),
+              icon: const Icon(LucideIcons.refreshCw, size: 14),
+              label: const Text('Kiểm tra bản cập nhật mới (APK)'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.tc.primary,
+                side: BorderSide(color: context.tc.primary.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                textStyle: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           ],

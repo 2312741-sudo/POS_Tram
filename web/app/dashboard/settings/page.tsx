@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock, CreditCard, Receipt, RotateCcw, Settings, Store } from "lucide-react";
+import { AppUpdateManager } from "@/components/app-update-manager";
 import { nowMs } from "@/lib/kitchen";
 import { useDashboardData, type StoreItem } from "@/lib/data-context";
 import { useAuth, canAccessRoute, normalizeRoleId, ROLE_OWNER } from "@/lib/auth";
@@ -189,6 +190,8 @@ function SettingsForm({ store }: { store: StoreItem }) {
       <div>
         <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu cài đặt"}</button>
       </div>
+
+      <AppUpdateManager isOwner={isOwner} />
 
       {isOwner && (
         <div style={{ border: "1px solid var(--danger)", borderRadius: 12, padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

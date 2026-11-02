@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Quyền mạng tải APK cập nhật & kết nối Firebase -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Quyền yêu cầu cài đặt file APK trên Android (Android 8.0+) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Quyền Bluetooth kết nối máy in nhiệt (Android 11 trở xuống) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
