@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { onValueWritten } from "firebase-functions/v2/database";
+import { onValueCreated, onValueWritten } from "firebase-functions/v2/database";
+import { findDuplicateTarget, mergedProduct } from "./productDedupeLogic";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import { ASSIGNABLE_ROLES, buildAssignedProfile, canAssignAcrossStores, countIndexedStores, isAssignableRole, shouldDisableAuthAccount } from "./multiStore";
@@ -819,3 +820,21 @@ export const pullPooledPoints = onCall({ region: FUNCTION_REGION }, async (reque
 
 // Xóa khách hàng (Chủ quán/Quản lý) — xem deleteCustomer.ts, deleteCustomerLogic.ts
 export { deleteCustomer } from "./deleteCustomer";
+
+// Gộp món trùng do app bản cũ lưu món sao chép theo tên — xem productDedupeLogic.ts
+export const productDedupe = onValueCreated(
+  { ref: "/stores/{storeCode}/products/{productKey}", region: FUNCTION_REGION },
+  async (event) => {
+    const { storeCode, productKey } = event.params;
+    const created = event.data.val() as AnyMap | null;
+    if (!created || typeof created !== "object") return;
+    const productsRef = admin.database().ref(`stores/${storeCode}/products`);
+    const all = ((await productsRef.get()).val() ?? {}) as Record<string, unknown>;
+    const target = findDuplicateTarget(productKey, created, all);
+    if (!target) return;
+    await productsRef.update({
+      [target]: mergedProduct(all[target] as AnyMap, created),
+      [productKey]: null,
+    });
+  }
+);
