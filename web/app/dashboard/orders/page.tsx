@@ -54,7 +54,7 @@ export default function OrdersPage() {
     isOwnerOrManager(user?.roleId || user?.role, user?.isRootOwner) && hasPermission(user, "CREATE_SAMPLE_DATA") && currentStoreCode !== "ALL";
   const loading = !historyLoaded && historyData.length === 0;
   const [search, setSearch] = useState("");
-  const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("ALL");
+  const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "7DAYS" | "THIS_MONTH" | "LAST_MONTH" | "CUSTOM">("TODAY");
   const [filterDate, setFilterDate] = useState("");
   const [filterMethod, setFilterMethod] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -411,12 +411,12 @@ export default function OrdersPage() {
             onChange={(e) => { setDatePreset(e.target.value as typeof datePreset); setPage(1); }}
             style={{ width: "auto", minWidth: "160px" }}
           >
-            <option value="ALL">Tất cả thời gian</option>
             <option value="TODAY">Hôm nay</option>
             <option value="YESTERDAY">Hôm qua</option>
             <option value="7DAYS">7 ngày qua</option>
             <option value="THIS_MONTH">Tháng này</option>
             <option value="LAST_MONTH">Tháng trước</option>
+            <option value="ALL">Tất cả thời gian</option>
             <option value="CUSTOM">Tùy chọn ngày...</option>
           </select>
 

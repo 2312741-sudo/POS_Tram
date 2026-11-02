@@ -286,10 +286,16 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
       }
 
       if (_selectedDate != null) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(s.openedAt);
-        if (dt.year != _selectedDate!.year ||
-            dt.month != _selectedDate!.month ||
-            dt.day != _selectedDate!.day) {
+        final dtOpen = DateTime.fromMillisecondsSinceEpoch(s.openedAt);
+        final dtClose = s.closedAt != null
+            ? DateTime.fromMillisecondsSinceEpoch(s.closedAt!)
+            : null;
+        final matchesOpen = _isSameDay(dtOpen, _selectedDate!);
+        final matchesClose = dtClose != null && _isSameDay(dtClose, _selectedDate!);
+        final isToday = _isSameDay(_selectedDate!, DateTime.now());
+        final isOpenToday = s.isOpen && isToday;
+
+        if (!matchesOpen && !matchesClose && !isOpenToday) {
           return false;
         }
       }
@@ -757,7 +763,7 @@ Ghi chú: ${shift.notes}
 
           // Search & Filter Row
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
             child: Row(
               children: [
                 Expanded(
@@ -801,26 +807,8 @@ Ghi chú: ${shift.notes}
             ),
           ),
 
-          if (_selectedDate != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 16, bottom: 6),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.funnel, size: 14, color: context.tc.primary),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text(
-                    'Đang lọc ngày: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.tc.primary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  )),
-                ],
-              ),
-            ),
+          // Quick Date Filter Chips
+          _buildDateFilterChips(),
 
           // List of shifts
           Expanded(
@@ -870,6 +858,83 @@ Ghi chú: ${shift.notes}
                           ),
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Widget _buildDateFilterChips() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    final isAll = _selectedDate == null;
+    final isToday = _selectedDate != null && _isSameDay(_selectedDate!, today);
+    final isYesterday = _selectedDate != null && _isSameDay(_selectedDate!, yesterday);
+    final isCustom = _selectedDate != null && !isToday && !isYesterday;
+
+    Widget chip(String label, bool selected, VoidCallback onTap, {IconData? icon}) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          avatar: icon != null
+              ? Icon(icon, size: 14, color: selected ? Colors.white : context.tc.textSecondary)
+              : null,
+          label: Text(
+            label,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              color: selected ? Colors.white : context.tc.textPrimary,
+            ),
+          ),
+          selected: selected,
+          selectedColor: context.tc.primary,
+          backgroundColor: context.tc.cardElevated,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          onSelected: (_) => onTap(),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+      child: Row(
+        children: [
+          chip('Tất cả ngày', isAll, () => setState(() => _selectedDate = null)),
+          chip('Hôm nay', isToday, () => setState(() => _selectedDate = today)),
+          chip('Hôm qua', isYesterday, () => setState(() => _selectedDate = yesterday)),
+          chip(
+            isCustom ? DateFormat('dd/MM/yyyy').format(_selectedDate!) : 'Chọn ngày...',
+            isCustom,
+            () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate ?? DateTime.now(),
+                firstDate: DateTime(2024),
+                lastDate: DateTime(2030),
+              );
+              if (picked != null) {
+                setState(() => _selectedDate = picked);
+              }
+            },
+            icon: LucideIcons.calendar,
+          ),
+          if (_selectedDate != null)
+            InkWell(
+              onTap: () => setState(() => _selectedDate = null),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Icon(LucideIcons.x, size: 16, color: context.tc.textSecondary),
+              ),
+            ),
         ],
       ),
     );
