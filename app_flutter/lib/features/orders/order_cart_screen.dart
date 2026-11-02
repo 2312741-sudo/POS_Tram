@@ -300,6 +300,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
   int get _subTotal => _rawSubTotal;
 
+  /// Số tiền của giảm giá thủ công [pct]% hóa đơn: tính trên tiền món sau giảm giá từng món
+  int _manualPercentAmount(int pct) {
+    final diff = _subTotal - _itemDiscountTotal;
+    final base = diff > 0 ? diff : 0;
+    return pct >= 100 ? base : (base * pct / 100).round();
+  }
+
   int get _totalDiscount => _itemDiscountTotal + _voucherDiscountTotal + _pointsDiscount;
 
   int get _afterDiscount {
@@ -1381,6 +1388,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         } else {
           valid.add(d);
         }
+      } else if (d.effectiveManualPercent != null) {
+        // Giảm % hóa đơn thủ công: tính lại theo đơn hiện tại (giảm 100% luôn về 0đ dù thêm / đổi món)
+        final pct = d.effectiveManualPercent!;
+        valid.add(BillDiscountModel(
+          description: d.description,
+          amount: _manualPercentAmount(pct),
+          staffNote: d.staffNote,
+          manualPercent: pct,
+        ));
       } else {
         valid.add(d);
       }
@@ -4258,12 +4274,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       );
                       return;
                     }
-                    final raw = manualType == 'PERCENT' ? (_subTotal * val / 100).round() : val;
+                    final raw = manualType == 'PERCENT' ? _manualPercentAmount(val) : val;
                     final amt = raw > _subTotal ? _subTotal : raw;
                     if (!allowStack) _appliedDiscounts.clear();
                     _appliedDiscounts.add(BillDiscountModel(
                       description: 'Giảm giá thủ công (${manualType == "PERCENT" ? "$val%" : FormatUtils.vnd(val)})',
                       amount: amt,
+                      manualPercent: manualType == 'PERCENT' ? val : null,
                     ));
                   }
                   confirmed = true;

@@ -238,6 +238,9 @@ class BillDiscountModel {
   final String? campaignType;
   final String? voucherCode;
   final int? comboCount; // Số lượng combo được hưởng (ví dụ: 1 bánh + 1 nước = 1 combo, 3 bánh = 3 combo)
+  /// Giảm giá thủ công theo % hóa đơn (1–100). Có giá trị → số tiền được TÍNH LẠI mỗi khi đơn thay đổi
+  /// (trước đây chỉ lưu số tiền lúc bấm → thêm / đổi món là "giảm 100%" không còn về 0đ).
+  final int? manualPercent;
 
   BillDiscountModel({
     this.promoId,
@@ -251,7 +254,17 @@ class BillDiscountModel {
     this.campaignType,
     this.voucherCode,
     this.comboCount,
+    this.manualPercent,
   });
+
+  static final _manualPctRe = RegExp(r'^Giảm giá thủ công \((\d{1,3})%\)$');
+
+  /// % giảm thủ công: trường mới, hoặc đọc từ mô tả của bản ghi cũ ("Giảm giá thủ công (100%)")
+  int? get effectiveManualPercent {
+    if (campaignId != null || (promoId != null && promoId!.isNotEmpty)) return null;
+    final p = manualPercent ?? int.tryParse(_manualPctRe.firstMatch(description.trim())?.group(1) ?? '');
+    return (p != null && p > 0 && p <= 100) ? p : null;
+  }
 
   factory BillDiscountModel.fromMap(Map<dynamic, dynamic> map) {
     String? str(String k) {
@@ -279,6 +292,7 @@ class BillDiscountModel {
       campaignType: str('campaignType'),
       voucherCode: str('voucherCode'),
       comboCount: asInt(map['comboCount']),
+      manualPercent: asInt(map['manualPercent']),
     );
   }
 
@@ -294,6 +308,7 @@ class BillDiscountModel {
     if (campaignType != null) 'campaignType': campaignType,
     if (voucherCode != null) 'voucherCode': voucherCode,
     if (comboCount != null && comboCount! > 0) 'comboCount': comboCount,
+    if (manualPercent != null) 'manualPercent': manualPercent,
   };
 
   BillDiscountModel copyWith({
@@ -313,5 +328,6 @@ class BillDiscountModel {
         campaignType: campaignType,
         voucherCode: voucherCode,
         comboCount: comboCount ?? this.comboCount,
+        manualPercent: manualPercent,
       );
 }
