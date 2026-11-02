@@ -1,6 +1,6 @@
 // lib/firebase.ts
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getDatabase, onValue, ref } from "firebase/database";
 import { getFirestore } from "firebase/firestore";
 
 import { getAuth } from "firebase/auth";
@@ -35,3 +35,19 @@ export const functions = getFunctions(app, "asia-southeast1");
 export { firebaseConfig };
 export default app;
 
+
+/**
+ * Đồng hồ máy chạy NHANH hơn máy chủ → rules từ chối nhật ký thao tác có timestamp "ở tương lai"
+ * (PERMISSION_DENIED khi mở ca, xóa món, thanh toán...). Lấy độ lệch từ `.info/serverTimeOffset`
+ * và kéo Date.now() về giờ máy chủ để mọi timestamp web ghi đều khớp giờ Firebase.
+ */
+if (typeof window !== "undefined") {
+  const clientNow = Date.now.bind(Date);
+  let offset = 0;
+  Date.now = () => clientNow() + offset;
+  onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+    const v = Number(snap.val());
+    // Chỉ kéo lùi khi máy nhanh hơn máy chủ (offset âm); máy chậm thì rules vẫn chấp nhận
+    offset = Number.isFinite(v) && v < 0 ? v : 0;
+  });
+}

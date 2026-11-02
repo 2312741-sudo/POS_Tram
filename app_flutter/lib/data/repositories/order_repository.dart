@@ -1723,7 +1723,10 @@ class OrderRepository {
 
   Future<void> saveProduct(ProductModel product, {String? storeCode}) async {
     final ref = getProductsRef(storeCode);
-    final key = product.name.replaceAll(RegExp(r'[.#$\[\]]'), '_');
+    // Sửa món đã có: ghi đúng nút cũ (món sao chép từ cửa hàng khác / tạo trên web có khóa khác tên món),
+    // nếu không sẽ sinh thêm 1 món trùng. Món mới: khóa theo tên món.
+    final existingKey = product.dbKey?.trim() ?? '';
+    final key = existingKey.isNotEmpty ? existingKey : product.name.replaceAll(RegExp(r'[.#$\[\]]'), '_');
     await ref.child(key).set(product.toMap());
   }
 
