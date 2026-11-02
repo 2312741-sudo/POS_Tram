@@ -1315,6 +1315,11 @@ export function billPaymentPortions(b: HistoryOrder): Record<PayBucket, number> 
   return out;
 }
 
+/** Phần chuyển khoản do nhân viên TỰ xác nhận (Trạm Bot chưa khớp giao dịch ngân hàng) → cần đối soát sao kê */
+export function isQrManuallyConfirmed(b: HistoryOrder): boolean {
+  return String((b as { qrConfirmedBy?: unknown }).qrConfirmedBy ?? "").toUpperCase() === "MANUAL";
+}
+
 /** Hóa đơn thanh toán HỖN HỢP (vd tiền mặt + chuyển khoản): phương thức SPLIT hoặc tiền chia cho ≥ 2 phương thức */
 export function isMixedPayment(b: HistoryOrder): boolean {
   if (String(b.paymentMethod || "").toUpperCase().includes("SPLIT")) return true;

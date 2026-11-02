@@ -189,6 +189,9 @@ const statusColors: Record<string, string> = {
   INACTIVE: "#9ca3af",
 };
 
+/** Bản ghi catalog_items đọc thô từ RTDB (chống trùng khi nhập / dọn trùng) */
+type CatalogRow = { itemId?: string; sku?: string; name?: string; createdAt?: number; updatedAt?: number; [k: string]: unknown };
+
 export default function InventoryPage() {
   const { stores, currentStoreCode, setCurrentStoreCode } = useDashboardData();
   const { user } = useAuth();
@@ -1165,17 +1168,17 @@ export default function InventoryPage() {
       for (const branch of targetBranches) {
         // Đọc danh mục hàng thực tế từ RTDB của chi nhánh đang xét để chống trùng lặp chính xác
         const branchSnap = await get(ref(db, `stores/${branch}/catalog_items`));
-        const branchItemsVal = (branchSnap.val() || {}) as Record<string, any>;
+        const branchItemsVal = (branchSnap.val() || {}) as Record<string, CatalogRow>;
 
         const branchSkuMap = new Map<string, { itemId: string; createdAt?: number }>();
         const branchNameMap = new Map<string, { itemId: string; createdAt?: number }>();
 
-        Object.values(branchItemsVal).forEach((item: any) => {
+        Object.values(branchItemsVal).forEach((item: CatalogRow) => {
           if (item?.sku) {
-            branchSkuMap.set(String(item.sku).trim().toUpperCase(), { itemId: item.itemId, createdAt: item.createdAt });
+            branchSkuMap.set(String(item.sku).trim().toUpperCase(), { itemId: String(item.itemId ?? ""), createdAt: item.createdAt });
           }
           if (item?.name) {
-            branchNameMap.set(String(item.name).trim().toLowerCase(), { itemId: item.itemId, createdAt: item.createdAt });
+            branchNameMap.set(String(item.name).trim().toLowerCase(), { itemId: String(item.itemId ?? ""), createdAt: item.createdAt });
           }
         });
 
@@ -1270,10 +1273,10 @@ export default function InventoryPage() {
     setIsDeduplicating(true);
     try {
       const snap = await get(ref(db, `stores/${targetStoreCode}/catalog_items`));
-      const itemsVal = (snap.val() || {}) as Record<string, any>;
-      const bySku = new Map<string, any[]>();
+      const itemsVal = (snap.val() || {}) as Record<string, CatalogRow>;
+      const bySku = new Map<string, (CatalogRow & { id: string })[]>();
 
-      Object.entries(itemsVal).forEach(([id, item]: [string, any]) => {
+      Object.entries(itemsVal).forEach(([id, item]: [string, CatalogRow]) => {
         const key = (item?.sku || "").trim().toUpperCase() || (item?.name || "").trim().toLowerCase();
         if (!bySku.has(key)) bySku.set(key, []);
         bySku.get(key)!.push({ id, ...item });

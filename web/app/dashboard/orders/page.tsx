@@ -31,7 +31,7 @@ import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/pr
 import { buildToppingLookup } from "@/lib/topping-split";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-import { billItemDiscount, billLevelDiscount, billPaymentPortions, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isMixedPayment, isRevenueBill } from "@/lib/reports";
+import { billItemDiscount, billLevelDiscount, billPaymentPortions, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isMixedPayment, isQrManuallyConfirmed, isRevenueBill } from "@/lib/reports";
 import { billDeletedItems } from "@/lib/item-deletion";
 import { baseTableName } from "@/lib/table-status";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
@@ -134,6 +134,8 @@ export default function OrdersPage() {
         !filterMethod ||
         (filterMethod === "mixed"
           ? isMixedPayment(h)
+          : filterMethod === "qr_manual"
+          ? isQrManuallyConfirmed(h)
           : !isMixedPayment(h) && (h.paymentMethod || "").toLowerCase().includes(filterMethod.toLowerCase()));
       const matchZone =
         !filterZone ||
@@ -214,12 +216,29 @@ export default function OrdersPage() {
   };
 
   const getPaymentBadge = (method?: string, bill?: HistoryOrder) => {
+    const manualTag =
+      bill && isQrManuallyConfirmed(bill) ? (
+        <span className="badge badge-danger" style={{ marginLeft: 4 }} title="Nhân viên tự xác nhận đã nhận chuyển khoản — đối soát với sao kê">
+          CK tự xác nhận
+        </span>
+      ) : null;
     if (bill && isMixedPayment(bill)) {
       const p = billPaymentPortions(bill);
       return (
-        <span className="badge badge-warning" title={`Tiền mặt ${formatVND(p.CASH)} • Chuyển khoản ${formatVND(p.TRANSFER_QR)}`}>
-          Hỗn hợp: TM {formatVND(p.CASH)} + CK {formatVND(p.TRANSFER_QR)}
-        </span>
+        <>
+          <span className="badge badge-warning" title={`Tiền mặt ${formatVND(p.CASH)} • Chuyển khoản ${formatVND(p.TRANSFER_QR)}`}>
+            Hỗn hợp: TM {formatVND(p.CASH)} + CK {formatVND(p.TRANSFER_QR)}
+          </span>
+          {manualTag}
+        </>
+      );
+    }
+    if (manualTag) {
+      return (
+        <>
+          <span className="badge badge-info">Chuyển khoản</span>
+          {manualTag}
+        </>
       );
     }
     const m = (method || "").toLowerCase();
@@ -445,6 +464,7 @@ export default function OrdersPage() {
             <option value="cash">Tiền mặt</option>
             <option value="transfer">Chuyển khoản</option>
             <option value="mixed">Hỗn hợp (TM + CK)</option>
+            <option value="qr_manual">CK nhân viên tự xác nhận (cần đối soát)</option>
           </select>
 
           <select

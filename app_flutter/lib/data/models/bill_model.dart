@@ -64,6 +64,9 @@ class BillModel {
   String paymentMethod; // 'CASH', 'TRANSFER_QR', 'CARD', 'SPLIT'
   List<PaymentSplitModel>? paymentSplits; // Thanh toán hỗn hợp (VD: Tiền mặt + Chuyển khoản QR)
   String notes;
+  /// Phần chuyển khoản được xác nhận thế nào: 'BANK' (Trạm Bot khớp giao dịch ngân hàng) /
+  /// 'MANUAL' (nhân viên tự xác nhận — cần đối soát sao kê). null: không có chuyển khoản / dữ liệu cũ.
+  String? qrConfirmedBy;
   final String? parentBillId; // If split
   final List<String>? mergedTableNames;
   int pointsUsed;
@@ -104,6 +107,7 @@ class BillModel {
     this.paymentMethod = 'CASH',
     this.paymentSplits,
     this.notes = '',
+    this.qrConfirmedBy,
     this.parentBillId,
     this.mergedTableNames,
     this.pointsUsed = 0,
@@ -311,6 +315,7 @@ class BillModel {
       paymentMethod: map['paymentMethod']?.toString() ?? 'CASH',
       paymentSplits: splits,
       notes: map['notes']?.toString() ?? map['note']?.toString() ?? '',
+      qrConfirmedBy: (map['qrConfirmedBy']?.toString().isNotEmpty ?? false) ? map['qrConfirmedBy'].toString() : null,
       parentBillId: parentBillId,
       mergedTableNames: merged,
       pointsUsed: _asInt(map['pointsUsed']) ?? 0,
@@ -487,6 +492,7 @@ class BillModel {
       'paymentSplits': paymentSplits!.map((e) => e.toMap()).toList(),
     'notes': notes,
     'note': notes,
+    if (qrConfirmedBy != null) 'qrConfirmedBy': qrConfirmedBy,
     if (parentBillId != null) 'parentBillId': parentBillId,
     if (mergedTableNames != null) 'mergedTableNames': mergedTableNames,
     if (pointsUsed > 0) 'pointsUsed': pointsUsed,

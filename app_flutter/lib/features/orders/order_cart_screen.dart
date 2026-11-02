@@ -4331,6 +4331,31 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       String? matchedNote,
     }) async {
       if (isProcessingPayment) return;
+      // Phần chuyển khoản của đơn: hỗn hợp = phần QR nhân viên để lại; chuyển khoản = cả đơn
+      final qrPart = paymentMethod == 'SPLIT'
+          ? (overrideQrAmount ?? 0)
+          : (paymentMethod == 'TRANSFER_QR' ? _finalTotal : 0);
+      final qrManual = qrPart > 0 && matchedNote == null;
+      // Hỗn hợp mà phần chuyển khoản CHƯA được ngân hàng xác nhận → nhân viên phải xác nhận đã kiểm tra tiền về
+      // (trước đây bấm hoàn tất là ghi luôn "khách đã chuyển" dù tiền chưa vào tài khoản)
+      if (paymentMethod == 'SPLIT' && qrManual) {
+        final ok = await showDialog<bool>(
+          context: ctx,
+          builder: (dCtx) => AlertDialog(
+            title: const Text('Xác nhận tiền chuyển khoản'),
+            content: Text(
+              'Chưa nhận được xác nhận từ ngân hàng cho phần chuyển khoản ${FormatUtils.vnd(qrPart)}.\n\n'
+              'Chỉ bấm "Đã kiểm tra, tiền đã về" khi bạn đã thấy tiền vào tài khoản cửa hàng. '
+              'Thao tác được ghi lại kèm tên bạn để đối soát cuối ngày.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Chưa, chờ tiếp')),
+              ElevatedButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('Đã kiểm tra, tiền đã về')),
+            ],
+          ),
+        );
+        if (ok != true) return;
+      }
       setSheetState(() {
         isProcessingPayment = true;
         paymentError = null;
@@ -4354,6 +4379,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           method: paymentMethod,
           splits: splits,
         );
+        if (qrPart > 0) bill.qrConfirmedBy = qrManual ? 'MANUAL' : 'BANK';
 
         // Đổi điểm (chặn nếu thiếu điểm) + tích điểm được xử lý trong closeAndPayBill (transaction, idempotent)
         await _fb.closeAndPayBill(
@@ -4362,6 +4388,20 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           pointEarnRate: _storeInfo?.pointEarnRate,
           pointRedeemRate: _storeInfo?.pointRedeemRate,
         );
+
+        if (paymentMethod == 'SPLIT' && qrManual) {
+          _fb.logAction(AuditLogModel(
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            username: _auth.currentUser?.username ?? '',
+            userFullName: _auth.currentUser?.fullName ?? 'Nhân viên',
+            userRole: _auth.currentUser?.roleId ?? 'UNKNOWN',
+            action: 'QR_MANUAL_CONFIRM',
+            targetType: 'BILL',
+            targetId: bill.billCode,
+            details: 'Tự xác nhận đã nhận chuyển khoản ${FormatUtils.vnd(qrPart)} (đơn hỗn hợp, tiền mặt '
+                '${FormatUtils.vnd(overrideCashAmount ?? 0)}) bàn ${widget.table.name} — chưa có xác nhận từ ngân hàng',
+          ));
+        }
 
         if (ctx.mounted) Navigator.pop(ctx);
         if (mounted) {

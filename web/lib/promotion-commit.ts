@@ -76,7 +76,7 @@ export async function reservePromotionUsage(
 
   // 1. Voucher (mã dùng 1 lần)
   if (code) {
-    let lookup = await get(ref(db, `${base}/voucher_lookup/${code}`));
+    const lookup = await get(ref(db, `${base}/voucher_lookup/${code}`));
     let lv = lookup.val() as { campaignId?: string; voucherId?: string } | null;
 
     // Nếu chi nhánh hiện tại chưa có lookup, tra cứu chéo sang các chi nhánh liên kết

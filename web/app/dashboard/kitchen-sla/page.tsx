@@ -53,7 +53,6 @@ export default function KitchenSlaPage() {
   // Lắng nghe dữ liệu kitchen_orders
   useEffect(() => {
     if (!storeCode) return;
-    setLoading(true);
     return onValue(
       ref(db, `stores/${storeCode}/kitchen_orders`),
       (snap) => {
@@ -97,7 +96,9 @@ export default function KitchenSlaPage() {
     }
     // Custom
     const start = customStart ? new Date(`${customStart}T00:00:00`).getTime() : 0;
-    const end = customEnd ? new Date(`${customEnd}T23:59:59.999`).getTime() : Date.now();
+    const end = customEnd
+      ? new Date(`${customEnd}T23:59:59.999`).getTime()
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
     return { fromMs: start, toMs: end };
   }, [dateFilter, customStart, customEnd]);
 
