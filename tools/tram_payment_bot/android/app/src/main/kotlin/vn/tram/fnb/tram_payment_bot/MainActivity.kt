@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
@@ -63,6 +65,50 @@ class MainActivity : FlutterActivity() {
                     startActivity(intent)
                     result.success(true)
                 }
+                "isIgnoringBatteryOptimizations" -> {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    val isIgnoring = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        powerManager?.isIgnoringBatteryOptimizations(packageName) ?: false
+                    } else {
+                        true
+                    }
+                    result.success(isIgnoring)
+                }
+                "requestIgnoreBatteryOptimizations" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (_: Exception) {
+                            try {
+                                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(fallbackIntent)
+                                result.success(true)
+                            } catch (_: Exception) {
+                                result.success(false)
+                            }
+                        }
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "setAutoDetectStore" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("auto_detect_store", enabled).apply()
+                    result.success(true)
+                }
+                "getAutoDetectStore" -> {
+                    val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
+                    val enabled = prefs.getBoolean("auto_detect_store", true)
+                    result.success(enabled)
+                }
                 "setDefaultStoreCode" -> {
                     val code = call.argument<String>("storeCode") ?: "TRAM01"
                     val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
@@ -77,9 +123,13 @@ class MainActivity : FlutterActivity() {
                 "setBankMapping" -> {
                     val packageName = call.argument<String>("packageName")
                     val storeCode = call.argument<String>("storeCode")
-                    if (!packageName.isNullOrBlank() && !storeCode.isNullOrBlank()) {
+                    if (!packageName.isNullOrBlank()) {
                         val prefs = getSharedPreferences("tram_bot_prefs", Context.MODE_PRIVATE)
-                        prefs.edit().putString("bank_map_$packageName", storeCode).apply()
+                        if (storeCode.isNullOrBlank()) {
+                            prefs.edit().remove("bank_map_$packageName").apply()
+                        } else {
+                            prefs.edit().putString("bank_map_$packageName", storeCode).apply()
+                        }
                         result.success(true)
                     } else {
                         result.success(false)
@@ -160,8 +210,8 @@ class MainActivity : FlutterActivity() {
             conn.requestMethod = "PUT"
             conn.setRequestProperty("Content-Type", "application/json; utf-8")
             conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
 
             val json = JSONObject().apply {
                 put("eventId", eventId)
@@ -183,7 +233,7 @@ class MainActivity : FlutterActivity() {
             conn.responseCode
             conn.disconnect()
 
-            // Gửi event về Flutter
+            // Gửi event về Flutter UI
             val data = mapOf(
                 "eventId" to eventId,
                 "storeCode" to storeCode,

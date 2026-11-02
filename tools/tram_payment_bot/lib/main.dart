@@ -39,6 +39,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
   static const _eventChannel = EventChannel('vn.tram.fnb.tram_payment_bot/events');
 
   bool _isPermissionGranted = false;
+  bool _isBatteryOptimized = false;
   String _selectedStoreCode = 'TRAM01';
   bool _autoDetectStore = true;
   final List<Map<String, dynamic>> _recentPayments = [];
@@ -46,16 +47,25 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
 
   static const List<Map<String, String>> _popularBanks = [
     {'name': 'MB Bank (Quân Đội)', 'pkg': 'com.mbmobile'},
-    {'name': 'Vietcombank', 'pkg': 'com.VCB'},
+    {'name': 'Vietcombank (VCB Digibank)', 'pkg': 'com.VCB'},
     {'name': 'Techcombank', 'pkg': 'vn.com.techcombank.bb.app'},
-    {'name': 'ACB', 'pkg': 'mobile.acb.com.vn'},
-    {'name': 'VPBank', 'pkg': 'com.vpb.neo'},
-    {'name': 'BIDV', 'pkg': 'com.vnpay.bidv'},
-    {'name': 'VietinBank', 'pkg': 'com.vietinbank.ipay'},
-    {'name': 'TPBank', 'pkg': 'com.tpb.mb.gprs'},
-    {'name': 'Sacombank', 'pkg': 'com.vnpay.sacombank'},
-    {'name': 'Agribank', 'pkg': 'com.vnpay.Agribank'},
+    {'name': 'ACB (ACB ONE)', 'pkg': 'mobile.acb.com.vn'},
+    {'name': 'VPBank (VPBank NEO)', 'pkg': 'com.vpb.neo'},
+    {'name': 'BIDV (SmartBanking)', 'pkg': 'com.vnpay.bidv'},
+    {'name': 'VietinBank (iPay)', 'pkg': 'com.vietinbank.ipay'},
+    {'name': 'TPBank (TPBank Mobile)', 'pkg': 'com.tpb.mb.gprs'},
+    {'name': 'Sacombank (Sacombank Pay)', 'pkg': 'com.vnpay.sacombank'},
+    {'name': 'Agribank (E-Mobile)', 'pkg': 'com.vnpay.Agribank'},
+    {'name': 'Cake by VPBank', 'pkg': 'xyz.be.cake'},
+    {'name': 'MoMo', 'pkg': 'com.mservice.momopay'},
+    {'name': 'Viettel Money', 'pkg': 'com.bplus.vtpay'},
+    {'name': 'ZaloPay', 'pkg': 'vn.com.vng.zalopay'},
+    {'name': 'VIB (MyVIB 2.0)', 'pkg': 'com.vib.myvib2'},
+    {'name': 'OCB (OCB OMNI)', 'pkg': 'com.mplus.omni'},
+    {'name': 'Tin nhắn SMS (Google/Samsung/Xiaomi)', 'pkg': 'com.google.android.apps.messaging'},
   ];
+
+  static const List<String> _storeList = ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04', 'TRAM05'];
 
   @override
   void initState() {
@@ -82,8 +92,12 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
   Future<void> _checkPermission() async {
     try {
       final bool granted = await _methodChannel.invokeMethod('isNotificationPermissionGranted');
+      final bool isIgnoring = await _methodChannel.invokeMethod('isIgnoringBatteryOptimizations');
       if (mounted) {
-        setState(() => _isPermissionGranted = granted);
+        setState(() {
+          _isPermissionGranted = granted;
+          _isBatteryOptimized = !isIgnoring;
+        });
       }
     } catch (_) {}
   }
@@ -96,12 +110,25 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
       }
     } catch (_) {}
     try {
+      final bool autoDetect = await _methodChannel.invokeMethod('getAutoDetectStore');
+      if (mounted) {
+        setState(() => _autoDetectStore = autoDetect);
+      }
+    } catch (_) {}
+    try {
       final Map<dynamic, dynamic>? maps = await _methodChannel.invokeMethod('getBankMappings');
       if (maps != null && mounted) {
         setState(() {
           _bankMappings = maps.map((k, v) => MapEntry(k.toString(), v.toString()));
         });
       }
+    } catch (_) {}
+  }
+
+  Future<void> _setAutoDetectStore(bool val) async {
+    setState(() => _autoDetectStore = val);
+    try {
+      await _methodChannel.invokeMethod('setAutoDetectStore', {'enabled': val});
     } catch (_) {}
   }
 
@@ -147,6 +174,14 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
   Future<void> _openSettings() async {
     try {
       await _methodChannel.invokeMethod('openNotificationSettings');
+    } catch (_) {}
+  }
+
+  Future<void> _requestIgnoreBattery() async {
+    try {
+      await _methodChannel.invokeMethod('requestIgnoreBatteryOptimizations');
+      await Future.delayed(const Duration(seconds: 1));
+      _checkPermission();
     } catch (_) {}
   }
 
@@ -219,7 +254,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 1. Trạng thái cấp quyền
+          // 1. Trạng thái cấp quyền thông báo
           Card(
             elevation: 1.5,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -239,7 +274,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                           color: _isPermissionGranted ? const Color(0xFF137333) : const Color(0xFFD93025),
                           boxShadow: [
                             BoxShadow(
-                              color: (_isPermissionGranted ? const Color(0xFF137333) : const Color(0xFFD93025)).withOpacity(0.4),
+                              color: (_isPermissionGranted ? const Color(0xFF137333) : const Color(0xFFD93025)).withValues(alpha: 0.4),
                               blurRadius: 8,
                               spreadRadius: 2,
                             ),
@@ -286,6 +321,51 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
             ),
           ),
 
+          // 1b. Cảnh báo Tối ưu hóa Pin (Tránh bị Android đóng băng ngầm)
+          if (_isBatteryOptimized) ...[
+            const SizedBox(height: 12),
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              color: const Color(0xFFFFF8E1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.battery_alert, color: Color(0xFFD97706), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Cần tắt tối ưu pin để chạy 24/7',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFB45309)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Hệ điều hành Android có thể đóng băng Bot khi tắt màn hình nếu chưa loại trừ pin. Bấm nút dưới để cấp phép chạy nền không giới hạn.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF78350F), height: 1.35),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.battery_charging_full, size: 16),
+                      label: const Text('Tắt tối ưu pin ngay'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _requestIgnoreBattery,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 16),
 
           // 2. Cấu hình Chi nhánh
@@ -309,10 +389,10 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Tự động theo cú pháp mã đơn', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Tự chia tiền cho Quán 1/2/3 khi khách chuyển TRAM01, TRAM02...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: const Text('Tự chia tiền cho Quán 1/2/3... khi khách chuyển TRAM01, TRAM02...', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     value: _autoDetectStore,
-                    activeColor: const Color(0xFF7E2930),
-                    onChanged: (val) => setState(() => _autoDetectStore = val),
+                    activeThumbColor: const Color(0xFF7E2930),
+                    onChanged: _setAutoDetectStore,
                   ),
                   const Divider(height: 16),
                   const Text('Chi nhánh mặc định khi không tìm thấy mã:', style: TextStyle(fontSize: 13, color: Color(0xFF5D5B63))),
@@ -320,18 +400,21 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: ['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'].map((code) {
+                    children: _storeList.map((code) {
                       final isSelected = _selectedStoreCode == code;
+                      final label = code == 'TRAM01'
+                          ? 'Quán 1 ($code)'
+                          : code == 'TRAM02'
+                              ? 'Quán 2 ($code)'
+                              : code == 'TRAM03'
+                                  ? 'Quán 3 ($code)'
+                                  : code == 'TRAM04'
+                                      ? 'Quán 4 ($code)'
+                                      : 'Quán 5 ($code)';
                       return ChoiceChip(
-                        label: Text(code == 'TRAM01'
-                            ? 'Quán 1 ($code)'
-                            : code == 'TRAM02'
-                                ? 'Quán 2 ($code)'
-                                : code == 'TRAM03'
-                                    ? 'Quán 3 ($code)'
-                                    : 'Quán 4 ($code)'),
+                        label: Text(label),
                         selected: isSelected,
-                        selectedColor: const Color(0xFF7E2930).withOpacity(0.15),
+                        selectedColor: const Color(0xFF7E2930).withValues(alpha: 0.15),
                         labelStyle: TextStyle(
                           color: isSelected ? const Color(0xFF7E2930) : Colors.black87,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -349,7 +432,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
 
           const SizedBox(height: 16),
 
-          // 2b. Gán Ngân Hàng -> Cửa Hàng (Mô hình 1 điện thoại dùng cho 4 cửa hàng)
+          // 2b. Gán Ngân Hàng -> Cửa Hàng (Mô hình 1 điện thoại dùng cho nhiều cửa hàng)
           Card(
             elevation: 1.5,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -373,7 +456,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Vì bạn đang dùng 1 máy nhận thông báo cho 4 quán khác nhau, hãy gán cố định ngân hàng tương ứng với từng quán bên dưới. Tiền vào app nào sẽ tự động đổ về POS quán đó ngay cả khi khách xóa hoặc sửa nội dung chuyển khoản.',
+                    'Vì bạn đang dùng 1 máy nhận thông báo cho nhiều quán khác nhau, hãy gán cố định ngân hàng tương ứng với từng quán bên dưới. Tiền vào app nào sẽ tự động đổ về POS quán đó ngay cả khi khách xóa hoặc sửa nội dung chuyển khoản.',
                     style: TextStyle(fontSize: 12, color: Color(0xFF5D5B63), height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -392,7 +475,8 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                           Expanded(
                             flex: 2,
                             child: DropdownButtonFormField<String?>(
-                              value: currentStore,
+                              key: ValueKey('dd_${pkg}_$currentStore'),
+                              initialValue: currentStore,
                               isDense: true,
                               decoration: InputDecoration(
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -401,7 +485,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                               hint: const Text('Tự động theo mã', style: TextStyle(fontSize: 11)),
                               items: [
                                 const DropdownMenuItem(value: null, child: Text('Tự động theo mã', style: TextStyle(fontSize: 12))),
-                                ...['TRAM01', 'TRAM02', 'TRAM03', 'TRAM04'].map((code) => DropdownMenuItem(
+                                ..._storeList.map((code) => DropdownMenuItem(
                                   value: code,
                                   child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF7E2930))),
                                 )),
@@ -439,7 +523,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Bấm nút bên dưới để giả lập một giao dịch chuyển khoản 35.000đ tới POS mà không cần chuyển tiền thật.',
+                    'Bấm nút bên dưới để giả lập một giao dịch chuyển khoản tới POS mà không cần chuyển tiền thật.',
                     style: TextStyle(fontSize: 13, color: Color(0xFF5D5B63)),
                   ),
                   const SizedBox(height: 12),
@@ -529,7 +613,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                 color: Colors.white,
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF137333).withOpacity(0.12),
+                    backgroundColor: const Color(0xFF137333).withValues(alpha: 0.12),
                     child: const Icon(Icons.arrow_downward, color: Color(0xFF137333), size: 20),
                   ),
                   title: Row(
@@ -542,7 +626,7 @@ class _PaymentBotHomeScreenState extends State<PaymentBotHomeScreen> with Widget
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7E2930).withOpacity(0.1),
+                          color: const Color(0xFF7E2930).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
