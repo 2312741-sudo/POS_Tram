@@ -1157,10 +1157,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   title: const Text('Quy ước tính toán Báo Cáo Cuối Ngày'),
                   content: const SingleChildScrollView(
                     child: Text(
-                      '• Doanh thu tổng: Tổng tiền hàng trước khi áp dụng chiết khấu/khuyến mãi.\n'
-                      '• Giảm giá món: Chiết khấu trực tiếp trên từng dòng sản phẩm.\n'
-                      '• Giảm giá hóa đơn: Voucher khuyến mãi, thẻ thành viên, trừ điểm.\n'
-                      '• Doanh thu: Số tiền thực tế sau giảm giá (đã bao gồm thuế GTGT).\n'
+                      '• Doanh thu tổng (thực nhận): Số tiền thực tế thu của khách, đã trừ mọi giảm giá / khuyến mãi (gồm thuế GTGT).\n'
+                      '• Tổng tiền hàng: Tiền hàng theo giá bán trước khi áp dụng chiết khấu/khuyến mãi.\n'
+                      '• Giảm giá món: Giảm trên từng món (giảm tay, combo, tặng / giảm món, đồng giá).\n'
+                      '• Giảm giá hóa đơn: Giảm cả hóa đơn, voucher, trừ điểm.\n'
                       '• Đang phục vụ: Thống kê tức thời các bàn đang có khách ngồi tại quán.\n'
                       '• Doanh thu thuần: Doanh thu bán hàng trừ chi phí hoàn trả hàng.',
                     ),
@@ -1534,14 +1534,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         _buildSectionCard(
           title: 'TỔNG KẾT BÁN HÀNG',
           rows: [
-            _buildReportRow('Doanh thu tổng', FormatUtils.vnd(_grossRevenue)),
+            _buildReportRow(
+              'Doanh thu tổng (thực nhận)',
+              FormatUtils.vnd(_netRevenue),
+              subtitle: 'Đã trừ mọi giảm giá / khuyến mãi • gồm ${FormatUtils.vnd(_vatTotal)} tiền thuế',
+              isBold: true,
+            ),
+            _buildReportRow('Tổng tiền hàng (trước giảm giá)', FormatUtils.vnd(_grossRevenue)),
             _buildReportRow('Tổng giảm giá món', FormatUtils.vnd(_itemDiscounts)),
             _buildReportRow('Tổng giảm giá hóa đơn', FormatUtils.vnd(_billDiscounts)),
-            _buildReportRow(
-              'Doanh thu (Đã thu)',
-              FormatUtils.vnd(_netRevenue),
-              subtitle: 'Bao gồm ${FormatUtils.vnd(_vatTotal)} tiền thuế',
-            ),
             _buildReportRow(
               'Doanh thu ước tính cả ngày',
               FormatUtils.vnd(_netRevenue + _servingEstimatedRevenue),

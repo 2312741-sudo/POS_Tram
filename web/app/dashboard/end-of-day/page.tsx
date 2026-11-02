@@ -691,18 +691,18 @@ export default function EndOfDayReportPage() {
                 TỔNG KẾT BÁN HÀNG
               </div>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <ReportRow label="Doanh thu gộp" value={formatVND(zReport.tab1_tongHop.grossRevenue)} />
+                <ReportRow
+                  label="Doanh thu tổng (thực nhận)"
+                  value={formatVND(zReport.tab1_tongHop.netRevenue)}
+                  subtitle={`Đã trừ mọi giảm giá / khuyến mãi • gồm ${formatVND(zReport.tab1_tongHop.vatTotal)} tiền thuế VAT`}
+                  valueColor="#7E2930"
+                  isBold
+                />
+                <ReportRow label="Tổng tiền hàng (trước giảm giá)" value={formatVND(zReport.tab1_tongHop.grossRevenue)} />
                 <ReportRow label="Tổng giảm giá món" value={formatVND(zReport.tab1_tongHop.itemDiscounts)} />
                 <ReportRow label="Tổng giảm giá hóa đơn / Điểm" value={formatVND(zReport.tab1_tongHop.billDiscounts)} />
                 <ReportRow label="Tổng tiền giảm giá" value={formatVND(zReport.tab1_tongHop.totalDiscount)} valueColor="#C93B2B" isBold />
                 <ReportRow label="Doanh thu sau giảm giá (Pre-VAT)" value={formatVND(zReport.tab1_tongHop.afterDiscount)} />
-                <ReportRow
-                  label="Doanh thu (Đã thu)"
-                  value={formatVND(zReport.tab1_tongHop.netRevenue)}
-                  subtitle={`Bao gồm ${formatVND(zReport.tab1_tongHop.vatTotal)} tiền thuế VAT`}
-                  valueColor="#7E2930"
-                  isBold
-                />
                 <ReportRow
                   label="Doanh thu ước tính cả ngày"
                   subtitle="Tổng doanh thu + Đơn đang phục vụ"

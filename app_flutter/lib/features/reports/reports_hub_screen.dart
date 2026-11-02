@@ -609,7 +609,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           storeName: _currentStoreInfo.storeName,
         );
         return [
-          ['Doanh thu gộp (Subtotal)', ReportExportService.formatCurrency(z.tab1TongHop.grossRevenue), 'Tổng tiền trước giảm giá'],
+          ['Doanh thu tổng (thực nhận)', ReportExportService.formatCurrency(z.tab1TongHop.netRevenue), 'Đã trừ mọi giảm giá / khuyến mãi'],
+          ['Tổng tiền hàng (trước giảm giá)', ReportExportService.formatCurrency(z.tab1TongHop.grossRevenue), 'Giá bán trước giảm giá'],
           ['Tổng chiết khấu / Giảm giá', ReportExportService.formatCurrency(z.tab1TongHop.totalDiscount), 'Giảm bill + Món + Điểm'],
           ['Doanh thu sau giảm giá', ReportExportService.formatCurrency(z.tab1TongHop.afterDiscount), 'Trước thuế VAT'],
           ['Thuế GTGT (VAT)', ReportExportService.formatCurrency(z.tab1TongHop.vatTotal), 'Đã chốt trên hóa đơn'],

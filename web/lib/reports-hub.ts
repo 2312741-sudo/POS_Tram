@@ -324,7 +324,8 @@ export function buildHubTable(kind: ReportKind, ctx: HubContext): HubTable {
       return {
         columns: [T("Chỉ tiêu cuối ngày"), T("Giá trị"), T("Ghi chú đối soát")],
         rows: [
-          ["Doanh thu gộp (Subtotal)", t1.grossRevenue, "Tổng tiền trước giảm giá"],
+          ["Doanh thu tổng (thực nhận)", t1.netRevenue, "Đã trừ mọi giảm giá / khuyến mãi"],
+          ["Tổng tiền hàng (trước giảm giá)", t1.grossRevenue, "Giá bán trước giảm giá"],
           ["Tổng chiết khấu / Giảm giá", t1.totalDiscount, "Giảm bill + Món + Điểm"],
           ["Doanh thu sau giảm giá", t1.afterDiscount, "Trước thuế VAT"],
           ["Thuế GTGT (VAT)", t1.vatTotal, "Đã chốt trên hóa đơn"],
