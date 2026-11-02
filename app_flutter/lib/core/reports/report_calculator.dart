@@ -239,7 +239,7 @@ class ReportCalculator {
 
   static int getGuestCount(BillModel b) {
     if (b is ReportBillModel) return b.guestCount;
-    return 1;
+    return b.guests;
   }
 
   static int getRefundAmount(BillModel b) {

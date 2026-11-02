@@ -345,8 +345,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   int get _netRevenueWithOther => _netRevenue + _otherIncome - _refundAmount;
   int get _netRevenueWithoutOther => _netRevenue - _refundAmount;
 
+  /// Tổng số khách THẬT ghi trên các hóa đơn đã thanh toán (trước đây = số hóa đơn)
   int get _totalPaidGuests {
-    return _paidBills.length; // 1 guest per bill as baseline, plus table guest counts if tracked
+    return _paidBills.fold(0, (s, b) => s + ReportCalculator.getGuestCount(b));
   }
 
   int get _avgRevenuePerBill {

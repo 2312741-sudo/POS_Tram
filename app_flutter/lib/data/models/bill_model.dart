@@ -75,6 +75,8 @@ class BillModel {
   List<OrderActionLogModel> actionLogs;
   /// Món đã lưu bị xóa trước khi chốt đơn (ghi cả với HĐ PAID và CANCELLED).
   List<DeletedItemEntry> deletedItems;
+  /// Số khách ghi trên hóa đơn (lấy từ số khách của bàn lúc thanh toán). Hóa đơn cũ không có → 1.
+  int guests;
   /// Lý do hủy đơn (cancelReason / cancellationReason) — dùng cho báo cáo xóa/hủy món
   String cancelNote;
 
@@ -113,6 +115,7 @@ class BillModel {
     this.actionLogs = const [],
     this.deletedItems = const [],
     this.cancelNote = '',
+    this.guests = 1,
   });
 
   static int? _asInt(Object? v) {
@@ -319,6 +322,7 @@ class BillModel {
       actionLogs: actionLogs,
       deletedItems: DeletedItemsLogic.decode(map['deletedItems'] ?? map['deletedItemsJson']),
       cancelNote: (map['cancelReason'] ?? map['cancellationReason'])?.toString() ?? '',
+      guests: (_asInt(map['guestCount']) ?? 0) > 0 ? _asInt(map['guestCount'])! : 1,
     );
   }
 

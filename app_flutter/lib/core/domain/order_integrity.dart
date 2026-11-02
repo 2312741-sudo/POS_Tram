@@ -344,7 +344,8 @@ class BillRecordBuilder {
       'discountAmount': bill.totalDiscount,
       'timestamp': bill.closedAt ?? bill.createdAt,
       'itemsJson': jsonEncode(base['items']),
-      if (guestCount != null && guestCount > 0) 'guestCount': guestCount,
+      // Ghi lại hóa đơn (hủy / hoàn tiền) không truyền số khách → giữ số khách đã có trên hóa đơn
+      if ((guestCount ?? bill.guests) > 0) 'guestCount': guestCount ?? bill.guests,
       ...extra,
     };
   }
