@@ -1301,7 +1301,9 @@ export function paymentBucket(method: unknown): PayBucket {
 export function billPaymentPortions(b: HistoryOrder): Record<PayBucket, number> {
   const out: Record<PayBucket, number> = { CASH: 0, TRANSFER_QR: 0, CARD: 0 };
   const finalA = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0)) || 0;
-  const splits = Array.isArray(b.paymentSplits) ? b.paymentSplits.filter((sp) => Number(sp?.amount) > 0) : [];
+  const rawSplits: unknown = b.paymentSplits;
+  const list = Array.isArray(rawSplits) ? rawSplits : rawSplits && typeof rawSplits === "object" ? Object.values(rawSplits) : [];
+  const splits = (list as Array<{ method: string; amount: number }>).filter((sp) => sp && Number(sp.amount) > 0);
   if (splits.length > 0) {
     for (const sp of splits) out[paymentBucket(sp.method)] += Number(sp.amount) || 0;
     // Phần chênh (làm tròn / dữ liệu cũ) dồn vào tiền mặt để tổng các phương thức = thực thu
@@ -1311,6 +1313,13 @@ export function billPaymentPortions(b: HistoryOrder): Record<PayBucket, number> 
   }
   out[paymentBucket(b.paymentMethod)] += finalA;
   return out;
+}
+
+/** Hóa đơn thanh toán HỖN HỢP (vd tiền mặt + chuyển khoản): phương thức SPLIT hoặc tiền chia cho ≥ 2 phương thức */
+export function isMixedPayment(b: HistoryOrder): boolean {
+  if (String(b.paymentMethod || "").toUpperCase().includes("SPLIT")) return true;
+  const p = billPaymentPortions(b);
+  return [p.CASH, p.TRANSFER_QR, p.CARD].filter((v) => v > 0).length >= 2;
 }
 
 /**

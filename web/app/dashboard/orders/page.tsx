@@ -31,7 +31,7 @@ import { buildProductCodeMap, resolveProductCode, type CodeLine } from "@/lib/pr
 import { buildToppingLookup } from "@/lib/topping-split";
 import { exportHistory, exportSingleBillExcel, exportCancellationReport } from "@/lib/export";
 import { useDashboardData, HistoryOrder } from "@/lib/data-context";
-import { billItemDiscount, billLevelDiscount, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isRevenueBill } from "@/lib/reports";
+import { billItemDiscount, billLevelDiscount, billPaymentPortions, billPointsDiscount, billPointsUsed, billStatusLabel, calculateCancellationReport, getBillTimestamp, formatNumber, formatVND, isMixedPayment, isRevenueBill } from "@/lib/reports";
 import { billDeletedItems } from "@/lib/item-deletion";
 import { baseTableName } from "@/lib/table-status";
 import { lineDiscountLabel, lineDiscountTotal, lineQuantity, lineUnitPrice, type RawOrderLine } from "@/lib/order-math";
@@ -131,7 +131,10 @@ export default function OrdersPage() {
       }
 
       const matchMethod =
-        !filterMethod || (h.paymentMethod || "").toLowerCase().includes(filterMethod.toLowerCase());
+        !filterMethod ||
+        (filterMethod === "mixed"
+          ? isMixedPayment(h)
+          : !isMixedPayment(h) && (h.paymentMethod || "").toLowerCase().includes(filterMethod.toLowerCase()));
       const matchZone =
         !filterZone ||
         (filterZone === "Mang về" ? isTakeaway(h) : (h.zone || "").toLowerCase() === filterZone.toLowerCase());
@@ -159,15 +162,12 @@ export default function OrdersPage() {
     return takeawayOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
   }, [takeawayOrders]);
 
-  const cashOrders = useMemo(() => {
-    return revenueBills.filter(h => (h.paymentMethod || "").toLowerCase().includes("cash") || (h.paymentMethod || "").toLowerCase().includes("tiền mặt"));
-  }, [revenueBills]);
-  const cashAmount = cashOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
+  // Hóa đơn hỗn hợp (TM + CK) chia đúng phần tiền mặt / chuyển khoản
+  const cashOrders = useMemo(() => revenueBills.filter((h) => billPaymentPortions(h).CASH > 0), [revenueBills]);
+  const cashAmount = revenueBills.reduce((s, h) => s + billPaymentPortions(h).CASH, 0);
 
-  const transferOrders = useMemo(() => {
-    return revenueBills.filter(h => (h.paymentMethod || "").toLowerCase().includes("transfer") || (h.paymentMethod || "").toLowerCase().includes("chuyển"));
-  }, [revenueBills]);
-  const transferAmount = transferOrders.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0);
+  const transferOrders = useMemo(() => revenueBills.filter((h) => billPaymentPortions(h).TRANSFER_QR > 0), [revenueBills]);
+  const transferAmount = revenueBills.reduce((s, h) => s + billPaymentPortions(h).TRANSFER_QR, 0);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -213,7 +213,15 @@ export default function OrdersPage() {
     printWindow.document.close();
   };
 
-  const getPaymentBadge = (method?: string) => {
+  const getPaymentBadge = (method?: string, bill?: HistoryOrder) => {
+    if (bill && isMixedPayment(bill)) {
+      const p = billPaymentPortions(bill);
+      return (
+        <span className="badge badge-warning" title={`Tiền mặt ${formatVND(p.CASH)} • Chuyển khoản ${formatVND(p.TRANSFER_QR)}`}>
+          Hỗn hợp: TM {formatVND(p.CASH)} + CK {formatVND(p.TRANSFER_QR)}
+        </span>
+      );
+    }
     const m = (method || "").toLowerCase();
     if (m.includes("cash") || m.includes("tiền mặt")) {
       return <span className="badge badge-success">Tiền mặt</span>;
@@ -436,6 +444,7 @@ export default function OrdersPage() {
             <option value="">Tất cả phương thức</option>
             <option value="cash">Tiền mặt</option>
             <option value="transfer">Chuyển khoản</option>
+            <option value="mixed">Hỗn hợp (TM + CK)</option>
           </select>
 
           <select
@@ -509,7 +518,7 @@ export default function OrdersPage() {
                         </div>
                       )}
                     </td>
-                    <td>{getPaymentBadge(h.paymentMethod)}</td>
+                    <td>{getPaymentBadge(h.paymentMethod, h)}</td>
                     <td>
                       <span
                         style={{
@@ -723,7 +732,9 @@ export default function OrdersPage() {
                   {selectedOrder.cashierName || "Thu ngân"}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--subtext)", marginTop: "2px" }}>
-                  {selectedOrder.paymentMethod || "Tiền mặt"}
+                  {isMixedPayment(selectedOrder)
+                    ? `Hỗn hợp: Tiền mặt ${formatVND(billPaymentPortions(selectedOrder).CASH)} + Chuyển khoản ${formatVND(billPaymentPortions(selectedOrder).TRANSFER_QR)}`
+                    : selectedOrder.paymentMethod || "Tiền mặt"}
                 </div>
               </div>
 
