@@ -84,6 +84,10 @@ String describeCampaignBenefit(CampaignModel c) {
     final tops = t.rewardToppingQty > 0 ? ' kèm ${t.rewardToppingQty} topping' : '';
     return '${benefit(t.benefitMode, t.value)} $qty món$tops$from';
   }
+  if (type == 'ITEMPRICERULE') {
+    final main = normalizeBenefitMode(t.benefitMode) == 'FIXEDPRICE' ? benefit(t.benefitMode, t.value) : '${benefit(t.benefitMode, t.value)} mỗi món';
+    return '$main${t.maxRewardQty > 0 ? ' (tối đa ${t.maxRewardQty} phần/đơn)' : ''}';
+  }
   final cap = t.maxDiscountMoney > 0 ? ', tối đa ${money(t.maxDiscountMoney)}' : '';
   return '${benefit(t.benefitMode, t.value)} hóa đơn$cap$from';
 }

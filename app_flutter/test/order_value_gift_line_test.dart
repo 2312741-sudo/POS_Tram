@@ -164,4 +164,23 @@ void main() {
     final st = CartCampaignPricing.quoteStacked([c], cart: [xoai(3)], products: products, branchId: 'TRAM01', nowMs: 1000);
     expect(st['X1']!.totalPromotionDiscount, 16000);
   });
+
+  group('đồng giá / giảm theo món chỉ tính trên giá món + size (topping, phụ thu Grab vẫn tính tiền)', () {
+    CampaignModel rule(String mode, int value) => CampaignModel.fromMap({
+          'campaignId': 'XOAI', 'programCode': 'KM/XOAI', 'name': 'Xoài', 'campaignType': 'ITEM_PRICE_RULE',
+          'active': true, 'branchIds': ['TRAM01'], 'hasCodes': false, 'stackingMode': 'ENABLED', 'priority': 0, 'createdAt': 1,
+          'includedItemIds': ['5'],
+          'tiers': [
+            {'tierId': 'T', 'conditionBasis': 'TOTALAMOUNT', 'threshold': 0, 'benefitMode': mode, 'value': value, 'maxRewardQty': 1, 'rewardItemIds': [], 'sortOrder': 1},
+          ],
+        });
+    // Trà xoài 30K + thạch dừa 5K + Tăng giá Grab 2K = 37K
+    final cup = OrderItemModel(productId: 5, name: 'Trà Olong - Xoài', price: 30000, quantity: 1,
+        selectedToppings: ['Thạch dừa', 'Tăng giá Grab 2K'], toppingPrice: 7000);
+    int disc(CampaignModel c) => CartCampaignPricing.quoteForApply(c, cart: [cup], products: products, branchId: 'TRAM01', isApplied: false, nowMs: 1000).totalPromotionDiscount;
+
+    test('giảm 16K mỗi ly → 37K còn 21K', () => expect(disc(rule('FIXED', 16000)), 16000));
+    test('đồng giá 16K → 16K + 7K topping = 23K (không ép cả ly về 16K)', () => expect(disc(rule('FIXEDPRICE', 16000)), 14000));
+    test('giảm 50% → giảm 15K (trên 30K giá ly)', () => expect(disc(rule('PERCENT', 5000)), 15000));
+  });
 }

@@ -127,6 +127,8 @@ export interface CampaignFormState {
   threshold: string;
   // ITEMPRICERULE
   fixedPriceValue: string;
+  /** Hình thức: đồng giá (giá bán mới) / giảm số tiền mỗi món / giảm % mỗi món */
+  itemPriceMode: "FIXEDPRICE" | "FIXED" | "PERCENT";
   /** Số phần tối đa được áp giá trong 1 đơn (tier.maxRewardQty), "" = không giới hạn */
   itemMaxQty: string;
   // ORDERVALUEITEMBENEFIT & BUYXGETY: món thưởng Y
@@ -162,7 +164,7 @@ export function emptyCampaignForm(): CampaignFormState {
     active: true, startDate: "", endDate: "", budgetMoney: "", maxUses: "",
     hasCodes: false, autoApply: true, requireStaffNote: false, birthdayOnly: false, blockPoints: false, stackingMode: "ENABLED", maxCampaignsPerOrder: "", priority: "0",
     discountType: "PERCENT", discountValue: "", maxDiscount: "", threshold: "",
-    fixedPriceValue: "", itemMaxQty: "",
+    fixedPriceValue: "", itemPriceMode: "FIXEDPRICE", itemMaxQty: "",
     rewardItemIds: [], rewardGroupIds: [], rewardQty: "1", rewardToppingQty: "0", rewardToppingIds: [], rewardBenefit: "FREEITEM", rewardValue: "",
     buyItemIds: [], buyGroupIds: [], buyQty: "1", multiplyByBundle: true,
     includedItemIds: [], includedGroupIds: [], daysOfWeek: [], timeSlots: [],
@@ -256,7 +258,8 @@ export function campaignToForm(cam: StoredCampaign): CampaignFormState {
       form.discountType = mode === "PERCENT" ? "PERCENT" : "AMOUNT";
       form.discountValue = posStr(mode === "PERCENT" ? basisPointsToPercent(value) : value);
     } else if (type === "ITEMPRICERULE") {
-      form.fixedPriceValue = posStr(value);
+      form.itemPriceMode = mode === "PERCENT" ? "PERCENT" : mode === "FIXED" ? "FIXED" : "FIXEDPRICE";
+      form.fixedPriceValue = posStr(mode === "PERCENT" ? basisPointsToPercent(value) : value);
       form.itemMaxQty = posStr(num(tier.maxRewardQty));
     } else if (type === "ORDERVALUEITEMBENEFIT") {
       form.rewardItemIds = strList(tier.rewardItemIds);
@@ -316,7 +319,10 @@ export function validateCampaignForm(form: CampaignFormState): string | null {
       return null;
     }
     case "ITEMPRICERULE": {
-      if (!(toInt(form.fixedPriceValue) > 0)) return "Giá đồng giá (VND) phải lớn hơn 0";
+      if (!(toInt(form.fixedPriceValue) > 0)) {
+        return form.itemPriceMode === "PERCENT" ? "Phần trăm giảm phải lớn hơn 0" : form.itemPriceMode === "FIXED" ? "Số tiền giảm mỗi món phải lớn hơn 0" : "Giá đồng giá (VND) phải lớn hơn 0";
+      }
+      if (form.itemPriceMode === "PERCENT" && toInt(form.fixedPriceValue) > 100) return "Phần trăm giảm tối đa 100%";
       return null;
     }
     case "ORDERVALUEITEMBENEFIT": {
@@ -415,7 +421,12 @@ export function buildBenefitFields(
       const defaultQty = isMangoTea ? 1 : 0;
       const parsedQty = Math.round(toInt(form.itemMaxQty) || defaultQty);
       return {
-        tiers: [buildTier({ tierId, threshold: 0, benefitMode: "FIXEDPRICE", value: v, maxRewardQty: Math.max(0, parsedQty) })],
+        tiers: [buildTier({
+          tierId, threshold: 0,
+          benefitMode: form.itemPriceMode === "PERCENT" ? "PERCENT" : form.itemPriceMode === "FIXED" ? "FIXED" : "FIXEDPRICE",
+          value: form.itemPriceMode === "PERCENT" ? percentToBasisPoints(v) : v,
+          maxRewardQty: Math.max(0, parsedQty),
+        })],
         buyConditions: [],
         includedItemIds: form.includedItemIds,
         includedGroupIds: form.includedGroupIds,
@@ -484,7 +495,12 @@ export function describeCampaignBenefit(cam: StoredCampaign): string {
   const threshold = num(tier.threshold ?? tier.thresholdValue);
   const cap = num(tier.maxDiscountMoney ?? tier.maxBenefitValue);
   const from = threshold > 0 ? ` (đơn từ ${vnd(threshold)})` : "";
-  if (type === "ITEMPRICERULE") return value > 0 ? `Đồng giá ${vnd(value)}` : "";
+  if (type === "ITEMPRICERULE") {
+    if (!(value > 0)) return "";
+    if (mode === "PERCENT") return `Giảm ${basisPointsToPercent(value)}% mỗi món`;
+    if (mode === "FIXED") return `Giảm ${vnd(value)} mỗi món`;
+    return `Đồng giá ${vnd(value)}`;
+  }
   if (type === "ORDERVALUEITEMBENEFIT") {
     const t = rewardText(mode, value);
     const tops = num(tier.rewardToppingQty) + (Array.isArray(tier.rewardToppingIds) ? tier.rewardToppingIds.length : 0);

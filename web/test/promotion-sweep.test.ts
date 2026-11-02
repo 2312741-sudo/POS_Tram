@@ -409,3 +409,19 @@ describe("Giảm 1 ly (giảm tiền / %) theo giá trị đơn: giảm thẳng 
     expect(q.rewardBenefits.map((b) => [b.lineId, b.quantity])).toEqual([["L0", 1]]);
   });
 });
+
+describe("Đồng giá / giảm theo món: chỉ tính trên giá món + size, topping & phụ thu Grab vẫn tính tiền", () => {
+  const rule = (mode: string, value: number) =>
+    parseCampaign("XOAI", {
+      campaignId: "XOAI", name: "Xoài", campaignType: "ITEM_PRICE_RULE", active: true, branchIds: [], stackingMode: "ENABLED", schedule: {}, includedItemIds: ["5"],
+      tiers: [{ tierId: "T", threshold: 0, benefitMode: mode, value, maxRewardQty: 1 }],
+    } as never);
+  const ctx = { branchId: "TRAM01", nowMs: vn(2026, 10, 22, 10) };
+  // Trà xoài 30K + thạch dừa 5K + Tăng giá Grab 2K = 37K
+  const lines = linesFromOrder([{ productId: 5, name: "Trà Olong - Xoài", price: 30000, quantity: 1, selectedToppings: ["Thạch dừa", "Tăng giá Grab 2K"], toppingPrice: 7000 }]);
+  it("giảm 16K → 21K; đồng giá 16K → 23K; giảm 50% → giảm 15K", () => {
+    expect(quoteCampaign(rule("FIXED", 16000), lines, ctx).totalPromotionDiscount).toBe(16000);
+    expect(quoteCampaign(rule("FIXEDPRICE", 16000), lines, ctx).totalPromotionDiscount).toBe(14000);
+    expect(quoteCampaign(rule("PERCENT", 5000), lines, ctx).totalPromotionDiscount).toBe(15000);
+  });
+});

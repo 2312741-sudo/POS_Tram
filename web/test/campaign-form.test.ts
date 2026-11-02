@@ -143,3 +143,17 @@ describe("Tặng kèm topping (rewardToppingQty)", () => {
     expect("rewardToppingQty" in none).toBe(false);
   });
 });
+
+describe("Đồng giá / đồng giảm: chọn hình thức", () => {
+  it("giảm số tiền / % / đồng giá lưu đúng benefitMode và đọc lại được", async () => {
+    const m = await import("../lib/campaign-form");
+    const base = { ...m.emptyCampaignForm(), campaignType: "ITEMPRICERULE" as const, includedItemIds: ["5"] };
+    const fixed = m.buildBenefitFields({ ...base, itemPriceMode: "FIXED", fixedPriceValue: "16000" }).tiers[0];
+    expect([fixed.benefitMode, fixed.value]).toEqual(["FIXED", 16000]);
+    const pct = m.buildBenefitFields({ ...base, itemPriceMode: "PERCENT", fixedPriceValue: "20" }).tiers[0];
+    expect([pct.benefitMode, pct.value]).toEqual(["PERCENT", 2000]);
+    const back = m.campaignToForm({ campaignType: "ITEMPRICERULE", tiers: [pct] } as never);
+    expect([back.itemPriceMode, back.fixedPriceValue]).toEqual(["PERCENT", "20"]);
+    expect(m.validateCampaignForm({ ...base, name: "X", itemPriceMode: "PERCENT", fixedPriceValue: "150" } as never)).toContain("100%");
+  });
+});

@@ -699,7 +699,10 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
         for (const line of lines) {
           if (unitsLeft <= 0) break;
           if (!inScope(campaign, line)) continue;
-          const perUnit = unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
+          // Đồng giá / giảm theo món chỉ tính trên GIÁ MÓN + SIZE; topping / phụ thu (thạch, 'Tăng giá Grab 2K') vẫn
+          // tính tiền — vd ly xoài 30K + thạch dừa 5K + Grab 2K, đồng giá 16K → 23K, giảm 16K → 21K. Khớp Dart.
+          const topUnit = (line.toppingCount ?? 0) > 0 ? Math.max(0, Math.min(line.toppingUnitPrice ?? 0, line.unitPrice)) : 0;
+          const perUnit = unitBenefit(tier.benefitMode, tier.value, line.unitPrice - topUnit);
           if (perUnit <= 0) continue;
           const remaining = Math.max(0, lineFinal[line.lineId] ?? 0);
           const take = Math.min(line.quantity, unitsLeft);
@@ -1136,7 +1139,10 @@ export function describeBenefit(c: Campaign): string {
     const qty = t.maxRewardQty > 0 ? t.maxRewardQty : 1;
     return `${benefitText(t.benefitMode, t.value)} ${qty} món${from}`;
   }
-  if (type === "ITEMPRICERULE") return `đồng giá ${vnd(t.value)}${t.maxRewardQty > 0 ? ` (tối đa ${t.maxRewardQty} phần/đơn)` : ""}`;
+  if (type === "ITEMPRICERULE") {
+    const main = normalizeBenefitMode(t.benefitMode) === "FIXEDPRICE" ? `đồng giá ${vnd(t.value)}` : `${benefitText(t.benefitMode, t.value)} mỗi món`;
+    return `${main}${t.maxRewardQty > 0 ? ` (tối đa ${t.maxRewardQty} phần/đơn)` : ""}`;
+  }
   const cap = t.maxDiscountMoney > 0 ? `, tối đa ${vnd(t.maxDiscountMoney)}` : "";
   return `${benefitText(t.benefitMode, t.value)} hóa đơn${cap}${from}`;
 }

@@ -1002,7 +1002,27 @@ export default function PromotionsPage() {
               )}
               {campaignForm.campaignType === "ITEMPRICERULE" && (
                 <div style={{ background: "var(--surface-muted)", padding: "12px", borderRadius: "8px", border: "1px solid #fecdd3" }}>
-                  <FormField label="Giá đồng giá (VND) *" value={campaignForm.fixedPriceValue} onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })} type="number" placeholder="VD: 25000" />
+                  <label style={labelStyle}>Hình thức *</label>
+                  <select
+                    value={campaignForm.itemPriceMode}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, itemPriceMode: e.target.value as "FIXEDPRICE" | "FIXED" | "PERCENT" })}
+                    style={inputStyle}
+                  >
+                    <option value="FIXED">Giảm số tiền mỗi món (vd giảm 16.000đ)</option>
+                    <option value="PERCENT">Giảm % mỗi món</option>
+                    <option value="FIXEDPRICE">Đồng giá (bán món với giá cố định)</option>
+                  </select>
+                  <div style={{ height: "10px" }} />
+                  <FormField
+                    label={campaignForm.itemPriceMode === "PERCENT" ? "Giảm (%) mỗi món *" : campaignForm.itemPriceMode === "FIXED" ? "Giảm (VND) mỗi món *" : "Giá đồng giá (VND) *"}
+                    value={campaignForm.fixedPriceValue}
+                    onChange={(v) => setCampaignForm({ ...campaignForm, fixedPriceValue: v })}
+                    type="number"
+                    placeholder={campaignForm.itemPriceMode === "PERCENT" ? "VD: 20" : campaignForm.itemPriceMode === "FIXED" ? "VD: 16000" : "VD: 25000"}
+                  />
+                  <div style={{ fontSize: "12px", color: "var(--subtext)", marginTop: "4px" }}>
+                    Tính trên giá món + size; topping và phụ thu (thạch, Tăng giá Grab…) vẫn tính tiền riêng.
+                  </div>
                   <div style={{ height: "10px" }} />
                   <FormField label="Số phần tối đa mỗi đơn (để trống = áp cho mọi phần)" value={campaignForm.itemMaxQty} onChange={(v) => setCampaignForm({ ...campaignForm, itemMaxQty: v })} type="number" placeholder="VD: 1" />
                 </div>

@@ -565,7 +565,10 @@ PriceQuoteModel calculatePrice({
         for (var line in lines) {
           if (unitsLeft <= 0) break;
           if (!inScope(campaign, line)) continue;
-          final perUnit = _unitBenefit(tier.benefitMode, tier.value, line.unitPrice);
+          // Đồng giá / giảm theo món chỉ tính trên GIÁ MÓN + SIZE; topping / phụ thu (thạch, 'Tăng giá Grab 2K') vẫn
+          // tính tiền — vd ly xoài 30K + thạch dừa 5K + Grab 2K, đồng giá 16K → 23K, giảm 16K → 21K. Khớp web.
+          final topUnit = line.toppingCount > 0 ? max(0, min(line.toppingUnitPrice, line.unitPrice)) : 0;
+          final perUnit = _unitBenefit(tier.benefitMode, tier.value, line.unitPrice - topUnit);
           if (perUnit <= 0) continue;
           final remaining = max(0, lineFinalPrices[line.lineId] ?? 0);
           final take = min(line.quantity, unitsLeft);
