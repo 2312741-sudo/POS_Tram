@@ -442,8 +442,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           // Gom theo mã món: Thạch dừa gọi riêng và gọi làm topping cùng một dòng
           final key = part.isTopping ? productMergeKey(part.code, part.name) : productMergeKey(_codeOf(item.productId, item.name.trim()), item.name.trim());
           final entry = productMap.putIfAbsent(key, () => {
-                'name': part.isTopping ? part.name : key,
-                'code': part.isTopping ? part.code : _codeOf(item.productId, key),
+                // Tên / mã hiển thị lấy từ món (khóa gom 'code:…' chỉ dùng để gộp dòng)
+                'name': part.isTopping ? part.name : item.name.trim(),
+                'code': part.isTopping ? part.code : _codeOf(item.productId, item.name.trim()),
                 'productId': part.isTopping ? part.productId : item.productId,
                 'quantity': 0,
                 'revenue': 0,
@@ -912,10 +913,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             // Topping tách thành dòng riêng
             for (final part in splitLineParts(item, mainKey: item.name.trim(), mainUnitCost: 0, productsMap: _productsMap)) {
               // Gom theo mã món: Thạch dừa gọi riêng và gọi làm topping cùng một dòng
-          final key = part.isTopping ? productMergeKey(part.code, part.name) : productMergeKey(_codeOf(item.productId, item.name.trim()), item.name.trim());
+              final key = part.isTopping ? productMergeKey(part.code, part.name) : productMergeKey(_codeOf(item.productId, item.name.trim()), item.name.trim());
               final e = pMap.putIfAbsent(key, () => {
-                    'name': part.isTopping ? '${part.name} (topping)' : key,
-                    'code': part.isTopping ? part.code : _codeOf(item.productId, key),
+                    'name': part.isTopping ? '${part.name} (topping)' : item.name.trim(),
+                    'code': part.isTopping ? part.code : _codeOf(item.productId, item.name.trim()),
                     'unitPrice': part.quantity > 0 ? (part.grossRevenue / part.quantity).round() : 0,
                     'quantity': 0,
                     'revenue': 0,
