@@ -15,6 +15,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
+import '../../data/models/user_model.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/domain/business_day.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -67,6 +68,25 @@ class ReportsHubScreen extends StatefulWidget {
   State<ReportsHubScreen> createState() => _ReportsHubScreenState();
 }
 
+class StaffFilterOption {
+  final String id;
+  final String displayName;
+  final Set<String> aliases;
+
+  const StaffFilterOption({
+    required this.id,
+    required this.displayName,
+    required this.aliases,
+  });
+}
+
+class _StaffOptionBuilder {
+  final String label;
+  final Set<String> aliases = {};
+
+  _StaffOptionBuilder({required this.label});
+}
+
 class _ReportsHubScreenState extends State<ReportsHubScreen> {
   final _fb = FirebaseService();
   final _auth = AuthService();
@@ -89,12 +109,14 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   StreamSubscription<List<CashShiftModel>>? _shiftsSub;
   StreamSubscription<List<TableModel>>? _tablesSub;
   StreamSubscription<List<ProductModel>>? _productsSub;
+  StreamSubscription<List<UserModel>>? _usersSub;
 
   List<BillModel> _allBills = [];
   List<CashShiftModel> _allShifts = [];
   List<TableModel> _tables = [];
   Map<int, ProductModel> _productsMap = {};
   List<StoreInfoModel> _stores = [];
+  List<UserModel> _userList = [];
 
   // Sort & search for product report
   String _productSearchQuery = '';
@@ -119,6 +141,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
     _shiftsSub?.cancel();
     _tablesSub?.cancel();
     _productsSub?.cancel();
+    _usersSub?.cancel();
     super.dispose();
   }
 
@@ -230,6 +253,13 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           setState(() => _productsMap = map);
         }
       });
+
+      _usersSub = _fb.usersStream().listen((users) {
+        if (mounted) setState(() => _userList = users);
+      }, onError: (_) {});
+      _fb.getUsers().then((users) {
+        if (mounted && _userList.isEmpty) setState(() => _userList = users);
+      }).catchError((_) {});
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -242,21 +272,91 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
 
   // ==================== FILTERING LOGIC ====================
 
-  /// Danh sách nhân viên cho bộ lọc (thu ngân + người order món)
-  List<String> get _staffOptions {
-    final set = <String>{};
-    for (final b in _allBills) {
-      final c = b.staffUsername.isNotEmpty ? b.staffUsername : b.staffFullName;
-      if (c.isNotEmpty) set.add(c);
-      for (final it in b.items) {
-        final o = (it.orderedBy != null && it.orderedBy!.isNotEmpty)
-            ? it.orderedBy!
-            : it.orderedByName;
-        if (o.isNotEmpty) set.add(o);
+  /// Danh sách nhân viên đầy đủ và không trùng lặp (hiển thị Họ và tên thay vì username)
+  List<StaffFilterOption> get _staffFilterOptions {
+    final userToFull = <String, String>{};
+    final fullToUser = <String, String>{};
+
+    for (final u in _userList) {
+      final un = u.username.trim().toLowerCase();
+      final fn = u.fullName.trim();
+      if (un.isNotEmpty && fn.isNotEmpty) {
+        userToFull[un] = fn;
+        fullToUser[fn.toLowerCase()] = u.username.trim();
       }
     }
-    final list = set.toList();
-    list.sort();
+
+    for (final s in _allShifts) {
+      final un = s.staffUsername.trim().toLowerCase();
+      final fn = s.staffFullName.trim();
+      if (un.isNotEmpty && fn.isNotEmpty) {
+        userToFull.putIfAbsent(un, () => fn);
+        fullToUser.putIfAbsent(fn.toLowerCase(), () => s.staffUsername.trim());
+      }
+    }
+
+    for (final b in _allBills) {
+      final un = b.staffUsername.trim().toLowerCase();
+      final fn = b.staffFullName.trim();
+      if (un.isNotEmpty && fn.isNotEmpty) {
+        userToFull.putIfAbsent(un, () => fn);
+        fullToUser.putIfAbsent(fn.toLowerCase(), () => b.staffUsername.trim());
+      }
+      for (final it in b.items) {
+        final iun = (it.orderedBy ?? '').trim().toLowerCase();
+        final ifn = it.orderedByName.trim();
+        if (iun.isNotEmpty && ifn.isNotEmpty) {
+          userToFull.putIfAbsent(iun, () => ifn);
+          fullToUser.putIfAbsent(ifn.toLowerCase(), () => (it.orderedBy ?? '').trim());
+        }
+      }
+    }
+
+    final staffMap = <String, _StaffOptionBuilder>{};
+
+    void registerPerson(String? rawUser, String? rawFull) {
+      final u = (rawUser ?? '').trim();
+      final f = (rawFull ?? '').trim();
+      if (u.isEmpty && f.isEmpty) return;
+
+      final resolvedFull = f.isNotEmpty ? f : (u.isNotEmpty ? (userToFull[u.toLowerCase()] ?? '') : '');
+      final label = resolvedFull.isNotEmpty ? resolvedFull : u;
+      final groupKey = label.toLowerCase();
+
+      final entry = staffMap.putIfAbsent(groupKey, () => _StaffOptionBuilder(label: label));
+      if (u.isNotEmpty) {
+        entry.aliases.add(u);
+        entry.aliases.add(u.toLowerCase());
+      }
+      if (f.isNotEmpty) entry.aliases.add(f);
+      if (resolvedFull.isNotEmpty) entry.aliases.add(resolvedFull);
+      final mappedUser = fullToUser[label.toLowerCase()];
+      if (mappedUser != null && mappedUser.isNotEmpty) {
+        entry.aliases.add(mappedUser);
+        entry.aliases.add(mappedUser.toLowerCase());
+      }
+    }
+
+    for (final b in _allBills) {
+      registerPerson(b.staffUsername, b.staffFullName);
+      for (final it in b.items) {
+        registerPerson(it.orderedBy, it.orderedByName);
+      }
+    }
+    for (final s in _allShifts) {
+      registerPerson(s.staffUsername, s.staffFullName);
+    }
+    for (final u in _userList) {
+      registerPerson(u.username, u.fullName);
+    }
+
+    final list = staffMap.values.map((e) => StaffFilterOption(
+      id: e.label,
+      displayName: e.label,
+      aliases: e.aliases,
+    )).toList();
+
+    list.sort((a, b) => a.displayName.compareTo(b.displayName));
     return list;
   }
 
@@ -273,10 +373,16 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
     final onlyCashier = cashierOnly ??
         (_selectedKind == ReportKind.promotions || _selectedKind == ReportKind.campaigns);
 
+    final selectedOpt = _staffFilterOptions.firstWhere(
+      (o) => o.id == _selectedStaff,
+      orElse: () => StaffFilterOption(id: _selectedStaff, displayName: _selectedStaff, aliases: {_selectedStaff}),
+    );
+
     return ReportCalculator.filterHubBills(
       dateFiltered,
       shiftId: _selectedShiftId,
       staff: _selectedStaff,
+      staffAliases: _selectedStaff == 'ALL' ? null : selectedOpt.aliases,
       cashierOnly: onlyCashier,
     );
   }
@@ -861,7 +967,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   key: ValueKey<Object?>(_selectedStaff),
-                  initialValue: _staffOptions.contains(_selectedStaff) ? _selectedStaff : 'ALL',
+                  initialValue: _staffFilterOptions.any((o) => o.id == _selectedStaff) ? _selectedStaff : 'ALL',
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Nhân viên',
@@ -871,9 +977,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                   ),
                   items: [
                     const DropdownMenuItem(value: 'ALL', child: Text('Tất cả nhân viên', style: TextStyle(fontSize: 11))),
-                    ..._staffOptions.map((u) => DropdownMenuItem(
-                      value: u,
-                      child: Text(u, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                    ..._staffFilterOptions.map((opt) => DropdownMenuItem(
+                      value: opt.id,
+                      child: Text(opt.displayName, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
                     )),
                   ],
                   onChanged: (val) {
