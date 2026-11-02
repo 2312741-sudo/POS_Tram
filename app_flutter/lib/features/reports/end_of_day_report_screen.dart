@@ -698,6 +698,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   void _showStaffPicker() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -707,6 +709,10 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             children: [
               Text('Lọc hàng hóa theo nhân viên', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
               ListTile(
                 leading: Icon(
                   _selectedStaff == 'ALL' ? LucideIcons.circleCheck : LucideIcons.circle,
@@ -744,6 +750,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   },
                 );
               }),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
