@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/domain/shift_scope.dart';
 import '../../core/reports/report_calculator.dart';
+import '../../core/reports/report_models.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -312,48 +313,25 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   }
 
   // ==================== TAB 1: TỔNG HỢP CALCULATIONS ====================
-  int get _grossRevenue => _paidBills.fold(0, (s, b) => s + b.subTotal);
+  OverviewReportResult get _overview => ReportCalculator.calculateOverviewReport(_rangeBills);
 
-  int get _itemDiscounts {
-    int sum = 0;
-    for (final b in _paidBills) {
-      for (final it in b.items) {
-        // Giảm giá dòng là tổng CẢ DÒNG đã lưu (không nhân số lượng)
-        sum += it.lineDiscountTotal;
-      }
-    }
-    return sum;
-  }
-
-  int get _billDiscounts {
-    int sum = 0;
-    for (final b in _paidBills) {
-      final billDisc = b.discounts.fold(0, (ds, d) => ds + d.amount);
-      sum += billDisc + b.pointsDiscount;
-      if (sum == 0 && b.totalDiscount > 0) {
-        sum += (b.totalDiscount - _itemDiscounts).clamp(0, b.totalDiscount);
-      }
-    }
-    return sum;
-  }
-
-  int get _netRevenue => _paidBills.fold(0, (s, b) => s + b.finalAmount);
-  int get _vatTotal => _paidBills.fold(0, (s, b) => s + b.vatAmount);
+  int get _grossRevenue => _overview.grossRevenue;
+  int get _itemDiscounts => _overview.itemDiscounts;
+  int get _billDiscounts => _overview.billDiscounts + _overview.pointsDiscounts;
+  int get _totalDiscount => _overview.totalDiscount;
+  int get _afterDiscount => _overview.afterDiscount;
+  int get _netRevenue => _overview.netRevenue;
+  int get _vatTotal => _overview.vatTotal;
   int get _otherIncome => 0; // Thu khác
-  int get _refundAmount => 0; // Trả hàng
-
-  int get _netRevenueWithOther => _netRevenue + _otherIncome - _refundAmount;
-  int get _netRevenueWithoutOther => _netRevenue - _refundAmount;
+  int get _refundAmount => _overview.refundAmount;
+  int get _netRevenueWithoutRefund => _overview.netRevenueWithoutRefund;
+  int get _netRevenueWithOther => _netRevenueWithoutRefund + _otherIncome;
+  int get _netRevenueWithoutOther => _netRevenueWithoutRefund;
 
   /// Tổng số khách THẬT ghi trên các hóa đơn đã thanh toán (trước đây = số hóa đơn)
-  int get _totalPaidGuests {
-    return _paidBills.fold(0, (s, b) => s + ReportCalculator.getGuestCount(b));
-  }
+  int get _totalPaidGuests => _overview.totalGuests;
 
-  int get _avgRevenuePerBill {
-    if (_paidBills.isEmpty) return 0;
-    return (_netRevenue / _paidBills.length).round();
-  }
+  int get _avgRevenuePerBill => _overview.avgRevenuePerPaidBill;
 
   // ==================== TAB 2: THU CHI CALCULATIONS ====================
   // Hóa đơn hỗn hợp (tiền mặt + QR) chia đúng phần từng phương thức → TM + QR + Thẻ = Tổng thực thu
@@ -1532,31 +1510,39 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             _buildReportRow(
               'Doanh thu tổng (thực nhận)',
               FormatUtils.vnd(_netRevenue),
-              subtitle: 'Đã trừ mọi giảm giá / khuyến mãi • gồm ${FormatUtils.vnd(_vatTotal)} tiền thuế',
+              subtitle: 'Đã trừ mọi giảm giá / khuyến mãi • gồm ${FormatUtils.vnd(_vatTotal)} tiền thuế VAT',
               isBold: true,
+              color: const Color(0xFF7E2930),
             ),
             _buildReportRow('Tổng tiền hàng (trước giảm giá)', FormatUtils.vnd(_grossRevenue)),
             _buildReportRow('Tổng giảm giá món', FormatUtils.vnd(_itemDiscounts)),
-            _buildReportRow('Tổng giảm giá hóa đơn', FormatUtils.vnd(_billDiscounts)),
+            _buildReportRow('Tổng giảm giá hóa đơn / Điểm', FormatUtils.vnd(_billDiscounts)),
+            _buildReportRow(
+              'Tổng tiền giảm giá',
+              FormatUtils.vnd(_totalDiscount),
+              isBold: true,
+              color: const Color(0xFFC93B2B),
+            ),
+            _buildReportRow('Doanh thu sau giảm giá (Pre-VAT)', FormatUtils.vnd(_afterDiscount)),
             _buildReportRow(
               'Doanh thu ước tính cả ngày',
               FormatUtils.vnd(_netRevenue + _servingEstimatedRevenue),
               subtitle: 'Tổng doanh thu + Đơn đang phục vụ',
               isBold: true,
+              color: const Color(0xFFC47820),
             ),
-            _buildReportRow('Thu khác', FormatUtils.vnd(_otherIncome)),
-            _buildReportRow('Trả hàng', FormatUtils.vnd(_refundAmount)),
+            _buildReportRow('Thu khác', '0 đ'),
             _buildReportRow(
-              'Doanh thu thuần',
-              FormatUtils.vnd(_netRevenueWithOther),
-              subtitle: 'Bao gồm thu khác',
-              isBold: true,
+              'Trả hàng / Hoàn tiền',
+              FormatUtils.vnd(_refundAmount),
+              color: const Color(0xFFC93B2B),
             ),
             _buildReportRow(
-              'Doanh thu thuần',
-              FormatUtils.vnd(_netRevenueWithoutOther),
-              subtitle: 'Không bao gồm thu khác',
+              'Doanh thu thực thu cuối ngày',
+              FormatUtils.vnd(_netRevenueWithoutRefund),
+              subtitle: 'Doanh thu thuần trừ tiền hoàn trả',
               isBold: true,
+              color: const Color(0xFF146A65),
             ),
           ],
         ),
@@ -1569,11 +1555,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
           trailingIcon: LucideIcons.chevronRight,
           onTitleTap: _showServingTablesSheet,
           rows: [
-            _buildReportRow('Đơn đang phục vụ', _servingTables.length.toString()),
-            _buildReportRow('Số lượng sản phẩm', _servingItemsCount.toString()),
-            _buildReportRow('Số khách', _servingGuestsCount.toString()),
-            _buildReportRow('Doanh thu ước tính', FormatUtils.vnd(_servingEstimatedRevenue)),
-            _buildReportRow('Thu khác', '0'),
+            _buildReportRow('Đơn đang phục vụ', '${_servingTables.length} bàn'),
+            _buildReportRow('Số lượng sản phẩm', '$_servingItemsCount món'),
+            _buildReportRow('Số khách', '$_servingGuestsCount người'),
+            _buildReportRow(
+              'Doanh thu ước tính',
+              FormatUtils.vnd(_servingEstimatedRevenue),
+              isBold: true,
+              color: const Color(0xFFC47820),
+            ),
           ],
         ),
 
@@ -1583,39 +1573,34 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         _buildSectionCard(
           title: 'HÓA ĐƠN',
           rows: [
-            _buildReportRow('Số hóa đơn', _paidBills.length.toString()),
-            _buildReportRow('Số khách', _totalPaidGuests.toString()),
-            _buildReportRow('Doanh thu TB/Đơn', FormatUtils.vnd(_avgRevenuePerBill)),
+            _buildReportRow('Số hóa đơn hoàn tất', '${_paidBills.length} đơn', isBold: true),
+            _buildReportRow('Số khách phục vụ', '$_totalPaidGuests người'),
+            _buildReportRow('Doanh thu TB / Đơn', FormatUtils.vnd(_avgRevenuePerBill), isBold: true),
           ],
         ),
 
         const SizedBox(height: 12),
 
-        // 4. HÓA ĐƠN ĐÃ HỦY
-        _buildSectionCard(
-          title: 'HÓA ĐƠN ĐÃ HỦY',
-          rows: [
-            _buildReportRow('Số lượng đơn hủy', _cancelledBills.length.toString()),
-            _buildReportRow(
-              'Giá trị hủy',
-              FormatUtils.vnd(_cancelledBills.fold(0, (s, b) => s + ReportCalculator.cancelledBillValue(b))),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        // 5. XÓA MÓN (món đã lưu bị xóa, từ HĐ hoàn thành + đã hủy)
+        // 4. HỦY ĐƠN & XÓA MÓN (KIỂM TOÁN THẤT THOÁT)
         Builder(builder: (context) {
           final deleted = ReportCalculator.calculateDeletedItems(_rangeBills);
+          final cancelLoss = _cancelledBills.fold(0, (s, b) => s + ReportCalculator.cancelledBillValue(b));
           return _buildSectionCard(
-            title: 'XÓA MÓN',
+            title: 'HỦY ĐƠN & XÓA MÓN (KIỂM TOÁN THẤT THOÁT)',
             rows: [
-              _buildReportRow('Số món xóa / hủy', deleted.count.toString()),
+              _buildReportRow('Số lượng đơn hủy', '${_cancelledBills.length} đơn'),
+              _buildReportRow(
+                'Giá trị đơn hủy',
+                FormatUtils.vnd(cancelLoss),
+                color: cancelLoss > 0 ? const Color(0xFFC93B2B) : null,
+                isBold: true,
+              ),
+              _buildReportRow('Số món xóa / hủy', '${deleted.count} món'),
               _buildReportRow(
                 'Tổng tiền xóa / hủy món',
                 FormatUtils.vnd(deleted.amount),
-                color: deleted.amount > 0 ? context.tc.danger : null,
+                color: deleted.amount > 0 ? const Color(0xFFC93B2B) : null,
+                isBold: true,
               ),
             ],
           );
@@ -1634,31 +1619,28 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
         _buildSectionCard(
           title: 'PHƯƠNG THỨC THANH TOÁN BÁN HÀNG',
           rows: [
-            _buildReportRow('Tiền mặt (Cash)', FormatUtils.vnd(_cashSales), isBold: true),
-            _buildReportRow('Chuyển khoản VietQR', FormatUtils.vnd(_qrSales), isBold: true, color: context.tc.info),
+            _buildReportRow('Tiền mặt (CASH)', FormatUtils.vnd(_cashSales), isBold: true, color: const Color(0xFF146A65)),
+            _buildReportRow('Chuyển khoản VietQR', FormatUtils.vnd(_qrSales), isBold: true, color: const Color(0xFF1877F2)),
             if (_cardSales > 0)
-              _buildReportRow('Thẻ ngân hàng POS', FormatUtils.vnd(_cardSales)),
+              _buildReportRow('Thẻ ngân hàng / POS', FormatUtils.vnd(_cardSales), isBold: true, color: const Color(0xFFD97706)),
             const Divider(height: 16),
             _buildReportRow(
               'TỔNG THỰC THU BÁN HÀNG',
               FormatUtils.vnd(_netRevenue),
               isBold: true,
-              color: context.tc.primary,
+              color: const Color(0xFF7E2930),
             ),
           ],
         ),
         const SizedBox(height: 12),
         _buildSectionCard(
-          title: 'GIAO DỊCH KÉT TIỀN & THU CHI KHÁC',
+          title: 'DÒNG TIỀN KÉT & THUẾ',
           rows: [
-            _buildReportRow('Tiền nộp thêm vào két (Cash In)', FormatUtils.vnd(_totalCashIn), color: context.tc.success),
-            _buildReportRow('Tiền rút / chi vặt két (Cash Out)', FormatUtils.vnd(_totalCashOut), color: context.tc.danger),
-            const Divider(height: 16),
-            _buildReportRow(
-              'DÒNG TIỀN KÉT PHÁT SINH',
-              '${_totalCashIn - _totalCashOut >= 0 ? "+" : ""}${FormatUtils.vnd(_totalCashIn - _totalCashOut)}',
-              isBold: true,
-            ),
+            _buildReportRow('Tiền nộp thêm vào két (Cash In)', FormatUtils.vnd(_totalCashIn)),
+            _buildReportRow('Tiền chi vặt từ két (Cash Out)', FormatUtils.vnd(_totalCashOut), color: const Color(0xFFC93B2B)),
+            _buildReportRow('Tổng tiền hoàn lại khách (Refund)', FormatUtils.vnd(_refundAmount), color: const Color(0xFFC93B2B)),
+            _buildReportRow('Tiền thuế GTGT (VAT) chốt trên bill', FormatUtils.vnd(_vatTotal)),
+            _buildReportRow('Tổng chiết khấu / Khuyến mãi', FormatUtils.vnd(_totalDiscount), color: const Color(0xFFC93B2B)),
           ],
         ),
         if (_auth.canViewAllShifts) ..._buildPerAccountShiftSection(),
@@ -1955,7 +1937,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      (item['code'] as String? ?? '').isEmpty ? item['name'] : '${item['code']} • ${item['name']}',
+                                      item['name'] as String? ?? '',
                                       style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
                                     ),
                                     Text(
@@ -2385,7 +2367,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  (item['code'] as String? ?? '').isEmpty ? item['name'] : '${item['code']} • ${item['name']}',
+                                  item['name'] as String? ?? '',
                                   style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.bold),
                                 ),
                                 Text(
