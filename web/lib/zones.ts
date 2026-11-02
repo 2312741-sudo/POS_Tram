@@ -1,3 +1,4 @@
+import { baseTableName } from "./table-status";
 /**
  * Thiết lập khu vực bàn. Nguồn: stores/{code}/zones/{tên khu} = { name } (giống ZoneModel của POS)
  * và stores/{code}/tables/{khu}_{tên bàn} = { name, zone, inUse, currentOrderJson, ... }.
@@ -244,6 +245,8 @@ export interface ZoneMeta {
   name: string;
   pinned: boolean;
   order: number | null;
+  /** Thứ tự bàn trong khu do người dùng sắp xếp (tên bàn gốc); rỗng = chưa sắp xếp */
+  tableOrder: string[];
 }
 
 /** Đọc zones/{khu} thô thành danh sách ZoneMeta (giữ cờ ghim + thứ tự) */
@@ -251,10 +254,12 @@ export function parseZoneMeta(val: unknown): ZoneMeta[] {
   if (!val || typeof val !== "object") return [];
   const out: ZoneMeta[] = [];
   for (const [key, raw] of Object.entries(val as Record<string, unknown>)) {
-    const o = raw && typeof raw === "object" ? (raw as { name?: unknown; pinned?: unknown; order?: unknown }) : {};
+    const o = raw && typeof raw === "object" ? (raw as { name?: unknown; pinned?: unknown; order?: unknown; tableOrder?: unknown }) : {};
     const name = String(o.name ?? key).trim();
     if (!name) continue;
-    out.push({ name, pinned: o.pinned === true, order: typeof o.order === "number" ? o.order : null });
+    const rawOrder = Array.isArray(o.tableOrder) ? o.tableOrder : o.tableOrder && typeof o.tableOrder === "object" ? Object.values(o.tableOrder) : [];
+    const tableOrder = rawOrder.map((x) => String(x ?? "").trim()).filter(Boolean);
+    out.push({ name, pinned: o.pinned === true, order: typeof o.order === "number" ? o.order : null, tableOrder });
   }
   return out;
 }
@@ -277,6 +282,43 @@ export function sortZoneNames(names: Iterable<string>, meta: ZoneMeta[]): string
     if (oa === null && ob !== null) return 1;
     return a.localeCompare(b, "vi");
   });
+}
+
+/**
+ * Sắp xếp bàn theo thứ tự người dùng đặt trong từng khu (zones/{khu}/tableOrder). Bản Dart song song:
+ * sortTablesByZoneOrder (zone_model.dart). Bàn có trong thứ tự đứng trước theo đúng thứ tự đó, bàn chưa có
+ * (mới tạo) giữ vị trí cũ rồi xếp sau; bàn tách ("Bàn 01 (2)") đi theo bàn gốc; thứ tự giữa các khu không đổi.
+ */
+export function sortTablesByZoneOrder<T extends { zone?: string; name: string }>(tables: T[], meta: ZoneMeta[]): T[] {
+  const orderByZone = new Map<string, Map<string, number>>();
+  for (const m of meta) {
+    if (m.tableOrder.length > 0) orderByZone.set(m.name.trim(), new Map(m.tableOrder.map((n, i) => [n, i])));
+  }
+  if (orderByZone.size === 0) return tables;
+  const firstSeen = new Map<string, number>();
+  tables.forEach((t, i) => {
+    const z = (t.zone ?? "").trim();
+    if (!firstSeen.has(z)) firstSeen.set(z, i);
+  });
+  const rank = (t: T) => orderByZone.get((t.zone ?? "").trim())?.get(baseTableName(t.name)) ?? 1 << 20;
+  return tables
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => {
+      const za = firstSeen.get((a.t.zone ?? "").trim())!;
+      const zb = firstSeen.get((b.t.zone ?? "").trim())!;
+      if (za !== zb) return za - zb;
+      return rank(a.t) - rank(b.t) || a.i - b.i;
+    })
+    .map((x) => x.t);
+}
+
+/** Lưu thứ tự bàn trong một khu: chỉ ghi tableOrder (không đụng node bàn đang có khách) */
+export function buildTableOrderUpdates(storeCode: string, zone: string, orderedTableNames: string[]): Record<string, unknown> {
+  const z = zone.trim();
+  return {
+    [`stores/${storeCode}/zones/${z}/name`]: z,
+    [`stores/${storeCode}/zones/${z}/tableOrder`]: orderedTableNames,
+  };
 }
 
 /** Ghim / bỏ ghim khu: chỉ ghi cờ pinned (không đụng bàn) */

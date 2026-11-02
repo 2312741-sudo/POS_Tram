@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ArrowDown, ArrowUp, LayoutGrid, Pencil, Pin, PinOff, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, LayoutGrid, ListOrdered, Pencil, Pin, PinOff, Plus, Trash2 } from "lucide-react";
 import { onValue, ref, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import ModalShell, { btnGhost, btnPrimary, errorBox, fieldInput, fieldLabel } from "./ModalShell";
 import { errorMessage } from "@/lib/errors";
+import { baseTableName } from "@/lib/table-status";
 import {
   buildZoneAuditUpdates,
   buildZoneDeleteUpdates,
+  buildTableOrderUpdates,
   buildZoneOrderUpdates,
   buildZonePinUpdates,
   isTableInUse,
@@ -17,6 +19,7 @@ import {
   planAddTables,
   planZoneCreate,
   planZoneRename,
+  sortTablesByZoneOrder,
   sortZoneNames,
   type ZoneMeta,
   type ZoneAuditActor,
@@ -42,6 +45,7 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
   const [count, setCount] = useState("5");
   const [prefix, setPrefix] = useState("Bàn");
   const [edit, setEdit] = useState<RowEdit | null>(null);
+  const [orderZone, setOrderZone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -103,6 +107,19 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
     const next = [...zones];
     [next[i], next[j]] = [next[j], next[i]];
     return writeOnly(buildZoneOrderUpdates(storeCode, next, pinnedSet), "Không lưu được thứ tự khu vực");
+  };
+  /** Bàn gốc của khu theo thứ tự đang áp dụng (bàn tách đi theo bàn gốc nên không liệt kê riêng) */
+  const orderedBases = (z: string): string[] => {
+    const names = tables.filter((t) => String(t.value.zone ?? "") === z).map((t) => ({ zone: z, name: String(t.value.name ?? "") }));
+    const sorted = sortTablesByZoneOrder(names, meta);
+    return [...new Set(sorted.map((t) => baseTableName(t.name)))].filter(Boolean);
+  };
+  const moveTable = (z: string, i: number, delta: -1 | 1) => {
+    const list = orderedBases(z);
+    const j = i + delta;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    return writeOnly(buildTableOrderUpdates(storeCode, z, list), "Không lưu được thứ tự bàn");
   };
   const countIn = (z: string) => tables.filter((t) => String(t.value.zone ?? "") === z).length;
   const busyIn = (z: string) => tables.some((t) => String(t.value.zone ?? "") === z && isTableInUse(t.value));
@@ -281,6 +298,11 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
                     onClick={() => setEdit({ zone: z, mode: "rename", value: z, count: "5", prefix: "Bàn" })}>
                     <Pencil size={16} />
                   </button>
+                  <button type="button" aria-label={`Sắp xếp bàn trong khu ${z}`} title="Sắp xếp thứ tự bàn"
+                    disabled={busy || n < 2} style={iconBtn(busy || n < 2)}
+                    onClick={() => setOrderZone(orderZone === z ? null : z)}>
+                    <ListOrdered size={16} />
+                  </button>
                   <button type="button" aria-label={`Thêm bàn vào khu ${z}`} title="Thêm bàn vào khu"
                     disabled={busy} style={iconBtn(busy)}
                     onClick={() => setEdit({ zone: z, mode: "tables", value: z, count: "5", prefix: "Bàn" })}>
@@ -294,6 +316,24 @@ export default function ZoneSetupDialog({ storeCode, actor, onClose }: Props) {
                 </div>
               </div>
 
+              {orderZone === z && (
+                <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--subtext)" }}>Dùng mũi tên để đổi vị trí bàn (app cũng đổi theo)</div>
+                  {orderedBases(z).map((tn, ti, arr) => (
+                    <div key={tn} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px" }}>
+                      <span style={{ fontSize: 13 }}>{ti + 1}. {tn}</span>
+                      <span style={{ display: "flex", gap: 4 }}>
+                        <button type="button" aria-label={`Đưa bàn ${tn} lên`} disabled={busy || ti === 0} style={iconBtn(busy || ti === 0)} onClick={() => moveTable(z, ti, -1)}>
+                          <ArrowUp size={14} />
+                        </button>
+                        <button type="button" aria-label={`Đưa bàn ${tn} xuống`} disabled={busy || ti === arr.length - 1} style={iconBtn(busy || ti === arr.length - 1)} onClick={() => moveTable(z, ti, 1)}>
+                          <ArrowDown size={14} />
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {isEditing && edit && edit.mode === "rename" && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <input style={fieldInput} aria-label="Tên khu mới" value={edit.value}

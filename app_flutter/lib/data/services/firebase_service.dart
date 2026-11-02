@@ -536,6 +536,7 @@ class FirebaseService {
   Future<void> setCategoryOrder(List<String> names, {String? storeCode}) => _orderRepo.setCategoryOrder(names, storeCode: storeCode);
   Future<void> setZonePinned(String zone, bool pinned) => _orderRepo.setZonePinned(zone, pinned);
   Future<void> setZoneOrder(List<String> names) => _orderRepo.setZoneOrder(names);
+  Future<void> setZoneTableOrder(String zone, List<String> names) => _orderRepo.setZoneTableOrder(zone, names);
   Future<ZonePlan> deleteZone({required String zone, required ZoneAuditActor actor}) =>
       _orderRepo.deleteZone(zone: zone, actor: actor);
 

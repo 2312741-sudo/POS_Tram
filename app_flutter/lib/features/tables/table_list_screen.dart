@@ -585,7 +585,12 @@ class _TableListScreenState extends State<TableListScreen> {
           if (!snapshot.hasData) {
             return const LoadingState(message: 'Đang tải sơ đồ bàn...');
           }
-          final allTables = snapshot.data!;
+          final allTables = sortTablesByZoneOrder<TableModel>(
+            snapshot.data!,
+            _zoneMeta,
+            zoneOf: (t) => t.zone,
+            baseNameOf: (t) => t.baseName,
+          );
           final zones = ['Tất cả', ...sortZoneNames(allTables.map((t) => t.zone), _zoneMeta)];
           if (!zones.contains(_selectedZone)) {
             _selectedZone = 'Tất cả';

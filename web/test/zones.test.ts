@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { planAddTables, planZoneCreate, planZoneRename, validateTablePrefix, validateTableCount, isTableInUse, buildZoneAuditUpdates, planDeleteTable, planDedupeTables } from "../lib/zones";
 import { buildZoneCreateUpdates, buildZoneDeleteUpdates, mergeZoneNames, nextTableNames, parseZones, validateZoneName } from "../lib/zones";
+import { sortTablesByZoneOrder, parseZoneMeta } from "../lib/zones";
 
 describe("khu vực bàn", () => {
   it("đọc danh sách khu từ nhiều dạng dữ liệu", () => {
@@ -162,5 +163,33 @@ describe("xóa bàn / dọn bàn trùng", () => {
     const busy = planDedupeTables({ storeCode: "T1", tables: [rec("Grab", "Grab", "A", { inUse: true }), rec("A_Grab", "Grab", "A")] });
     expect(busy).toEqual({ updates: { "stores/T1/tables/A_Grab": null }, affected: 1 });
     expect("error" in planDedupeTables({ storeCode: "T1", tables: [rec("A_Grab", "Grab", "A")] })).toBe(true);
+  });
+});
+
+describe("sortTablesByZoneOrder", () => {
+  const t = (zone: string, name: string) => ({ zone, name });
+  const names = (xs: { zone?: string; name: string }[]) => xs.map((x) => `${x.zone}/${x.name}`);
+  const meta = (name: string, tableOrder: string[]) => ({ name, pinned: false, order: null, tableOrder });
+
+  it("không có thứ tự thì giữ nguyên", () => {
+    const ts = [t("A", "B2"), t("A", "B1")];
+    expect(names(sortTablesByZoneOrder(ts, [meta("A", [])]))).toEqual(["A/B2", "A/B1"]);
+  });
+  it("xếp theo tableOrder, bàn mới xếp sau", () => {
+    const ts = [t("A", "B1"), t("A", "B2"), t("A", "B3"), t("A", "B4")];
+    expect(names(sortTablesByZoneOrder(ts, [meta("A", ["B3", "B1"])]))).toEqual(["A/B3", "A/B1", "A/B2", "A/B4"]);
+  });
+  it("không đổi thứ tự giữa các khu", () => {
+    const ts = [t("A", "B1"), t("B", "C1"), t("A", "B2"), t("B", "C2")];
+    expect(names(sortTablesByZoneOrder(ts, [meta("B", ["C2", "C1"])]))).toEqual(["A/B1", "A/B2", "B/C2", "B/C1"]);
+  });
+  it("bàn tách đi theo bàn gốc", () => {
+    const ts = [t("A", "B1"), t("A", "B2"), t("A", "B2 (2)")];
+    expect(names(sortTablesByZoneOrder(ts, [meta("A", ["B2", "B1"])]))).toEqual(["A/B2", "A/B2 (2)", "A/B1"]);
+  });
+  it("parseZoneMeta đọc tableOrder dạng mảng hoặc map", () => {
+    expect(parseZoneMeta({ A: { name: "A", tableOrder: ["x", "y"] } })[0].tableOrder).toEqual(["x", "y"]);
+    expect(parseZoneMeta({ A: { name: "A", tableOrder: { 0: "x", 1: "y" } } })[0].tableOrder).toEqual(["x", "y"]);
+    expect(parseZoneMeta({ A: { name: "A" } })[0].tableOrder).toEqual([]);
   });
 });

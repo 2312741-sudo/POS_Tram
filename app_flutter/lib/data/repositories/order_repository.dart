@@ -2160,6 +2160,12 @@ class OrderRepository {
     await zonesRef.child(zone.trim()).update({'name': zone.trim(), 'pinned': pinned ? true : null});
   }
 
+  /// Lưu thứ tự bàn trong một khu (chỉ ghi tableOrder, không đụng node bàn đang có khách)
+  Future<void> setZoneTableOrder(String zone, List<String> orderedTableNames) async {
+    final z = zone.trim();
+    await zonesRef.child(z).update({'name': z, 'tableOrder': orderedTableNames});
+  }
+
   /// Lưu thứ tự khu theo danh sách tên đã sắp xếp (một lần ghi)
   Future<void> setZoneOrder(List<String> orderedNames) async {
     final updates = <String, Object?>{};

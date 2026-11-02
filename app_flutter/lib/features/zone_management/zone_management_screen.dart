@@ -321,50 +321,93 @@ class _ZoneManagementScreenState extends State<ZoneManagementScreen> {
     }
   }
 
-  /// Danh sách bàn của một khu, có nút xóa từng bàn
+  /// Bàn của một khu theo thứ tự đã sắp xếp
+  List<TableModel> _orderedTablesIn(String zone) => sortTablesByZoneOrder<TableModel>(
+        _tables.where((t) => t.zone == zone).toList(),
+        _zones,
+        zoneOf: (t) => t.zone,
+        baseNameOf: (t) => t.baseName,
+      );
+
+  /// Danh sách bàn của một khu: kéo thả để sắp xếp thứ tự, có nút xóa từng bàn
   void _showTables(String zone) {
+    var ordered = _orderedTablesIn(zone);
     showModalBottomSheet(
       context: context,
       backgroundColor: context.tc.surface,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
-        final list = _tables.where((t) => t.zone == zone).toList();
+        // Bàn bị xóa trong lúc mở: bỏ khỏi danh sách đang sắp xếp
+        final alive = {for (final t in _tables.where((t) => t.zone == zone)) t.name};
+        ordered = ordered.where((t) => alive.contains(t.name)).toList();
+        Future<void> reorder(int oldI, int newI) async {
+          if (newI > oldI) newI -= 1;
+          final next = [...ordered];
+          next.insert(newI, next.removeAt(oldI));
+          setSheet(() => ordered = next);
+          try {
+            // Chỉ lưu bàn gốc (bàn tách đi theo bàn gốc), giữ nguyên thứ tự hiển thị
+            final names = <String>[];
+            for (final t in next) {
+              final b = t.baseName;
+              if (!names.contains(b)) names.add(b);
+            }
+            await _fb.setZoneTableOrder(zone, names);
+          } catch (e) {
+            _snack('Không lưu được thứ tự bàn: $e', error: true);
+          }
+        }
+
         return SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Bàn trong "$zone" (${list.length})',
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text('Bàn trong "$zone" (${ordered.length})',
                     style: GoogleFonts.beVietnamPro(
                         color: context.tc.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
               ),
+              if (ordered.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Giữ và kéo biểu tượng bên trái để đổi vị trí bàn',
+                      style: TextStyle(color: context.tc.textSecondary, fontSize: 12)),
+                ),
               Flexible(
-                child: list.isEmpty
+                child: ordered.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text('Khu chưa có bàn', style: TextStyle(color: context.tc.textSecondary)))
-                    : ListView(
+                    : ReorderableListView.builder(
                         shrinkWrap: true,
-                        children: [
-                          for (final t in list)
-                            ListTile(
-                              title: Text(t.name, style: TextStyle(color: context.tc.textPrimary)),
-                              subtitle: (t.inUse || t.currentOrderJson.isNotEmpty)
-                                  ? Text('Đang dùng', style: TextStyle(color: context.tc.textSecondary, fontSize: 12))
-                                  : null,
-                              trailing: IconButton(
-                                tooltip: 'Xóa bàn',
-                                icon: Icon(LucideIcons.trash2, color: context.tc.danger),
-                                onPressed: _busy
-                                    ? null
-                                    : () async {
-                                        await _deleteTable(zone, t);
-                                        if (ctx.mounted) setSheet(() {});
-                                      },
-                              ),
+                        buildDefaultDragHandles: false,
+                        itemCount: ordered.length,
+                        onReorder: reorder,
+                        itemBuilder: (_, i) {
+                          final t = ordered[i];
+                          return ListTile(
+                            key: ValueKey('${t.zone}_${t.name}'),
+                            leading: ReorderableDragStartListener(
+                              index: i,
+                              child: Icon(LucideIcons.gripVertical, color: context.tc.textSecondary),
                             ),
-                        ],
+                            title: Text(t.name, style: TextStyle(color: context.tc.textPrimary)),
+                            subtitle: (t.inUse || t.currentOrderJson.isNotEmpty)
+                                ? Text('Đang dùng', style: TextStyle(color: context.tc.textSecondary, fontSize: 12))
+                                : null,
+                            trailing: IconButton(
+                              tooltip: 'Xóa bàn',
+                              icon: Icon(LucideIcons.trash2, color: context.tc.danger),
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      await _deleteTable(zone, t);
+                                      if (ctx.mounted) setSheet(() {});
+                                    },
+                            ),
+                          );
+                        },
                       ),
               ),
             ]),

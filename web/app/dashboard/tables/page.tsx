@@ -104,7 +104,7 @@ import { applyLineRemoval, buildDeletionEntry, deletionDetails, type DeletedItem
 import ManagerPinDialog, { SetApprovalPinDialog } from "@/components/ManagerPinDialog";
 import TableTransferDialog from "@/components/TableTransferDialog";
 import ZoneSetupDialog from "@/components/ZoneSetupDialog";
-import { parseZoneMeta, sortZoneNames, type ZoneMeta } from "@/lib/zones";
+import { parseZoneMeta, sortTablesByZoneOrder, sortZoneNames, type ZoneMeta } from "@/lib/zones";
 import WebOrderDialog from "@/components/WebOrderDialog";
 import { useItemCatalog } from "@/lib/note-catalog";
 import { canAdjustPoints as canManageLayout, canEditPointConfig, canReadCustomers } from "@/lib/customers";
@@ -364,7 +364,8 @@ function TablesPageContent() {
   });
 
   const filtered = useMemo(() => {
-    return tables.filter((t) => {
+    const ordered = currentStoreCode === "ALL" ? tables : sortTablesByZoneOrder(tables, zoneMeta);
+    return ordered.filter((t) => {
       const matchZone = selectedZone === "ALL" || t.zone === selectedZone;
       const matchSearch =
         !search ||
@@ -373,7 +374,7 @@ function TablesPageContent() {
       const matchStatus = statusFilter === "ALL" || deriveTableStatus(t) === statusFilter;
       return matchZone && matchSearch && matchStatus;
     });
-  }, [tables, selectedZone, search, statusFilter]);
+  }, [tables, zoneMeta, currentStoreCode, selectedZone, search, statusFilter]);
 
   // Statistics
   const inUseCount = useMemo(() => tables.filter((t) => t.inUse).length, [tables]);
