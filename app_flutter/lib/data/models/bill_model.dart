@@ -391,6 +391,27 @@ class BillModel {
   /// Tổng giảm giá theo món (lineDiscountTotal) của hóa đơn.
   int get itemDiscountTotal => items.fold(0, (s, i) => s + i.lineDiscountTotal);
 
+  static const _itemLevelCampaigns = {'BUYXGETY', 'ORDERVALUEITEMBENEFIT', 'ITEMPRICERULE'};
+
+  /// Khuyến mãi THEO MÓN trong discounts (combo / mua X tặng Y, tặng-giảm món theo giá trị đơn, đồng giá) —
+  /// báo cáo xếp vào giảm giá MÓN. Khớp billPromoItemDiscount (web).
+  int get promoItemDiscount => discounts.fold(0, (s, d) {
+        final t = (d.campaignType ?? '').toUpperCase().replaceAll('_', '');
+        return _itemLevelCampaigns.contains(t) && d.amount > 0 ? s + d.amount : s;
+      });
+
+  /// Giảm giá MÓN trên báo cáo = giảm tay trên dòng món + khuyến mãi theo món (không vượt tổng giảm)
+  int get reportItemDiscount {
+    final v = itemDiscountTotal + promoItemDiscount;
+    return totalDiscount > 0 && v > totalDiscount ? totalDiscount : v;
+  }
+
+  /// Giảm giá ĐƠN trên báo cáo = tổng giảm − giảm giá món (giảm % / tiền cả hóa đơn, voucher đơn, đổi điểm)
+  int get reportOrderDiscount {
+    final v = totalDiscount - reportItemDiscount;
+    return v < 0 ? 0 : v;
+  }
+
   /// Giảm giá cấp đơn = tổng giảm − giảm theo món (gồm voucher/CTKM + đổi điểm).
   int get orderLevelDiscount {
     final v = totalDiscount - itemDiscountTotal;

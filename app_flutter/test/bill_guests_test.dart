@@ -22,4 +22,25 @@ void main() {
     final rec = BillRecordBuilder.build(bill('A', 4), storeCode: 'TRAM01', storeName: 'Trạm');
     expect(rec['guestCount'], 4);
   });
+
+  test('khuyến mãi theo món (tặng chanh, giảm 16K xoài, combo) là giảm giá MÓN; giảm % hóa đơn là giảm giá ĐƠN', () {
+    final b = BillModel.fromMap({
+      'billCode': 'HD-9', 'status': 'PAID', 'tableName': 'Bàn 1', 'subTotal': 215000, 'totalDiscount': 81000, 'finalAmount': 134000,
+      'items': [
+        {'productId': 1, 'name': 'Bánh', 'price': 40000, 'quantity': 2, 'lineDiscountTotal': 5000, 'discountAmount': 5000, 'discountedQuantity': 1, 'discountUnitAmount': 5000},
+      ],
+      'discounts': [
+        {'campaignId': 'G', 'description': 'Tặng chanh Grab', 'amount': 22000, 'campaignType': 'ORDERVALUEITEMBENEFIT'},
+        {'campaignId': 'X', 'description': 'Giảm 16K xoài', 'amount': 16000, 'campaignType': 'ORDER_VALUE_ITEM_BENEFIT'},
+        {'campaignId': 'C', 'description': 'Combo', 'amount': 10000, 'campaignType': 'BUYXGETY'},
+        {'campaignId': 'B', 'description': 'Hoa hồng 20%', 'amount': 28000, 'campaignType': 'BILLDISCOUNT'},
+      ],
+    }, 'B9');
+    expect(b.promoItemDiscount, 48000);
+    expect(b.reportItemDiscount, 5000 + 48000);
+    expect(b.reportOrderDiscount, 81000 - 53000);
+    final o = ReportCalculator.calculateOverviewReport([b]);
+    expect(o.itemDiscounts, 53000);
+    expect(o.billDiscounts, 28000);
+  });
 }

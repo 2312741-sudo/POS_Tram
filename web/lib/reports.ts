@@ -695,10 +695,33 @@ export function billSubTotal(bill: HistoryOrder): number {
   return Number(bill.totalAmount || 0);
 }
 
-/** Tổng giảm giá theo món của hóa đơn (ưu tiên itemDiscounts lưu trên bill) */
-export function billItemDiscount(bill: HistoryOrder): number {
+/** Chương trình KM tính trên TỪNG MÓN (combo / mua X tặng Y, tặng-giảm món theo giá trị đơn, đồng giá) */
+const ITEM_LEVEL_CAMPAIGNS = new Set(["BUYXGETY", "ORDERVALUEITEMBENEFIT", "ITEMPRICERULE"]);
+
+/**
+ * Tiền khuyến mãi THEO MÓN trong bill.discounts (vd tặng chanh Grab, giảm 16K ly xoài, combo bánh + nước) —
+ * báo cáo xếp vào "giảm giá món", không phải "giảm giá đơn". Giảm % / số tiền cả hóa đơn vẫn là giảm giá đơn.
+ */
+export function billPromoItemDiscount(bill: HistoryOrder): number {
+  if (!Array.isArray(bill.discounts)) return 0;
+  return bill.discounts.reduce((s, d) => {
+    const t = String((d as { campaignType?: unknown }).campaignType ?? "").toUpperCase().replace(/_/g, "");
+    return ITEM_LEVEL_CAMPAIGNS.has(t) ? s + Math.max(0, Number(d.amount || 0) || 0) : s;
+  }, 0);
+}
+
+/** Giảm giá thủ công trên từng dòng món (itemDiscounts lưu trên bill, không có thì cộng từ dòng món) */
+function billLineDiscount(bill: HistoryOrder): number {
   if (bill.itemDiscounts != null) return Math.max(0, Number(bill.itemDiscounts) || 0);
   return extractBillItems(bill).reduce((s, it) => s + itemLineDiscount(it), 0);
+}
+
+/** Tổng giảm giá theo MÓN = giảm tay trên dòng món + khuyến mãi theo món (không vượt tổng giảm của hóa đơn) */
+export function billItemDiscount(bill: HistoryOrder): number {
+  const line = billLineDiscount(bill);
+  const promo = billPromoItemDiscount(bill);
+  const total = billTotalDiscount(bill);
+  return total > 0 ? Math.min(total, line + promo) : line + promo;
 }
 
 /** Tổng giảm giá của hóa đơn (totalDiscount → discountAmount) */
@@ -761,7 +784,8 @@ export function calculateOverviewReport(bills: HistoryOrder[], refundAmountParam
       const bSubTotal = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0));
       grossRevenue += bSubTotal;
 
-      // Giảm giá món
+      // Giảm giá món = giảm tay trên dòng món + khuyến mãi theo món (combo, tặng / giảm món, đồng giá)
+      const bPromoItem = billPromoItemDiscount(b);
       let bItemDisc = 0;
       if (b.itemDiscounts != null) {
         bItemDisc = Number(b.itemDiscounts);
@@ -769,15 +793,17 @@ export function calculateOverviewReport(bills: HistoryOrder[], refundAmountParam
         const items = extractBillItems(b);
         bItemDisc = items.reduce((sum, it) => sum + itemLineDiscount(it), 0);
       }
+      bItemDisc += bPromoItem;
       itemDiscounts += bItemDisc;
 
-      // Giảm giá đơn / Voucher
+      // Giảm giá đơn / Voucher (bỏ phần khuyến mãi theo món đã xếp vào giảm giá món)
       let bBillDisc = 0;
       if (b.billDiscounts != null) {
         bBillDisc = Number(b.billDiscounts);
       } else if (Array.isArray(b.discounts)) {
         bBillDisc = b.discounts.reduce((sum, d) => sum + Number(d.amount || 0), 0);
       }
+      bBillDisc = Math.max(0, bBillDisc - bPromoItem);
       billDiscounts += bBillDisc;
 
       // Giảm giá điểm
