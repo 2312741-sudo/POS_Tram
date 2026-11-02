@@ -2931,6 +2931,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                   onPressed: () {
                     setState(() {
                       _cart[index] = _cart[index].withoutLineDiscount();
+                      // Lưu món lên bàn — không thì lần tải lại bàn sau sẽ trả giá cũ
+                      widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
                       _recalculateDiscounts();
                     });
                     Navigator.pop(ctx);
@@ -2963,6 +2965,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       approvalId: approval?.approvalId ?? '',
                       approvedAt: approval?.approvedAt,
                     );
+                    // Lưu món đã giảm lên bàn (trước đây chỉ đổi trên màn hình → mở lại / thêm món / máy khác thấy giá cũ)
+                    widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
                     _recalculateDiscounts();
                   });
                   Navigator.pop(ctx);
