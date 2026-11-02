@@ -368,7 +368,25 @@ class OrderRepository {
 
   /// Lưu bàn. Lỗi thật được ném ra ([DataWriteException]); nếu mất mạng thì dữ liệu được
   /// giữ cục bộ và tự đồng bộ sau (không ném lỗi).
+  /// Mã hóa đơn đã thanh toán / hủy trên máy này — chặn lần lưu bàn cũ tới muộn làm đơn hiện lại
+  final Set<String> _closedBillIds = <String>{};
+
+  void _rememberClosed(TableModel cleared) {
+    final id = cleared.closedBillId;
+    if (id != null && id.isNotEmpty) _closedBillIds.add(id);
+  }
+
+  /// Bàn mang đơn đã đóng (bản cũ còn giữ trong bộ nhớ) → không được ghi lại
+  bool _isClosedOrder(TableModel t) {
+    final id = t.currentBillId;
+    return id != null && id.isNotEmpty && (_closedBillIds.contains(id) || id == t.closedBillId);
+  }
+
   Future<void> saveTable(TableModel table) async {
+    if (_isClosedOrder(table)) {
+      debugPrint('[OrderRepository] Bỏ qua lưu bàn ${table.name}: hóa đơn ${table.currentBillId} đã đóng');
+      return;
+    }
     if (table.inUse && table.currentItems.isNotEmpty) {
       table.clearOrderingLock();
     }
@@ -410,9 +428,11 @@ class OrderRepository {
       staffName: staffName,
     );
 
-    unawaited(
-      tablesRef.child(res.targetTable.firebaseKey).set(res.targetTable.toMap()).catchError((_) {}),
-    );
+    if (!_isClosedOrder(res.targetTable)) {
+      unawaited(
+        tablesRef.child(res.targetTable.firebaseKey).set(res.targetTable.toMap()).catchError((_) {}),
+      );
+    }
     return res;
   }
 
@@ -1189,6 +1209,7 @@ class OrderRepository {
       rethrow;
     }
     table.clearTable();
+    _rememberClosed(cleared);
     _tryRemoveInactiveSplitTable(cleared);
 
     unawaited(_runPaymentFollowUps(
@@ -1516,6 +1537,7 @@ class OrderRepository {
       'hủy hóa đơn bàn ${table.name}',
     );
     table.clearTable();
+    _rememberClosed(cleared);
     _tryRemoveInactiveSplitTable(cleared);
 
     await _safeLog(AuditLogModel(

@@ -1422,6 +1422,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         openedAt: null,
         currentBillId: null,
         currentOrderCode: null,
+        // Dấu "hóa đơn đã đóng": luật Firebase chặn lần lưu bàn cũ mang mã này (đơn đã thanh toán không hiện lại)
+        ...(table.currentBillId ? { closedBillId: table.currentBillId } : {}),
+        discountsJson: null,
         mergedIntoTable: null,
         actionLogsJson: null,
         deletedItemsJson: null,

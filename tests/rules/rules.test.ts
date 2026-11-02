@@ -304,6 +304,27 @@ describe("POS Trạm - Security Rules: hóa đơn, bàn, bếp", () => {
     await assertFails(waiter.ref("stores/TRAM01/kitchen_orders/k1").remove());
     await assertSucceeds(db("manager_uid").ref("stores/TRAM01/tables/T2").remove());
   });
+
+  it("23b. Đơn đã thanh toán không 'sống lại': lưu bàn cũ mang mã HĐ đã đóng bị chặn, đơn mới vẫn ghi được", async () => {
+    const cashier = db("cashier_uid");
+    const order = { name: "Bàn 3", zone: "Trong", inUse: true, currentBillId: "HD-261102-0001", currentOrderJson: "[{\"name\":\"Trà\"}]" };
+    await assertSucceeds(cashier.ref("stores/TRAM01/tables/T3").set(order));
+    // Thanh toán: hóa đơn + dọn bàn (để lại dấu closedBillId)
+    await assertSucceeds(
+      cashier.ref("stores/TRAM01").update({
+        "bills/b1": { id: "b1", billCode: "HD-261102-0001", status: "PAID", finalAmount: 0, subTotal: 30000 },
+        "tables/T3": { name: "Bàn 3", zone: "Trong", inUse: false, currentOrderJson: "", closedBillId: "HD-261102-0001" },
+      })
+    );
+    // Máy khác / màn hình cũ lưu lại bàn với đơn cũ → bị chặn
+    await assertFails(cashier.ref("stores/TRAM01/tables/T3").set(order));
+    await assertFails(cashier.ref("stores/TRAM01/tables/T3/currentBillId").set("HD-261102-0001"));
+    // Ghi lẻ trường khác trên bàn trống vẫn được (web, khóa chọn món…)
+    await assertSucceeds(cashier.ref("stores/TRAM01/tables/T3/orderingBy").set("nv1"));
+    // Đơn mới với mã mới → ghi được, dấu cũ vẫn giữ
+    await assertSucceeds(cashier.ref("stores/TRAM01/tables/T3").set({ ...order, currentBillId: "HD-261102-0002", closedBillId: "HD-261102-0001" }));
+    await assertSucceeds(cashier.ref("stores/TRAM01/tables/T3/currentOrderJson").set("[]"));
+  });
 });
 
 describe("POS Trạm - Security Rules: bộ đếm, kho, khuyến mãi khi thanh toán", () => {

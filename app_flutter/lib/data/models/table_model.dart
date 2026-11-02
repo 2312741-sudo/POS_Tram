@@ -14,6 +14,9 @@ class TableModel {
   String? mergedIntoTable; // Name of parent table if merged
   String? currentBillId; // Mã hóa đơn thanh toán (HD-yyMMdd-HHmmss)
   String? currentOrderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
+  /// Mã hóa đơn vừa đóng trên bàn (thanh toán / hủy / dọn bàn). Luật Firebase từ chối mọi lần ghi
+  /// lại bàn với đúng mã này → đơn đã thanh toán không thể "sống lại" do một lần lưu bàn cũ tới muộn.
+  String? closedBillId;
 
   // Đặt bàn trước KiotViet (Reservations)
   bool isReserved;
@@ -74,6 +77,7 @@ class TableModel {
     this.mergedIntoTable,
     this.currentBillId,
     this.currentOrderCode,
+    this.closedBillId,
     this.isReserved = false,
     this.reservationCustomer,
     this.reservationPhone,
@@ -271,6 +275,7 @@ class TableModel {
       mergedIntoTable: map['mergedIntoTable']?.toString(),
       currentBillId: map['currentBillId']?.toString(),
       currentOrderCode: map['currentOrderCode']?.toString(),
+      closedBillId: nz(map['closedBillId']),
       isReserved: isReserved,
       reservationCustomer: map['reservationCustomer']?.toString(),
       reservationPhone: map['reservationPhone']?.toString(),
@@ -305,6 +310,7 @@ class TableModel {
     if (mergedIntoTable != null) 'mergedIntoTable': mergedIntoTable,
     if (currentBillId != null) 'currentBillId': currentBillId,
     if (currentOrderCode != null) 'currentOrderCode': currentOrderCode,
+    if (closedBillId != null && closedBillId!.isNotEmpty) 'closedBillId': closedBillId,
     'isReserved': isReserved,
     if (reservationCustomer != null) 'reservationCustomer': reservationCustomer,
     if (reservationPhone != null) 'reservationPhone': reservationPhone,
@@ -452,6 +458,7 @@ class TableModel {
     currentOrderJson = '';
     openedAt = null;
     guestCount = null;
+    if (currentBillId != null && currentBillId!.isNotEmpty) closedBillId = currentBillId;
     currentBillId = null;
     currentOrderCode = null;
     mergedIntoTable = null;
