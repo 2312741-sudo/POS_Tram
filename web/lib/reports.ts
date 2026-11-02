@@ -965,16 +965,10 @@ export function calculateRevenueByPeriod(
     const bFinal = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0));
     entry.netRevenue += bFinal;
 
-    const pm = (b.paymentMethod || "").toUpperCase();
-    if (pm === "CASH" || pm.includes("TIỀN MẶT")) {
-      entry.cashRevenue += bFinal;
-    } else if (pm === "TRANSFER_QR" || pm === "TRANSFER" || pm.includes("CHUYỂN")) {
-      entry.qrRevenue += bFinal;
-    } else if (pm === "CARD" || pm.includes("THẺ")) {
-      entry.cardRevenue += bFinal;
-    } else {
-      entry.cashRevenue += bFinal; // fallback
-    }
+    const portions = billPaymentPortions(b);
+    entry.cashRevenue += portions.CASH;
+    entry.qrRevenue += portions.TRANSFER_QR;
+    entry.cardRevenue += portions.CARD;
   }
 
   const list = Array.from(groups.values()).sort((a, b) => a.sortKey - b.sortKey);
@@ -1290,6 +1284,35 @@ export function calculateHourlyReport(bills: HistoryOrder[]): HourlyReportItem[]
   return hours;
 }
 
+type PayBucket = "CASH" | "TRANSFER_QR" | "CARD";
+
+/** Quy một phương thức thanh toán về TM / QR / Thẻ */
+export function paymentBucket(method: unknown): PayBucket {
+  const pm = String(method || "CASH").toUpperCase();
+  if (pm.includes("TRANSFER") || pm.includes("QR") || pm.includes("CHUYỂN")) return "TRANSFER_QR";
+  if (pm.includes("CARD") || pm.includes("THẺ")) return "CARD";
+  return "CASH";
+}
+
+/**
+ * Số tiền THỰC THU của hóa đơn chia theo phương thức. Hóa đơn hỗn hợp (SPLIT: tiền mặt + QR) chia đúng theo
+ * paymentSplits — trước đây cả hóa đơn bị dồn vào tiền mặt (web) / bị bỏ khỏi cả TM lẫn QR (app).
+ */
+export function billPaymentPortions(b: HistoryOrder): Record<PayBucket, number> {
+  const out: Record<PayBucket, number> = { CASH: 0, TRANSFER_QR: 0, CARD: 0 };
+  const finalA = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0)) || 0;
+  const splits = Array.isArray(b.paymentSplits) ? b.paymentSplits.filter((sp) => Number(sp?.amount) > 0) : [];
+  if (splits.length > 0) {
+    for (const sp of splits) out[paymentBucket(sp.method)] += Number(sp.amount) || 0;
+    // Phần chênh (làm tròn / dữ liệu cũ) dồn vào tiền mặt để tổng các phương thức = thực thu
+    const diff = finalA - (out.CASH + out.TRANSFER_QR + out.CARD);
+    if (diff !== 0) out.CASH = Math.max(0, out.CASH + diff);
+    return out;
+  }
+  out[paymentBucket(b.paymentMethod)] += finalA;
+  return out;
+}
+
 /**
  * Báo cáo 7: Hình thức Thanh toán (Payment Methods)
  */
@@ -1306,29 +1329,26 @@ export function calculatePaymentMethodsReport(bills: HistoryOrder[]): Record<str
   let totalAll = 0;
 
   for (const b of paidBills) {
-    let pm = (b.paymentMethod || "CASH").toUpperCase();
-    if (pm.includes("TRANSFER") || pm.includes("QR") || pm.includes("CHUYỂN")) {
-      pm = "TRANSFER_QR";
-    } else if (pm.includes("CARD") || pm.includes("THẺ")) {
-      pm = "CARD";
-    } else {
-      pm = "CASH";
-    }
-
-    if (!result[pm]) {
-      result[pm] = { billCount: 0, grossRevenue: 0, totalDiscount: 0, vatAmount: 0, finalAmount: 0 };
-    }
-
     const gross = Number(b.subTotal != null ? b.subTotal : (b.totalAmount || 0));
     const disc = Number(b.totalDiscount != null ? b.totalDiscount : (b.discountAmount || 0));
     const vat = Number(b.vatAmount || 0);
     const finalA = Number(b.finalAmount != null ? b.finalAmount : (b.totalAmount || 0));
+    const portions = billPaymentPortions(b);
+    const parts = (Object.keys(portions) as PayBucket[]).filter((k) => portions[k] > 0);
+    if (parts.length === 0) parts.push(paymentBucket(b.paymentMethod));
 
-    result[pm].billCount += 1;
-    result[pm].grossRevenue += gross;
-    result[pm].totalDiscount += disc;
-    result[pm].vatAmount += vat;
-    result[pm].finalAmount += finalA;
+    for (const pm of parts) {
+      if (!result[pm]) {
+        result[pm] = { billCount: 0, grossRevenue: 0, totalDiscount: 0, vatAmount: 0, finalAmount: 0 };
+      }
+      // Hóa đơn hỗn hợp: tiền hàng / giảm giá / VAT chia theo tỷ lệ tiền thu của từng phương thức
+      const share = parts.length === 1 ? 1 : finalA > 0 ? portions[pm] / finalA : 0;
+      result[pm].billCount += 1;
+      result[pm].grossRevenue += Math.round(gross * share);
+      result[pm].totalDiscount += Math.round(disc * share);
+      result[pm].vatAmount += Math.round(vat * share);
+      result[pm].finalAmount += parts.length === 1 ? finalA : portions[pm];
+    }
     totalAll += finalA;
   }
 

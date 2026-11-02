@@ -256,7 +256,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     }).toList();
   }
 
-  List<BillModel> get _paidBills => _rangeBills.where((b) => b.status == 'PAID').toList();
+  List<BillModel> get _paidBills => ReportCalculator.deduplicateBills(_rangeBills).where((b) => b.status == 'PAID').toList();
   /// Hóa đơn ĐÃ thanh toán rồi bị hủy (hủy đơn trên bàn khi chưa thanh toán tính vào số món hủy)
   List<BillModel> get _cancelledBills => ReportCalculator.deduplicateBills(_rangeBills).where((b) => b.isPaidCancel).toList();
 
@@ -356,17 +356,12 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   }
 
   // ==================== TAB 2: THU CHI CALCULATIONS ====================
-  int get _cashSales => _paidBills
-      .where((b) => b.paymentMethod == 'CASH')
-      .fold(0, (s, b) => s + b.finalAmount);
+  // Hóa đơn hỗn hợp (tiền mặt + QR) chia đúng phần từng phương thức → TM + QR + Thẻ = Tổng thực thu
+  int get _cashSales => _paidBills.fold(0, (s, b) => s + b.paymentPortions['CASH']!);
 
-  int get _qrSales => _paidBills
-      .where((b) => b.paymentMethod.contains('QR') || b.paymentMethod.contains('TRANSFER'))
-      .fold(0, (s, b) => s + b.finalAmount);
+  int get _qrSales => _paidBills.fold(0, (s, b) => s + b.paymentPortions['TRANSFER_QR']!);
 
-  int get _cardSales => _paidBills
-      .where((b) => b.paymentMethod == 'CARD')
-      .fold(0, (s, b) => s + b.finalAmount);
+  int get _cardSales => _paidBills.fold(0, (s, b) => s + b.paymentPortions['CARD']!);
 
   // Cash shift adjustments within range
   int get _totalCashIn {

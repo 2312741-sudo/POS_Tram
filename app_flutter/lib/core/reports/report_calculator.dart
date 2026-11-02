@@ -478,14 +478,11 @@ class ReportCalculator {
       int transfer = 0;
       int card = 0;
       for (final b in list) {
-        final m = b.paymentMethod.toUpperCase();
-        if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
-          cash += b.finalAmount;
-        } else if (m.contains('TRANSFER') || m.contains('QR') || m.contains('CHUYỂN KHOẢN')) {
-          transfer += b.finalAmount;
-        } else {
-          card += b.finalAmount;
-        }
+        // Hóa đơn hỗn hợp chia theo paymentSplits
+        final p = b.paymentPortions;
+        cash += p['CASH']!;
+        transfer += p['TRANSFER_QR']!;
+        card += p['CARD']!;
       }
       final pct = totalAllNet == 0
           ? 0.0

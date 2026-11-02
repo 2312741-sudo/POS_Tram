@@ -111,16 +111,19 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
     final targetList = _filteredBills;
     for (final b in targetList) {
-      final m = b.paymentMethod.toLowerCase();
-      if (m.contains('cash') || m.contains('tiền mặt')) {
+      // Hóa đơn hỗn hợp (tiền mặt + QR) chia tiền theo phần từng phương thức
+      final p = b.paymentPortions;
+      if (p['CASH']! > 0) {
         cash++;
-        cashAmount += b.finalAmount;
-      } else if (m.contains('transfer') || m.contains('chuyển') || m.contains('qr')) {
+        cashAmount += p['CASH']!;
+      }
+      if (p['TRANSFER_QR']! > 0) {
         transfer++;
-        transferAmount += b.finalAmount;
-      } else {
+        transferAmount += p['TRANSFER_QR']!;
+      }
+      if (p['CARD']! > 0) {
         other++;
-        otherAmount += b.finalAmount;
+        otherAmount += p['CARD']!;
       }
     }
 

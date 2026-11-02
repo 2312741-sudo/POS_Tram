@@ -163,12 +163,9 @@ class _RevenueTabState extends State<RevenueTab> {
   }
 
   int get _totalRevenue => _filteredBills.fold(0, (s, b) => s + b.finalAmount);
-  int get _cashRevenue => _filteredBills
-      .where((b) => b.paymentMethod.toLowerCase().contains('cash') || b.paymentMethod.toLowerCase().contains('tiền mặt'))
-      .fold(0, (s, b) => s + b.finalAmount);
-  int get _transferRevenue => _filteredBills
-      .where((b) => b.paymentMethod.toLowerCase().contains('transfer') || b.paymentMethod.toLowerCase().contains('chuyển') || b.paymentMethod.toLowerCase().contains('qr'))
-      .fold(0, (s, b) => s + b.finalAmount);
+  // Hóa đơn hỗn hợp (tiền mặt + QR) chia theo phần từng phương thức
+  int get _cashRevenue => _filteredBills.fold(0, (s, b) => s + b.paymentPortions['CASH']!);
+  int get _transferRevenue => _filteredBills.fold(0, (s, b) => s + b.paymentPortions['TRANSFER_QR']!);
   int get _avgPerOrder => _filteredBills.isNotEmpty ? (_totalRevenue / _filteredBills.length).round() : 0;
 
   // Chart data builder

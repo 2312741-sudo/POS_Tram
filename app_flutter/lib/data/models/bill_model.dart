@@ -400,6 +400,33 @@ class BillModel {
         return _itemLevelCampaigns.contains(t) && d.amount > 0 ? s + d.amount : s;
       });
 
+  /// Quy phương thức thanh toán về 'CASH' / 'TRANSFER_QR' / 'CARD' (khớp paymentBucket bên web)
+  static String paymentBucket(String method) {
+    final m = method.toUpperCase();
+    if (m.contains('TRANSFER') || m.contains('QR') || m.contains('CHUYỂN')) return 'TRANSFER_QR';
+    if (m.contains('CARD') || m.contains('THẺ')) return 'CARD';
+    return 'CASH';
+  }
+
+  /// Tiền THỰC THU chia theo phương thức. Hóa đơn hỗn hợp (tiền mặt + QR) chia theo paymentSplits —
+  /// trước đây báo cáo bỏ hẳn loại hóa đơn này khỏi cả dòng tiền mặt lẫn QR. Khớp billPaymentPortions (web).
+  Map<String, int> get paymentPortions {
+    final out = {'CASH': 0, 'TRANSFER_QR': 0, 'CARD': 0};
+    final splits = (paymentSplits ?? const <PaymentSplitModel>[]).where((sp) => sp.amount > 0).toList();
+    if (splits.isNotEmpty) {
+      for (final sp in splits) {
+        final k = paymentBucket(sp.method);
+        out[k] = out[k]! + sp.amount;
+      }
+      final diff = finalAmount - (out['CASH']! + out['TRANSFER_QR']! + out['CARD']!);
+      if (diff != 0) out['CASH'] = (out['CASH']! + diff) < 0 ? 0 : out['CASH']! + diff;
+      return out;
+    }
+    final k = paymentBucket(paymentMethod);
+    out[k] = out[k]! + finalAmount;
+    return out;
+  }
+
   /// Giảm giá MÓN trên báo cáo = giảm tay trên dòng món + khuyến mãi theo món (không vượt tổng giảm)
   int get reportItemDiscount {
     final v = itemDiscountTotal + promoItemDiscount;
