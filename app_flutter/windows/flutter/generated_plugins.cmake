@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   firebase_auth
   firebase_core
+  firebase_database
   print_bluetooth_thermal
   printing
   share_plus
