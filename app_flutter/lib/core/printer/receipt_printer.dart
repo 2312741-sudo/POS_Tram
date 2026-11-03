@@ -1,4 +1,5 @@
 // lib/core/printer/receipt_printer.dart
+import '../utils/topping_utils.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -133,7 +134,7 @@ class ReceiptPrinter {
       if (item.selectedSize.isNotEmpty) details.add('Size ${item.selectedSize}');
       if (item.selectedSugar.isNotEmpty) details.add(item.selectedSugar);
       if (item.selectedIce.isNotEmpty) details.add(item.selectedIce);
-      if (item.selectedToppings.isNotEmpty) details.add(item.selectedToppings.join(', '));
+      if (item.selectedToppings.isNotEmpty) details.add(toppingLabels(item.selectedToppings).join(', '));
       if (details.isNotEmpty) {
         bytes.addAll(encodeText(normalize('  (${details.join(' - ')})')));
         bytes.add(0x0A);
@@ -333,7 +334,7 @@ class ReceiptPrinter {
       if (item.selectedSize.isNotEmpty) details.add('Size ${item.selectedSize}');
       if (item.selectedSugar.isNotEmpty) details.add(item.selectedSugar);
       if (item.selectedIce.isNotEmpty) details.add(item.selectedIce);
-      if (item.selectedToppings.isNotEmpty) details.add(item.selectedToppings.join(', '));
+      if (item.selectedToppings.isNotEmpty) details.add(toppingLabels(item.selectedToppings).join(', '));
       if (details.isNotEmpty) {
         bytes.addAll(encodeText(normalize('  (${details.join(' - ')})')));
         bytes.add(0x0A);
@@ -472,7 +473,7 @@ class ReceiptPrinter {
       if (item.selectedSize.isNotEmpty) details.add('Size ${item.selectedSize}');
       if (item.selectedSugar.isNotEmpty) details.add(item.selectedSugar);
       if (item.selectedIce.isNotEmpty) details.add(item.selectedIce);
-      if (item.selectedToppings.isNotEmpty) details.add(item.selectedToppings.join(', '));
+      if (item.selectedToppings.isNotEmpty) details.add(toppingLabels(item.selectedToppings).join(', '));
       if (details.isNotEmpty) {
         lines.add(ReceiptRasterLine(text: '  (${details.join(' - ')})', fontSize: 14.0));
       }

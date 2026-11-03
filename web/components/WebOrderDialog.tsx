@@ -6,7 +6,8 @@ import { lineQuantity, lineUnitPrice, setLineQuantity, summarizeOrderLines, type
 import { addLineToOrder, makeOrderLine, type OrderActor } from "@/lib/web-order";
 import type { Campaign } from "@/lib/pricing-engine";
 import { isProductAvailable, type AvailabilityFields } from "@/lib/product-availability";
-import { toggleTopping, type ItemCatalog } from "@/lib/item-options";
+import { addToppingUnit, removeToppingUnit, toggleTopping, type ItemCatalog } from "@/lib/item-options";
+import { toppingCount } from "@/lib/topping-utils";
 import {
   ICE_OPTIONS,
   SUGAR_OPTIONS,
@@ -123,6 +124,16 @@ export default function WebOrderDialog({
       background: active ? "var(--primary)" : "var(--surface)", color: active ? "#fff" : "var(--subtext)",
     }) as const;
 
+  /** Topping đã chọn: chip có nút − / + để lấy nhiều phần (− về 0 = bỏ topping) */
+  const stepperChip = (key: string, label: string, count: number, canAdd: boolean, onAdd: () => void, onSub: () => void) => (
+    <span key={key} style={{ ...chip(true), display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 6px 2px 12px" }}>
+      {label}
+      <button type="button" aria-label={`Bớt ${label}`} onClick={onSub} style={{ background: "transparent", border: 0, color: "#fff", cursor: "pointer", padding: 2, display: "inline-flex" }}><Minus size={13} /></button>
+      <strong>{count}</strong>
+      <button type="button" aria-label={`Thêm ${label}`} disabled={!canAdd} onClick={onAdd} style={{ background: "transparent", border: 0, color: "#fff", cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.5, padding: 2, display: "inline-flex" }}><Plus size={13} /></button>
+    </span>
+  );
+
   return (
     <ModalShell
       title={`${opening ? "Mở bàn & gọi món" : "Thêm món"} — ${tableName}`}
@@ -167,15 +178,24 @@ export default function WebOrderDialog({
                 ? picking.opts.toppingGroups.map((g) => (
                     <OptionGroup key={g.id} label={`${g.name}${!g.multi ? " (chọn 1)" : g.max > 0 ? ` (tối đa ${g.max})` : ""}`}>
                       {g.items.map((t) => {
-                        const on = picking.sel.toppings.includes(t.name);
+                        const count = toppingCount(picking.sel.toppings, t.name);
+                        const label = `${t.name}${t.price > 0 ? ` +${fmt(t.price)}` : ""}`;
+                        if (g.multi && count > 0) {
+                          const inGroup = g.items.reduce((a, x) => a + toppingCount(picking.sel.toppings, x.name), 0);
+                          return stepperChip(
+                            t.id, label, count, !(g.max > 0 && inGroup >= g.max),
+                            () => setPicking({ ...picking, sel: { ...picking.sel, toppings: addToppingUnit(picking.sel.toppings, g, t.name) } }),
+                            () => setPicking({ ...picking, sel: { ...picking.sel, toppings: removeToppingUnit(picking.sel.toppings, t.name) } })
+                          );
+                        }
                         return (
                           <button
                             key={t.id}
                             type="button"
-                            style={chip(on)}
+                            style={chip(count > 0)}
                             onClick={() => setPicking({ ...picking, sel: { ...picking.sel, toppings: toggleTopping(picking.sel.toppings, g, t.name) } })}
                           >
-                            {t.name}{t.price > 0 ? ` +${fmt(t.price)}` : ""}
+                            {label}
                           </button>
                         );
                       })}
@@ -185,18 +205,20 @@ export default function WebOrderDialog({
               {!picking.opts.catalogMode && picking.opts.toppings.length > 0 && (
                 <OptionGroup label="Topping (chọn nhiều)">
                   {picking.opts.toppings.map((t) => {
-                    const on = picking.sel.toppings.includes(t.name);
+                    const count = toppingCount(picking.sel.toppings, t.name);
+                    if (count > 0) {
+                      return stepperChip(
+                        t.name, `${t.name} +${fmt(t.price)}`, count, true,
+                        () => setPicking({ ...picking, sel: { ...picking.sel, toppings: [...picking.sel.toppings, t.name] } }),
+                        () => setPicking({ ...picking, sel: { ...picking.sel, toppings: removeToppingUnit(picking.sel.toppings, t.name) } })
+                      );
+                    }
                     return (
                       <button
                         key={t.name}
                         type="button"
-                        style={chip(on)}
-                        onClick={() =>
-                          setPicking({
-                            ...picking,
-                            sel: { ...picking.sel, toppings: on ? picking.sel.toppings.filter((x) => x !== t.name) : [...picking.sel.toppings, t.name] },
-                          })
-                        }
+                        style={chip(false)}
+                        onClick={() => setPicking({ ...picking, sel: { ...picking.sel, toppings: [...picking.sel.toppings, t.name] } })}
                       >
                         {t.name} +{fmt(t.price)}
                       </button>

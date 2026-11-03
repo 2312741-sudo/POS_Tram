@@ -4,6 +4,7 @@ import { normalizeBusinessDayStart, setBusinessDayConfig } from "./business-day"
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db, auth, functions } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
+import { planKitchenCancel } from "./kitchen";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { buildCreateStorePayload, type CreateStorePayload } from "./create-store-payload";
@@ -1769,6 +1770,22 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         });
         // Ghi nguyên tử: thành công tất cả hoặc không ghi gì
         await update(ref(db), updates);
+
+        // Hủy cả đơn → báo bếp huỷ mọi món của các phiếu bếp chưa xong của bàn (không chặn việc hủy đơn)
+        void get(ref(db, `stores/${targetStoreCode}/kitchen_orders`))
+          .then((snap) => {
+            const upd = planKitchenCancel({
+              storeCode: targetStoreCode,
+              kitchenVal: snap.val(),
+              tableName: table.name,
+              orderCode: table.currentOrderCode || undefined,
+              line: null,
+              removeQty: 0,
+              now: Date.now(),
+            });
+            return Object.keys(upd).length > 0 ? update(ref(db), upd) : undefined;
+          })
+          .catch(() => {});
 
         applyClosedTableLocally(targetStoreCode, table, clearPayload);
         setAllHistory((prev) => [sanitizeHistoryOrder(cancelRecord, cancelBillId), ...prev]);

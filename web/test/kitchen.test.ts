@@ -16,7 +16,10 @@ describe("màn hình bếp trên web", () => {
     });
     expect(t.map((x) => x.key)).toEqual(["a", "b"]);
     expect(t[0]).toMatchObject({ tableName: "Bàn 1", orderCode: "OD-1", note: "gấp", orderedByName: "An" });
-    expect(t[0].lines[0]).toEqual({ name: "Trà đào", quantity: 2, note: "ít đá", options: "Size L • 50% đường • + Kem Cheese" });
+    expect(t[0].lines[0]).toEqual({
+      name: "Trà đào", quantity: 2, note: "ít đá", options: "Size L • 50% đường",
+      toppings: [{ name: "Kem Cheese", count: 1 }], cancelledQty: 0,
+    });
     expect(parseKitchenTickets("T1", null)).toEqual([]);
   });
 

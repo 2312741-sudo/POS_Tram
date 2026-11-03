@@ -159,7 +159,7 @@ export default function KitchenPage() {
           {tickets.map((t) => {
             const wait = now > 0 ? waitingMinutes(t, now) : 0;
             return (
-              <div key={t.key} style={{ background: "var(--surface)", border: `2px solid ${wait >= 10 ? "#B3261E" : "var(--border)"}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div key={t.key} style={{ background: "var(--surface)", border: `2px solid ${wait >= 10 || t.hasCancellation ? "#B3261E" : "var(--border)"}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <strong style={{ fontSize: 18 }}>{t.tableName}</strong>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, color: wait >= 10 ? "#B3261E" : "var(--subtext)" }}>
@@ -171,14 +171,38 @@ export default function KitchenPage() {
                     {t.orderCode}{t.orderCode && t.orderedByName ? " • " : ""}{t.orderedByName}
                   </div>
                 )}
+                {t.hasCancellation && (
+                  <div style={{ background: "#FCE8E6", color: "#B3261E", border: "1px solid #B3261E", borderRadius: 8, padding: "6px 10px", fontSize: 13, fontWeight: 800 }}>
+                    {t.fullyCancelled ? "ĐƠN NÀY ĐÃ BỊ HUỶ — không làm nữa" : "CÓ MÓN BỊ HUỶ — xem dòng màu đỏ"}
+                  </div>
+                )}
                 <div style={{ display: "grid", gap: 6 }}>
-                  {t.lines.map((l, i) => (
-                    <div key={i} style={{ fontSize: 14 }}>
-                      <strong>{l.quantity} ×</strong> {l.name}
-                      {l.options && <div style={{ fontSize: 12, color: "var(--subtext)" }}>{l.options}</div>}
-                      {l.note && <div style={{ fontSize: 12, color: "#B06000", fontWeight: 600 }}>Ghi chú: {l.note}</div>}
-                    </div>
-                  ))}
+                  {t.lines.map((l, i) => {
+                    const allGone = l.cancelledQty >= l.quantity;
+                    const active = l.quantity - l.cancelledQty;
+                    return (
+                      <div key={i} style={{ fontSize: 14, ...(l.cancelledQty > 0 ? { background: "#FCE8E6", borderRadius: 8, padding: "4px 8px" } : null) }}>
+                        <span style={allGone ? { textDecoration: "line-through", color: "var(--subtext)" } : undefined}>
+                          <strong>{allGone ? "HUỶ" : `${active} ×`}</strong> {l.name}
+                        </span>
+                        {l.cancelledQty > 0 && !allGone && (
+                          <div style={{ fontSize: 13, color: "#B3261E", fontWeight: 800 }}>Đã huỷ {l.cancelledQty} phần (từ x{l.quantity} còn x{active})</div>
+                        )}
+                        {l.options && <div style={{ fontSize: 12, color: "var(--subtext)" }}>{l.options}</div>}
+                        {l.toppings.length > 0 && (
+                          <div style={{ marginTop: 3, background: "#E6F4EA", borderRadius: 6, padding: "3px 8px" }}>
+                            <div style={{ fontSize: 11, color: "#137333", fontWeight: 700 }}>Topping:</div>
+                            {l.toppings.map((tp) => (
+                              <div key={tp.name} style={{ fontSize: 14, fontWeight: 700, color: "#0D652D" }}>
+                                + {tp.name}{tp.count > 1 ? `  x${tp.count}` : ""}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {l.note && <div style={{ fontSize: 12, color: "#B06000", fontWeight: 600 }}>Ghi chú: {l.note}</div>}
+                      </div>
+                    );
+                  })}
                 </div>
                 {t.note && <div style={{ background: "#FEF7E0", color: "#8A5B00", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>Bếp: {t.note}</div>}
                 <button
@@ -187,7 +211,7 @@ export default function KitchenPage() {
                   disabled={busyKey === t.key}
                   onClick={() => markDone(t.key)}
                 >
-                  <CheckCircle2 size={16} /> Xong
+                  <CheckCircle2 size={16} /> {t.fullyCancelled ? "Đã biết" : "Xong"}
                 </button>
               </div>
             );

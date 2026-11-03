@@ -305,3 +305,21 @@ List<String> toggleTopping({
   next.add(name);
   return next;
 }
+
+/// Thêm MỘT phần topping (cho phép lặp lại cùng topping để lấy nhiều phần). Nhóm "chọn một" chỉ nhận 1 phần
+/// (thay phần cũ); nhóm "tối đa N" giới hạn tổng số phần trong nhóm. Trả danh sách mới, không sửa [selected].
+List<String> addToppingUnit({
+  required List<String> selected,
+  required ToppingGroup group,
+  required String name,
+}) {
+  final next = List<String>.from(selected);
+  final groupNames = group.items.map((t) => t.name).toSet();
+  if (!group.multi) {
+    next.removeWhere(groupNames.contains);
+  } else if (group.max > 0 && next.where(groupNames.contains).length >= group.max) {
+    return next; // đã đủ phần -> không thêm
+  }
+  next.add(name);
+  return next;
+}

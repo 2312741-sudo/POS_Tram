@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/domain/topping_ref.dart';
 import '../../core/domain/item_options.dart';
+import '../../core/utils/topping_utils.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
@@ -568,6 +569,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           ..clear()
                           ..addAll(next);
                       }),
+                      onIncrement: (g, name) => setModalState(() {
+                        final next = addToppingUnit(selected: selectedToppings, group: g, name: name);
+                        selectedToppings
+                          ..clear()
+                          ..addAll(next);
+                      }),
+                      onDecrement: (n) => setModalState(() => selectedToppings.remove(n)),
                       onRemoveExtra: (n) => setModalState(() => selectedToppings.remove(n)),
                       onClearAll: () => setModalState(() => selectedToppings.clear()),
                     ),
@@ -579,27 +587,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       spacing: 8,
                       runSpacing: 4,
                       children: availableToppingNames.map((topName) {
-                        final isSel = selectedToppings.contains(topName);
+                        final count = toppingCount(selectedToppings, topName);
                         final topProd = toppingItemMap[topName];
                         final priceStr = topProd != null ? FormatUtils.vnd(topProd.price) : '5.000 đ';
+                        if (count > 0) {
+                          return ToppingStepperChip(
+                            label: '$topName (+$priceStr)',
+                            count: count,
+                            onIncrement: () => setModalState(() => selectedToppings.add(topName)),
+                            onDecrement: () => setModalState(() => selectedToppings.remove(topName)),
+                          );
+                        }
                         return FilterChip(
                           label: Text('$topName (+$priceStr)'),
-                          selected: isSel,
-                          selectedColor: context.tc.primaryLight,
-                          labelStyle: TextStyle(
-                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          onSelected: (val) {
-                            setModalState(() {
-                              if (val) {
-                                selectedToppings.add(topName);
-                              } else {
-                                selectedToppings.remove(topName);
-                              }
-                            });
-                          },
+                          selected: false,
+                          labelStyle: TextStyle(color: context.tc.textPrimary, fontSize: 12),
+                          onSelected: (_) => setModalState(() => selectedToppings.add(topName)),
                         );
                       }).toList(),
                     ),

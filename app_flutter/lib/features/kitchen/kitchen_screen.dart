@@ -1,4 +1,5 @@
 // lib/features/kitchen/kitchen_screen.dart
+import '../../core/utils/topping_utils.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,6 +35,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
   StreamSubscription<List<KitchenOrderModel>>? _sub;
   // Đơn vừa vuốt "Xong" – ẩn ngay để Dismissible không còn trong cây widget
   final Set<String> _pendingDone = {};
+  final Set<String> _cancelSeen = {}; // 'khóa|cancelledAt' đã rung báo
   // Đang xong một phần (key|nhóm) – chặn bấm đúp
   final Set<String> _pendingGroup = {};
   final Set<String> _pendingItem = {};
@@ -89,6 +91,12 @@ class _KitchenScreenState extends State<KitchenScreen> {
         if (!wasLoading && orders.length > hadOrders) {
           HapticFeedback.heavyImpact();
         }
+        // Rung khi có món bị huỷ (nhân viên xóa món đã gửi bếp)
+        var newCancel = false;
+        for (final o in orders) {
+          if (o.cancelledAt != null && _cancelSeen.add('${o.firebaseKey}|${o.cancelledAt}')) newCancel = true;
+        }
+        if (newCancel && !wasLoading) HapticFeedback.vibrate();
       }
     }, onError: (Object e) {
       if (mounted) setState(() { _error = e; _loading = false; });
@@ -541,6 +549,9 @@ class _KitchenOrderCard extends StatelessWidget {
     // Có cả nước lẫn bánh → cho xong từng phần
     final canSplit = order.groupsPresent.length >= 2;
 
+    final cancelledQtys = order.cancelledQtys;
+    final fullyCancelled = order.isFullyCancelled;
+
     final tName = order.tableName.trim();
     final tableDisplayName = tName.toLowerCase().startsWith('bàn') || tName.toLowerCase().contains('mang')
         ? tName
@@ -573,10 +584,10 @@ class _KitchenOrderCard extends StatelessWidget {
           color: AppColors.kitchenCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: waiting.inMinutes >= 10
+            color: order.hasCancellation || waiting.inMinutes >= 10
               ? AppColors.danger.withValues(alpha: 0.5)
               : AppColors.kitchenCardBorder,
-            width: waiting.inMinutes >= 10 ? 2 : 1,
+            width: order.hasCancellation || waiting.inMinutes >= 10 ? 2 : 1,
           ),
           boxShadow: waiting.inMinutes >= 10
             ? [BoxShadow(color: AppColors.danger.withValues(alpha: 0.2), blurRadius: 16)]
@@ -626,6 +637,30 @@ class _KitchenOrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              if (order.hasCancellation) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.danger.withValues(alpha: 0.6)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.triangleAlert, color: AppColors.danger, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          fullyCancelled ? 'ĐƠN NÀY ĐÃ BỊ HUỶ — không làm nữa' : 'CÓ MÓN BỊ HUỶ — xem dòng màu đỏ',
+                          style: GoogleFonts.beVietnamPro(color: AppColors.danger, fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               const Divider(color: AppColors.kitchenCardBorder, height: 1),
               const SizedBox(height: 12),
 
@@ -633,14 +668,16 @@ class _KitchenOrderCard extends StatelessWidget {
               ...items.asMap().entries.map((entry) {
                 final item = entry.value;
                 final grp = entry.key < groups.length ? groups[entry.key] : null;
+                final cancelled = entry.key < cancelledQtys.length ? cancelledQtys[entry.key] : 0;
+                final allGone = cancelled >= item.quantity;
                 return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   // Trước đây nền kem nhạt + chữ trắng => gần như không đọc được
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: cancelled > 0 ? AppColors.danger.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white10),
+                  border: Border.all(color: cancelled > 0 ? AppColors.danger.withValues(alpha: 0.5) : Colors.white10),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,9 +701,12 @@ class _KitchenOrderCard extends StatelessWidget {
                           child: Text(
                             item.name,
                             style: GoogleFonts.beVietnamPro(
-                              color: Colors.white,
+                              color: allGone ? Colors.white38 : Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
+                              decoration: allGone ? TextDecoration.lineThrough : null,
+                              decorationColor: AppColors.danger,
+                              decorationThickness: 2,
                             ),
                           ),
                         ),
@@ -678,16 +718,16 @@ class _KitchenOrderCard extends StatelessWidget {
                             border: Border.all(color: AppColors.kitchenAccent.withValues(alpha: 0.5)),
                           ),
                           child: Text(
-                            'x${item.quantity}',
+                            allGone ? 'HUỶ' : 'x${item.quantity - cancelled}',
                             style: GoogleFonts.beVietnamPro(
-                              color: AppColors.kitchenAccent,
+                              color: allGone ? AppColors.danger : AppColors.kitchenAccent,
                               fontWeight: FontWeight.w800,
                               fontSize: 15,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        InkWell(
+                        if (!allGone) InkWell(
                           onTap: () => onItemDone(entry.key),
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
@@ -716,7 +756,17 @@ class _KitchenOrderCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (item.optionsSummary.isNotEmpty) ...[
+                    if (cancelled > 0 && !allGone) ...[
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Text(
+                          'Đã huỷ $cancelled phần (từ x${item.quantity} còn x${item.quantity - cancelled})',
+                          style: GoogleFonts.beVietnamPro(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                    if (item.optionsSummaryNoTopping.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Padding(
                         padding: const EdgeInsets.only(left: 16),
@@ -728,12 +778,50 @@ class _KitchenOrderCard extends StatelessWidget {
                             border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                           ),
                           child: Text(
-                            'Tuỳ chọn: ${item.optionsSummary}',
+                            'Tuỳ chọn: ${item.optionsSummaryNoTopping}',
                             style: GoogleFonts.beVietnamPro(
                               color: Colors.amber.shade200,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    // Topping tách riêng, mỗi topping một dòng (kèm số phần) để bếp dễ nhìn
+                    if (item.selectedToppings.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.lightGreen.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.lightGreen.withValues(alpha: 0.35)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Topping:',
+                                style: GoogleFonts.beVietnamPro(
+                                  color: Colors.lightGreen.shade200,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              for (final t in groupToppings(item.selectedToppings))
+                                Text(
+                                  '+ ${t.name}${t.count > 1 ? '  x${t.count}' : ''}',
+                                  style: GoogleFonts.beVietnamPro(
+                                    color: Colors.lightGreen.shade100,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -771,7 +859,7 @@ class _KitchenOrderCard extends StatelessWidget {
               }),
 
               const SizedBox(height: 12),
-              if (canSplit) ...[
+              if (canSplit && !fullyCancelled) ...[
                 Row(
                   children: [
                     for (final g in [kKitchenGroupDrink, kKitchenGroupFood]) ...[
@@ -799,7 +887,7 @@ class _KitchenOrderCard extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: onDone,
                   icon: const Icon(LucideIcons.circleCheck),
-                  label: Text(canSplit ? 'Xong cả đơn' : 'Đã xong', style: GoogleFonts.beVietnamPro(
+                  label: Text(fullyCancelled ? 'Đã biết' : (canSplit ? 'Xong cả đơn' : 'Đã xong'), style: GoogleFonts.beVietnamPro(
                     fontWeight: FontWeight.w700, fontSize: 15,
                   )),
                   style: ElevatedButton.styleFrom(

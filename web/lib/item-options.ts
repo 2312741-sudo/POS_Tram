@@ -201,3 +201,23 @@ export function toggleTopping(selected: string[], group: ToppingGroup, name: str
   next.push(name);
   return next;
 }
+
+/**
+ * Thêm MỘT phần topping (cho phép lặp lại cùng topping để lấy nhiều phần). Nhóm "chọn một" chỉ nhận 1 phần
+ * (thay phần cũ); nhóm "tối đa N" giới hạn tổng số phần trong nhóm. Trả danh sách mới.
+ */
+export function addToppingUnit(selected: string[], group: ToppingGroup, name: string): string[] {
+  const names = new Set(group.items.map((t) => t.name));
+  let next = [...selected];
+  if (!group.multi) next = next.filter((x) => !names.has(x));
+  else if (group.max > 0 && next.filter((x) => names.has(x)).length >= group.max) return next;
+  next.push(name);
+  return next;
+}
+
+/** Bớt MỘT phần của topping (về 0 = bỏ topping) */
+export function removeToppingUnit(selected: string[], name: string): string[] {
+  const i = selected.indexOf(name);
+  if (i < 0) return selected;
+  return [...selected.slice(0, i), ...selected.slice(i + 1)];
+}

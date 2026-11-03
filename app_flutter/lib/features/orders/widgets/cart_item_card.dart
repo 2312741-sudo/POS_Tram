@@ -2,6 +2,7 @@
 //
 // Thẻ một món trong giỏ hàng (OrderCartScreen). Chỉ hiển thị; mọi thao tác
 // được truyền vào qua callback nên hành vi nghiệp vụ giữ nguyên ở màn hình.
+import '../../../core/utils/topping_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
@@ -134,7 +135,7 @@ class CartItemCard extends StatelessWidget {
                         _AttrChip(item.selectedIce.trim(),
                             context.ink(const Color(0xFF0F5E66)), context.bg(const Color(0xFFE0F2F1))),
                       if (hasToppings)
-                        _AttrChip('+${item.selectedToppings.join(', ')}',
+                        _AttrChip('+${toppingLabels(item.selectedToppings).join(', ')}',
                             context.tc.warningInk, context.tc.warningLight),
                     ],
                   ),

@@ -4,6 +4,7 @@
  *  - topping: ưu tiên category.allowedToppingIds → product.allowedToppings → mọi món topping → bộ topping mặc định
  *  - đường / đá: khi món là đồ uống (hasIceSugarOptions, có size hoặc danh mục đồ uống)
  */
+import { toppingLabels } from "./topping-utils";
 import type { RawOrderLine } from "./order-math";
 import { productIdValue, type OrderActor } from "./web-order";
 import { isLegacyCatalog, noteChips, resolveItemOptions, type ItemCatalog, type ToppingGroup } from "./item-options";
@@ -224,10 +225,16 @@ export function makeConfiguredLine(
 
 /** Mô tả ngắn các tùy chọn đã chọn: "Size M • 70% đường • 50% đá • + Trân châu đen" */
 export function describeSelection(line: RawOrderLine): string {
+  const parts = describeSelectionNoTopping(line) ? [describeSelectionNoTopping(line)] : [];
+  if (Array.isArray(line.selectedToppings) && line.selectedToppings.length > 0) parts.push(`+ ${toppingLabels(line.selectedToppings).join(", ")}`);
+  return parts.join(" • ");
+}
+
+/** Size / đường / đá (không gồm topping) — màn bếp hiển thị topping ở dòng riêng */
+export function describeSelectionNoTopping(line: RawOrderLine): string {
   const parts: string[] = [];
   if (line.selectedSize) parts.push(`Size ${String(line.selectedSize)}`);
   if (line.selectedSugar) parts.push(String(line.selectedSugar));
   if (line.selectedIce) parts.push(String(line.selectedIce));
-  if (Array.isArray(line.selectedToppings) && line.selectedToppings.length > 0) parts.push(`+ ${line.selectedToppings.map(String).join(", ")}`);
   return parts.join(" • ");
 }

@@ -1482,6 +1482,7 @@ class OrderRepository {
     final orderCode = table.currentOrderCode ?? FormatUtils.orderCode();
     final now = DateTime.now().millisecondsSinceEpoch;
     final cancelBillId = 'BILL_CANCELLED_$now';
+    unawaited(cancelKitchenOrdersForTable(tableName: table.name, orderCode: table.currentOrderCode));
     final deleted = table.deletedItems;
     final deletedSummary = DeletedItemsLogic.summarize(deleted);
     final cancelLog = OrderActionLogModel(
@@ -2286,6 +2287,100 @@ class OrderRepository {
     table.currentOrderJson = jsonEncode(updatedItems.map((e) => e.toMap()).toList());
     table.inUse = true;
     await saveTable(table);
+  }
+
+  static String _kitchenItemKey(Map m) {
+    final tops = (m['selectedToppings'] is List ? (m['selectedToppings'] as List).map((e) => e.toString()).toList() : <String>[])..sort();
+    return '${m['productId']}|${m['selectedSize'] ?? ''}|${m['selectedSugar'] ?? ''}|${m['selectedIce'] ?? ''}|${tops.join(',')}';
+  }
+
+  /// Báo bếp HUỶ [removeQty] phần của [line] (món đã gửi bếp bị xóa/giảm). Tìm các phiếu bếp CHƯA XONG của bàn
+  /// (khớp mã đặt món nếu có), ghi `cancelledQty` vào món tương ứng để màn bếp hiện "ĐÃ HUỶ". Không ném lỗi:
+  /// việc xóa món ở bàn không được hỏng vì không báo được bếp.
+  Future<void> cancelKitchenItems({
+    required String tableName,
+    String? orderCode,
+    required OrderItemModel line,
+    required int removeQty,
+  }) async {
+    if (removeQty <= 0) return;
+    try {
+      final snap = await kitchenOrdersRef.get().timeout(const Duration(seconds: 4));
+      if (!snap.exists || snap.value is! Map) return;
+      final want = _kitchenItemKey(line.toMap());
+      var left = removeQty;
+      final entries = (snap.value as Map).entries
+          .where((e) => e.value is Map)
+          .map((e) => (key: e.key.toString(), map: Map<dynamic, dynamic>.from(e.value as Map)))
+          .where((e) => e.map['isDone'] != true && e.map['tableName']?.toString() == tableName)
+          .where((e) => orderCode == null || orderCode.isEmpty || e.map['orderCode']?.toString() == orderCode)
+          .toList()
+        ..sort((a, b) => ((b.map['timestamp'] as num?) ?? 0).compareTo((a.map['timestamp'] as num?) ?? 0));
+      final updates = <String, Object?>{};
+      for (final e in entries) {
+        if (left <= 0) break;
+        final List items;
+        try {
+          items = jsonDecode(e.map['itemsJson']?.toString() ?? '[]') as List;
+        } catch (_) {
+          continue;
+        }
+        var changed = false;
+        for (final raw in items) {
+          if (left <= 0) break;
+          if (raw is! Map || _kitchenItemKey(raw) != want) continue;
+          final qty = (raw['quantity'] as num?)?.toInt() ?? 1;
+          final cancelled = (raw['cancelledQty'] as num?)?.toInt() ?? 0;
+          final take = (qty - cancelled).clamp(0, left);
+          if (take <= 0) continue;
+          raw['cancelledQty'] = cancelled + take;
+          left -= take;
+          changed = true;
+        }
+        if (changed) {
+          updates['${e.key}/itemsJson'] = jsonEncode(items);
+          updates['${e.key}/cancelledAt'] = DateTime.now().millisecondsSinceEpoch;
+        }
+      }
+      if (updates.isNotEmpty) await kitchenOrdersRef.update(updates);
+    } catch (e) {
+      debugPrint('[OrderRepository] Không báo huỷ món cho bếp: $e');
+    }
+  }
+
+  /// Hủy cả hóa đơn / dọn bàn: huỷ toàn bộ món của các phiếu bếp chưa xong của bàn
+  Future<void> cancelKitchenOrdersForTable({required String tableName, String? orderCode}) async {
+    try {
+      final snap = await kitchenOrdersRef.get().timeout(const Duration(seconds: 4));
+      if (!snap.exists || snap.value is! Map) return;
+      final updates = <String, Object?>{};
+      for (final e in (snap.value as Map).entries) {
+        final v = e.value;
+        if (v is! Map || v['isDone'] == true || v['tableName']?.toString() != tableName) continue;
+        if (orderCode != null && orderCode.isNotEmpty && v['orderCode']?.toString() != orderCode) continue;
+        final List items;
+        try {
+          items = jsonDecode(v['itemsJson']?.toString() ?? '[]') as List;
+        } catch (_) {
+          continue;
+        }
+        var changed = false;
+        for (final raw in items) {
+          if (raw is! Map) continue;
+          final qty = (raw['quantity'] as num?)?.toInt() ?? 1;
+          if (((raw['cancelledQty'] as num?)?.toInt() ?? 0) >= qty) continue;
+          raw['cancelledQty'] = qty;
+          changed = true;
+        }
+        if (changed) {
+          updates['${e.key}/itemsJson'] = jsonEncode(items);
+          updates['${e.key}/cancelledAt'] = DateTime.now().millisecondsSinceEpoch;
+        }
+      }
+      if (updates.isNotEmpty) await kitchenOrdersRef.update(updates);
+    } catch (e) {
+      debugPrint('[OrderRepository] Không báo huỷ đơn cho bếp: $e');
+    }
   }
 
   Future<void> markKitchenOrderDone(String key) async {

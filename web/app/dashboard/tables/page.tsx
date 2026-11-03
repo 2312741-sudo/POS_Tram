@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Suspense, useState, useMemo, useCallback, useEffect, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { onValue, ref, update } from "firebase/database";
+import { get, onValue, ref, update } from "firebase/database";
+import { planKitchenCancel } from "@/lib/kitchen";
 import {
   Search,
   Plus,
@@ -893,6 +894,24 @@ function TablesPageContent() {
         approval,
         [entry]
       );
+      if (!err && sent) {
+        // Món đã gửi bếp bị xóa/giảm → báo bếp huỷ (màn bếp đánh dấu "ĐÃ HUỶ"); lỗi không chặn việc xóa món
+        const sc = tableStoreCode(table);
+        void get(ref(db, `stores/${sc}/kitchen_orders`))
+          .then((snap) => {
+            const upd = planKitchenCancel({
+              storeCode: sc,
+              kitchenVal: snap.val(),
+              tableName: table.name,
+              orderCode: table.currentOrderCode || undefined,
+              line: line as Record<string, unknown>,
+              removeQty: entry.quantity,
+              now: Date.now(),
+            });
+            return Object.keys(upd).length > 0 ? update(ref(db), upd) : undefined;
+          })
+          .catch(() => {});
+      }
       if (!err && nextItems.length === 0) {
         // Xóa hết món đã lưu → ghi hóa đơn CANCELLED (kèm deletedItems) và trả bàn — giống Flutter
         const res = await cancelActiveTable(

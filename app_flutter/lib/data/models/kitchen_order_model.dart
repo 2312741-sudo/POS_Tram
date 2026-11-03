@@ -21,6 +21,7 @@ class KitchenOrderModel {
   // (= key phiếu gốc). itemGroup = 'drink' | 'food' của phiếu đã tách. Dữ liệu cũ: null.
   final String? batchId;
   final String? itemGroup;
+  final int? cancelledAt; // Lần gần nhất có món bị huỷ (nhân viên xóa món đã gửi bếp)
 
   KitchenOrderModel({
     this.firebaseKey,
@@ -39,6 +40,7 @@ class KitchenOrderModel {
     this.pickedUpBy,
     this.batchId,
     this.itemGroup,
+    this.cancelledAt,
   });
 
   factory KitchenOrderModel.fromMap(Map<dynamic, dynamic> map, {String? key}) {
@@ -59,6 +61,7 @@ class KitchenOrderModel {
       pickedUpBy: map['pickedUpBy']?.toString(),
       batchId: map['batchId']?.toString(),
       itemGroup: map['itemGroup']?.toString(),
+      cancelledAt: (map['cancelledAt'] as num?)?.toInt(),
     );
   }
 
@@ -78,6 +81,7 @@ class KitchenOrderModel {
     if (pickedUpBy != null) 'pickedUpBy': pickedUpBy,
     if (batchId != null) 'batchId': batchId,
     if (itemGroup != null) 'itemGroup': itemGroup,
+    if (cancelledAt != null) 'cancelledAt': cancelledAt,
   };
 
   KitchenOrderModel copyWith({
@@ -115,6 +119,7 @@ class KitchenOrderModel {
       pickedUpBy: pickedUpBy ?? this.pickedUpBy,
       batchId: batchId ?? this.batchId,
       itemGroup: itemGroup ?? this.itemGroup,
+      cancelledAt: cancelledAt,
     );
   }
 
@@ -136,6 +141,31 @@ class KitchenOrderModel {
     } catch (_) {
       return [];
     }
+  }
+
+  /// Số phần đã bị HUỶ của từng món theo thứ tự [items] (key `cancelledQty` trong itemsJson,
+  /// ghi khi nhân viên xóa/giảm món đã gửi bếp). Dữ liệu cũ không có key → 0.
+  List<int> get cancelledQtys {
+    try {
+      final List list = jsonDecode(itemsJson);
+      return list.map<int>((e) => e is Map ? ((e['cancelledQty'] as num?)?.toInt() ?? 0) : 0).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Phiếu có món bị huỷ (một phần hoặc toàn bộ)
+  bool get hasCancellation => cancelledQtys.any((q) => q > 0);
+
+  /// Toàn bộ món của phiếu đã bị huỷ → bếp chỉ cần bấm "Đã biết" để tắt phiếu
+  bool get isFullyCancelled {
+    final its = items;
+    final cq = cancelledQtys;
+    if (its.isEmpty || cq.length != its.length) return false;
+    for (var i = 0; i < its.length; i++) {
+      if (cq[i] < its[i].quantity) return false;
+    }
+    return true;
   }
 
   /// Các nhóm có trong phiếu; >= 2 nhóm thì bếp có thể xong từng phần.

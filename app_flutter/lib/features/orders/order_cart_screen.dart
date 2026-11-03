@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/permissions/app_permissions.dart';
 import '../../core/printer/receipt_printer.dart';
 import '../../core/domain/item_options.dart';
+import '../../core/utils/topping_utils.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/manager_pin_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -445,6 +446,15 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       timestamp: now,
     );
     widget.table.addDeletedItem(entry);
+    // Món đã gửi bếp bị xóa/giảm → báo bếp huỷ (màn bếp đánh dấu "ĐÃ HUỶ")
+    if (line.isSentKitchen && savedQty > 0) {
+      unawaited(_fb.cancelKitchenItems(
+        tableName: widget.table.name,
+        orderCode: widget.table.currentOrderCode,
+        line: line,
+        removeQty: savedQty,
+      ));
+    }
     final details = DeletedItemsLogic.auditDetails(entry, widget.table.name);
     widget.table.addActionLog(OrderActionLogModel(
       timestamp: now,
@@ -3293,6 +3303,13 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                           ..clear()
                           ..addAll(next);
                       }),
+                      onIncrement: (g, name) => setModalState(() {
+                        final next = addToppingUnit(selected: selectedToppings, group: g, name: name);
+                        selectedToppings
+                          ..clear()
+                          ..addAll(next);
+                      }),
+                      onDecrement: (n) => setModalState(() => selectedToppings.remove(n)),
                       onRemoveExtra: (n) => setModalState(() => selectedToppings.remove(n)),
                       onClearAll: () => setModalState(() => selectedToppings.clear()),
                     ),
@@ -3315,27 +3332,22 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                       spacing: 8,
                       runSpacing: 4,
                       children: availableToppingNames.map((topName) {
-                        final isSel = selectedToppings.contains(topName);
+                        final count = toppingCount(selectedToppings, topName);
                         final topProd = toppingItemMap[topName];
                         final priceStr = topProd != null ? FormatUtils.vnd(topProd.price) : '5.000 đ';
+                        if (count > 0) {
+                          return ToppingStepperChip(
+                            label: '$topName (+$priceStr)',
+                            count: count,
+                            onIncrement: () => setModalState(() => selectedToppings.add(topName)),
+                            onDecrement: () => setModalState(() => selectedToppings.remove(topName)),
+                          );
+                        }
                         return FilterChip(
                           label: Text('$topName (+$priceStr)'),
-                          selected: isSel,
-                          selectedColor: context.tc.primaryLight,
-                          labelStyle: TextStyle(
-                            color: isSel ? context.tc.primaryDark : context.tc.textPrimary,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          onSelected: (val) {
-                            setModalState(() {
-                              if (val) {
-                                selectedToppings.add(topName);
-                              } else {
-                                selectedToppings.remove(topName);
-                              }
-                            });
-                          },
+                          selected: false,
+                          labelStyle: TextStyle(color: context.tc.textPrimary, fontSize: 12),
+                          onSelected: (_) => setModalState(() => selectedToppings.add(topName)),
                         );
                       }).toList(),
                     ),

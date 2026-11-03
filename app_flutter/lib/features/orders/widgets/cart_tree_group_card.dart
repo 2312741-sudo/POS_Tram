@@ -7,6 +7,7 @@
 // - Nút thao tác (Ghi chú, Giảm giá) dạng icon compact để không bao giờ bị đè/chồng chéo giá tiền.
 // - Nếu sản phẩm chỉ có 1 nhánh duy nhất: hiển thị gọn gàng như thẻ đơn thông thường.
 
+import '../../../core/utils/topping_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -532,7 +533,7 @@ class CartTreeGroupCard extends StatelessWidget {
                                   ),
                                 if (hasToppings)
                                   _BranchAttrChip(
-                                    '+${item.selectedToppings.join(', ')}',
+                                    '+${toppingLabels(item.selectedToppings).join(', ')}',
                                     context.tc.warningInk,
                                     context.tc.warningLight,
                                   ),

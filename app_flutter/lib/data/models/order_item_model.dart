@@ -1,3 +1,4 @@
+import '../../core/utils/topping_utils.dart';
 // ==================== ORDER ITEM MODEL (KIOTVIET FNB) ====================
 //
 // GIẢM GIÁ THEO MÓN (line discount) — giảm theo TỪNG PHẦN được chọn:
@@ -403,7 +404,17 @@ class OrderItemModel {
     if (selectedSize.isNotEmpty) parts.add('Size $selectedSize');
     if (selectedSugar.isNotEmpty) parts.add(selectedSugar);
     if (selectedIce.isNotEmpty) parts.add(selectedIce);
-    if (selectedToppings.isNotEmpty) parts.addAll(selectedToppings);
+    if (selectedToppings.isNotEmpty) parts.addAll(toppingLabels(selectedToppings));
+    return parts.join(' • ');
+  }
+
+  /// Size / đường / đá (không gồm topping) — màn bếp hiển thị topping ở dòng riêng
+  String get optionsSummaryNoTopping {
+    final parts = <String>[
+      if (selectedSize.isNotEmpty) 'Size $selectedSize',
+      if (selectedSugar.isNotEmpty) selectedSugar,
+      if (selectedIce.isNotEmpty) selectedIce,
+    ];
     return parts.join(' • ');
   }
 

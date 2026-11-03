@@ -1,4 +1,5 @@
 // lib/features/tables/widgets/ready_kitchen_orders_banner.dart
+import '../../../core/utils/topping_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
@@ -560,7 +561,7 @@ class ReadyKitchenOrdersBanner extends StatelessWidget {
                                           if (item.selectedSugar.isNotEmpty) options.add(item.selectedSugar);
                                           if (item.selectedIce.isNotEmpty) options.add(item.selectedIce);
                                           if (item.selectedToppings.isNotEmpty) {
-                                            options.add(item.selectedToppings.join(', '));
+                                            options.add(toppingLabels(item.selectedToppings).join(', '));
                                           }
                                           if (item.note.trim().isNotEmpty) {
                                             options.add('Ghi chú: ${item.note.trim()}');
