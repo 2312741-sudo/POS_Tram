@@ -380,9 +380,27 @@ class BillDetailSheet extends StatelessWidget {
                       ),
                     ),
                     onPressed: () async {
+                      // In lại hóa đơn là thao tác nhạy cảm: cần quyền REPRINT_BILL và được ghi nhật ký
+                      if (!auth.can(AppPermissions.reprintBill)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Bạn không có quyền in lại hóa đơn!'), backgroundColor: AppColors.danger),
+                        );
+                        return;
+                      }
                       final storeInfo = auth.currentStoreInfo ??
                           StoreInfoModel(storeCode: auth.currentStoreCode, storeName: 'POS Trạm');
                       await ReceiptPrinter.printBill(store: storeInfo, bill: bill);
+                      await fb.logAction(AuditLogModel(
+                        timestamp: DateTime.now().millisecondsSinceEpoch,
+                        username: auth.currentUser?.username ?? 'staff',
+                        userFullName: auth.currentUser?.fullName ?? 'Thu Ngân',
+                        userRole: auth.currentUser?.roleId ?? 'ROLE_STAFF',
+                        action: 'REPRINT_BILL',
+                        targetType: 'BILL',
+                        targetId: bill.billCode,
+                        details: 'In lại hóa đơn ${bill.billCode} bàn ${bill.tableName}',
+                        isSuspicious: true,
+                      ));
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(

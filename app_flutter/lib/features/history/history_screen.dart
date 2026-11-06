@@ -2,13 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../core/permissions/app_permissions.dart';
-import '../../core/printer/receipt_printer.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/services/firebase_service.dart';
+import '../manager/widgets/bill_detail_sheet.dart';
 import '../../core/domain/business_day.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -282,10 +281,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         bill.orderCode!.trim().isNotEmpty &&
         bill.orderCode != bill.billCode;
 
+    // Bấm vào mở bảng chi tiết hóa đơn đầy đủ (giống tài khoản Quản lý / Chủ quán)
     return Card(
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: ListTile(
+        onTap: () => BillDetailSheet.show(context, bill),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
@@ -298,64 +298,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
             size: 20,
           ),
         ),
-        title: Row(
-          children: [
-            Flexible(child: Text(
-              bill.billCode,
-              style: GoogleFonts.beVietnamPro(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: isCancelled ? context.tc.textHint : context.tc.textPrimary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            )),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isCancelled ? context.bg(Colors.red.shade50) : context.tc.cardElevated,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  tableText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.normal,
-                    color: isCancelled ? context.tc.danger : context.tc.textPrimary,
+        // Mã hóa đơn hiển thị đầy đủ (không cắt bớt)
+        title: Text(
+          bill.billCode,
+          style: GoogleFonts.beVietnamPro(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: isCancelled ? context.tc.textHint : context.tc.textPrimary,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isCancelled ? context.bg(Colors.red.shade50) : context.tc.cardElevated,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      tableText,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: isCancelled ? context.tc.danger : context.tc.textPrimary,
+                      ),
+                    ),
                   ),
-                ),
+                  if (isCancelled)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(color: context.tc.danger, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('HỦY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                ],
               ),
-            ),
-            if (isCancelled) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: context.tc.danger,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'HỦY',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
+              const SizedBox(height: 4),
+              Text(
+                '${showOrderCode ? "Đơn: ${bill.orderCode} • " : ""}Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)} • $methodStr',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
               ),
             ],
-          ],
+          ),
         ),
-        subtitle: Text(
-          '${showOrderCode ? "Đơn: ${bill.orderCode} • " : ""}Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)} • $methodStr',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
-        ),
+        isThreeLine: true,
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -373,309 +365,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
               isCancelled ? 'Đã hủy' : (bill.status == 'PAID' ? 'Hoàn thành' : bill.status),
               style: GoogleFonts.beVietnamPro(fontSize: 10, color: isCancelled ? context.tc.danger : context.tc.success, fontWeight: FontWeight.bold),
             ),
-          ],
-        ),
-        children: [
-          const Divider(),
-          // Items breakdown
-          ...bill.items.map((i) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        '${i.name} x${i.quantity}${i.hasDiscount ? ' • ${i.discountDescription(FormatUtils.vnd)}' : ''}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 13),
-                      ),
-                    ),
-                    Flexible(child: Text(FormatUtils.vnd(i.itemTotal), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ],
-                ),
-              )),
-          const Divider(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Tiền hàng:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-              Flexible(child: Text(FormatUtils.vnd(bill.subTotal), style: GoogleFonts.beVietnamPro(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          if (bill.itemDiscountTotal > 0)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Giảm giá món:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary)),
-                Flexible(child: Text('-${FormatUtils.vnd(bill.itemDiscountTotal)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-          if (bill.discounts.isNotEmpty) ...[
-            ...bill.discounts.map((d) => Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(child: Text(' - ${d.promoCode ?? d.description}:', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    Flexible(child: Text('-${FormatUtils.vnd(d.amount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.success, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ],
-                )),
-          ],
-          if (bill.vatRate > 0)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(child: Text('VAT (${bill.vatRate.toStringAsFixed(0)}%):', style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Flexible(child: Text('+${FormatUtils.vnd(bill.vatAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-          if (bill.deletedItems.isNotEmpty) ...[
-            const Divider(),
-            Text('Món đã xóa (${bill.deletedItemsCount} món • ${FormatUtils.vnd(bill.deletedItemsAmount)}):',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.danger)),
-            ...bill.deletedItems.map((e) => Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '• ${e.quantity} x ${e.name} (${FormatUtils.vnd(e.amount)}) — ${e.reason} • ${e.staffFullName.isNotEmpty ? e.staffFullName : e.staffUsername}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: context.tc.textSecondary),
-                  ),
-                )),
-          ],
-          const SizedBox(height: 12),
-
-          // Action buttons: Cancel / Delete and Reprint
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Hủy / Xóa hóa đơn button (Chỉ Chủ quán hoặc tài khoản có quyền CANCEL_BILL)
-              if (_auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill))
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: context.tc.danger,
-                  ),
-                  icon: Icon(
-                    isCancelled ? LucideIcons.trash2 : LucideIcons.circleX,
-                    size: 16,
-                  ),
-                  label: Text(
-                    isCancelled ? 'Xóa hóa đơn' : 'Hủy hóa đơn',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  onPressed: () => _showCancelOrDeleteBillDialog(context, bill),
-                ),
-
-              // Reprint button
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(64, AppSpacing.minTapTarget)),
-                icon: const Icon(LucideIcons.printer, size: 16),
-                label: const Text('In lại hóa đơn'),
-                onPressed: () async {
-                  if (!_auth.can(AppPermissions.reprintBill)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Bạn không có quyền in lại hóa đơn!'), backgroundColor: AppColors.danger),
-                    );
-                    return;
-                  }
-
-                  final store = await _fb.getStoreInfo();
-                  await ReceiptPrinter.printBill(store: store, bill: bill, isPrePrint: false);
-
-                  // Audit log for reprint
-                  await _fb.logAction(AuditLogModel(
-                    timestamp: DateTime.now().millisecondsSinceEpoch,
-                    username: _auth.currentUser?.username ?? 'staff',
-                    userFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
-                    userRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
-                    action: 'REPRINT_BILL',
-                    targetType: 'BILL',
-                    targetId: bill.billCode,
-                    details: 'In lại hóa đơn ${bill.billCode} bàn ${bill.tableName}',
-                    isSuspicious: true,
-                  ));
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã gửi lệnh in lại bill!')));
-                  }
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showCancelOrDeleteBillDialog(BuildContext context, BillModel bill) async {
-    final canCancel = _auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill);
-    if (!canCancel) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tài khoản nhân viên không được phép hủy hoặc xóa hóa đơn đã thanh toán!'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
-
-    final reasonCtrl = TextEditingController();
-    final quickReasons = [
-      'Khách đổi ý hủy món',
-      'Nhập nhầm bàn / nhầm món',
-      'Thu ngân tính nhầm tiền',
-      'Hóa đơn thử nghiệm / test',
-      'Khách không đủ tiền thanh toán',
-    ];
-    String selectedReason = quickReasons.first;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: context.bg(Colors.red.shade50), shape: BoxShape.circle),
-                child: Icon(LucideIcons.triangleAlert, color: context.tc.danger, size: 24),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  bill.status == 'CANCELLED' ? 'Xóa Hóa Đơn Khỏi Hệ Thống' : 'Hủy / Xóa Hóa Đơn',
-                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: context.tc.cardElevated,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: context.tc.borderLight),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(child: Text('Mã HĐ: ${bill.billCode}', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 13, color: context.tc.primaryDark), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          Flexible(child: Text(bill.status == 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÃ THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: bill.status == 'CANCELLED' ? context.tc.danger : context.tc.success), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        ],
-                      ),
-                      if (bill.orderCode != null && bill.orderCode!.isNotEmpty)
-                        Text('Mã đặt món: ${bill.orderCode}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.blueGrey)),
-                      const SizedBox(height: 4),
-                      Text('Bàn: ${bill.tableName} (${bill.zone}) • Tổng tiền: ${FormatUtils.vnd(bill.finalAmount)}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text('Thu ngân: ${bill.staffFullName} • ${FormatUtils.timeOnly(bill.reportTimeMs)}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.textSecondary)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Lý do hủy / xóa *:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: quickReasons.map((r) {
-                    final isSel = selectedReason == r;
-                    return ChoiceChip(
-                      label: Text(r, style: TextStyle(fontSize: 11, color: isSel ? Colors.white : context.tc.textPrimary)),
-                      selected: isSel,
-                      selectedColor: context.tc.danger,
-                      backgroundColor: context.tc.cardElevated,
-                      onSelected: (val) {
-                        if (val) {
-                          setDlgState(() {
-                            selectedReason = r;
-                            reasonCtrl.text = r;
-                          });
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: reasonCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Nhập chi tiết lý do...',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actionsOverflowButtonSpacing: 8,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Đóng'),
-            ),
-            if (bill.status != 'CANCELLED' && (_auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill)))
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.tc.danger,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(LucideIcons.circleX, size: 16),
-                label: const Text('Hủy hóa đơn'),
-                onPressed: () async {
-                  final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
-                  Navigator.pop(ctx);
-                  await _fb.cancelPaidBill(
-                    bill: bill,
-                    reason: reason,
-                    staffUsername: _auth.currentUser?.username ?? 'staff',
-                    staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
-                    staffRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Đã hủy hóa đơn ${bill.billCode}!'),
-                        backgroundColor: AppColors.danger,
-                      ),
-                    );
-                  }
-                },
-              ),
-            // Tùy chọn Xóa vĩnh viễn (Chủ quán hoặc quản lý cấp cao)
-            if (_auth.isRootOwner || _auth.isOwner || _auth.can(AppPermissions.cancelBill))
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.ink(Colors.red.shade800),
-                  side: BorderSide(color: context.line(Colors.red.shade300)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(LucideIcons.trash2, size: 16),
-                label: const Text('Xóa hẳn khỏi máy'),
-                onPressed: () async {
-                  final reason = reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : selectedReason;
-                  Navigator.pop(ctx);
-                  await _fb.deleteBill(
-                    bill: bill,
-                    reason: reason,
-                    staffUsername: _auth.currentUser?.username ?? 'staff',
-                    staffFullName: _auth.currentUser?.fullName ?? 'Thu Ngân',
-                    staffRole: _auth.currentUser?.roleId ?? 'ROLE_STAFF',
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Đã xóa vĩnh viễn hóa đơn ${bill.billCode}!'),
-                      ),
-                    );
-                  }
-                },
-              ),
           ],
         ),
       ),
