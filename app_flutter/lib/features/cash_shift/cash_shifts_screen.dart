@@ -302,8 +302,30 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _canViewDifference ? _buildSlipSheet(shift) : _buildMyShiftSummary(shift),
+      // Giới hạn chiều cao để màn nhỏ vẫn còn vùng mờ phía trên bấm để đóng
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+      builder: (ctx) => Stack(
+        children: [
+          _canViewDifference ? _buildSlipSheet(shift) : _buildMyShiftSummary(shift),
+          // Nội dung phiếu dài nên vuốt xuống bị cuộn thay vì đóng → luôn có nút đóng
+          Positioned(
+            top: 6,
+            right: 6,
+            child: IconButton(
+              tooltip: 'Đóng',
+              style: IconButton.styleFrom(
+                backgroundColor: ctx.tc.cardElevated,
+                foregroundColor: ctx.tc.textPrimary,
+                minimumSize: const Size(40, 40),
+              ),
+              icon: const Icon(LucideIcons.x, size: 20),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -339,7 +361,7 @@ class _CashShiftsScreenState extends State<CashShiftsScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 30), // chừa chỗ cho nút đóng góc phải
             // Slip Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
