@@ -9,20 +9,32 @@ import '../../../data/models/promotion_model.dart';
 class CartCampaignPricing {
   CartCampaignPricing._();
 
+  /// Tra món của dòng giỏ hàng. Món tạo từ Web / sao chép chưa có id số nên có `id` = 0 và DÙNG CHUNG productId 0:
+  /// tra theo id 0 sẽ ra một món bất kỳ (sai nhóm / mã → combo không tính món đó). Chỉ tin id khi > 0 và khớp tên;
+  /// còn lại tra theo TÊN món.
+  static ProductModel? resolveProduct(OrderItemModel item, List<ProductModel> products) {
+    final nameKey = item.name.trim().toLowerCase();
+    ProductModel? byName;
+    ProductModel? byId;
+    for (final p in products) {
+      if (byName == null && p.name.trim().toLowerCase() == nameKey) byName = p;
+      if (byId == null && item.productId > 0 && p.id == item.productId) byId = p;
+    }
+    if (byId != null && (byName == null || byId.name.trim().toLowerCase() == nameKey)) return byId;
+    return byName ?? byId;
+  }
+
   /// Dựng dòng tính giá từ giỏ hàng (lineId = vị trí dòng, groupId = tên nhóm món)
   static List<PricingLineItem> lines(List<OrderItemModel> cart, List<ProductModel> products) {
-    final cat = {for (final p in products) p.id: p.category};
-    final prodByNumId = {for (final p in products) p.id: p};
-    final prodByName = {for (final p in products) p.name.trim().toLowerCase(): p};
     return [
       for (int i = 0; i < cart.length; i++)
         (() {
           final item = cart[i];
-          final p = prodByNumId[item.productId] ?? prodByName[item.name.trim().toLowerCase()];
+          final p = resolveProduct(item, products);
           return PricingLineItem.fromOrderItem(
             item,
             lineId: 'L$i',
-            groupId: p?.category ?? cat[item.productId],
+            groupId: p?.category,
             itemCode: p?.code,
             dbKey: p?.dbKey,
           );

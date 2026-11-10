@@ -2260,12 +2260,16 @@ class OrderRepository {
 
     // Gắn nhóm bếp (nước/bánh) cho từng món để bếp có thể xong từng phần. Lỗi → không gắn (xong cả đơn).
     Map<int, String> categoryById = {};
+    Map<String, String> categoryByName = {};
     try {
-      categoryById = {for (final p in await getProducts()) p.id: p.category};
+      final prods = await getProducts();
+      // Món tạo từ web có id = 0 (dùng chung productId 0) → chỉ tin id > 0, còn lại tra theo tên món
+      categoryById = {for (final p in prods) if (p.id > 0) p.id: p.category};
+      categoryByName = {for (final p in prods) p.name.trim().toLowerCase(): p.category};
     } catch (_) {}
     final kitchenItems = unsent.map((e) {
       final m = e.toMap();
-      final cat = categoryById[e.productId];
+      final cat = categoryByName[e.name.trim().toLowerCase()] ?? categoryById[e.productId];
       if (cat != null) m['kitchenGroup'] = kitchenGroupOfCategory(cat);
       return m;
     }).toList();

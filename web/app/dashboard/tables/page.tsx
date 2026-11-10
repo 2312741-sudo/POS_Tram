@@ -2,6 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useState, useMemo, useCallback, useEffect, type CSSProperties } from "react";
+import { buildGroupLookup } from "@/lib/pricing-engine";
 import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { get, onValue, ref, update } from "firebase/database";
@@ -273,11 +274,7 @@ function TablesPageContent() {
   // Khuyến mãi / voucher cho bàn đang thanh toán (nhân viên tự chọn hoặc nhập mã — không tự áp dụng)
   const promoStoreCode = selectedTableForOrder ? selectedTableForOrder.storeCode || resolveWriteStoreCode(currentStoreCode) : "";
   const promoItems = useMemo(() => parseOrderJson(selectedTableForOrder?.currentOrderJson), [selectedTableForOrder?.currentOrderJson]);
-  const categoryById = useMemo(() => new Map(products.map((p) => [String(p.id), p.category])), [products]);
-  const promoGroupOf = useCallback(
-    (it: RawOrderLine) => categoryById.get(String(it.productId ?? it.id ?? "")) ?? (typeof it.category === "string" ? it.category : null),
-    [categoryById]
-  );
+  const promoGroupOf = useMemo(() => buildGroupLookup(products), [products]);
   const promoStore = stores.find((s) => s.storeCode === promoStoreCode) || currentStore;
   const promoRewardProducts = useMemo(
     () =>

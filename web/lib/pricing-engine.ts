@@ -824,6 +824,30 @@ export function calculatePrice(input: PricingInput, activeCampaigns: Campaign[])
 }
 
 // ==================== CẦU NỐI GIỎ HÀNG ↔ ENGINE ====================
+/**
+ * Tra nhóm món (category) của một dòng đơn. Dòng do APP lập cho món tạo từ Web mang productId = 0 (dùng chung cho
+ * nhiều món) nên tra theo id không đủ: ưu tiên id khớp tên, rồi tra theo TÊN món, cuối cùng mới tới category trên dòng.
+ */
+export function buildGroupLookup(products: { id?: unknown; name?: unknown; category?: unknown }[]) {
+  const byId = new Map<string, { name: string; category: string | null }>();
+  const byName = new Map<string, string | null>();
+  for (const p of products) {
+    const cat = typeof p.category === "string" && p.category ? p.category : null;
+    const name = String(p.name ?? "").trim().toLowerCase();
+    const id = String(p.id ?? "");
+    if (id && id !== "0" && !byId.has(id)) byId.set(id, { name, category: cat });
+    if (name && !byName.has(name)) byName.set(name, cat);
+  }
+  return (it: Record<string, unknown>): string | null => {
+    const name = String(it.name ?? "").trim().toLowerCase();
+    const idKey = String(it.productId ?? it.id ?? "");
+    const hit = idKey && idKey !== "0" ? byId.get(idKey) : undefined;
+    if (hit && (!name || !byName.has(name) || hit.name === name)) return hit.category;
+    if (name && byName.has(name)) return byName.get(name) ?? null;
+    return hit?.category ?? (typeof it.category === "string" && it.category ? it.category : null);
+  };
+}
+
 /** Dòng món của bàn → dòng tính giá (lineId = vị trí dòng, groupId = nhóm món tra từ danh mục) */
 export function linesFromOrder(
   items: RawOrderLine[],
