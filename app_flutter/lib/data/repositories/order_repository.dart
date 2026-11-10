@@ -262,7 +262,10 @@ class OrderRepository {
         orderingBy: cleanUser,
         orderingByName: cleanName,
         orderingAt: now,
-      )..regenerateCodes();
+      )
+        ..regenerateCodes()
+        ..syncedOrderJson = '';
+      splitTable.syncedMeta = splitTable.metaSnapshot();
 
       final occupiedBy = busyOrdering
           ? (current.orderingByName ?? current.orderingBy ?? 'nhân viên khác')
@@ -279,6 +282,8 @@ class OrderRepository {
     claimed.orderingByName = cleanName;
     claimed.orderingAt = now;
     claimed.ensureCodes();
+    claimed.syncedOrderJson = '';
+    claimed.syncedMeta = claimed.metaSnapshot();
     return (targetTable: claimed, wasSplit: false, occupiedBy: null);
   }
 
@@ -353,7 +358,11 @@ class OrderRepository {
       if (event.snapshot.exists && event.snapshot.value != null) {
         final list = _parseList<TableModel>(
           event.snapshot.value,
-          (k, v) => TableModel.fromServer(v is Map ? v : {'name': k}, k.toString()),
+          (k, v) {
+            final t = TableModel.fromServer(v is Map ? v : {'name': k}, k.toString());
+            _rememberClosed(t);
+            return t;
+          },
         );
         return normalizeTablesList(list);
       }
@@ -362,6 +371,11 @@ class OrderRepository {
   }
 
   void _tryRemoveInactiveSplitTable(TableModel table) {
+    if (table.closedBillId != null && table.closedBillId!.isNotEmpty) {
+      // Giữ lại node bàn đã dọn kèm closedBillId trên Firebase để chặn lần ghi muộn từ máy khác
+      // làm sống lại đơn vừa thanh toán / hủy; normalizeTablesList đã tự ẩn bàn tách trống.
+      return;
+    }
     if (table.isAutoSplit && !table.inUse && !table.isReserved && !table.isActivelyOrdering()) {
       unawaited(tablesRef.child(table.firebaseKey).remove().catchError((_) {}));
     }
@@ -369,21 +383,40 @@ class OrderRepository {
 
   /// Lưu bàn. Lỗi thật được ném ra ([DataWriteException]); nếu mất mạng thì dữ liệu được
   /// giữ cục bộ và tự đồng bộ sau (không ném lỗi).
-  /// Mã hóa đơn đã thanh toán / hủy trên máy này — chặn lần lưu bàn cũ tới muộn làm đơn hiện lại
-  final Set<String> _closedBillIds = <String>{};
+  /// Mã hóa đơn đã thanh toán / hủy theo từng bàn — chặn lần lưu bàn cũ tới muộn làm đơn hiện lại
+  final Map<String, Set<String>> _closedBillIdsByTable = <String, Set<String>>{};
 
   void _rememberClosed(TableModel cleared) {
     final id = cleared.closedBillId;
-    if (id != null && id.isNotEmpty) _closedBillIds.add(id);
+    if (id != null && id.isNotEmpty) {
+      _closedBillIdsByTable.putIfAbsent(cleared.firebaseKey, () => <String>{}).add(id);
+    }
+  }
+
+  void _rememberClosedId(String firebaseKey, String? billId) {
+    if (billId != null && billId.isNotEmpty) {
+      _closedBillIdsByTable.putIfAbsent(firebaseKey, () => <String>{}).add(billId);
+    }
+  }
+
+  void _forgetClosedId(String firebaseKey, String? billId) {
+    if (billId != null && billId.isNotEmpty) {
+      _closedBillIdsByTable[firebaseKey]?.remove(billId);
+    }
   }
 
   /// Bàn mang đơn đã đóng (bản cũ còn giữ trong bộ nhớ) → không được ghi lại
   bool _isClosedOrder(TableModel t) {
     final id = t.currentBillId;
-    return id != null && id.isNotEmpty && (_closedBillIds.contains(id) || id == t.closedBillId);
+    if (id == null || id.isEmpty) return false;
+    if (id == t.closedBillId) return true;
+    return _closedBillIdsByTable[t.firebaseKey]?.contains(id) ?? false;
   }
 
   Future<void> saveTable(TableModel table) async {
+    if (!table.inUse) {
+      _rememberClosed(table);
+    }
     if (_isClosedOrder(table)) {
       debugPrint('[OrderRepository] Bỏ qua lưu bàn ${table.name}: hóa đơn ${table.currentBillId} đã đóng');
       return;
@@ -404,10 +437,8 @@ class OrderRepository {
         tablesRef.child(table.firebaseKey).set(table.toMap()),
         'bàn ${table.name}',
       );
-      if (base != null) {
-        table.syncedOrderJson = table.currentOrderJson;
-        table.syncedMeta = table.metaSnapshot();
-      }
+      table.syncedOrderJson = table.currentOrderJson;
+      table.syncedMeta = table.metaSnapshot();
     }
     _tryRemoveInactiveSplitTable(table);
   }
@@ -432,8 +463,22 @@ class OrderRepository {
     final localMeta = table.metaSnapshot();
     table.syncedMeta = localMeta;
     final fut = tablesRef.child(table.firebaseKey).runTransaction((Object? current) {
+      if (_isClosedOrder(table) || !table.inUse) {
+        return Transaction.abort();
+      }
       final out = Map<String, dynamic>.from(localMap);
       if (current is Map) {
+        final billId = localMap['currentBillId']?.toString() ?? '';
+        final serverClosedId = current['closedBillId']?.toString() ?? '';
+        final tableClosedSet = _closedBillIdsByTable[table.firebaseKey];
+        if (billId.isNotEmpty && (billId == serverClosedId || (tableClosedSet != null && tableClosedSet.contains(billId)))) {
+          return Transaction.abort();
+        }
+        final rawInUse = current['inUse'];
+        final serverInUse = rawInUse == true || rawInUse == 1 || rawInUse?.toString().toLowerCase() == 'true';
+        if (base.trim().isNotEmpty && !serverInUse) {
+          return Transaction.abort();
+        }
         // Khuyến mãi / số khách / khách hàng / ghi chú: máy này không đổi thì giữ của server (máy khác vừa đổi)
         if (baseMeta != null) {
           for (final f in TableModel.mergedMetaFields) {
@@ -446,7 +491,14 @@ class OrderRepository {
           }
         }
         final serverJson = current['currentOrderJson']?.toString() ?? '';
-        out['currentOrderJson'] = OrderMerge.mergeJson(base: base, local: localJson, server: serverJson);
+        final mergedOrderJson = OrderMerge.mergeJson(base: base, local: localJson, server: serverJson);
+        if (mergedOrderJson.trim().isEmpty || mergedOrderJson.trim() == '[]') {
+          return Transaction.abort();
+        }
+        out['currentOrderJson'] = mergedOrderJson;
+        if (serverClosedId.isNotEmpty && out['closedBillId'] == null) {
+          out['closedBillId'] = serverClosedId;
+        }
         // Nhật ký thao tác / món đã xóa: chỉ thêm, không mất phần máy khác vừa ghi
         final logs = OrderMerge.unionJsonLists(current['actionLogsJson'], localMap['actionLogsJson']);
         if (logs != null) out['actionLogsJson'] = logs;
@@ -457,7 +509,24 @@ class OrderRepository {
     }, applyLocally: true);
     try {
       final res = await fut.timeout(_txnTimeout);
-      if (!res.committed) throw DataWriteException('Không lưu được bàn ${table.name}: bị từ chối');
+      if (!res.committed) {
+        final snapVal = res.snapshot.value;
+        if (snapVal is Map) {
+          final closedId = snapVal['closedBillId']?.toString();
+          _rememberClosedId(table.firebaseKey, closedId);
+          final rawInUse = snapVal['inUse'];
+          final srvInUse = rawInUse == true || rawInUse == 1 || rawInUse?.toString().toLowerCase() == 'true';
+          if (!srvInUse || (closedId != null && closedId == localMap['currentBillId'])) {
+            debugPrint('[OrderRepository] Bỏ qua lưu gộp bàn ${table.name}: bàn đã đóng trên server');
+            return;
+          }
+        }
+        if (_isClosedOrder(table) || !table.inUse) {
+          debugPrint('[OrderRepository] Bỏ qua lưu gộp bàn ${table.name}: đơn đã đóng');
+          return;
+        }
+        throw DataWriteException('Không lưu được bàn ${table.name}: bị từ chối');
+      }
     } on TimeoutException {
       debugPrint('[OrderRepository] Chưa có xác nhận lưu bàn ${table.name} - đang chờ đồng bộ.');
       unawaited(fut.then<void>((_) {}, onError: (Object e) {
@@ -478,7 +547,12 @@ class OrderRepository {
   Stream<TableModel?> tableStream(String firebaseKey) {
     return tablesRef.child(firebaseKey).onValue.map<TableModel?>((event) {
       final v = event.snapshot.value;
-      return v is Map ? TableModel.fromServer(v, firebaseKey) : null;
+      if (v is Map) {
+        final t = TableModel.fromServer(v, firebaseKey);
+        _rememberClosed(t);
+        return t;
+      }
+      return null;
     });
   }
 
@@ -739,7 +813,9 @@ class OrderRepository {
     target.currentOrderJson = sourceTable.currentOrderJson;
     target.openedAt = sourceTable.openedAt;
     target.guestCount = sourceTable.guestCount;
-    target.currentBillId = sourceTable.currentBillId;
+    target.currentBillId = (targetTable.closedBillId != null && targetTable.closedBillId == sourceTable.currentBillId)
+        ? FormatUtils.billCode()
+        : sourceTable.currentBillId;
     target.currentOrderCode = sourceTable.currentOrderCode;
     target.actionLogsJson = sourceTable.actionLogsJson;
     target.deletedItemsJson = sourceTable.deletedItemsJson;
@@ -1264,6 +1340,9 @@ class OrderRepository {
         throw DataWriteException('Đơn của bàn vừa được máy khác thay đổi. Vui lòng xem lại đơn rồi thanh toán lại.');
       }
     }
+    final closingBillId = table.currentBillId;
+    _rememberClosedId(table.firebaseKey, closingBillId);
+    try {
     if (!BillCodeGenerator.isSequential(bill.billCode)) {
       bill.billCode = await allocateBillCode(storeCode: storeCode);
     }
@@ -1365,6 +1444,10 @@ class OrderRepository {
       pointRedeemRate: pointRedeemRate,
     ));
     return synced;
+    } catch (e) {
+      _forgetClosedId(table.firebaseKey, closingBillId);
+      rethrow;
+    }
   }
 
   late final LoyaltyService _loyalty = LoyaltyService(() => _root);
@@ -1617,6 +1700,9 @@ class OrderRepository {
     required String staffFullName,
     required String staffRole,
   }) async {
+    final closingBillId = table.currentBillId;
+    _rememberClosedId(table.firebaseKey, closingBillId);
+    try {
     final storeCode = _currentStoreCode;
     final items = table.currentItems;
     final totalAmount = items.fold(0, (sum, i) => sum + i.itemTotal);
@@ -1696,6 +1782,10 @@ class OrderRepository {
       details: 'Hủy hóa đơn $billCode (Mã đơn: $orderCode) bàn ${table.name} (${items.length} món, ${FormatUtils.vnd(totalAmount)}). Lý do: $reason',
       isSuspicious: true,
     ));
+    } catch (e) {
+      _forgetClosedId(table.firebaseKey, closingBillId);
+      rethrow;
+    }
   }
 
   Future<void> cancelPaidBill({

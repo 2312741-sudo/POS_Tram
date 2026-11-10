@@ -488,6 +488,8 @@ class TableModel {
   void clearTable() {
     inUse = false;
     currentOrderJson = '';
+    syncedOrderJson = '';
+    syncedMeta = null;
     openedAt = null;
     guestCount = null;
     if (currentBillId != null && currentBillId!.isNotEmpty) closedBillId = currentBillId;

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/domain/order_merge.dart';
 import 'package:tram_flutter/data/models/order_item_model.dart';
+import 'package:tram_flutter/data/models/table_model.dart';
+import 'package:tram_flutter/data/repositories/order_repository.dart';
 
 String _json(List<OrderItemModel> items) => jsonEncode(items.map((e) => e.toMap()).toList());
 List<OrderItemModel> _items(String json) => [for (final e in jsonDecode(json) as List) OrderItemModel.fromMap(e as Map)];
@@ -90,5 +92,38 @@ void main() {
     expect(OrderMerge.differs(_json([a, b]), _json([b.copyWith(lineKey: 'zz'), a])), false);
     expect(OrderMerge.differs(_json([a]), _json([a.copyWith(quantity: 2)])), true);
     expect(OrderMerge.differs(_json([a]), _json([a, b])), true);
+  });
+
+  test('clearTable xóa syncedOrderJson/syncedMeta và lưu closedBillId để chặn ghi đè đơn đã đóng', () {
+    final t = TableModel.fromServer({
+      'name': 'Bàn 02',
+      'zone': 'Khu vực chính',
+      'inUse': true,
+      'currentBillId': 'HD-261110-0009',
+      'currentOrderJson': base,
+    }, 'Khu vực chính_Bàn 02');
+    expect(t.syncedOrderJson, base);
+    expect(t.syncedMeta, isNotNull);
+
+    t.clearTable();
+    expect(t.inUse, false);
+    expect(t.currentOrderJson, '');
+    expect(t.syncedOrderJson, '');
+    expect(t.syncedMeta, isNull);
+    expect(t.currentBillId, isNull);
+    expect(t.closedBillId, 'HD-261110-0009');
+  });
+
+  test('resolveTableForNewOrder khởi tạo sẵn syncedOrderJson rỗng để bàn mở mới nhận đồng bộ realtime ngay', () {
+    final empty = TableModel(name: 'Bàn 01', zone: 'Khu A');
+    final res = OrderRepository.resolveTableForNewOrder(
+      empty,
+      [empty],
+      staffUsername: 'minhanh',
+      staffName: 'Minh Ánh',
+      nowMs: 1000,
+    );
+    expect(res.targetTable.syncedOrderJson, '');
+    expect(res.targetTable.syncedMeta, isNotNull);
   });
 }

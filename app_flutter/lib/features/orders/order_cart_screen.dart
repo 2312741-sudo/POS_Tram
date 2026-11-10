@@ -118,16 +118,48 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   // Đang mở màn "Thêm món" (màn đó tự gộp khi lưu): tạm không áp cập nhật từ máy khác vào giỏ, giữ lại bản mới nhất
   bool _remotePaused = false;
   TableModel? _pendingRemote;
+  // Đơn trên màn hình này đã thanh toán / hủy / đóng (trên máy này hoặc máy khác) → không bao giờ lưu lại bàn khi thoát
+  bool _orderClosed = false;
 
-  /// Bàn đổi trên server (máy khác thêm / sửa / xóa món, áp khuyến mãi...): gộp vào giỏ đang mở theo bản gốc
-  /// máy này đã đọc — thay đổi chưa lưu của máy này được giữ nguyên.
+  /// Bàn đổi trên server (máy khác thêm / sửa / xóa món, áp khuyến mãi, hoặc thanh toán/hủy đơn...):
+  /// gộp vào giỏ đang mở theo bản gốc máy này đã đọc — thay đổi chưa lưu của máy này được giữ nguyên.
   void _onRemoteTable(TableModel? remote) {
-    if (!mounted || remote == null || !remote.inUse) return;
+    if (!mounted || remote == null || _orderClosed) return;
+    final t = widget.table;
+    final currentBillId = t.currentBillId;
+    final wasClosedOnServer = !remote.inUse &&
+        ((currentBillId != null && currentBillId.isNotEmpty && remote.closedBillId == currentBillId) ||
+            (t.syncedOrderJson != null && t.syncedOrderJson!.trim().isNotEmpty));
+    if (wasClosedOnServer) {
+      if (_remotePaused) {
+        _pendingRemote = remote;
+        return;
+      }
+      _orderClosed = true;
+      t.clearTable();
+      if (remote.closedBillId != null && remote.closedBillId!.isNotEmpty) {
+        t.closedBillId = remote.closedBillId;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đơn bàn ${t.name} đã được thanh toán hoặc hủy trên thiết bị khác.'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go('/tables');
+        }
+      }
+      return;
+    }
+    if (!remote.inUse) return;
     if (_remotePaused) {
       _pendingRemote = remote;
       return;
     }
-    final t = widget.table;
     final base = t.syncedOrderJson;
     if (base == null) return;
     final remoteJson = remote.syncedOrderJson ?? remote.currentOrderJson;
@@ -894,10 +926,11 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
     // Nếu giỏ hàng đã bị xóa hết món -> Chuyển bàn về trạng thái TRỐNG hoàn toàn!
     if (_cart.isEmpty) {
+      _orderClosed = true;
+      widget.table.currentOrderJson = '';
       _recalculateDiscounts();
       if (widget.table.deletedItems.isNotEmpty) {
         // Có món đã lưu bị xóa → ghi HĐ ĐÃ HỦY (giữ deletedItems cho báo cáo) rồi dọn bàn.
-        widget.table.currentOrderJson = '';
         try {
           await _fb.cancelActiveBill(
             widget.table,
@@ -935,6 +968,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
   Future<void> _showCancelBillDialog() async {
     if (!await _ensureShiftOpen() || !mounted) return;
     if (_cart.isEmpty) {
+      _orderClosed = true;
       widget.table.clearTable();
       await _fb.saveTable(widget.table);
       if (mounted) Navigator.of(context).pop();
@@ -1067,6 +1101,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     if (confirmed == true) {
       final reason = reasonCtrl.text.trim();
       setState(() => _isLoading = true);
+      _orderClosed = true;
       try {
         await _fb.cancelActiveBill(
           widget.table,
@@ -1087,6 +1122,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
           Navigator.of(context).pop();
         }
       } catch (e) {
+        _orderClosed = false;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Lỗi hủy hóa đơn: $e'), backgroundColor: AppColors.danger),
@@ -1497,7 +1533,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     }
     setState(() => _appliedDiscounts = valid);
     _syncTableDiscounts();
-    if (widget.table.currentOrderJson.isNotEmpty) {
+    if (!_orderClosed && _cart.isNotEmpty && widget.table.inUse && widget.table.currentOrderJson.isNotEmpty) {
       _fb.saveTable(widget.table).catchError(_saveFailed);
     }
     if (dropped.isNotEmpty && mounted) {
@@ -2249,6 +2285,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                               shouldPrint: _autoPrintBill,
                             );
 
+                            if (remainingItems.isEmpty) {
+                              _orderClosed = true;
+                            }
                             if (mounted) {
                               setState(() {
                                 _cart = remainingItems;
@@ -2314,6 +2353,9 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
                             staffRole: staffRole,
                           );
 
+                          if (remainingItems.isEmpty) {
+                            _orderClosed = true;
+                          }
                           if (mounted) {
                             setState(() {
                               _cart = remainingItems;
@@ -4434,8 +4476,8 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         ..addAll(originalDiscounts);
     } else {
       _syncTableDiscounts();
-      if (widget.table.currentOrderJson.isNotEmpty) {
-        _fb.saveTable(widget.table).catchError(_saveFailed);
+      if (!_orderClosed && _cart.isNotEmpty && widget.table.inUse && widget.table.currentOrderJson.isNotEmpty) {
+        await _fb.saveTable(widget.table).catchError(_saveFailed);
       }
     }
     if (mounted) setState(() {});
@@ -4517,6 +4559,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
         if (qrPart > 0) bill.qrConfirmedBy = qrManual ? 'MANUAL' : 'BANK';
 
         // Đổi điểm (chặn nếu thiếu điểm) + tích điểm được xử lý trong closeAndPayBill (transaction, idempotent)
+        _orderClosed = true;
         await _fb.closeAndPayBill(
           bill,
           widget.table,
@@ -4559,6 +4602,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
 
         _fireBackgroundPaymentTasks(bill, paymentMethod, shouldPrint: _autoPrintBill);
       } catch (e) {
+        _orderClosed = false;
         if (ctx.mounted) {
           setSheetState(() {
             isProcessingPayment = false;
@@ -5107,15 +5151,16 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       'isAddingMore': true,
     });
     if (!mounted) return;
+    _resumeRemote();
+    if (_orderClosed) return;
     if (res is List<OrderItemModel>) {
       setState(() {
         _cart = List.from(res);
       });
       _recalculateDiscounts();
-      _resumeRemote();
     } else {
-      _resumeRemote();
       final refreshed = await _fb.tablesStream().first;
+      if (_orderClosed || !mounted) return;
       final currentT = refreshed.where((x) => x.name == widget.table.name).firstOrNull;
       if (currentT != null && mounted) {
         setState(() {
@@ -5285,6 +5330,7 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
+        if (_orderClosed || _cart.isEmpty || !widget.table.inUse) return;
         _syncTableDiscounts();
         if (widget.table.currentOrderJson.isNotEmpty) {
           _fb.saveTable(widget.table).catchError(_saveFailed);
