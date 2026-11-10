@@ -69,3 +69,13 @@ describe("phiếu bếp huỷ món", () => {
     expect(items.map((i: { cancelledQty: number }) => i.cancelledQty)).toEqual([2, 1]);
   });
 });
+
+describe("huỷ món bếp với productId 0 dùng chung (món tạo từ web)", () => {
+  it("chỉ huỷ đúng món theo tên, không huỷ món khác cùng productId 0", () => {
+    const val = ticketVal([{ productId: 0, name: "Bánh gấu", price: 1, quantity: 1 }, { productId: 0, name: "Trà olong - Tắc", price: 1, quantity: 1 }]);
+    const upd = planKitchenCancel({ storeCode: "S", kitchenVal: val, tableName: "Bàn 1", line: { productId: 0, name: "Trà olong - Tắc", quantity: 1 }, removeQty: 1, now: 5 });
+    const items = JSON.parse(upd["stores/S/kitchen_orders/k1/itemsJson"] as string);
+    expect(items[0].cancelledQty).toBeUndefined();
+    expect(items[1].cancelledQty).toBe(1);
+  });
+});

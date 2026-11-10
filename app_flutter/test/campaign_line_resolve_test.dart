@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/data/models/order_item_model.dart';
 import 'package:tram_flutter/data/models/product_model.dart';
 import 'package:tram_flutter/features/orders/widgets/campaign_pricing.dart';
+import 'package:tram_flutter/data/repositories/order_repository.dart';
 
 // Dữ liệu thật TRẠM CHANH: món tạo từ web không có id số (id = 0) nên mọi dòng của chúng mang productId 0.
 ProductModel _p(int id, String name, String category, {String? key, String code = ''}) =>
@@ -34,5 +35,10 @@ void main() {
     expect(CartCampaignPricing.resolveProduct(line(1, 'Trà Olong - Chanh tươi'), products)?.name, 'Trà Olong - Chanh tươi');
     expect(CartCampaignPricing.resolveProduct(line(1, 'Bánh gấu'), products)?.name, 'Bánh gấu');
     expect(CartCampaignPricing.resolveProduct(line(0, 'Món lạ'), products), isNull);
+  });
+
+  test('nextProductId: cấp id số = lớn nhất (trường id hoặc khóa số) + 1', () {
+    expect(OrderRepository.nextProductId({'a': {'id': 3}, '7': {'name': 'x'}, '-Pxx': {'name': 'web'}, 'b': {'id': '12'}}), 13);
+    expect(OrderRepository.nextProductId(null), 1);
   });
 }

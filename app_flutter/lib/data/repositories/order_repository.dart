@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import '../../core/domain/order_merge.dart';
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
 import '../../core/domain/item_options.dart';
@@ -352,7 +353,7 @@ class OrderRepository {
       if (event.snapshot.exists && event.snapshot.value != null) {
         final list = _parseList<TableModel>(
           event.snapshot.value,
-          (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
+          (k, v) => TableModel.fromServer(v is Map ? v : {'name': k}, k.toString()),
         );
         return normalizeTablesList(list);
       }
@@ -393,11 +394,92 @@ class OrderRepository {
     if (table.isAutoSplit) {
       table.isSplitTable = true;
     }
-    await _commitWrite(
-      tablesRef.child(table.firebaseKey).set(table.toMap()),
-      'bàn ${table.name}',
-    );
+    // Bàn đang có khách và máy này biết bản đơn đã đọc từ server → GỘP vào đơn mới nhất (không ghi đè món
+    // máy khác vừa thêm). Mất mạng: transaction không chạy được → ghi như cũ để còn đồng bộ sau.
+    final base = table.syncedOrderJson;
+    if (base != null && table.inUse && _isOnline) {
+      await _saveTableMerged(table, base);
+    } else {
+      await _commitWrite(
+        tablesRef.child(table.firebaseKey).set(table.toMap()),
+        'bàn ${table.name}',
+      );
+      if (base != null) {
+        table.syncedOrderJson = table.currentOrderJson;
+        table.syncedMeta = table.metaSnapshot();
+      }
+    }
     _tryRemoveInactiveSplitTable(table);
+  }
+
+  /// Theo dõi kết nối tới Firebase (.info/connected) để biết có chạy transaction được không
+  bool _online = true;
+  StreamSubscription<DatabaseEvent>? _connSub;
+  bool get _isOnline {
+    _connSub ??= _root.child('.info/connected').onValue.listen((e) => _online = e.snapshot.value == true, onError: (_) {});
+    return _online;
+  }
+
+  /// Lưu bàn bằng transaction: gộp thay đổi của máy này (so với [base]) vào đơn mới nhất trên server.
+  Future<void> _saveTableMerged(TableModel table, String base) async {
+    final localJson = table.currentOrderJson;
+    final localMap = table.toMap();
+    // Bản gốc cho lần lưu sau = đúng những gì máy này biết (KHÔNG phải bản đã gộp): món máy khác thêm mà máy
+    // này chưa hiển thị sẽ không bị coi là "đã xóa". Đặt TRƯỚC transaction vì sự kiện cập nhật bàn (bản đã gộp)
+    // có thể tới ngay, trước khi transaction xong — màn giỏ hàng dùng bản gốc này để không cộng trùng số lượng.
+    table.syncedOrderJson = localJson;
+    final baseMeta = table.syncedMeta;
+    final localMeta = table.metaSnapshot();
+    table.syncedMeta = localMeta;
+    final fut = tablesRef.child(table.firebaseKey).runTransaction((Object? current) {
+      final out = Map<String, dynamic>.from(localMap);
+      if (current is Map) {
+        // Khuyến mãi / số khách / khách hàng / ghi chú: máy này không đổi thì giữ của server (máy khác vừa đổi)
+        if (baseMeta != null) {
+          for (final f in TableModel.mergedMetaFields) {
+            if (jsonEncode(localMeta[f]) != jsonEncode(baseMeta[f])) continue;
+            if (current[f] == null) {
+              out.remove(f);
+            } else {
+              out[f] = current[f];
+            }
+          }
+        }
+        final serverJson = current['currentOrderJson']?.toString() ?? '';
+        out['currentOrderJson'] = OrderMerge.mergeJson(base: base, local: localJson, server: serverJson);
+        // Nhật ký thao tác / món đã xóa: chỉ thêm, không mất phần máy khác vừa ghi
+        final logs = OrderMerge.unionJsonLists(current['actionLogsJson'], localMap['actionLogsJson']);
+        if (logs != null) out['actionLogsJson'] = logs;
+        final deleted = OrderMerge.unionJsonLists(current['deletedItemsJson'], localMap['deletedItemsJson']);
+        if (deleted != null) out['deletedItemsJson'] = deleted;
+      }
+      return Transaction.success(out);
+    }, applyLocally: true);
+    try {
+      final res = await fut.timeout(_txnTimeout);
+      if (!res.committed) throw DataWriteException('Không lưu được bàn ${table.name}: bị từ chối');
+    } on TimeoutException {
+      debugPrint('[OrderRepository] Chưa có xác nhận lưu bàn ${table.name} - đang chờ đồng bộ.');
+      unawaited(fut.then<void>((_) {}, onError: (Object e) {
+        debugPrint('[OrderRepository] Lưu bàn ${table.name} thất bại khi đồng bộ: $e');
+      }));
+    } on DataWriteException {
+      table.syncedOrderJson = base;
+      table.syncedMeta = baseMeta;
+      rethrow;
+    } catch (e) {
+      table.syncedOrderJson = base;
+      table.syncedMeta = baseMeta;
+      throw DataWriteException('Không lưu được bàn ${table.name}: $e', e);
+    }
+  }
+
+  /// Theo dõi một bàn (màn giỏ hàng tự cập nhật khi máy khác thêm / sửa món)
+  Stream<TableModel?> tableStream(String firebaseKey) {
+    return tablesRef.child(firebaseKey).onValue.map<TableModel?>((event) {
+      final v = event.snapshot.value;
+      return v is Map ? TableModel.fromServer(v, firebaseKey) : null;
+    });
   }
 
   /// Khóa bàn tạm thời khi nhân viên bấm vào bàn trống, hoặc tự động tách sang bàn phụ
@@ -414,7 +496,7 @@ class OrderRepository {
       if (snap.exists && snap.value != null) {
         latestTables = _parseList<TableModel>(
           snap.value,
-          (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
+          (k, v) => TableModel.fromServer(v is Map ? v : {'name': k}, k.toString()),
         );
       }
     } catch (_) {
@@ -442,7 +524,7 @@ class OrderRepository {
     try {
       final snap = await tablesRef.child(table.firebaseKey).get().timeout(const Duration(milliseconds: 1200));
       if (snap.exists && snap.value is Map) {
-        final remote = TableModel.fromMap(snap.value as Map, table.firebaseKey);
+        final remote = TableModel.fromServer(snap.value as Map, table.firebaseKey);
         if (remote.inUse && remote.currentItems.isNotEmpty) {
           return; // Đã có đơn thật trên bàn, không xóa!
         }
@@ -486,7 +568,7 @@ class OrderRepository {
       if (snap.exists && snap.value != null) {
         remoteTables = _parseList<TableModel>(
           snap.value,
-          (k, v) => TableModel.fromMap(v is Map ? v : {'name': k}, k.toString()),
+          (k, v) => TableModel.fromServer(v is Map ? v : {'name': k}, k.toString()),
         );
       }
     } catch (_) {}
@@ -537,12 +619,27 @@ class OrderRepository {
     dst.orderingBy = src.orderingBy;
     dst.orderingByName = src.orderingByName;
     dst.orderingAt = src.orderingAt;
+    dst.closedBillId = src.closedBillId ?? dst.closedBillId;
+    // Trạng thái lấy từ server → nhớ làm bản gốc cho lần lưu gộp sau
+    if (src.syncedOrderJson != null) {
+      dst.syncedOrderJson = src.syncedOrderJson;
+      dst.syncedMeta = src.syncedMeta;
+    }
   }
 
   /// Gộp bàn: chỉ cộng dồn các dòng món có cấu hình giống hệt nhau (size, topping, đường,
   /// đá, ghi chú, giá...). Ghi cả 2 bàn trong 1 lệnh multi-path (không thể áp dụng một nửa).
   Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
     if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
+    // Lấy đơn MỚI NHẤT của cả 2 bàn (không gộp trên bản cũ làm mất món máy khác vừa thêm)
+    final fresh = await _freshTablePair(sourceTable, targetTable);
+    if (fresh != null) {
+      _applyTableState(sourceTable, fresh.source);
+      if (fresh.target != null) _applyTableState(targetTable, fresh.target!);
+    }
+    if (!sourceTable.inUse || sourceTable.currentItems.isEmpty) {
+      throw DataWriteException('Bàn ${sourceTable.name} không còn món để gộp (có thể đã được gộp / chuyển rồi).');
+    }
     final sourceItems = sourceTable.currentItems;
     final combined = OrderLineMerger.merge(targetTable.currentItems, sourceItems);
 
@@ -586,7 +683,7 @@ class OrderRepository {
     _applyTableState(sourceTable, source);
     _tryRemoveInactiveSplitTable(source);
 
-    await _safeLog(AuditLogModel(
+    unawaited(_safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: staffUsername ?? 'staff',
       userFullName: staffName ?? 'Nhân viên',
@@ -595,12 +692,46 @@ class OrderRepository {
       targetType: 'TABLE',
       targetId: '${sourceTable.name} -> ${targetTable.name}',
       details: '${staffName ?? "Nhân viên"} gộp ${sourceTable.name} vào ${targetTable.name} (chuyển ${sourceItems.length} món: $sourceItemNames sang ${targetTable.name})',
-    ));
+    )));
   }
 
   /// Chuyển bàn: ghi bàn đích và dọn bàn nguồn trong 1 lệnh multi-path.
+  /// Đọc bản mới nhất của 2 bàn trên server trước khi chuyển / gộp (bàn trên máy có thể đã cũ: máy khác vừa
+  /// thêm món, hoặc chính thao tác trước vừa dọn bàn). Mất mạng / lỗi đọc → null (dùng bản trên máy).
+  Future<({TableModel source, TableModel? target})?> _freshTablePair(TableModel source, TableModel target) async {
+    if (!_isOnline) return null;
+    try {
+      final snaps = await Future.wait([
+        tablesRef.child(source.firebaseKey).get(),
+        tablesRef.child(target.firebaseKey).get(),
+      ]).timeout(_readTimeout);
+      if (snaps[0].value is! Map) return null;
+      return (
+        source: TableModel.fromServer(snaps[0].value as Map, source.firebaseKey),
+        target: snaps[1].value is Map ? TableModel.fromServer(snaps[1].value as Map, target.firebaseKey) : null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> transferTable(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
     if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
+    // Lấy đơn MỚI NHẤT của bàn nguồn và kiểm tra bàn đích còn trống
+    final fresh = await _freshTablePair(sourceTable, targetTable);
+    if (fresh != null) {
+      _applyTableState(sourceTable, fresh.source);
+      final ft = fresh.target;
+      if (ft != null && ft.inUse && ft.currentItems.isNotEmpty) {
+        throw DataWriteException('Bàn ${targetTable.name} vừa có khách (máy khác mới mở). Vui lòng chọn bàn khác.');
+      }
+      if (ft != null) _applyTableState(targetTable, ft);
+    }
+    // KHÔNG chuyển một đơn rỗng: bấm 2 lần liên tiếp (lần 2 chạy khi bàn nguồn vừa được dọn) từng ghi đè bàn đích
+    // bằng đơn rỗng → mất sạch món, bàn về 0đ.
+    if (!sourceTable.inUse || sourceTable.currentItems.isEmpty) {
+      throw DataWriteException('Bàn ${sourceTable.name} không còn món để chuyển (có thể đã được chuyển rồi).');
+    }
     final itemCount = sourceTable.currentItems.length;
     final itemNames = sourceTable.currentItems.map((e) => "${e.name} (x${e.quantity})").join(", ");
     final target = _copyTable(targetTable);
@@ -640,7 +771,8 @@ class OrderRepository {
     _applyTableState(sourceTable, source);
     _tryRemoveInactiveSplitTable(source);
 
-    await _safeLog(AuditLogModel(
+    // Nhật ký ghi nền: không giữ hộp thoại mở thêm (khoảng chờ này từng cho phép bấm lần 2)
+    unawaited(_safeLog(AuditLogModel(
       timestamp: DateTime.now().millisecondsSinceEpoch,
       username: staffUsername ?? 'staff',
       userFullName: staffName ?? 'Nhân viên',
@@ -649,7 +781,7 @@ class OrderRepository {
       targetType: 'TABLE',
       targetId: '${sourceTable.name} -> ${targetTable.name}',
       details: '${staffName ?? "Nhân viên"} chuyển bàn từ ${sourceTable.name} sang ${targetTable.name} ($itemCount món: $itemNames)',
-    ));
+    )));
   }
 
   /// Tính toán trạng thái 2 bàn sau khi tách một phần (hoặc toàn bộ) món từ [sourceTable] sang [targetTable]:
@@ -1120,6 +1252,18 @@ class OrderRepository {
   /// dữ liệu đã lưu cục bộ và sẽ tự đồng bộ).
   Future<bool> closeAndPayBill(BillModel bill, TableModel table, {double? pointEarnRate, int? pointRedeemRate}) async {
     final storeCode = _currentStoreCode;
+    // Máy khác vừa thêm / sửa món mà máy này chưa kịp cập nhật → KHÔNG thanh toán trên đơn cũ (sẽ mất món đó).
+    final knownOrder = table.syncedOrderJson;
+    if (knownOrder != null && _isOnline) {
+      String? serverOrder;
+      try {
+        final snap = await tablesRef.child(table.firebaseKey).child('currentOrderJson').get().timeout(const Duration(seconds: 2));
+        serverOrder = snap.value?.toString() ?? '';
+      } catch (_) {}
+      if (serverOrder != null && serverOrder.isNotEmpty && OrderMerge.differs(knownOrder, serverOrder)) {
+        throw DataWriteException('Đơn của bàn vừa được máy khác thay đổi. Vui lòng xem lại đơn rồi thanh toán lại.');
+      }
+    }
     if (!BillCodeGenerator.isSequential(bill.billCode)) {
       bill.billCode = await allocateBillCode(storeCode: storeCode);
     }
@@ -1750,7 +1894,32 @@ class OrderRepository {
     // nếu không sẽ sinh thêm 1 món trùng. Món mới: khóa theo tên món.
     final existingKey = product.dbKey?.trim() ?? '';
     final key = existingKey.isNotEmpty ? existingKey : product.name.replaceAll(RegExp(r'[.#$\[\]]'), '_');
-    await ref.child(key).set(product.toMap());
+    // Mỗi món phải có id SỐ riêng: món thiếu id bị coi là productId 0 dùng chung → tra nhầm món ở combo,
+    // phiếu bếp, báo cáo... Món mới / món cũ chưa có id: cấp id = lớn nhất trong chi nhánh + 1.
+    var toSave = product;
+    if (product.id <= 0) {
+      final snap = await ref.get();
+      toSave = product.copyWith(id: nextProductId(snap.value));
+    }
+    await ref.child(key).set(toSave.toMap());
+  }
+
+  /// Id số kế tiếp cho món của chi nhánh: lớn nhất (trường id hoặc khóa số) + 1. Khớp nextProductId (web).
+  static int nextProductId(Object? rawProducts) {
+    int? posInt(Object? v) {
+      final n = v is num ? v.toInt() : int.tryParse(v?.toString().trim() ?? '');
+      return n != null && n > 0 ? n : null;
+    }
+    var max = 0;
+    if (rawProducts is Map) {
+      for (final e in rawProducts.entries) {
+        final v = e.value;
+        for (final n in [if (v is Map) posInt(v['id']), posInt(e.key)]) {
+          if (n != null && n > max) max = n;
+        }
+      }
+    }
+    return max + 1;
   }
 
   /// Báo hết / bật lại món: chỉ ghi isAvailable + soldOutAt/By/Until (rules cho bếp & nhân viên đúng các trường này).
@@ -2295,7 +2464,8 @@ class OrderRepository {
 
   static String _kitchenItemKey(Map m) {
     final tops = (m['selectedToppings'] is List ? (m['selectedToppings'] as List).map((e) => e.toString()).toList() : <String>[])..sort();
-    return '${m['productId']}|${m['selectedSize'] ?? ''}|${m['selectedSugar'] ?? ''}|${m['selectedIce'] ?? ''}|${tops.join(',')}';
+    // Có tên món: món tạo từ web / sao chép dùng chung productId 0
+    return '${m['productId']}|${(m['name'] ?? '').toString().trim().toLowerCase()}|${m['selectedSize'] ?? ''}|${m['selectedSugar'] ?? ''}|${m['selectedIce'] ?? ''}|${tops.join(',')}';
   }
 
   /// Báo bếp HUỶ [removeQty] phần của [line] (món đã gửi bếp bị xóa/giảm). Tìm các phiếu bếp CHƯA XONG của bàn

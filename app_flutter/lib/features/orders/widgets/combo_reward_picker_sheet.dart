@@ -33,7 +33,14 @@ class ComboRewardPickerSheet extends StatefulWidget {
 }
 
 class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
-  final Map<int, int> _quantities = {};
+  // Khóa theo món (không theo id): món tạo từ web / sao chép đều có id = 0 → dùng id sẽ gộp nhầm nhiều món
+  final Map<String, int> _quantities = {};
+
+  static String _keyOf(ProductModel p) {
+    final k = p.dbKey?.trim() ?? '';
+    if (k.isNotEmpty) return 'key:$k';
+    return p.id > 0 ? 'id:${p.id}' : 'name:${p.name.trim().toLowerCase()}';
+  }
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -61,18 +68,18 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
       return;
     }
     setState(() {
-      _quantities[product.id] = (_quantities[product.id] ?? 0) + 1;
+      _quantities[_keyOf(product)] = (_quantities[_keyOf(product)] ?? 0) + 1;
     });
   }
 
   void _decrement(ProductModel product) {
-    final current = _quantities[product.id] ?? 0;
+    final current = _quantities[_keyOf(product)] ?? 0;
     if (current <= 0) return;
     setState(() {
       if (current == 1) {
-        _quantities.remove(product.id);
+        _quantities.remove(_keyOf(product));
       } else {
-        _quantities[product.id] = current - 1;
+        _quantities[_keyOf(product)] = current - 1;
       }
     });
   }
@@ -279,7 +286,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                               ),
                             ),
                             ...products.map((p) {
-                              final qty = _quantities[p.id] ?? 0;
+                              final qty = _quantities[_keyOf(p)] ?? 0;
                               final discountedPrice = widget.discountPerUnit > 0
                                   ? (p.price - widget.discountPerUnit).clamp(0, p.price)
                                   : p.price;
@@ -469,7 +476,7 @@ class _ComboRewardPickerSheetState extends State<ComboRewardPickerSheet> {
                                   final chosen = <ProductModel, int>{};
                                   for (final entry in _quantities.entries) {
                                     if (entry.value <= 0) continue;
-                                    final p = widget.candidateProducts.firstWhere((x) => x.id == entry.key);
+                                    final p = widget.candidateProducts.firstWhere((x) => _keyOf(x) == entry.key);
                                     chosen[p] = entry.value;
                                   }
                                   Navigator.pop(context, chosen);

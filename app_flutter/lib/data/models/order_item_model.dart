@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../../core/utils/topping_utils.dart';
 // ==================== ORDER ITEM MODEL (KIOTVIET FNB) ====================
 //
@@ -66,6 +67,30 @@ class OrderItemModel {
   /// Không tính vào mốc giá trị đơn, chỉ dòng này nhận ưu đãi, không gộp món gọi thêm vào dòng này.
   String rewardCampaignId;
 
+  /// Mã riêng của DÒNG món (không đổi khi sửa số lượng / ghi chú / giảm giá). Dùng để GỘP đơn khi nhiều máy
+  /// cùng sửa một bàn (OrderMerge): dòng nào máy nào thêm / sửa / xóa được áp đúng vào bản trên server.
+  /// Dòng cũ chưa có mã: suy ra từ món + giờ gọi + tùy chọn (legacyLineKey).
+  final String lineKey;
+
+  static final math.Random _rng = math.Random();
+
+  /// Mã dòng mới, ngẫu nhiên, không trùng giữa các máy
+  static String newLineKey() =>
+      'L${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${_rng.nextInt(1 << 30).toRadixString(36)}';
+
+  /// Mã dòng cho dữ liệu cũ (chưa có lineKey): cố định theo các trường không đổi khi sửa dòng
+  static String legacyLineKey({
+    required int productId,
+    required String name,
+    int? orderedAt,
+    String size = '',
+    String sugar = '',
+    String ice = '',
+    List<String> toppings = const [],
+    String rewardCampaignId = '',
+  }) =>
+      'old:$productId|${name.trim()}|${orderedAt ?? ''}|$size|$sugar|$ice|${toppings.join(',')}|$rewardCampaignId';
+
   OrderItemModel({
     required this.productId,
     required this.name,
@@ -92,7 +117,9 @@ class OrderItemModel {
     this.orderedByName = '',
     this.orderedAt,
     this.rewardCampaignId = '',
-  }) : discountedQuantity = (discountedQuantity ??
+    String? lineKey,
+  }) : lineKey = (lineKey != null && lineKey.isNotEmpty) ? lineKey : newLineKey(),
+       discountedQuantity = (discountedQuantity ??
                 ((discountAmount > 0 || discountPercent > 0 || discountUnitAmount > 0) ? quantity : 0))
             .clamp(0, quantity < 0 ? 0 : quantity);
 
@@ -198,10 +225,23 @@ class OrderItemModel {
       orderedByName: map['orderedByName']?.toString() ?? '',
       orderedAt: asEpochMs(map['orderedAt']),
       rewardCampaignId: map['rewardCampaignId']?.toString() ?? '',
+      lineKey: (map['lineKey']?.toString().trim().isNotEmpty ?? false)
+          ? map['lineKey'].toString().trim()
+          : legacyLineKey(
+              productId: resolveProductId(map['productId'], map['id']),
+              name: map['name']?.toString() ?? map['productName']?.toString() ?? '',
+              orderedAt: asEpochMs(map['orderedAt']),
+              size: map['selectedSize']?.toString() ?? '',
+              sugar: map['selectedSugar']?.toString() ?? '',
+              ice: map['selectedIce']?.toString() ?? '',
+              toppings: toppings,
+              rewardCampaignId: map['rewardCampaignId']?.toString() ?? '',
+            ),
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'lineKey': lineKey,
     'productId': productId,
     'name': name,
     'price': price,
@@ -442,6 +482,7 @@ class OrderItemModel {
     String? orderedByName,
     int? orderedAt,
     String? rewardCampaignId,
+    String? lineKey,
   }) {
     final nextQty = quantity ?? this.quantity;
     final next = OrderItemModel(
@@ -472,6 +513,7 @@ class OrderItemModel {
       orderedByName: orderedByName ?? this.orderedByName,
       orderedAt: orderedAt ?? this.orderedAt,
       rewardCampaignId: rewardCampaignId ?? this.rewardCampaignId,
+      lineKey: lineKey ?? this.lineKey,
     );
     // Số lượng / đơn giá / cấu hình giảm thay đổi mà không truyền tổng giảm
     // tường minh → tính lại tổng giảm của dòng.

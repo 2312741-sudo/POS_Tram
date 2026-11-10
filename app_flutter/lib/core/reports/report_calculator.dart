@@ -751,7 +751,8 @@ class ReportCalculator {
 
     int itemDiscountAppliedCount = 0;
     int itemDiscountAmountTotal = 0;
-    final Map<int, _ItemDiscountAccumulator> itemDiscMap = {};
+    // Khóa theo món: productId > 0, còn lại theo tên (món tạo từ web / sao chép dùng chung productId 0)
+    final Map<String, _ItemDiscountAccumulator> itemDiscMap = {};
 
     for (final b in paidBills) {
       // Bill campaigns
@@ -788,12 +789,13 @@ class ReportCalculator {
         if (it.lineDiscountTotal > 0) {
           itemDiscountAppliedCount += 1;
           itemDiscountAmountTotal += it.lineDiscountTotal;
-          itemDiscMap.putIfAbsent(it.productId, () => _ItemDiscountAccumulator(
+          final discKey = it.productId > 0 ? 'id:${it.productId}' : 'name:${it.name.trim().toLowerCase()}';
+          final acc = itemDiscMap.putIfAbsent(discKey, () => _ItemDiscountAccumulator(
             productId: it.productId,
             productName: it.name,
           ));
-          itemDiscMap[it.productId]!.discountAmount += it.lineDiscountTotal;
-          itemDiscMap[it.productId]!.quantity += it.discountedQuantity;
+          acc.discountAmount += it.lineDiscountTotal;
+          acc.quantity += it.discountedQuantity;
         }
       }
     }

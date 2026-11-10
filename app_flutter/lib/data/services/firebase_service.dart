@@ -200,6 +200,8 @@ class FirebaseService {
 
   Future<void> saveTable(TableModel table) => _orderRepo.saveTable(table);
 
+  Stream<TableModel?> tableStream(String firebaseKey) => _orderRepo.tableStream(firebaseKey);
+
   Future<({TableModel targetTable, bool wasSplit, String? occupiedBy})> claimOrSplitTableForOrdering(
     TableModel requestedTable, {
     Iterable<TableModel>? knownTables,

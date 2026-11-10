@@ -468,7 +468,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                               itemCount: filteredProds.length,
                               itemBuilder: (context, i) {
                                 final p = filteredProds[i];
-                                final isChecked = selected.contains(p.id.toString());
+                                final isChecked = selected.any((r) => _isProductRef(p, r));
                                 return CheckboxListTile(
                                   title: Text(p.name),
                                   subtitle: Text('${FormatUtils.vnd(p.price)} • ${p.category}'),
@@ -476,9 +476,9 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                                   onChanged: (val) {
                                     setDlgState(() {
                                       if (val == true) {
-                                        selected.add(p.id.toString());
+                                        selected.add(_productRef(p));
                                       } else {
-                                        selected.remove(p.id.toString());
+                                        selected.removeWhere((r) => _isProductRef(p, r));
                                       }
                                     });
                                     onChanged();
@@ -770,7 +770,7 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
                   spacing: 6,
                   runSpacing: 6,
                   children: _includedItemIds.map((itemId) {
-                    final prod = _allProducts.where((p) => p.id.toString() == itemId).firstOrNull;
+                    final prod = _allProducts.where((p) => _isProductRef(p, itemId)).firstOrNull;
                     final name = prod?.name ?? 'Món #$itemId';
                     return Chip(
                       label: Text(name),
@@ -1124,9 +1124,27 @@ class _CampaignFormScreenState extends State<CampaignFormScreen> {
     }
   }
 
+  /// Mã lưu vào danh sách món của chương trình. Món tạo từ web / sao chép không có id số (id = 0, dùng chung)
+  /// → lưu khóa RTDB của món (engine khớp theo khóa/tên/mã), không lưu "0" làm mọi món đó bị chọn cùng lúc.
+  static String _productRef(ProductModel p) {
+    if (p.id > 0) return p.id.toString();
+    final k = p.dbKey?.trim() ?? '';
+    return k.isNotEmpty ? k : p.name;
+  }
+
+  /// Mã trong danh sách (id số, khóa RTDB, tên hoặc mã món — web lưu khóa / tên) có trỏ tới món [p] không
+  static bool _isProductRef(ProductModel p, String ref) {
+    final r = ref.trim();
+    if (r.isEmpty || r == '0') return false;
+    return (p.id > 0 && p.id.toString() == r) ||
+        (p.dbKey != null && p.dbKey == r) ||
+        p.name.trim().toLowerCase() == r.toLowerCase() ||
+        (p.code.isNotEmpty && p.code == r);
+  }
+
   String _productNames(List<String> ids) {
     if (ids.isEmpty) return '(chưa chọn)';
-    return ids.map((id) => _allProducts.where((p) => p.id.toString() == id).firstOrNull?.name ?? 'Món #$id').join(', ');
+    return ids.map((id) => _allProducts.where((p) => _isProductRef(p, id)).firstOrNull?.name ?? 'Món #$id').join(', ');
   }
 
   /// Ô nhập + chọn cách tính ưu đãi dùng chung cho 2 loại

@@ -89,7 +89,9 @@ class TableCard extends StatelessWidget {
     final isReserved = status == TableVisualStatus.reserved;
     final items = table.currentItems;
     final int itemsCount = items.fold(0, (sum, i) => sum + i.quantity);
+    // Tiền sau giảm giá theo món (giảm tay); giá gốc để gạch ngang khi có giảm
     final int totalAmount = items.fold(0, (sum, i) => sum + i.itemTotal);
+    final int grossAmount = items.fold(0, (sum, i) => sum + i.lineGross);
 
     final accent = status == TableVisualStatus.empty ? tc.border : style.color;
 
@@ -148,7 +150,7 @@ class TableCard extends StatelessWidget {
                       // Chân thẻ: tổng tiền / gợi ý + menu thao tác nhanh
                       Row(
                         children: [
-                          Expanded(child: _buildFooter(context, style, inUse, isReserved, itemsCount, totalAmount)),
+                          Expanded(child: _buildFooter(context, style, inUse, isReserved, itemsCount, totalAmount, grossAmount)),
                           _buildMenu(context, inUse, isReserved),
                         ],
                       ),
@@ -260,10 +262,12 @@ class TableCard extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context, TableStatusStyle style, bool inUse, bool isReserved, int itemsCount, int totalAmount) {
+  Widget _buildFooter(BuildContext context, TableStatusStyle style, bool inUse, bool isReserved, int itemsCount, int totalAmount, int grossAmount) {
     if (inUse) {
-      final int discountAmount = table.currentDiscounts.fold(0, (sum, d) => sum + d.amount);
-      final int payableAmount = (totalAmount - discountAmount).clamp(0, totalAmount);
+      // Giảm = khuyến mãi đã áp dụng + giảm giá tay trên từng món
+      final int promoAmount = table.currentDiscounts.fold(0, (sum, d) => sum + d.amount);
+      final int payableAmount = (totalAmount - promoAmount).clamp(0, totalAmount);
+      final int discountAmount = grossAmount - payableAmount;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -275,7 +279,7 @@ class TableCard extends StatelessWidget {
           // Có khuyến mãi / giảm giá: hiện giá gốc gạch ngang + giá thực khách phải trả
           if (discountAmount > 0)
             Text(
-              FormatUtils.vnd(totalAmount),
+              FormatUtils.vnd(grossAmount),
               maxLines: 1,
               style: GoogleFonts.beVietnamPro(
                 fontSize: 11,

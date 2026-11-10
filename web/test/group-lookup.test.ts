@@ -25,3 +25,19 @@ describe("buildGroupLookup", () => {
     expect(groupOf({ productId: 0, name: "Món lạ" })).toBeNull();
   });
 });
+
+import { hasNumericProductId, nextProductId } from "../lib/product-code";
+describe("cấp id số cho món", () => {
+  it("lấy lớn nhất (trường id hoặc khóa số) + 1", () => {
+    expect(nextProductId({ a: { id: 3 }, "7": { name: "x" }, "-Pxx": { name: "web" }, b: { id: "12" } })).toBe(13);
+    expect(nextProductId({})).toBe(1);
+    expect(nextProductId(null)).toBe(1);
+  });
+  it("nhận biết món thiếu id", () => {
+    expect(hasNumericProductId({ id: 5 })).toBe(true);
+    expect(hasNumericProductId({ id: "5" })).toBe(true);
+    expect(hasNumericProductId({ id: 0 })).toBe(false);
+    expect(hasNumericProductId({ name: "Trà olong - Tắc" })).toBe(false);
+    expect(hasNumericProductId(undefined)).toBe(false);
+  });
+});

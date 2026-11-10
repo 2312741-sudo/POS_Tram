@@ -1156,6 +1156,8 @@ class _TableListScreenState extends State<TableListScreen> {
     );
   }
 
+  bool _tableOpBusy = false; // đang chuyển / gộp bàn
+
   void _showTransferTableDialog(TableModel sourceTable, List<TableModel> allTables) {
     final emptyTables = allTables.where((t) => !t.inUse && !t.isReserved && t.name != sourceTable.name).toList();
     if (emptyTables.isEmpty) {
@@ -1189,9 +1191,12 @@ class _TableListScreenState extends State<TableListScreen> {
                       subtitle: Text(target.zone),
                       trailing: const Icon(LucideIcons.chevronRight, size: 14),
                       onTap: () async {
+                        if (_tableOpBusy) return; // chặn bấm 2 lần (lần 2 từng chuyển đơn rỗng đè lên bàn đích)
+                        _tableOpBusy = true;
                         try {
                           await _fb.transferTable(sourceTable, target);
                         } catch (e) {
+                          _tableOpBusy = false;
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Lỗi chuyển bàn: $e'), backgroundColor: AppColors.danger),
@@ -1199,6 +1204,7 @@ class _TableListScreenState extends State<TableListScreen> {
                           }
                           return;
                         }
+                        _tableOpBusy = false;
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1253,9 +1259,12 @@ class _TableListScreenState extends State<TableListScreen> {
                       subtitle: Text('${target.zone} • ${target.currentItems.length} món'),
                       trailing: const Icon(LucideIcons.merge, size: 16),
                       onTap: () async {
+                        if (_tableOpBusy) return;
+                        _tableOpBusy = true;
                         try {
                           await _fb.mergeTables(sourceTable, target);
                         } catch (e) {
+                          _tableOpBusy = false;
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Lỗi gộp bàn: $e'), backgroundColor: AppColors.danger),
@@ -1263,6 +1272,7 @@ class _TableListScreenState extends State<TableListScreen> {
                           }
                           return;
                         }
+                        _tableOpBusy = false;
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

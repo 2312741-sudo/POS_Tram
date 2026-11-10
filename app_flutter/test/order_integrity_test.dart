@@ -192,6 +192,21 @@ void main() {
       expect(plan.unmapped, contains('product:99'));
     });
 
+    test('món tạo từ web / sao chép (productId 0) tra công thức theo tên món', () {
+      final lines = [
+        StockSaleLine.from(OrderItemModel(productId: 0, name: 'Trà sữa', price: 30000, quantity: 1)),
+        StockSaleLine.from({'productId': 0, 'name': 'Món lạ', 'quantity': 1}),
+      ].whereType<StockSaleLine>().toList();
+      final plan = StockConsumptionPlanner.plan(
+        lines: lines,
+        recipes: recipes,
+        catalogIdByLegacyProductId: {0: 'ITM_SAI'},
+        catalogIdByName: {'trà sữa': 'ITM_TS'},
+      );
+      expect(plan.qtyByItem['ITM_TRA'], 10);
+      expect(plan.unmapped, contains('product:0'));
+    });
+
     test('áp dụng tiêu hao lên số dư: trừ tồn và giá trị theo giá vốn bình quân', () {
       final next = StockConsumptionPlanner.applyConsumption(
         {'onHandQty': 100, 'inventoryValue': 50000, 'averageCostScaled': 50000, 'version': 3},

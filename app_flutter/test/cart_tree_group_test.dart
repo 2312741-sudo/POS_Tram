@@ -178,6 +178,46 @@ void main() {
       expect(discounts[1]!.first.campaignName, equals('Combo Mua Nước + Bánh Giảm 10K'));
     });
 
+    test('computeLinePromotionDiscounts không hiển thị KM vượt số tiền thực áp dụng (dòng giảm tay không bị gắn nhãn combo)', () {
+      // Tình huống thật HD-261110-0015: combo áp 30K (3 combo), sau đó thêm 1 bánh và GIẢM TAY 10K.
+      // Tính lại cho ra 4 combo (40K) nhưng hóa đơn chỉ tính 30K → dòng bánh giảm tay không được hiện thêm "-10K combo".
+      final cart = [
+        OrderItemModel(productId: 101, name: 'Trà Đào Cam Sả', price: 20000, quantity: 4),
+        OrderItemModel(productId: 201, name: 'Bánh Croissant', price: 30000, quantity: 3),
+        OrderItemModel(productId: 201, name: 'Bánh Croissant', price: 30000, quantity: 1,
+            discountUnitAmount: 10000, discountedQuantity: 1, discountAmount: 10000, discountReason: 'lỗi combo'),
+      ];
+      final products = [
+        ProductModel(id: 101, name: 'Trà Đào Cam Sả', price: 20000, category: 'Nước', unit: 'Ly'),
+        ProductModel(id: 201, name: 'Bánh Croissant', price: 30000, category: 'Bánh', unit: 'Cái'),
+      ];
+      final campaign = CampaignModel(
+        campaignId: 'COMBO_1', programCode: 'C1', name: 'Combo bánh và nước giảm 10K', description: '',
+        campaignType: 'BUY_X_GET_Y', schedule: CampaignSchedule(), branchIds: const [],
+        includedCustomerIds: const [], excludedCustomerIds: const [], includedItemIds: const [],
+        includedGroupIds: const [], excludedItemIds: const [], tiers: const [],
+        buyConditions: [
+          CampaignBuyCondition(conditionId: 'COND_1', buyItemIds: const [], buyGroupIds: ['Nước'], requiredBuyQty: 1,
+              rewardItemIds: const [], rewardGroupIds: ['Bánh'], rewardQty: 1, benefitMode: 'FIXED', value: 10000,
+              multiplyByBundle: true),
+        ],
+        warnRepeatedCustomer: false, hasCodes: false, autoApply: false, stackingMode: 'STACKABLE', priority: 1,
+        active: true, createdAt: 0, updatedAt: 0, createdBy: 'admin', version: 1,
+      );
+      final discounts = CartCampaignPricing.computeLinePromotionDiscounts(
+        cart: cart,
+        appliedDiscounts: [BillDiscountModel(campaignName: campaign.name, description: '', amount: 30000, campaignId: 'COMBO_1')],
+        campaignsById: {'COMBO_1': campaign},
+        products: products,
+        branchId: 'TRAM_01',
+      );
+      final total = discounts.values.expand((e) => e).fold<int>(0, (s, e) => s + e.discountAmount);
+      expect(total, 30000);
+      expect(discounts[1]!.first.discountAmount, 30000);
+      expect(discounts[1]!.first.quantity, 3);
+      expect(discounts.containsKey(2), isFalse);
+    });
+
     testWidgets('CartTreeGroupCard renders tree branches and badges properly', (tester) async {
       final cart = [
         OrderItemModel(

@@ -85,7 +85,8 @@ export function waitingMinutes(ticket: Pick<KitchenTicket, "timestamp">, now: nu
 
 const itemKey = (m: Record<string, unknown>): string => {
   const tops = Array.isArray(m.selectedToppings) ? m.selectedToppings.map(String).sort() : [];
-  return `${String(m.productId ?? "")}|${String(m.selectedSize ?? "")}|${String(m.selectedSugar ?? "")}|${String(m.selectedIce ?? "")}|${tops.join(",")}`;
+  // Có tên món: món tạo từ web / sao chép dùng chung productId 0
+  return `${String(m.productId ?? "")}|${String(m.name ?? "").trim().toLowerCase()}|${String(m.selectedSize ?? "")}|${String(m.selectedSugar ?? "")}|${String(m.selectedIce ?? "")}|${tops.join(",")}`;
 };
 
 /**

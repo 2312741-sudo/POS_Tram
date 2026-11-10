@@ -45,3 +45,23 @@ export function buildProductCodeMap(products: Array<CodeSource & { id?: string |
   }
   return map;
 }
+
+const positiveIntOf = (v: unknown): number | null => {
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+/** Món đã có id số (> 0) chưa. App coi món thiếu id là productId 0 — dùng chung cho mọi món thiếu id. */
+export function hasNumericProductId(node: unknown): boolean {
+  return !!node && typeof node === "object" && positiveIntOf((node as Record<string, unknown>).id) != null;
+}
+
+/** Id số kế tiếp cho món mới của chi nhánh: lớn nhất (theo trường id hoặc khóa số) + 1. Khớp allocId của sao chép thực đơn. */
+export function nextProductId(products: Record<string, unknown> | null | undefined): number {
+  let max = 0;
+  for (const [key, node] of Object.entries(products || {})) {
+    const fromNode = node && typeof node === "object" ? positiveIntOf((node as Record<string, unknown>).id) : null;
+    for (const n of [fromNode, positiveIntOf(key)]) if (n != null && n > max) max = n;
+  }
+  return max + 1;
+}

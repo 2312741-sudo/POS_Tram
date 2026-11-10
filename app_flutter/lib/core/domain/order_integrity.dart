@@ -187,7 +187,10 @@ class StockSaleLine {
   final String size;
   final List<String> toppings;
 
-  StockSaleLine({required this.productId, required this.quantity, this.size = '', this.toppings = const []});
+  /// Tên món — tra công thức khi productId = 0 (món tạo từ web / sao chép không có id số)
+  final String name;
+
+  StockSaleLine({required this.productId, required this.quantity, this.size = '', this.toppings = const [], this.name = ''});
 
   /// Hỗ trợ cả OrderItemModel và Map (khóa 'productId' hoặc 'product_id' cũ)
   static StockSaleLine? from(dynamic raw) {
@@ -197,6 +200,7 @@ class StockSaleLine {
         quantity: raw.quantity,
         size: raw.selectedSize,
         toppings: raw.selectedToppings,
+        name: raw.name,
       );
     }
     if (raw is Map) {
@@ -207,6 +211,7 @@ class StockSaleLine {
         quantity: (raw['quantity'] as num?)?.toInt() ?? 1,
         size: raw['selectedSize']?.toString() ?? '',
         toppings: raw['selectedToppings'] is List ? List<String>.from((raw['selectedToppings'] as List).map((e) => e.toString())) : const [],
+        name: raw['name']?.toString() ?? '',
       );
     }
     return null;
@@ -272,7 +277,9 @@ class StockConsumptionPlanner {
 
     for (final line in lines) {
       if (line.quantity <= 0) continue;
-      final itemId = catalogIdByLegacyProductId[line.productId] ?? line.productId.toString();
+      final itemId = (line.productId > 0 ? catalogIdByLegacyProductId[line.productId] : null) ??
+          (line.name.trim().isNotEmpty ? catalogIdByName[normalizeName(line.name)] : null) ??
+          line.productId.toString();
       final recipe = pickRecipe(recipes, itemId, size: line.size, branchId: branchId);
       if (recipe != null) {
         addRecipe(recipe, line.quantity);

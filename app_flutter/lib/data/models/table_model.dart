@@ -11,6 +11,24 @@ class TableModel {
   final String zone;
   bool inUse;
   String _currentOrderJson;
+
+  /// Bản currentOrderJson máy này đã ĐỌC từ server (không lưu lên server). Khi lưu bàn, chỉ phần máy này đổi
+  /// so với bản này được gộp vào đơn mới nhất trên server (OrderMerge) → không xóa món máy khác vừa thêm.
+  /// null = bàn dựng mới trên máy (chưa đọc từ server) → ghi đè như cũ.
+  String? syncedOrderJson;
+
+  /// Các trường ngoài món mà nhiều máy có thể cùng sửa: lưu theo luật "máy nào đổi thì lấy của máy đó,
+  /// không đổi thì giữ của server" (so với bản đã đọc [syncedMeta]).
+  static const List<String> mergedMetaFields = ['discountsJson', 'guestCount', 'note', 'customerId', 'customerName', 'customerPhone'];
+
+  /// Giá trị [mergedMetaFields] máy này đã đọc từ server (không lưu lên server)
+  Map<String, Object?>? syncedMeta;
+
+  /// Chụp giá trị hiện tại của [mergedMetaFields] (theo đúng dạng ghi lên server)
+  Map<String, Object?> metaSnapshot() {
+    final m = toMap();
+    return {for (final f in mergedMetaFields) f: m[f]};
+  }
   String? mergedIntoTable; // Name of parent table if merged
   String? currentBillId; // Mã hóa đơn thanh toán (HD-yyMMdd-HHmmss)
   String? currentOrderCode; // Mã đặt món / gọi món kiểm soát (OD-yyMMdd-HHmmss)
@@ -299,6 +317,13 @@ class TableModel {
       orderingAt: orderingAt,
     );
   }
+
+  /// Bàn đọc từ SERVER: nhớ bản đơn đã đọc để lần lưu sau gộp đúng (xem [syncedOrderJson]).
+  /// Bản sao dựng từ dữ liệu cục bộ dùng [TableModel.fromMap] (không có bản gốc → ghi đè như cũ).
+  factory TableModel.fromServer(Map<dynamic, dynamic> map, [String? key]) =>
+      (TableModel.fromMap(map, key)..syncedOrderJson = map['currentOrderJson']?.toString() ?? '').._markMetaSynced();
+
+  void _markMetaSynced() => syncedMeta = metaSnapshot();
 
   Map<String, dynamic> toMap() => {
     if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),

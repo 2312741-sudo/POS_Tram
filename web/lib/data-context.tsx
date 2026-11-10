@@ -4,6 +4,7 @@ import { normalizeBusinessDayStart, setBusinessDayConfig } from "./business-day"
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db, auth, functions } from "./firebase";
 import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
+import { hasNumericProductId, nextProductId } from "./product-code";
 import { planKitchenCancel } from "./kitchen";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
@@ -2086,6 +2087,13 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
         if (productData.imageBase64 !== undefined) {
           payload.imageBase64 = productData.imageBase64;
         }
+
+        // Mỗi món phải có id SỐ riêng: app lưu productId theo id số; món thiếu id bị coi là 0 và dùng chung
+        // → tra nhầm món (combo, phiếu bếp, báo cáo...). Món mới hoặc món cũ chưa có id: cấp id = lớn nhất + 1.
+        const productsSnap = await get(ref(db, `stores/${targetCode}/products`));
+        const allProducts = (productsSnap.val() || {}) as Record<string, unknown>;
+        const current = productData.id ? allProducts[productData.id] : undefined;
+        if (!hasNumericProductId(current)) payload.id = nextProductId(allProducts);
 
         if (productData.id) {
           await update(ref(db, `stores/${targetCode}/products/${productData.id}`), payload);
