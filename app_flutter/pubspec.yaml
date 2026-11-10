@@ -1,7 +1,7 @@
 name: tram_flutter
 description: "TramApp - Hệ thống quản lý nhà hàng"
 publish_to: 'none'
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
