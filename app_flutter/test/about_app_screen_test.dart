@@ -16,7 +16,7 @@ void main() {
   }
 
   group('AboutAppScreen Widget Tests', () {
-    testWidgets('hiển thị đầy đủ thông tin tên ứng dụng và phiên bản 1.0.8+9', (tester) async {
+    testWidgets('hiển thị đầy đủ thông tin tên ứng dụng và phiên bản 1.0.9+10', (tester) async {
       await tester.pumpWidget(buildTestWidget());
       await tester.pump();
 
@@ -27,7 +27,7 @@ void main() {
       expect(find.text('POS TRẠM'), findsOneWidget);
 
       // Phiên bản và bản dựng
-      expect(find.text('Phiên bản 1.0.8 (Bản dựng 9)'), findsOneWidget);
+      expect(find.text('Phiên bản 1.0.9 (Bản dựng 10)'), findsOneWidget);
 
       // Bundle ID & Apple Team
       expect(find.text('com.tramapp.tramFlutter'), findsOneWidget);
