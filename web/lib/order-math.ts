@@ -171,6 +171,30 @@ export function summarizeOrderLines(items: RawOrderLine[]): { subTotal: number; 
   return { subTotal, itemDiscounts };
 }
 
+/** Tổng tiền các khuyến mãi / giảm giá đơn đang áp trên bàn (discountsJson — hợp đồng chung với Flutter) */
+export function tableDiscountTotal(t: { discountsJson?: unknown }): number {
+  let list: unknown = t.discountsJson;
+  if (typeof list === "string") {
+    try {
+      list = list ? JSON.parse(list) : [];
+    } catch {
+      list = [];
+    }
+  }
+  if (!Array.isArray(list)) return 0;
+  return list.reduce((s: number, d) => s + Math.max(0, Number((d as { amount?: unknown })?.amount) || 0), 0);
+}
+
+/**
+ * Tiền khách phải trả của bàn đang phục vụ = tiền món (size + topping) − giảm giá từng món − khuyến mãi / giảm đơn
+ * đang áp. Khớp TableModel.payableTotal (Flutter) và thẻ bàn.
+ */
+export function tablePayableTotal(t: { currentOrderJson?: unknown; discountsJson?: unknown }): number {
+  const json = typeof t.currentOrderJson === "string" ? t.currentOrderJson : "";
+  const { subTotal, itemDiscounts } = summarizeOrderLines(parseOrderJson(json));
+  return Math.max(0, subTotal - itemDiscounts - tableDiscountTotal(t));
+}
+
 /** Parse currentOrderJson của bàn an toàn — trả về mảng rỗng nếu lỗi */
 export function parseOrderJson(json?: string | null): RawOrderLine[] {
   if (!json) return [];

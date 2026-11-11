@@ -424,6 +424,13 @@ class TableModel {
   }
 
   int get currentTotal => currentItems.fold(0, (s, p) => s + p.itemTotal);
+
+  /// Tiền khách phải trả của bàn = tiền món (đã trừ giảm giá từng món) − khuyến mãi / giảm đơn đang áp
+  /// (discountsJson). Dùng cho "Đang phục vụ" / doanh thu ước tính. Khớp tablePayableTotal (web).
+  int get payableTotal {
+    final v = currentTotal - currentDiscounts.fold<int>(0, (s, d) => s + (d.amount > 0 ? d.amount : 0));
+    return v < 0 ? 0 : v;
+  }
   String get firebaseKey => '${zone}_$name';
   bool get isMerged => mergedIntoTable != null && mergedIntoTable!.isNotEmpty;
 

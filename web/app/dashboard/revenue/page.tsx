@@ -18,23 +18,11 @@ import {
   ReportStoreInfo,
 } from "@/lib/export";
 import { useDashboardData, TableItem } from "@/lib/data-context";
+import { tablePayableTotal } from "@/lib/order-math";
 
+/** Tiền bàn đang phục vụ SAU khuyến mãi (giảm giá món + khuyến mãi / giảm đơn đang áp) */
 function getTableServingTotal(t: TableItem): number {
-  if (!t.currentOrderJson) return 0;
-  try {
-    const items = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
-    if (!Array.isArray(items)) return 0;
-    return items.reduce((sum: number, it: { quantity?: number; count?: number; price?: number; selectedToppings?: Array<{ price?: number }> }) => {
-      const qty = it.quantity || it.count || 1;
-      let toppingSum = 0;
-      if (Array.isArray(it.selectedToppings)) {
-        toppingSum = it.selectedToppings.reduce((ts: number, tp) => ts + (tp.price || 0), 0);
-      }
-      return sum + ((Number(it.price) || 0) + toppingSum) * qty;
-    }, 0);
-  } catch {
-    return 0;
-  }
+  return tablePayableTotal(t);
 }
 
 // Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render

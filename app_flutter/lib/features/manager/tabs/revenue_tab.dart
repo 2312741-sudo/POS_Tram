@@ -97,7 +97,7 @@ class _RevenueTabState extends State<RevenueTab> {
   // Active serving tables
   List<TableModel> get _servingTables => _tables.where((t) => t.inUse && !t.isMerged).toList();
   int get _servingCount => _servingTables.length;
-  int get _servingTotal => _servingTables.fold<int>(0, (s, t) => s + t.currentTotal);
+  int get _servingTotal => _servingTables.fold<int>(0, (s, t) => s + t.payableTotal);
 
   // Takeaway metrics
   List<BillModel> get _takeawayBills => _filteredBills.where((b) {
@@ -573,7 +573,7 @@ class _RevenueTabState extends State<RevenueTab> {
                                 overflow: TextOverflow.ellipsis,
                               )),
                               Text(
-                                FormatUtils.vnd(st.currentTotal),
+                                FormatUtils.vnd(st.payableTotal),
                                 style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: context.ink(const Color(0xFF1D4ED8))),
                               ),
                             ],

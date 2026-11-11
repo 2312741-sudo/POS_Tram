@@ -310,32 +310,8 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
     return _servingTables.fold(0, (s, t) => s + (t.guestCount ?? 1));
   }
 
-  int get _servingEstimatedRevenue {
-    int total = 0;
-    for (final t in _servingTables) {
-      if (t.currentOrderJson.isNotEmpty) {
-        try {
-          final list = jsonDecode(t.currentOrderJson);
-          if (list is List) {
-            for (final it in list) {
-              final price = (it['price'] as num?)?.toInt() ?? 0;
-              final qty = (it['quantity'] as num?)?.toInt() ?? 1;
-              int toppingSum = 0;
-              if (it['selectedToppings'] is List) {
-                for (final tp in it['selectedToppings']) {
-                  if (tp is Map && tp['price'] != null) {
-                    toppingSum += (tp['price'] as num).toInt();
-                  }
-                }
-              }
-              total += (price + toppingSum) * qty;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-    return total;
-  }
+  /// Tiền bàn đang phục vụ SAU khuyến mãi (size + topping − giảm giá món − khuyến mãi / giảm đơn đang áp)
+  int get _servingEstimatedRevenue => _servingTables.fold(0, (s, t) => s + t.payableTotal);
 
   // ==================== TAB 1: TỔNG HỢP CALCULATIONS ====================
   OverviewReportResult get _overview => ReportCalculator.calculateOverviewReport(_rangeBills);
@@ -1038,21 +1014,9 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (ctx, i) {
                     final t = _servingTables[i];
-                    int itemsCount = 0;
-                    int estTotal = 0;
-                    if (t.currentOrderJson.isNotEmpty) {
-                      try {
-                        final list = jsonDecode(t.currentOrderJson);
-                        if (list is List) {
-                          for (final it in list) {
-                            final q = (it['quantity'] as num?)?.toInt() ?? 1;
-                            final p = (it['price'] as num?)?.toInt() ?? 0;
-                            itemsCount += q;
-                            estTotal += p * q;
-                          }
-                        }
-                      } catch (_) {}
-                    }
+                    final itemsCount = t.currentItems.fold<int>(0, (s, it) => s + it.quantity);
+                    // Sau khuyến mãi (giảm giá món + khuyến mãi / giảm đơn đang áp)
+                    final estTotal = t.payableTotal;
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Container(

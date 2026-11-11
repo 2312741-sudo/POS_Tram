@@ -31,7 +31,7 @@ import { businessDayStartFor } from "@/lib/business-day";
 import { nowMs } from "@/lib/kitchen";
 import { useDashboardData } from "@/lib/data-context";
 import { buildToppingLookup, splitLineParts } from "@/lib/topping-split";
-import { parseOrderJson, summarizeOrderLines } from "@/lib/order-math";
+import { tablePayableTotal } from "@/lib/order-math";
 import { isRevenueBill } from "@/lib/reports";
 
 // Tooltip biểu đồ — khai báo ngoài component để không bị tạo lại mỗi lần render
@@ -89,12 +89,8 @@ export default function DashboardPage() {
 
   const todayServingTotal = tablesData
     .filter((t) => t.inUse && !t.mergedIntoTable)
-    .reduce((sum, t) => {
-      if (!t.currentOrderJson) return sum;
-      // Cùng công thức với lúc thanh toán (size + topping - giảm giá dòng)
-      const { subTotal, itemDiscounts } = summarizeOrderLines(parseOrderJson(t.currentOrderJson));
-      return sum + Math.max(0, subTotal - itemDiscounts);
-    }, 0);
+    // Sau khuyến mãi: size + topping − giảm giá dòng − khuyến mãi / giảm đơn đang áp trên bàn
+    .reduce((sum, t) => sum + tablePayableTotal(t), 0);
 
   // 7-day revenue chart
   const chartData = Array.from({ length: 7 }, (_, i) => {

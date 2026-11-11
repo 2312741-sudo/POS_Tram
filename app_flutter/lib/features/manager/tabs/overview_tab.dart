@@ -124,7 +124,7 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   int get _todayRevenue => _todayPaidBills.fold(0, (s, b) => s + b.finalAmount);
-  int get _todayServingTotal => _tables.where((t) => t.inUse && !t.isMerged).fold<int>(0, (s, t) => s + t.currentTotal);
+  int get _todayServingTotal => _tables.where((t) => t.inUse && !t.isMerged).fold<int>(0, (s, t) => s + t.payableTotal);
   int get _todayDiscounts => _todayPaidBills.fold(0, (s, b) => s + b.totalDiscount);
   int get _occupiedTables => _tables.where((t) => t.inUse).length;
   int get _pendingOnlineOrders => _onlineOrders.where((o) => o.isPending).length;

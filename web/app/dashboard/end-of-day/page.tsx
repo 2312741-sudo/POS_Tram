@@ -1,4 +1,5 @@
 "use client";
+import { tablePayableTotal } from "@/lib/order-math";
 import React, { useState, useMemo } from "react";
 import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData, ProductItem } from "@/lib/data-context";
@@ -186,7 +187,7 @@ export default function EndOfDayReportPage() {
 
     activeTables.forEach((t) => {
       totalGuests += t.guestCount || 1;
-      let items: Array<{ quantity?: number; count?: number; price?: number; selectedToppings?: Array<{ price?: number }> }> = [];
+      let items: Array<{ quantity?: number; count?: number }> = [];
       if (t.currentOrderJson) {
         try {
           const parsed = typeof t.currentOrderJson === "string" ? JSON.parse(t.currentOrderJson) : t.currentOrderJson;
@@ -196,15 +197,10 @@ export default function EndOfDayReportPage() {
         }
       }
       items.forEach((it) => {
-        const qty = it.quantity || it.count || 1;
-        const price = Number(it.price || 0);
-        let toppingSum = 0;
-        if (Array.isArray(it.selectedToppings)) {
-          toppingSum = it.selectedToppings.reduce((ts: number, tp) => ts + (tp.price || 0), 0);
-        }
-        totalItems += qty;
-        estimatedRevenue += (price + toppingSum) * qty;
+        totalItems += it.quantity || it.count || 1;
       });
+      // Sau khuyến mãi: size + topping − giảm giá dòng − khuyến mãi / giảm đơn đang áp trên bàn
+      estimatedRevenue += tablePayableTotal(t);
     });
 
     return {
