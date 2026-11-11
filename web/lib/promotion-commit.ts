@@ -237,7 +237,8 @@ export async function reserveAllPromotions(
 ): Promise<PromotionReservation[]> {
   const done: PromotionReservation[] = [];
   try {
-    for (const d of discounts) done.push(await reservePromotionUsage(db, storeCode, d, billId, actor));
+    // Giảm giá không thuộc chương trình (giảm tay của app) không có lượt dùng / ngân sách để trừ
+    for (const d of discounts) if (d.campaignId) done.push(await reservePromotionUsage(db, storeCode, d, billId, actor));
   } catch (e) {
     for (const r of done) await rollbackPromotionUsage(db, storeCode, r);
     throw e;

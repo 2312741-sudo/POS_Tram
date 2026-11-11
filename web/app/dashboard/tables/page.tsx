@@ -293,6 +293,17 @@ function TablesPageContent() {
     // Tặng món theo giá trị đơn: thêm DÒNG TẶNG riêng vào đơn của bàn (không trừ món khách đã gọi) — giống app
     rewardProducts: promoRewardProducts,
     actor: { username: user?.username || "admin_web", fullName: user?.fullName, role: user?.roleId || user?.role },
+    // Khuyến mãi lưu trên bàn — dùng chung với app (app áp combo / mã thì web thấy, web áp thì app thấy)
+    savedDiscounts: selectedTableForOrder?.discountsJson,
+    onPersist: async (discountsJson) => {
+      const table = selectedTableForOrder;
+      if (!table || !table.inUse) return;
+      try {
+        await writeTableFields(table, { discountsJson });
+      } catch (e) {
+        setLineError(`Không lưu được khuyến mãi lên bàn: ${errorMessage(e, "lỗi không xác định")}`);
+      }
+    },
     onAddLines: async (lines) => {
       const table = selectedTableForOrder;
       if (!table) return null;

@@ -1,4 +1,5 @@
 "use client";
+import { parseTableDiscounts, serializeTableDiscounts, splitTableDiscounts } from "@/lib/table-discounts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { get, onValue, ref } from "firebase/database";
 import { Clock, Tag, Ticket, X } from "lucide-react";
@@ -62,8 +63,12 @@ export function usePromotions(args: {
   /** Gỡ các dòng món tặng CHƯA gửi bếp của chương trình khỏi đơn (bỏ chương trình / đơn hết đủ điều kiện) */
   onRemoveRewardLines?: (campaignId: string) => Promise<void>;
   actor?: OrderActor;
+  /** Khuyến mãi đang lưu trên bàn (tables/{key}/discountsJson — dùng chung với app) */
+  savedDiscounts?: unknown;
+  /** Ghi lại khuyến mãi của bàn khi người dùng áp / bỏ trên web (để app thấy) */
+  onPersist?: (discountsJson: string | null) => Promise<unknown>;
 }) {
-  const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, onRemoveRewardLines, actor } = args;
+  const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, onRemoveRewardLines, actor, savedDiscounts, onPersist } = args;
   const [loaded, setLoaded] = useState<{ store: string; list: Campaign[] }>({ store: "", list: [] });
   const [selection, setSelection] = useState<{ key: string; list: AppliedDiscount[] }>({ key: "", list: [] });
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -97,6 +102,15 @@ export function usePromotions(args: {
   const lines = useMemo(() => linesFromOrder(items, groupOf), [items, groupOf]);
   const ctx = useMemo(() => ({ branchId: storeCode, guestCount, nowMs }), [storeCode, guestCount, nowMs]);
 
+  // Khuyến mãi lưu trên bàn (app hoặc web khác vừa áp): web luôn theo bản trên bàn. Mục không phải chương trình
+  // (giảm tay của app, khuyến mãi cũ) giữ nguyên số tiền đã lưu.
+  const savedSig = typeof savedDiscounts === "string" ? savedDiscounts : JSON.stringify(savedDiscounts ?? null);
+  const saved = useMemo(() => splitTableDiscounts(parseTableDiscounts(savedDiscounts)), [savedSig]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setSelection({ key: tableKey, list: saved.campaigns });
+  }, [tableKey, saved]);
+  const extras = saved.extras;
+
   const selected = useMemo(() => (selection.key === tableKey ? selection.list : []), [selection, tableKey]);
   // Đơn đã có dòng món tặng của chương trình (thêm từ app / lần trước) → chương trình đó coi như đang áp dụng
   const chosen = useMemo(() => {
@@ -121,7 +135,14 @@ export function usePromotions(args: {
     [chosen, byId, lines, ctx, campaignsLoaded, giftOnly]
   );
   const effective = useMemo(() => applied.filter((d) => d.amount > 0), [applied]);
-  const total = effective.reduce((s, d) => s + d.amount, 0);
+  // Tổng / danh sách đưa vào hóa đơn gồm cả giảm giá do app áp (không phải chương trình) đang lưu trên bàn
+  const withExtras = useMemo(() => [...effective, ...extras.filter((d) => d.amount > 0)], [effective, extras]);
+  const total = withExtras.reduce((s, d) => s + d.amount, 0);
+
+  /** Ghi khuyến mãi mới của bàn lên server (giữ các mục app áp không phải chương trình) */
+  const persist = (list: AppliedDiscount[]) => {
+    if (onPersist) void onPersist(serializeTableDiscounts([...list, ...extras]));
+  };
 
   const eligible = useMemo(() => listEligibleCampaigns(campaigns, storeCode, nowMs).filter((c) => !c.hasCodes), [campaigns, storeCode, nowMs]);
 
@@ -129,10 +150,13 @@ export function usePromotions(args: {
     const incoming = { discount: buildAppliedDiscount(campaign, amount, opts), campaign };
     const r = addWithStacking(effective, incoming, byId, allowStack);
     setSelection({ key: tableKey, list: r.discounts });
+    persist(r.discounts);
     return r.removed;
   };
   const remove = (campaignId: string) => {
-    setSelection({ key: tableKey, list: selected.filter((d) => d.campaignId !== campaignId) });
+    const next = selected.filter((d) => d.campaignId !== campaignId);
+    setSelection({ key: tableKey, list: next });
+    persist(next);
     // Bỏ chương trình: gỡ luôn ly tặng chưa gửi bếp (không để thành ly tính tiền)
     if (onRemoveRewardLines && items.some((l) => String(l.rewardCampaignId ?? "") === campaignId && l.isSentKitchen !== true)) {
       void onRemoveRewardLines(campaignId);
@@ -156,7 +180,10 @@ export function usePromotions(args: {
         .finally(() => removing.current.delete(id));
     }
   }, [applied, items, byId, campaignsLoaded, onRemoveRewardLines]);
-  const clear = () => setSelection({ key: tableKey, list: [] });
+  const clear = () => {
+    setSelection({ key: tableKey, list: [] });
+    persist([]);
+  };
 
   // Cộng dồn: báo giá chương trình cùng các chương trình đang áp dụng khác (KM theo món trước, giảm hóa đơn sau)
   const quote = (c: Campaign) => {
@@ -225,7 +252,7 @@ export function usePromotions(args: {
     [campaigns, storeCode, nowMs, lines, ctx]
   );
 
-  return { campaigns, byId, eligible, applied: effective, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, canAddReward, addRewardLine, rewardLabel, ctx, nowMs };
+  return { campaigns, byId, eligible, applied: withExtras, extras, dropped, total, add, remove, clear, quote, lateItems, lateBlocks, canAddReward, addRewardLine, rewardLabel, ctx, nowMs };
 }
 
 type PromotionsState = ReturnType<typeof usePromotions>;
@@ -419,19 +446,20 @@ export default function PromotionPanel({ state, storeCode, canApply, billId }: P
 
       {applied.length > 0 && (
         <div style={{ marginBottom: "10px" }}>
-          {applied.map((d) => (
+          {applied.map((d, i) => (
             <div
-              key={d.campaignId}
+              key={d.campaignId || `extra-${i}`}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "6px 0", fontSize: "13px", borderBottom: "1px dashed var(--border)" }}
             >
               <div>
                 <strong>{d.campaignName}</strong>
+                {!d.campaignId && <span style={{ color: "var(--subtext)" }}> • áp từ app</span>}
                 {d.voucherCode && <span style={{ color: "var(--subtext)" }}> • mã {d.voucherCode}</span>}
                 {d.staffNote && <div style={{ fontSize: "11px", color: "var(--subtext)" }}>Ghi chú: {d.staffNote}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ color: "var(--success)", fontWeight: 700 }}>-{fmt(d.amount)}</span>
-                {canApply && (
+                {canApply && d.campaignId && (
                   <button type="button" className="btn-secondary" aria-label={`Gỡ ${d.campaignName}`} title="Gỡ khuyến mãi" onClick={() => remove(d.campaignId)} style={{ padding: "4px" }}>
                     <X size={14} />
                   </button>
