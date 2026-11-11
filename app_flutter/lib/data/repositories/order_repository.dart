@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/domain/order_merge.dart';
+import '../../core/domain/order_guards.dart';
 import '../../core/domain/order_integrity.dart';
 import '../../core/domain/deleted_items.dart';
 import '../../core/domain/item_options.dart';
@@ -705,14 +706,23 @@ class OrderRepository {
   /// đá, ghi chú, giá...). Ghi cả 2 bàn trong 1 lệnh multi-path (không thể áp dụng một nửa).
   Future<void> mergeTables(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
     if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
-    // Lấy đơn MỚI NHẤT của cả 2 bàn (không gộp trên bản cũ làm mất món máy khác vừa thêm)
-    final fresh = await _freshTablePair(sourceTable, targetTable);
-    if (fresh != null) {
-      _applyTableState(sourceTable, fresh.source);
-      if (fresh.target != null) _applyTableState(targetTable, fresh.target!);
+    // Lấy đơn MỚI NHẤT của cả 2 bàn (không gộp trên bản cũ làm mất món máy khác vừa thêm). Lỗi đọc → dùng bản trên máy.
+    final reads = await Future.wait([_readServerTable(sourceTable), _readServerTable(targetTable)]);
+    final decision = OrderGuards.sourceForMove(
+      tableName: sourceTable.name,
+      localInUse: sourceTable.inUse,
+      localItemCount: sourceTable.currentItems.length,
+      localBillId: sourceTable.currentBillId,
+      server: reads[0],
+    );
+    if (decision.blockReason != null) throw DataWriteException(decision.blockReason!);
+    if (decision.useServer) {
+      sourceTable.inUse = true;
+      sourceTable.currentOrderJson = reads[0].orderJson;
     }
-    if (!sourceTable.inUse || sourceTable.currentItems.isEmpty) {
-      throw DataWriteException('Bàn ${sourceTable.name} không còn món để gộp (có thể đã được gộp / chuyển rồi).');
+    final tRead = reads[1];
+    if (tRead.ok && tRead.exists && tRead.inUse && tRead.items.isNotEmpty) {
+      targetTable.currentOrderJson = tRead.orderJson;
     }
     final sourceItems = sourceTable.currentItems;
     final combined = OrderLineMerger.merge(targetTable.currentItems, sourceItems);
@@ -755,6 +765,9 @@ class OrderRepository {
     );
     _applyTableState(targetTable, target);
     _applyTableState(sourceTable, source);
+    // Máy này vừa ghi 2 bàn → đây là bản trên server (tránh so nhầm "máy khác vừa đổi" ở lần lưu / thanh toán sau)
+    targetTable.markSynced();
+    sourceTable.markSynced();
     _tryRemoveInactiveSplitTable(source);
 
     unawaited(_safeLog(AuditLogModel(
@@ -770,41 +783,37 @@ class OrderRepository {
   }
 
   /// Chuyển bàn: ghi bàn đích và dọn bàn nguồn trong 1 lệnh multi-path.
-  /// Đọc bản mới nhất của 2 bàn trên server trước khi chuyển / gộp (bàn trên máy có thể đã cũ: máy khác vừa
-  /// thêm món, hoặc chính thao tác trước vừa dọn bàn). Mất mạng / lỗi đọc → null (dùng bản trên máy).
-  Future<({TableModel source, TableModel? target})?> _freshTablePair(TableModel source, TableModel target) async {
-    if (!_isOnline) return null;
+  /// Đọc lại một bàn từ server đúng node của nó. Lỗi / hết giờ / mất mạng → [ServerTableRead.failed] (không chặn).
+  Future<ServerTableRead> _readServerTable(TableModel t) async {
+    if (!_isOnline) return ServerTableRead.failed;
     try {
-      final snaps = await Future.wait([
-        tablesRef.child(source.firebaseKey).get(),
-        tablesRef.child(target.firebaseKey).get(),
-      ]).timeout(_readTimeout);
-      if (snaps[0].value is! Map) return null;
-      return (
-        source: TableModel.fromServer(snaps[0].value as Map, source.firebaseKey),
-        target: snaps[1].value is Map ? TableModel.fromServer(snaps[1].value as Map, target.firebaseKey) : null,
-      );
+      final snap = await tablesRef.child(t.dbKey ?? t.firebaseKey).get().timeout(_readTimeout);
+      return ServerTableRead.fromNode(snap.value);
     } catch (_) {
-      return null;
+      return ServerTableRead.failed;
     }
   }
 
   Future<void> transferTable(TableModel sourceTable, TableModel targetTable, {String? staffName, String? staffUsername}) async {
     if (sourceTable.firebaseKey == targetTable.firebaseKey) return;
-    // Lấy đơn MỚI NHẤT của bàn nguồn và kiểm tra bàn đích còn trống
-    final fresh = await _freshTablePair(sourceTable, targetTable);
-    if (fresh != null) {
-      _applyTableState(sourceTable, fresh.source);
-      final ft = fresh.target;
-      if (ft != null && ft.inUse && ft.currentItems.isNotEmpty) {
-        throw DataWriteException('Bàn ${targetTable.name} vừa có khách (máy khác mới mở). Vui lòng chọn bàn khác.');
-      }
-      if (ft != null) _applyTableState(targetTable, ft);
+    // Lấy đơn MỚI NHẤT của bàn nguồn (gồm món máy khác vừa thêm). Chỉ chặn khi chắc chắn: bàn nguồn hết món
+    // trên máy, hoặc server xác nhận đơn đã chuyển / đóng (bấm 2 lần từng chép đơn rỗng đè lên bàn đích).
+    final reads = await Future.wait([_readServerTable(sourceTable), _readServerTable(targetTable)]);
+    final decision = OrderGuards.sourceForMove(
+      tableName: sourceTable.name,
+      localInUse: sourceTable.inUse,
+      localItemCount: sourceTable.currentItems.length,
+      localBillId: sourceTable.currentBillId,
+      server: reads[0],
+    );
+    if (decision.blockReason != null) throw DataWriteException(decision.blockReason!);
+    if (decision.useServer) {
+      sourceTable.inUse = true;
+      sourceTable.currentOrderJson = reads[0].orderJson;
     }
-    // KHÔNG chuyển một đơn rỗng: bấm 2 lần liên tiếp (lần 2 chạy khi bàn nguồn vừa được dọn) từng ghi đè bàn đích
-    // bằng đơn rỗng → mất sạch món, bàn về 0đ.
-    if (!sourceTable.inUse || sourceTable.currentItems.isEmpty) {
-      throw DataWriteException('Bàn ${sourceTable.name} không còn món để chuyển (có thể đã được chuyển rồi).');
+    final tRead = reads[1];
+    if (tRead.ok && tRead.exists && tRead.inUse && tRead.items.isNotEmpty) {
+      throw DataWriteException('Bàn ${targetTable.name} vừa có khách (máy khác mới mở). Vui lòng chọn bàn khác.');
     }
     final itemCount = sourceTable.currentItems.length;
     final itemNames = sourceTable.currentItems.map((e) => "${e.name} (x${e.quantity})").join(", ");
@@ -845,6 +854,9 @@ class OrderRepository {
     );
     _applyTableState(targetTable, target);
     _applyTableState(sourceTable, source);
+    // Máy này vừa ghi 2 bàn → đây là bản trên server (tránh so nhầm "máy khác vừa đổi" ở lần lưu / thanh toán sau)
+    targetTable.markSynced();
+    sourceTable.markSynced();
     _tryRemoveInactiveSplitTable(source);
 
     // Nhật ký ghi nền: không giữ hộp thoại mở thêm (khoảng chờ này từng cho phép bấm lần 2)
@@ -1087,6 +1099,7 @@ class OrderRepository {
     );
 
     _applyTableState(sourceTable, planned.updatedSource);
+    sourceTable.markSynced();
     if (!planned.updatedSource.inUse) {
       _tryRemoveInactiveSplitTable(planned.updatedSource);
     }
@@ -1151,6 +1164,8 @@ class OrderRepository {
 
     _applyTableState(sourceTable, planned.updatedSource);
     _applyTableState(targetTable, planned.updatedTarget);
+    sourceTable.markSynced();
+    targetTable.markSynced();
     if (!planned.updatedSource.inUse) {
       _tryRemoveInactiveSplitTable(planned.updatedSource);
     }
@@ -1328,17 +1343,13 @@ class OrderRepository {
   /// dữ liệu đã lưu cục bộ và sẽ tự đồng bộ).
   Future<bool> closeAndPayBill(BillModel bill, TableModel table, {double? pointEarnRate, int? pointRedeemRate}) async {
     final storeCode = _currentStoreCode;
-    // Máy khác vừa thêm / sửa món mà máy này chưa kịp cập nhật → KHÔNG thanh toán trên đơn cũ (sẽ mất món đó).
-    final knownOrder = table.syncedOrderJson;
-    if (knownOrder != null && _isOnline) {
-      String? serverOrder;
-      try {
-        final snap = await tablesRef.child(table.firebaseKey).child('currentOrderJson').get().timeout(const Duration(seconds: 2));
-        serverOrder = snap.value?.toString() ?? '';
-      } catch (_) {}
-      if (serverOrder != null && serverOrder.isNotEmpty && OrderMerge.differs(knownOrder, serverOrder)) {
-        throw DataWriteException('Đơn của bàn vừa được máy khác thay đổi. Vui lòng xem lại đơn rồi thanh toán lại.');
-      }
+    // Chỉ chặn khi đọc được bàn trên server và đơn ở đó có món mà hóa đơn này THIẾU (máy khác vừa thêm,
+    // máy này chưa cập nhật). Không đọc được / bàn tách chưa có trên server / chỉ khác trạng thái gửi bếp,
+    // giảm giá, ghi chú → không chặn.
+    final missing = OrderGuards.missingFromBill(await _readServerTable(table), bill.items);
+    if (missing.isNotEmpty) {
+      throw DataWriteException(
+          'Đơn của bàn vừa có thêm món từ máy khác chưa nằm trong hóa đơn này: ${missing.join(", ")}. Vui lòng xem lại đơn rồi thanh toán lại.');
     }
     final closingBillId = table.currentBillId;
     _rememberClosedId(table.firebaseKey, closingBillId);

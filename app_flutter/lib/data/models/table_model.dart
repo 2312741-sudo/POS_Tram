@@ -24,6 +24,15 @@ class TableModel {
   /// Giá trị [mergedMetaFields] máy này đã đọc từ server (không lưu lên server)
   Map<String, Object?>? syncedMeta;
 
+  /// Khóa node thật trên server khi bàn được đọc từ server (thường trùng [firebaseKey])
+  String? dbKey;
+
+  /// Đánh dấu trạng thái hiện tại là bản đã có trên server (sau khi chính máy này vừa ghi bàn thành công)
+  void markSynced() {
+    syncedOrderJson = currentOrderJson;
+    syncedMeta = metaSnapshot();
+  }
+
   /// Chụp giá trị hiện tại của [mergedMetaFields] (theo đúng dạng ghi lên server)
   Map<String, Object?> metaSnapshot() {
     final m = toMap();
@@ -321,7 +330,10 @@ class TableModel {
   /// Bàn đọc từ SERVER: nhớ bản đơn đã đọc để lần lưu sau gộp đúng (xem [syncedOrderJson]).
   /// Bản sao dựng từ dữ liệu cục bộ dùng [TableModel.fromMap] (không có bản gốc → ghi đè như cũ).
   factory TableModel.fromServer(Map<dynamic, dynamic> map, [String? key]) =>
-      (TableModel.fromMap(map, key)..syncedOrderJson = map['currentOrderJson']?.toString() ?? '').._markMetaSynced();
+      (TableModel.fromMap(map, key)
+            ..syncedOrderJson = map['currentOrderJson']?.toString() ?? ''
+            ..dbKey = key)
+          .._markMetaSynced();
 
   void _markMetaSynced() => syncedMeta = metaSnapshot();
 
