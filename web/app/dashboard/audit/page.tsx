@@ -1,5 +1,8 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { get, ref, query, orderByChild, startAt, endAt } from "firebase/database";
+import { db } from "@/lib/firebase";
+import { AUDIT_RANGE_LABELS, auditRange, type AuditRangePreset } from "@/lib/audit-range";
 import { format, formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import {
@@ -232,9 +235,53 @@ function getRoleName(role?: string): string {
 const PAGE_SIZE = 25;
 
 export default function AuditPage() {
-  const { auditLogs: logs, historyData, stores, currentStoreCode, loading: ctxLoading, products } = useDashboardData();
+  const { auditLogs: recentLogs, historyData, stores, currentStoreCode, loading: ctxLoading, products } = useDashboardData();
   const codeMap = useMemo(() => buildProductCodeMap(products), [products]);
-  const loading = ctxLoading && logs.length === 0;
+
+  // Khoảng ngày: mặc định chỉ có 150 thao tác mới nhất / chi nhánh (tải sẵn). Chọn khoảng ngày → tải ĐỦ thao tác
+  // trong khoảng đó trực tiếp từ Firebase (trước đây 'từ đầu tháng' chỉ thấy vài trăm dù mỗi ngày ~200 đơn).
+  const [rangePreset, setRangePreset] = useState<AuditRangePreset>("RECENT");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [rangeNow] = useState(() => Date.now());
+  const range = useMemo(() => auditRange(rangePreset, rangeNow, customFrom, customTo), [rangePreset, rangeNow, customFrom, customTo]);
+  const rangeStores = useMemo(
+    () => (currentStoreCode === "ALL" ? stores.map((st) => st.storeCode) : [currentStoreCode]).filter(Boolean),
+    [stores, currentStoreCode]
+  );
+  const rangeKey = range ? `${range.from}-${range.to}-${rangeStores.join(",")}` : "";
+  const [rangeResult, setRangeResult] = useState<{ key: string; logs: AuditLogItem[]; error: string }>({ key: "", logs: [], error: "" });
+  useEffect(() => {
+    if (!range || !rangeKey) return;
+    let alive = true;
+    Promise.all(
+      rangeStores.map(async (code) => {
+        const snap = await get(query(ref(db, `stores/${code}/audit_logs`), orderByChild("timestamp"), startAt(range.from), endAt(range.to)));
+        const storeName = stores.find((st) => st.storeCode === code)?.storeName || code;
+        const out: AuditLogItem[] = [];
+        snap.forEach((child) => {
+          const v = (child.val() || {}) as Record<string, unknown>;
+          out.push({ ...(v as unknown as AuditLogItem), id: child.key || "", storeCode: String(v.storeCode || code), storeName: String(v.storeName || storeName) });
+        });
+        return out;
+      })
+    )
+      .then((parts) => {
+        if (alive) setRangeResult({ key: rangeKey, logs: parts.flat().sort((a, b) => Number(b.timestamp) - Number(a.timestamp)), error: "" });
+      })
+      .catch((e: unknown) => {
+        if (alive) setRangeResult({ key: rangeKey, logs: [], error: e instanceof Error ? e.message : String(e) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [range, rangeKey, rangeStores, stores]);
+  const rangeLoading = !!range && rangeResult.key !== rangeKey;
+  const logs = useMemo(
+    () => (range ? (rangeResult.key === rangeKey ? rangeResult.logs : []) : recentLogs),
+    [range, rangeResult, rangeKey, recentLogs]
+  );
+  const loading = range ? rangeLoading : ctxLoading && logs.length === 0;
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -684,6 +731,30 @@ export default function AuditPage() {
               style={{ paddingLeft: "38px", width: "100%" }}
             />
           </div>
+
+          {/* Khoảng ngày */}
+          <select
+            className="input-field"
+            value={rangePreset}
+            onChange={(e) => { setRangePreset(e.target.value as AuditRangePreset); setPage(1); }}
+            style={{ width: "auto", minWidth: "200px" }}
+            title="Chọn khoảng ngày để xem ĐỦ mọi thao tác trong khoảng đó"
+          >
+            {(Object.keys(AUDIT_RANGE_LABELS) as AuditRangePreset[]).map((k) => (
+              <option key={k} value={k}>{AUDIT_RANGE_LABELS[k]}</option>
+            ))}
+          </select>
+          {rangePreset === "CUSTOM" && (
+            <>
+              <input type="date" className="input-field" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }} style={{ width: "auto" }} />
+              <input type="date" className="input-field" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1); }} style={{ width: "auto" }} />
+            </>
+          )}
+          {range && (
+            <span style={{ fontSize: "12px", color: rangeResult.error && !rangeLoading ? "var(--danger)" : "var(--subtext)" }}>
+              {rangeLoading ? "Đang tải đủ thao tác trong khoảng ngày…" : rangeResult.error ? `Không tải được: ${rangeResult.error}` : `${logs.length} thao tác trong khoảng đã chọn`}
+            </span>
+          )}
 
           {/* Action select */}
           <select

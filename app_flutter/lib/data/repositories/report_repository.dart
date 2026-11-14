@@ -322,6 +322,24 @@ class ReportRepository {
   }
 
   // ==================== AUDIT LOGS ====================
+  /// ĐỦ mọi thao tác trong khoảng [fromMs, toMs] (theo timestamp), mới nhất trước — cho màn Giám sát khi chọn khoảng ngày
+  Future<List<AuditLogModel>> auditLogsInRange(int fromMs, int toMs) async {
+    final snap = await auditLogsRef.orderByChild('timestamp').startAt(fromMs).endAt(toMs).get().timeout(const Duration(seconds: 20));
+    final list = <AuditLogModel>[];
+    final v = snap.value;
+    if (v is Map) {
+      v.forEach((k, e) {
+        if (e is Map) {
+          try {
+            list.add(AuditLogModel.fromMap(Map<dynamic, dynamic>.from(e), logId: k.toString()));
+          } catch (_) {}
+        }
+      });
+    }
+    list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return list;
+  }
+
   Stream<List<AuditLogModel>> auditLogsStream() {
     return Stream<List<AuditLogModel>>.multi((controller) {
       // 150 thao tác MỚI NHẤT theo thời gian. Trước đây limitToLast theo KHÓA: app ghi khóa '-O…' (push), web ghi

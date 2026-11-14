@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/domain/audit_range.dart';
 import '../../../core/permissions/app_permissions.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -20,9 +21,16 @@ class AuditTab extends StatefulWidget {
 class _AuditTabState extends State<AuditTab> {
   final _fb = FirebaseService();
   List<AuditLogModel> _logs = [];
+  List<AuditLogModel> _recentLogs = [];
   bool _loading = true;
   bool _denied = false;
   Timer? _safetyTimer;
+  StreamSubscription<List<AuditLogModel>>? _sub;
+
+  // Khoảng ngày: mặc định 150 thao tác mới nhất (thời gian thực); chọn khoảng → tải ĐỦ thao tác trong khoảng
+  AuditRangePreset _range = AuditRangePreset.recent;
+  int _rangeReq = 0;
+  String? _rangeError;
 
   String _search = '';
   String _categoryFilter = 'ALL'; // 'ALL', 'SUSPICIOUS', 'CANCEL', 'PAYMENT', 'TABLE', 'SHIFT'
@@ -36,6 +44,7 @@ class _AuditTabState extends State<AuditTab> {
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -52,17 +61,51 @@ class _AuditTabState extends State<AuditTab> {
       if (mounted && _loading) setState(() => _loading = false);
     });
 
-    _fb.auditLogsStream().listen((list) {
+    _sub = _fb.auditLogsStream().listen((list) {
       _safetyTimer?.cancel();
       if (mounted) {
         setState(() {
-          _logs = list;
-          _loading = false;
+          _recentLogs = list;
+          if (_range == AuditRangePreset.recent) {
+            _logs = list;
+            _loading = false;
+          }
         });
       }
     }, onError: (_) {
       if (mounted) setState(() => _loading = false);
     });
+  }
+
+  Future<void> _selectRange(AuditRangePreset p) async {
+    final r = AuditRange.of(p, DateTime.now().millisecondsSinceEpoch);
+    final req = ++_rangeReq;
+    setState(() {
+      _range = p;
+      _rangeError = null;
+      if (r == null) {
+        _logs = _recentLogs;
+        _loading = false;
+      } else {
+        _logs = [];
+        _loading = true;
+      }
+    });
+    if (r == null) return;
+    try {
+      final list = await _fb.auditLogsInRange(r.from, r.to);
+      if (!mounted || req != _rangeReq) return;
+      setState(() {
+        _logs = list;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted || req != _rangeReq) return;
+      setState(() {
+        _loading = false;
+        _rangeError = 'Không tải được nhật ký: $e';
+      });
+    }
   }
 
   int get _suspiciousCount => _logs.where((l) => l.isSuspicious).length;
@@ -256,11 +299,30 @@ class _AuditTabState extends State<AuditTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Flexible(child: Text(
-                  'Nhật ký thao tác (${filtered.length} sự kiện)',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.bold, color: context.tc.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Text(
-                  'Cập nhật thời gian thực',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: context.tc.success),
+                  _rangeError ?? 'Nhật ký thao tác (${filtered.length} sự kiện)',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, fontWeight: FontWeight.bold, color: _rangeError != null ? context.tc.danger : context.tc.textSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis)),
+                // Chọn khoảng ngày (mặc định 150 thao tác gần nhất, thời gian thực)
+                PopupMenuButton<AuditRangePreset>(
+                  initialValue: _range,
+                  onSelected: _selectRange,
+                  itemBuilder: (_) => [
+                    for (final p in AuditRangePreset.values) PopupMenuItem(value: p, child: Text(p.label)),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.calendar, size: 14, color: context.tc.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        _range == AuditRangePreset.recent ? 'Gần nhất • thời gian thực' : _range.label,
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: context.tc.primary),
+                      ),
+                      Icon(LucideIcons.chevronDown, size: 14, color: context.tc.primary),
+                    ],
+                  ),
                 ),
               ],
             ),

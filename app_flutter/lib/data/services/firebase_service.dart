@@ -426,6 +426,7 @@ class FirebaseService {
 
   // ==================== AUDIT LOGS ====================
   Stream<List<AuditLogModel>> auditLogsStream() => _reportRepo.auditLogsStream();
+  Future<List<AuditLogModel>> auditLogsInRange(int fromMs, int toMs) => _reportRepo.auditLogsInRange(fromMs, toMs);
 
   Future<void> logAction(AuditLogModel log) => _reportRepo.logAction(log);
 
