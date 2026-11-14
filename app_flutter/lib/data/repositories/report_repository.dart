@@ -324,7 +324,9 @@ class ReportRepository {
   // ==================== AUDIT LOGS ====================
   Stream<List<AuditLogModel>> auditLogsStream() {
     return Stream<List<AuditLogModel>>.multi((controller) {
-      final sub = auditLogsRef.limitToLast(150).onValue.listen(
+      // 150 thao tác MỚI NHẤT theo thời gian. Trước đây limitToLast theo KHÓA: app ghi khóa '-O…' (push), web ghi
+      // 'log_…' / 'LOG_…' → khóa web luôn xếp sau nên 150 mục chỉ toàn thao tác web cũ, mất hết thao tác trên app.
+      final sub = auditLogsRef.orderByChild('timestamp').limitToLast(150).onValue.listen(
         (event) {
           if (controller.isClosed) return;
           if (!event.snapshot.exists || event.snapshot.value == null || event.snapshot.value is! Map) {

@@ -3,7 +3,7 @@ import { resolveStaffUid } from "./staff-key";
 import { normalizeBusinessDayStart, setBusinessDayConfig } from "./business-day";
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { db, auth, functions } from "./firebase";
-import { ref, onValue, set, update, remove, get, push, query, limitToLast } from "firebase/database";
+import { ref, onValue, set, update, remove, get, push, query, limitToLast, orderByChild } from "firebase/database";
 import { hasNumericProductId, nextProductId } from "./product-code";
 import { planKitchenCancel } from "./kitchen";
 import { onAuthStateChanged } from "firebase/auth";
@@ -1020,12 +1020,12 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           };
 
           const unsubs = STORE_CHILD_NODES.map((child) => {
-            // Giới hạn 150 mục mới nhất cho history và audit_logs để tránh tải hàng chục MB ảnh base64 qua WebSocket
+            // Giới hạn 150 mục MỚI NHẤT THEO THỜI GIAN cho history và audit_logs (tránh tải hàng chục MB ảnh base64).
+            // Phải orderByChild("timestamp"): limitToLast theo khóa lấy nhầm vì app ghi khóa '-O…'/'BILL_…' còn web
+            // ghi 'log_…'/'bill_…' → khóa web luôn xếp sau, thao tác / hóa đơn mới trên app bị bỏ khỏi 150 mục.
             const queryRef =
-              child === "history"
-                ? query(ref(db, `stores/${code}/${child}`), limitToLast(150))
-                : child === "audit_logs"
-                ? query(ref(db, `stores/${code}/${child}`), limitToLast(150))
+              child === "history" || child === "audit_logs"
+                ? query(ref(db, `stores/${code}/${child}`), orderByChild("timestamp"), limitToLast(150))
                 : ref(db, `stores/${code}/${child}`);
 
             return onValue(
