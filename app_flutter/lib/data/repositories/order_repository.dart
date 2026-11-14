@@ -478,7 +478,15 @@ class OrderRepository {
         final rawInUse = current['inUse'];
         final serverInUse = rawInUse == true || rawInUse == 1 || rawInUse?.toString().toLowerCase() == 'true';
         if (base.trim().isNotEmpty && !serverInUse) {
-          return Transaction.abort();
+          // Bàn trên server trống mà đơn này CHƯA đóng (không thanh toán / hủy / chuyển — những việc đó đều để lại
+          // closedBillId = mã đơn): bàn bị xóa trắng (vd máy khác mở đơn mới đè lên bằng bản cũ). Không có ai
+          // khác đang giữ bàn → ghi lại NGUYÊN đơn của máy này thay vì bỏ qua (trước đây im lặng bỏ → mất đơn).
+          if (TableModel.fromServer(current, table.firebaseKey).isActivelyOrdering()) {
+            return Transaction.abort();
+          }
+          final revived = Map<String, dynamic>.from(localMap);
+          if (serverClosedId.isNotEmpty && revived['closedBillId'] == null) revived['closedBillId'] = serverClosedId;
+          return Transaction.success(revived);
         }
         // Khuyến mãi / số khách / khách hàng / ghi chú: máy này không đổi thì giữ của server (máy khác vừa đổi)
         if (baseMeta != null) {
@@ -517,9 +525,15 @@ class OrderRepository {
           _rememberClosedId(table.firebaseKey, closedId);
           final rawInUse = snapVal['inUse'];
           final srvInUse = rawInUse == true || rawInUse == 1 || rawInUse?.toString().toLowerCase() == 'true';
-          if (!srvInUse || (closedId != null && closedId == localMap['currentBillId'])) {
-            debugPrint('[OrderRepository] Bỏ qua lưu gộp bàn ${table.name}: bàn đã đóng trên server');
+          if (closedId != null && closedId.isNotEmpty && closedId == localMap['currentBillId']) {
+            debugPrint('[OrderRepository] Bỏ qua lưu gộp bàn ${table.name}: đơn đã đóng trên server');
             return;
+          }
+          if (!srvInUse) {
+            throw DataWriteException(
+              'Bàn ${table.name} vừa được máy khác mở đơn mới — đơn đang mở trên máy này CHƯA được lưu. '
+              'Hãy chuyển đơn này sang bàn khác (hoặc Mang về) rồi lưu lại.',
+            );
           }
         }
         if (_isClosedOrder(table) || !table.inUse) {
@@ -578,19 +592,75 @@ class OrderRepository {
       // Nếu mạng chậm/offline, dùng danh sách bàn đã biết từ stream
     }
 
-    final res = resolveTableForNewOrder(
+    var res = resolveTableForNewOrder(
       requestedTable,
       latestTables,
       staffUsername: staffUsername,
       staffName: staffName,
     );
 
-    if (!_isClosedOrder(res.targetTable)) {
-      unawaited(
-        tablesRef.child(res.targetTable.firebaseKey).set(res.targetTable.toMap()).catchError((_) {}),
+    // Giữ bàn bằng TRANSACTION: chỉ ghi khi bàn trên server còn trống (chưa có đơn, không ai khác đang giữ).
+    // Trước đây ghi đè thẳng cả bàn → 2 máy cùng mở đơn mới ở bàn Mang về chọn trùng tên bàn tách ("(4)"),
+    // máy sau xóa mất đơn máy trước vừa lưu → đơn biến mất ngay khi gửi bếp.
+    for (var attempt = 0; attempt < 5; attempt++) {
+      if (_isClosedOrder(res.targetTable)) return res;
+      final claim = await _claimTableNode(res.targetTable, staffUsername);
+      if (claim == null) return res; // giữ được (hoặc mạng chậm: transaction tự chạy tiếp, lúc lưu đơn sẽ tách nếu trùng)
+      // Bàn đã bận trên server → cập nhật bản server vào danh sách rồi chọn bàn tách khác
+      latestTables = [
+        for (final t in latestTables)
+          if (t.firebaseKey != claim.firebaseKey) t,
+        claim,
+      ];
+      res = resolveTableForNewOrder(
+        res.wasSplit ? res.targetTable : requestedTable,
+        latestTables,
+        staffUsername: staffUsername,
+        staffName: staffName,
       );
+      if (res.targetTable.firebaseKey == claim.firebaseKey) {
+        // Không chọn được bàn khác (hiếm) → dùng bàn tách mới tinh theo tên kế tiếp
+        res = resolveTableForNewOrder(claim, latestTables, staffUsername: staffUsername, staffName: staffName);
+      }
     }
     return res;
+  }
+
+  /// Ghi khóa giữ bàn nếu bàn trên server còn trống. Trả về null nếu đã giữ được (hoặc chưa có xác nhận vì
+  /// mạng chậm); trả về bàn đang có trên server nếu bàn đó đã bận (có đơn / người khác đang giữ).
+  Future<TableModel?> _claimTableNode(TableModel target, String staffUsername) async {
+    final key = target.firebaseKey;
+    final map = target.toMap();
+    TableModel? busy;
+    final fut = tablesRef.child(key).runTransaction((Object? current) {
+      busy = null;
+      if (current is Map) {
+        final t = TableModel.fromServer(current, key);
+        final hasOrder = t.inUse && t.currentItems.isNotEmpty;
+        if (hasOrder || t.isActivelyOrdering(excludeUsername: staffUsername)) {
+          busy = t;
+          return Transaction.abort();
+        }
+        final out = Map<String, dynamic>.from(map);
+        // Giữ dấu hóa đơn đã đóng của bàn (chặn lần ghi muộn làm đơn cũ sống lại)
+        final closed = current['closedBillId'];
+        if (out['closedBillId'] == null && closed != null && closed.toString().isNotEmpty) out['closedBillId'] = closed;
+        return Transaction.success(out);
+      }
+      return Transaction.success(Map<String, dynamic>.from(map));
+    }, applyLocally: false);
+    try {
+      final r = await fut.timeout(const Duration(seconds: 4));
+      if (r.committed) return null;
+      final v = r.snapshot.value;
+      if (v is Map) return busy ?? TableModel.fromServer(v, key);
+      return null;
+    } on TimeoutException {
+      unawaited(fut.then<void>((_) {}, onError: (_) {}));
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Nhả khóa đang chọn món khi nhân viên thoát màn hình chọn món mà không chọn món nào.
