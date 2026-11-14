@@ -13,6 +13,17 @@ void main() {
   final tra = OrderItemModel(productId: 1, name: 'Trà chanh', price: 20000, quantity: 1, lineKey: 'A');
   final base = _json([tra]);
 
+  test('quay về từ màn Thêm món: giỏ phải là danh sách vừa lưu, không thì món vừa thêm bị xóa trên server', () {
+    final banh = OrderItemModel(productId: 2, name: 'Bánh', price: 30000, lineKey: 'B', isSentKitchen: true);
+    final tac = OrderItemModel(productId: 3, name: 'Trà tắc', price: 20000, lineKey: 'C');
+    final themMon = _json([tra, banh]); // màn Thêm món đã lưu (bản gốc mới của máy này)
+    final server = _json([tra, banh, tac]); // trong lúc đó máy khác thêm Trà tắc
+    // LỖI CŨ: giỏ còn bản trước khi thêm món → "Bánh" bị coi là máy này đã xóa
+    expect(_qty(OrderMerge.mergeJson(base: themMon, local: base, server: server)).containsKey('Bánh'), isFalse);
+    // ĐÚNG: cập nhật giỏ = danh sách màn Thêm món trả về trước khi gộp → giữ đủ món
+    expect(_qty(OrderMerge.mergeJson(base: themMon, local: themMon, server: server)), {'Trà chanh': 1, 'Bánh': 1, 'Trà tắc': 1});
+  });
+
   test('2 máy cùng thêm món khác nhau → giữ cả hai (lỗi cũ: người lưu sau xóa món người trước)', () {
     final mayA = _json([tra, OrderItemModel(productId: 2, name: 'Bánh', price: 30000, lineKey: 'B')]);
     final mayB = _json([tra, OrderItemModel(productId: 3, name: 'Trà tắc', price: 20000, lineKey: 'C')]);

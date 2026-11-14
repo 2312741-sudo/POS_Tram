@@ -798,46 +798,64 @@ class _OrderListScreenState extends State<OrderListScreen> {
     };
   }
 
+  bool _leaving = false;
+
+  /// Thoát màn chọn món (nút ← trên app HOẶC vuốt / nút back của điện thoại): lưu món đã chọn rồi quay lại.
+  /// Trước đây vuốt back bỏ qua bước lưu → món vừa bấm biến mất khỏi đơn.
+  void _leaveAndSave() {
+    if (_leaving) return;
+    _leaving = true;
+    // Nếu chưa chọn món nào khi thoát:
+    // - Với phiên mở bàn mới (_startedAsNewOrder): chỉ nhả khóa orderingBy an toàn
+    //   (tránh ghi đè nếu đồng nghiệp vừa lưu đơn trên bàn này).
+    // - Nếu đã chọn món: dùng saveTableOrderSafe để tự tách bàn nếu trùng lúc lưu.
+    if (_cart.isEmpty) {
+      if (_startedAsNewOrder) {
+        _fb.releaseTableOrderingClaim(
+          widget.table,
+          staffUsername: _auth.currentUser?.username,
+        );
+      } else {
+        widget.table.clearTable();
+        _fb.saveTable(widget.table).catchError(_saveErrorHandler());
+      }
+    } else {
+      widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
+      widget.table.inUse = true;
+      _fb
+          .saveTableOrderSafe(
+            widget.table,
+            sessionBillId: _sessionBillId,
+            isNewOrderSession: _startedAsNewOrder,
+          )
+          .catchError((Object e) {
+        _saveErrorHandler()(e);
+        return (savedTable: widget.table, wasSplit: false);
+      });
+    }
+    Navigator.of(context).pop(_cart);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasItems = _cartCount > 0;
 
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leaveAndSave();
+      },
+      child: _buildScaffold(context, hasItems),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, bool hasItems) {
     return Scaffold(
       backgroundColor: context.tc.background,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () {
-            // Nếu chưa chọn món nào khi thoát:
-            // - Với phiên mở bàn mới (_startedAsNewOrder): chỉ nhả khóa orderingBy an toàn
-            //   (tránh ghi đè nếu đồng nghiệp vừa lưu đơn trên bàn này).
-            // - Nếu đã chọn món: dùng saveTableOrderSafe để tự tách bàn nếu trùng lúc lưu.
-            if (_cart.isEmpty) {
-              if (_startedAsNewOrder) {
-                _fb.releaseTableOrderingClaim(
-                  widget.table,
-                  staffUsername: _auth.currentUser?.username,
-                );
-              } else {
-                widget.table.clearTable();
-                _fb.saveTable(widget.table).catchError(_saveErrorHandler());
-              }
-            } else {
-              widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
-              widget.table.inUse = true;
-              _fb
-                  .saveTableOrderSafe(
-                    widget.table,
-                    sessionBillId: _sessionBillId,
-                    isNewOrderSession: _startedAsNewOrder,
-                  )
-                  .catchError((Object e) {
-                _saveErrorHandler()(e);
-                return (savedTable: widget.table, wasSplit: false);
-              });
-            }
-            Navigator.of(context).pop(_cart);
-          },
+          onPressed: _leaveAndSave,
         ),
         title: Column(
           children: [

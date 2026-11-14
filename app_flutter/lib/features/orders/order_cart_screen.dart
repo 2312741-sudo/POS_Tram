@@ -5151,24 +5151,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       'isAddingMore': true,
     });
     if (!mounted) return;
-    _resumeRemote();
-    if (_orderClosed) return;
-    if (res is List<OrderItemModel>) {
-      setState(() {
-        _cart = List.from(res);
-      });
-      _recalculateDiscounts();
-    } else {
-      final refreshed = await _fb.tablesStream().first;
-      if (_orderClosed || !mounted) return;
-      final currentT = refreshed.where((x) => x.name == widget.table.name).firstOrNull;
-      if (currentT != null && mounted) {
-        setState(() {
-          _cart = List.from(currentT.currentItems);
-        });
-        _recalculateDiscounts();
-      }
+    // Cập nhật giỏ bằng danh sách màn Thêm món vừa lưu TRƯỚC khi nhận lại thay đổi từ server.
+    // Trước đây nhận thay đổi trước (giỏ còn là bản cũ, chưa có món vừa thêm) → bộ gộp đơn coi món vừa thêm là
+    // "máy này đã xóa" và xóa luôn trên server: nhân viên thấy món rồi gửi bếp nhưng đơn mất món (ngẫu nhiên,
+    // khi có cập nhật bàn tới trong lúc đang ở màn Thêm món — máy khác, web, hoặc chính lần lưu vừa rồi).
+    if (res is List<OrderItemModel> && !_orderClosed) {
+      _cart = List.from(res);
+      widget.table.currentOrderJson = jsonEncode(_cart.map((e) => e.toMap()).toList());
     }
+    _resumeRemote();
+    if (_orderClosed || !mounted) return;
+    setState(() {});
+    _recalculateDiscounts();
   }
 
   Future<void> _updateGuestCount(int newCount) async {
