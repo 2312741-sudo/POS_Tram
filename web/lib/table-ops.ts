@@ -238,6 +238,16 @@ export const CLEARED_TABLE_FIELDS = {
   ...CLEAR_TABLE_CUSTOMER,
 } as const;
 
+/**
+ * Dấu "đơn đã đóng" trên bàn nguồn sau khi chuyển / gộp (giống TableModel.clearTable của app): closedBillId = mã
+ * hóa đơn của đơn vừa rời bàn. Thiếu dấu này, app đang mở đơn đó coi bàn "bị xóa trắng nhầm" và ghi lại đơn lên
+ * bàn nguồn → một đơn nằm ở cả 2 bàn (dễ thu tiền 2 lần).
+ */
+function closedMark(source: { currentBillId?: unknown }): { closedBillId?: string } {
+  const id = source.currentBillId == null ? "" : String(source.currentBillId).trim();
+  return id ? { closedBillId: id } : {};
+}
+
 function itemNames(items: RawOrderLine[]): string {
   return items.map((e) => `${str(e.name)} (x${lineQuantity(e)})`).join(", ");
 }
@@ -299,7 +309,7 @@ export function buildTransferPayloads(args: {
       // Khách tích điểm đi theo đơn sang bàn đích
       ...customerPayloadFrom(source),
     },
-    sourceFields: { ...CLEARED_TABLE_FIELDS },
+    sourceFields: { ...CLEARED_TABLE_FIELDS, ...closedMark(source) },
     audit: {
       timestamp: now,
       username: a.username,
@@ -363,7 +373,7 @@ export function buildMergePayloads(args: {
       // Giữ khách bàn đích; đích chưa có khách thì lấy của bàn nguồn
       ...mergedCustomerPayload(target, source),
     },
-    sourceFields: { ...CLEARED_TABLE_FIELDS, mergedIntoTable: tName },
+    sourceFields: { ...CLEARED_TABLE_FIELDS, mergedIntoTable: tName, ...closedMark(source) },
     audit: {
       timestamp: now,
       username: a.username,

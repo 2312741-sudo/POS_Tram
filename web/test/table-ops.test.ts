@@ -123,7 +123,8 @@ describe("buildTransferPayloads", () => {
     const logs = JSON.parse(String(p.targetFields.actionLogsJson));
     expect(logs).toHaveLength(2);
     expect(logs[1]).toMatchObject({ action: "TRANSFER_TABLE", staffUsername: "ql1", timestamp: now });
-    expect(p.sourceFields).toEqual(CLEARED_TABLE_FIELDS);
+    // Bàn nguồn để lại dấu "đơn đã đóng" (app đang mở đơn này không ghi đơn sống lại lên bàn nguồn)
+    expect(p.sourceFields).toEqual({ ...CLEARED_TABLE_FIELDS, closedBillId: "HD-1" });
     expect(p.targetFields).not.toHaveProperty("capacity");
     expect(p.audit).toMatchObject({ action: "TRANSFER_TABLE", targetType: "TABLE", targetId: "A1 -> B2", username: "ql1", timestamp: now });
   });
@@ -160,7 +161,8 @@ describe("buildMergePayloads", () => {
     expect(JSON.parse(String(p.targetFields.actionLogsJson))).toEqual([
       expect.objectContaining({ action: "MERGE_TABLE", details: expect.stringContaining("Gộp A1 vào C3") }),
     ]);
-    expect(p.sourceFields).toEqual({ ...CLEARED_TABLE_FIELDS, mergedIntoTable: "C3" });
+    expect(p.sourceFields).toMatchObject({ ...CLEARED_TABLE_FIELDS, mergedIntoTable: "C3" });
+    if (src.currentBillId) expect(p.sourceFields.closedBillId).toBe(String(src.currentBillId));
     expect(p.sourceFields.prePrintedAt).toBeNull();
     expect(p.audit).toMatchObject({ action: "MERGE_TABLE", targetId: "A1 -> C3" });
   });
