@@ -70,7 +70,9 @@ export function usePromotions(args: {
 }) {
   const { storeCode, tableKey, items, groupOf, guestCount, allowStack, rewardProducts = [], onAddLines, onRemoveRewardLines, actor, savedDiscounts, onPersist } = args;
   const [loaded, setLoaded] = useState<{ store: string; list: Campaign[] }>({ store: "", list: [] });
-  const [selection, setSelection] = useState<{ key: string; list: AppliedDiscount[] }>({ key: "", list: [] });
+  // Lựa chọn trên web gắn với [bàn + bản khuyến mãi đang lưu trên bàn] lúc chọn: bàn đổi khuyến mãi (app / máy khác,
+  // hoặc chính lần lưu của web) → theo bản trên bàn.
+  const [selection, setSelection] = useState<{ key: string; sig: string; list: AppliedDiscount[] }>({ key: "", sig: "", list: [] });
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -105,13 +107,13 @@ export function usePromotions(args: {
   // Khuyến mãi lưu trên bàn (app hoặc web khác vừa áp): web luôn theo bản trên bàn. Mục không phải chương trình
   // (giảm tay của app, khuyến mãi cũ) giữ nguyên số tiền đã lưu.
   const savedSig = typeof savedDiscounts === "string" ? savedDiscounts : JSON.stringify(savedDiscounts ?? null);
-  const saved = useMemo(() => splitTableDiscounts(parseTableDiscounts(savedDiscounts)), [savedSig]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    setSelection({ key: tableKey, list: saved.campaigns });
-  }, [tableKey, saved]);
+  const saved = useMemo(() => splitTableDiscounts(parseTableDiscounts(savedSig)), [savedSig]);
   const extras = saved.extras;
 
-  const selected = useMemo(() => (selection.key === tableKey ? selection.list : []), [selection, tableKey]);
+  const selected = useMemo(
+    () => (selection.key === tableKey && selection.sig === savedSig ? selection.list : saved.campaigns),
+    [selection, tableKey, savedSig, saved]
+  );
   // Đơn đã có dòng món tặng của chương trình (thêm từ app / lần trước) → chương trình đó coi như đang áp dụng
   const chosen = useMemo(() => {
     const ids = new Set(selected.map((d) => d.campaignId));
@@ -149,13 +151,13 @@ export function usePromotions(args: {
   const add = (campaign: Campaign, amount: number, opts?: { voucherCode?: string; staffNote?: string }): string[] => {
     const incoming = { discount: buildAppliedDiscount(campaign, amount, opts), campaign };
     const r = addWithStacking(effective, incoming, byId, allowStack);
-    setSelection({ key: tableKey, list: r.discounts });
+    setSelection({ key: tableKey, sig: savedSig, list: r.discounts });
     persist(r.discounts);
     return r.removed;
   };
   const remove = (campaignId: string) => {
     const next = selected.filter((d) => d.campaignId !== campaignId);
-    setSelection({ key: tableKey, list: next });
+    setSelection({ key: tableKey, sig: savedSig, list: next });
     persist(next);
     // Bỏ chương trình: gỡ luôn ly tặng chưa gửi bếp (không để thành ly tính tiền)
     if (onRemoveRewardLines && items.some((l) => String(l.rewardCampaignId ?? "") === campaignId && l.isSentKitchen !== true)) {
@@ -181,7 +183,7 @@ export function usePromotions(args: {
     }
   }, [applied, items, byId, campaignsLoaded, onRemoveRewardLines]);
   const clear = () => {
-    setSelection({ key: tableKey, list: [] });
+    setSelection({ key: tableKey, sig: savedSig, list: [] });
     persist([]);
   };
 
