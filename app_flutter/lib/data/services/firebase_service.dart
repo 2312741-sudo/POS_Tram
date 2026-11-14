@@ -78,6 +78,14 @@ class FirebaseService {
   ReportRepository get reportRepo => _reportRepo;
   ExportService get exportService => _exportService;
 
+  /// Trạng thái kết nối tới Firebase (true = đang kết nối). Chờ tới khi dịch vụ đã khởi tạo.
+  Stream<bool> connectionStream() async* {
+    while (!_initialized) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    yield* _root.child('.info/connected').onValue.map((e) => e.snapshot.value == true);
+  }
+
   void init({String? storeCode}) {
     if (storeCode != null && storeCode.isNotEmpty) {
       _currentStoreCode = storeCode.toUpperCase().trim();

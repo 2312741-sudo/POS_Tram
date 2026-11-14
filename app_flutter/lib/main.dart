@@ -11,6 +11,7 @@ import 'core/router/app_router.dart';
 import 'core/services/auth_service.dart';
 import 'core/reports/report_export_service.dart';
 import 'data/services/firebase_service.dart';
+import 'widgets/offline_banner.dart';
 import 'widgets/keyboard_dismiss_wrapper.dart';
 import 'firebase_options.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -142,7 +143,7 @@ class TramApp extends ConsumerWidget {
               systemNavigationBarColor: context.tc.background,
               systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
             ),
-            child: KeyboardDismissWrapper(child: child ?? const SizedBox.shrink()),
+            child: OfflineBanner(child: KeyboardDismissWrapper(child: child ?? const SizedBox.shrink())),
           );
         },
       ),
