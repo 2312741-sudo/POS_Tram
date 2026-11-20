@@ -155,6 +155,24 @@ function discountsOf(b: HistoryOrder): DiscountLike[] {
   return [];
 }
 
+/**
+ * Chỉ giữ MỘT chương trình (theo key của campaignIdentity / POINTS_ROW_KEY) trên mỗi hóa đơn — để báo cáo (gồm bảng
+ * theo nhân viên) tính riêng chương trình đó, vd riêng combo bánh + nước. "ALL" = giữ nguyên.
+ */
+export function onlyCampaign(bills: HistoryOrder[], key: string): HistoryOrder[] {
+  if (!key || key === "ALL") return bills;
+  const out: HistoryOrder[] = [];
+  for (const b of bills) {
+    if (key === POINTS_ROW_KEY) {
+      if (Number(b.pointsDiscount) > 0 || Number(b.pointsUsed) > 0) out.push({ ...b, discounts: [] });
+      continue;
+    }
+    const ds = discountsOf(b).filter((d) => campaignIdentity(d).key === key);
+    if (ds.length > 0) out.push({ ...b, discounts: ds as HistoryOrder["discounts"], pointsDiscount: 0, pointsUsed: 0 });
+  }
+  return out;
+}
+
 /** Tổng hợp khuyến mãi theo chiến dịch cho các hóa đơn PAID */
 export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
   const map = new Map<string, CampaignSummary & { _bills: Map<string, CampaignBillRow>; _codes: Set<string>; _staff: CampaignBillRow[] }>();

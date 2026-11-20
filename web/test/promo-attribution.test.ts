@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseCampaign, quoteStacked, linesFromOrder } from "../lib/pricing-engine";
 import { attributeBillsToStaff, discountStaffShares, promoStaffShares, staffMatcher } from "../lib/promo-attribution";
-import { calculateCampaignReport } from "../lib/promotion-report";
+import { calculateCampaignReport, onlyCampaign } from "../lib/promotion-report";
 import type { HistoryOrder } from "../lib/reports";
 
 const combo = parseCampaign("combo", {
@@ -78,5 +78,22 @@ describe("Khuyến mãi tính cho người bấm món", () => {
     expect(r.comboCount).toBe(7);
     expect(r.campaigns[0].comboCount).toBe(7);
     expect(r.staffTotals.reduce((s, x) => s + x.comboCount, 0)).toBe(7);
+  });
+
+  it("lọc riêng một chương trình: bảng nhân viên chỉ tính chương trình đó", () => {
+    const b = {
+      id: "M1", status: "PAID", staffUsername: "thu", staffFullName: "Thu", finalAmount: 90000, pointsDiscount: 5000, pointsUsed: 5,
+      items: [{ name: "Bánh", price: 20000, quantity: 3, orderedBy: "a", orderedByName: "A" }],
+      discounts: [
+        { campaignId: "BN", campaignName: "Combo bánh nước 10K", campaignType: "BUY_X_GET_Y", amount: 20000, comboCount: 2, staffShares: [{ u: "a", n: "A", amount: 10000, combo: 1 }, { u: "b", n: "B", amount: 10000, combo: 1 }] },
+        { campaignId: "X", campaignName: "Tặng ly", campaignType: "ORDER_VALUE_ITEM_BENEFIT", amount: 15000, comboCount: 3, staffShares: [{ u: "a", n: "A", amount: 15000, combo: 3 }] },
+      ],
+    } as unknown as HistoryOrder;
+    const all = calculateCampaignReport([b]);
+    expect(all.staffTotals.map((s) => [s.staff, s.comboCount])).toEqual(expect.arrayContaining([["A", 4], ["B", 1]]));
+    const bn = calculateCampaignReport(onlyCampaign([b], "id:BN"));
+    expect([bn.comboCount, bn.totalDiscount, bn.pointsUsed]).toEqual([2, 20000, 0]);
+    expect(bn.staffTotals.map((s) => [s.staff, s.comboCount, s.totalDiscount]).sort()).toEqual([["A", 1, 10000], ["B", 1, 10000]]);
+    expect(onlyCampaign([b], "ALL")).toEqual([b]);
   });
 });
