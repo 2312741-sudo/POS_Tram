@@ -6,6 +6,7 @@ import { resolveProductCode, type CodeLine, type ProductCodeMap } from "./produc
 import { splitLineParts, type ToppingLookup } from "./topping-split";
 import { billRemovedItems } from "./item-deletion";
 import { calculateCampaignReport } from "./promotion-report";
+import { attributeBillsToStaff, staffMatcher } from "./promo-attribution";
 import { soldItemRows, staffItemSummary } from "./staff-sales-report";
 import {
   billItemDiscount,
@@ -405,10 +406,22 @@ export function filterHubBills(
 }
 
 /**
- * Báo cáo khuyến mãi: khuyến mãi / combo do THU NGÂN áp lúc thanh toán → lọc nhân viên chỉ lấy đơn người đó thu tiền
- * (không lấy đơn người khác thu mà nhân viên này chỉ order giúp một món — trước đây 'Tất cả ca' bị cộng dư combo).
+ * Báo cáo khuyến mãi / chương trình: lọc nhân viên tính cho NGƯỜI BẤM MÓN được ưu đãi (combo tính cho người bấm món
+ * bánh / ly được giảm), không phải người thu tiền. Mỗi hóa đơn chỉ giữ phần khuyến mãi của nhân viên đó (staffShares) —
+ * cộng mọi nhân viên lại đúng bằng tổng của quán, không cộng dư. Xem lib/promo-attribution.ts.
  */
-export const CASHIER_ONLY_KINDS: ReadonlySet<ReportKind> = new Set<ReportKind>(["promotions", "campaigns"]);
+export const PROMO_STAFF_KINDS: ReadonlySet<ReportKind> = new Set<ReportKind>(["promotions", "campaigns"]);
+
+/** Hóa đơn cho báo cáo khuyến mãi: lọc ca, rồi (nếu chọn nhân viên) giữ phần khuyến mãi của người bấm món đó */
+export function promoHubBills(
+  bills: HistoryOrder[],
+  shiftId = "ALL",
+  staff = "ALL",
+  opts: { staffAliases?: Iterable<string> } = {},
+): HistoryOrder[] {
+  const byShift = filterHubBills(bills, shiftId, "ALL");
+  return staff === "ALL" ? byShift : attributeBillsToStaff(byShift, staffMatcher(staff, opts.staffAliases));
+}
 
 export interface HubStaffEntry {
   id: string; // display name / full name

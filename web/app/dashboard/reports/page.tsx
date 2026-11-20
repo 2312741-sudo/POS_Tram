@@ -57,7 +57,8 @@ import {
   REPORT_KINDS,
   buildHubTable,
   buildHubStaffEntries,
-  CASHIER_ONLY_KINDS,
+  PROMO_STAFF_KINDS,
+  promoHubBills,
   filterHubBills,
   hubStaffOptions,
   paymentLabel,
@@ -224,9 +225,9 @@ export default function ReportsHubPage() {
     () => filterHubBills(rangeBills, shiftId, staff, staffFilterOpts),
     [rangeBills, shiftId, staff, staffFilterOpts]
   );
-  // Báo cáo khuyến mãi: lọc nhân viên theo người thu tiền (người áp khuyến mãi)
+  // Báo cáo khuyến mãi / chương trình: lọc nhân viên theo NGƯỜI BẤM MÓN được ưu đãi (không phải người thu tiền)
   const tableBills = useMemo(
-    () => (CASHIER_ONLY_KINDS.has(kind) ? filterHubBills(rangeBills, shiftId, staff, { ...staffFilterOpts, cashierOnly: true }) : bills),
+    () => (PROMO_STAFF_KINDS.has(kind) ? promoHubBills(rangeBills, shiftId, staff, staffFilterOpts) : bills),
     [kind, rangeBills, shiftId, staff, staffFilterOpts, bills]
   );
   const prevBills = useMemo(

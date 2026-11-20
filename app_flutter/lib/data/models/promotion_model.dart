@@ -223,6 +223,39 @@ class PromotionModel {
   }
 }
 
+/// Phần của MỘT người bấm món trong một khuyến mãi (báo cáo khuyến mãi tính cho người bấm món, không phải thu ngân).
+/// Khớp StaffShare (web/lib/promo-attribution.ts): { u: username, n: tên, amount: tiền giảm, combo: số combo }.
+class PromoStaffShare {
+  final String u;
+  final String n;
+  final int amount;
+  final int combo;
+
+  const PromoStaffShare({required this.u, required this.n, required this.amount, required this.combo});
+
+  static PromoStaffShare? fromAny(Object? raw) {
+    if (raw is! Map) return null;
+    int asInt(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+    final amount = asInt(raw['amount']);
+    final combo = asInt(raw['combo']);
+    if (amount <= 0 && combo <= 0) return null;
+    final u = raw['u']?.toString() ?? '';
+    return PromoStaffShare(u: u, n: raw['n']?.toString() ?? u, amount: amount < 0 ? 0 : amount, combo: combo < 0 ? 0 : combo);
+  }
+
+  Map<String, dynamic> toMap() => {'u': u, 'n': n, 'amount': amount, 'combo': combo};
+
+  @override
+  bool operator ==(Object other) =>
+      other is PromoStaffShare && other.u == u && other.n == n && other.amount == amount && other.combo == combo;
+
+  @override
+  int get hashCode => Object.hash(u, n, amount, combo);
+
+  @override
+  String toString() => 'PromoStaffShare($u, $n, $amount, $combo)';
+}
+
 class BillDiscountModel {
   final String? promoId;
   final String? promoCode;
@@ -241,6 +274,8 @@ class BillDiscountModel {
   /// Giảm giá thủ công theo % hóa đơn (1–100). Có giá trị → số tiền được TÍNH LẠI mỗi khi đơn thay đổi
   /// (trước đây chỉ lưu số tiền lúc bấm → thêm / đổi món là "giảm 100%" không còn về 0đ).
   final int? manualPercent;
+  /// Chia theo NGƯỜI BẤM MÓN được ưu đãi (lưu lúc thanh toán); null = hóa đơn cũ / giảm thủ công
+  final List<PromoStaffShare>? staffShares;
 
   BillDiscountModel({
     this.promoId,
@@ -255,6 +290,7 @@ class BillDiscountModel {
     this.voucherCode,
     this.comboCount,
     this.manualPercent,
+    this.staffShares,
   });
 
   static final _manualPctRe = RegExp(r'^Giảm giá thủ công \((\d{1,3})%\)$');
@@ -293,6 +329,12 @@ class BillDiscountModel {
       voucherCode: str('voucherCode'),
       comboCount: asInt(map['comboCount']),
       manualPercent: asInt(map['manualPercent']),
+      staffShares: () {
+        final raw = map['staffShares'];
+        final list = raw is List ? raw : (raw is Map ? raw.values.toList() : const []);
+        final out = [for (final e in list) PromoStaffShare.fromAny(e)].whereType<PromoStaffShare>().toList();
+        return out.isEmpty ? null : out;
+      }(),
     );
   }
 
@@ -309,6 +351,7 @@ class BillDiscountModel {
     if (voucherCode != null) 'voucherCode': voucherCode,
     if (comboCount != null && comboCount! > 0) 'comboCount': comboCount,
     if (manualPercent != null) 'manualPercent': manualPercent,
+    if (staffShares != null && staffShares!.isNotEmpty) 'staffShares': [for (final s in staffShares!) s.toMap()],
   };
 
   BillDiscountModel copyWith({
@@ -316,6 +359,7 @@ class BillDiscountModel {
     String? description,
     String? campaignName,
     int? comboCount,
+    List<PromoStaffShare>? staffShares,
   }) => BillDiscountModel(
         promoId: promoId,
         promoCode: promoCode,
@@ -329,5 +373,6 @@ class BillDiscountModel {
         voucherCode: voucherCode,
         comboCount: comboCount ?? this.comboCount,
         manualPercent: manualPercent,
+        staffShares: staffShares ?? this.staffShares,
       );
 }

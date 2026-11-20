@@ -1,0 +1,462 @@
+{
+ "_note": "Đối chiếu chia khuyến mãi theo người bấm món app (Dart) ↔ web (TS). Kết quả mong đợi: promo_attribution_parity_expected.json (sinh từ web: UPDATE_PARITY=1 npx vitest run test/promo-attribution-parity.test.ts).",
+ "nowMs": 1793606400000,
+ "cashier": {
+  "u": "thu",
+  "n": "Thu ngân"
+ },
+ "cases": [
+  {
+   "name": "Combo: bánh của Bình và Chi, nước của An",
+   "campaigns": [
+    {
+     "campaignId": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 2,
+      "unitPrice": 30000
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Bánh",
+      "groupId": "BÁNH",
+      "quantity": 1,
+      "unitPrice": 25000
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L2",
+      "itemId": "L2",
+      "itemName": "Bánh",
+      "groupId": "BÁNH",
+      "quantity": 1,
+      "unitPrice": 25000
+     },
+     "staff": {
+      "u": "chi",
+      "n": "Chi"
+     }
+    }
+   ]
+  },
+  {
+   "name": "Combo + giảm 20% đơn chia theo dòng của 3 người",
+   "campaigns": [
+    {
+     "campaignId": "combo",
+     "name": "combo",
+     "campaignType": "BUYXGETY",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "buyConditions": [
+      {
+       "conditionId": "c",
+       "buyGroupIds": [
+        "TRÀ"
+       ],
+       "requiredBuyQty": 1,
+       "rewardGroupIds": [
+        "BÁNH"
+       ],
+       "rewardQty": 1,
+       "benefitMode": "FIXED",
+       "value": 10000
+      }
+     ]
+    },
+    {
+     "campaignId": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 30000
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Bánh",
+      "groupId": "BÁNH",
+      "quantity": 1,
+      "unitPrice": 25000
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L2",
+      "itemId": "L2",
+      "itemName": "Trà vải",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 33000
+     },
+     "staff": {
+      "u": "chi",
+      "n": "Chi"
+     }
+    }
+   ]
+  },
+  {
+   "name": "Xoài giảm 16K: người bấm ly xoài",
+   "campaigns": [
+    {
+     "campaignId": "xoai",
+     "name": "xoai",
+     "campaignType": "ITEMPRICERULE",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "includedItemIds": [
+      "Trà xoài"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "benefitMode": "FIXED",
+       "value": 16000,
+       "maxRewardQty": 1
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà xoài",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 37000,
+      "toppingUnitPrice": 7000,
+      "toppingCount": 2
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 30000
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    }
+   ]
+  },
+  {
+   "name": "Tặng chanh: người thêm ly tặng",
+   "campaigns": [
+    {
+     "campaignId": "gift",
+     "name": "gift",
+     "campaignType": "ORDERVALUEITEMBENEFIT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 50000,
+       "benefitMode": "FREE",
+       "value": 0,
+       "maxRewardQty": 1,
+       "rewardItemIds": [
+        "Trà chanh"
+       ]
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 2,
+      "unitPrice": 30000
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Trà chanh",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 22000,
+      "rewardCampaignId": "gift"
+     },
+     "staff": {
+      "u": "chi",
+      "n": "Chi"
+     }
+    }
+   ],
+   "dedicated": [
+    "gift"
+   ]
+  },
+  {
+   "name": "Giảm tay trên dòng không tính vào khuyến mãi",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 2,
+      "unitPrice": 30000,
+      "discountedQuantity": 1,
+      "discountPercent": 50
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Trà vải",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 33000
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    }
+   ]
+  },
+  {
+   "name": "Dòng không rõ người bấm → thu ngân",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 30000
+     },
+     "staff": null
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Trà vải",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 33000
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    }
+   ]
+  },
+  {
+   "name": "Tiền đã lưu lệch 1đ → làm tròn khớp",
+   "campaigns": [
+    {
+     "campaignId": "bill20",
+     "name": "bill20",
+     "campaignType": "BILLDISCOUNT",
+     "active": true,
+     "branchIds": [
+      "TRAM01"
+     ],
+     "tiers": [
+      {
+       "tierId": "t",
+       "threshold": 0,
+       "benefitMode": "PERCENT",
+       "value": 2000
+      }
+     ]
+    }
+   ],
+   "lines": [
+    {
+     "line": {
+      "lineId": "L0",
+      "itemId": "L0",
+      "itemName": "Trà đào",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 30000
+     },
+     "staff": {
+      "u": "an",
+      "n": "An"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L1",
+      "itemId": "L1",
+      "itemName": "Trà vải",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 33000
+     },
+     "staff": {
+      "u": "binh",
+      "n": "Bình"
+     }
+    },
+    {
+     "line": {
+      "lineId": "L2",
+      "itemId": "L2",
+      "itemName": "Trà vải",
+      "groupId": "TRÀ",
+      "quantity": 1,
+      "unitPrice": 33000
+     },
+     "staff": {
+      "u": "chi",
+      "n": "Chi"
+     }
+    }
+   ],
+   "storedDelta": {
+    "bill20": 1
+   }
+  }
+ ]
+}

@@ -418,7 +418,7 @@ function unitBenefit(mode: string, value: number, unitPrice: number): number {
   }
 }
 
-function manualLineDiscount(l: PricingLine): number {
+export function manualLineDiscount(l: PricingLine): number {
   if (l.isGift) return 0;
   if (l.manualDiscount != null) return Math.min(Math.max(0, l.manualDiscount), l.unitPrice * l.quantity);
   return computeLineDiscount({
@@ -957,6 +957,8 @@ export interface AppliedDiscount {
   programCode: string;
   campaignType: string;
   voucherCode?: string;
+  /** Chia theo NGƯỜI BẤM MÓN được ưu đãi (gắn lúc thanh toán — xem lib/promo-attribution.ts) */
+  staffShares?: { u: string; n: string; amount: number; combo: number }[];
 }
 
 /** Bản ghi bill.discounts — khớp CartCampaignPricing.discount (Flutter) */

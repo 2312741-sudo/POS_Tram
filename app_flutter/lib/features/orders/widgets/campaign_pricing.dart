@@ -1,6 +1,7 @@
 // lib/features/orders/widgets/campaign_pricing.dart
 // Cầu nối giỏ hàng ↔ Pricing Engine cho Chương trình khuyến mãi (CampaignModel).
 import '../../../core/domain/pricing_engine.dart';
+import '../../../core/reports/promo_attribution.dart';
 import '../../../data/models/campaign_models.dart';
 import '../../../data/models/order_item_model.dart';
 import '../../../data/models/product_model.dart';
@@ -520,6 +521,56 @@ class CartCampaignPricing {
 
   /// Tính lại các giảm giá theo chương trình khi giỏ hàng thay đổi.
   /// Trả về danh sách mới + tên các chương trình bị gỡ (không còn đủ điều kiện).
+  /// Lúc chốt hóa đơn: gắn staffShares (khuyến mãi chia theo NGƯỜI BẤM MÓN được ưu đãi) cho từng chương trình đang áp —
+  /// báo cáo khuyến mãi / combo theo nhân viên tính cho người bấm món, không phải thu ngân. Lỗi → giữ nguyên (không chặn thanh toán).
+  static List<BillDiscountModel> withStaffShares(
+    List<BillDiscountModel> applied,
+    Map<String, CampaignModel> campaignsById, {
+    required List<OrderItemModel> cart,
+    required List<ProductModel> products,
+    required String branchId,
+    required LineStaff cashier,
+    int? guestCount,
+    String? customerBirthday,
+    int? orderTimestampMs,
+  }) {
+    try {
+      final camps = <CampaignModel>[
+        for (final d in applied)
+          if (d.campaignId != null && campaignsById[d.campaignId] != null) campaignsById[d.campaignId]!,
+      ];
+      if (camps.isEmpty) return applied;
+      final lns = lines(cart, products);
+      final stacked = quoteStackedLines(
+        camps,
+        lns,
+        branchId: branchId,
+        guestCount: guestCount,
+        customerBirthday: customerBirthday,
+        nowMs: orderTimestampMs,
+        ignoreScheduleFor: {for (final c in camps) c.campaignId},
+      );
+      LineStaff? staffOf(String lineId) {
+        final i = int.tryParse(lineId.startsWith('L') ? lineId.substring(1) : lineId);
+        if (i == null || i < 0 || i >= cart.length) return null;
+        final it = cart[i];
+        return LineStaff(it.orderedBy.trim(), it.orderedByName.trim().isEmpty ? it.orderedBy.trim() : it.orderedByName.trim());
+      }
+
+      return [
+        for (final d in applied)
+          if (d.campaignId != null && stacked[d.campaignId] != null)
+            d.copyWith(
+                staffShares: PromoAttribution.shares(stacked[d.campaignId]!, lns, d.campaignId!, staffOf, cashier,
+                    storedAmount: d.amount))
+          else
+            d,
+      ];
+    } catch (_) {
+      return applied;
+    }
+  }
+
   static ({List<BillDiscountModel> discounts, List<String> dropped}) recalculate(
     List<BillDiscountModel> applied,
     Map<String, CampaignModel> campaignsById, {

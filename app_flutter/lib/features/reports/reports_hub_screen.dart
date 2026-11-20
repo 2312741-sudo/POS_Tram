@@ -8,6 +8,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/reports/bill_report_rows.dart';
 import '../../core/reports/report_calculator.dart';
+import '../../core/reports/promo_attribution.dart';
 import '../../core/reports/report_date_utils.dart';
 import '../../core/reports/report_export_service.dart';
 import '../../core/reports/report_models.dart';
@@ -399,12 +400,22 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       orElse: () => StaffFilterOption(id: _selectedStaff, displayName: _selectedStaff, aliases: {_selectedStaff}),
     );
 
+    // Báo cáo khuyến mãi / chương trình: lọc nhân viên theo NGƯỜI BẤM MÓN được ưu đãi (combo tính cho người bấm món
+    // được giảm, không phải thu ngân) — mỗi hóa đơn chỉ giữ phần khuyến mãi của người đó (PromoAttribution).
+    if (onlyCashier) {
+      final byShift = ReportCalculator.filterHubBills(dateFiltered, shiftId: _selectedShiftId);
+      if (_selectedStaff == 'ALL') return byShift;
+      return PromoAttribution.attributeBillsToStaff(
+        byShift,
+        PromoAttribution.matcher(_selectedStaff, selectedOpt.aliases),
+      );
+    }
+
     return ReportCalculator.filterHubBills(
       dateFiltered,
       shiftId: _selectedShiftId,
       staff: _selectedStaff,
       staffAliases: _selectedStaff == 'ALL' ? null : selectedOpt.aliases,
-      cashierOnly: onlyCashier,
     );
   }
 

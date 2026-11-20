@@ -3,7 +3,8 @@ import {
   REPORT_KINDS,
   buildHubTable,
   filterBillsByStatus,
-  CASHIER_ONLY_KINDS,
+  PROMO_STAFF_KINDS,
+  promoHubBills,
   filterHubBills,
   hubStaffOptions,
   buildHubStaffEntries,
@@ -85,17 +86,29 @@ describe("Trung tâm báo cáo web (giống app)", () => {
   });
 });
 
-describe("Báo cáo khuyến mãi lọc nhân viên theo NGƯỜI THU TIỀN", () => {
-  it("đơn người khác thu mà nhân viên chỉ order giúp 1 món không tính vào khuyến mãi của nhân viên đó", () => {
+describe("Báo cáo khuyến mãi lọc nhân viên theo NGƯỜI BẤM MÓN", () => {
+  it("combo tính cho người bấm món (Khoa), không cho người thu tiền (An); cộng lại không dư", () => {
     const own = bill("P1", vn(2026, 10, 29, 9), [{ name: "A", price: 10000, orderedBy: "kh", orderedByName: "Khoa" }], {
       staffUsername: "kh", staffFullName: "Khoa", shiftId: "S1", discounts: [{ campaignId: "C", description: "Combo", amount: 10000, comboCount: 1 }],
     } as never);
+    // Hóa đơn cũ (chưa lưu staffShares): cả đơn do Khoa bấm, An thu tiền → tính cho Khoa
     const other = bill("P2", vn(2026, 10, 29, 10), [{ name: "A", price: 10000, orderedBy: "kh", orderedByName: "Khoa" }], {
       staffUsername: "an", staffFullName: "An", shiftId: "S2", discounts: [{ campaignId: "C", description: "Combo", amount: 10000, comboCount: 1 }],
     } as never);
-    expect(filterHubBills([own, other], "ALL", "Khoa").map((b) => b.id)).toEqual(["P1", "P2"]);
-    expect(filterHubBills([own, other], "ALL", "Khoa", { cashierOnly: true }).map((b) => b.id)).toEqual(["P1"]);
-    expect(CASHIER_ONLY_KINDS.has("campaigns") && CASHIER_ONLY_KINDS.has("promotions")).toBe(true);
+    // Hóa đơn mới: combo chia theo người bấm món bánh
+    const split = bill("P3", vn(2026, 10, 29, 11), [{ name: "A", price: 10000, orderedBy: "kh", orderedByName: "Khoa" }], {
+      staffUsername: "an", staffFullName: "An", shiftId: "S2",
+      discounts: [{ campaignId: "C", description: "Combo", amount: 20000, comboCount: 2,
+        staffShares: [{ u: "kh", n: "Khoa", amount: 10000, combo: 1 }, { u: "an", n: "An", amount: 10000, combo: 1 }] }],
+    } as never);
+    const all = [own, other, split];
+    const combos = (bs: typeof all) => bs.flatMap((b) => b.discounts ?? []).reduce((s, d) => s + Number(d.comboCount || 0), 0);
+    expect(combos(promoHubBills(all, "ALL", "Khoa"))).toBe(3);
+    expect(combos(promoHubBills(all, "ALL", "An"))).toBe(1);
+    expect(combos(promoHubBills(all, "ALL", "ALL"))).toBe(4);
+    // lọc ca vẫn theo ca của hóa đơn
+    expect(combos(promoHubBills(all, "S2", "Khoa"))).toBe(2);
+    expect(PROMO_STAFF_KINDS.has("campaigns") && PROMO_STAFF_KINDS.has("promotions")).toBe(true);
   });
 });
 

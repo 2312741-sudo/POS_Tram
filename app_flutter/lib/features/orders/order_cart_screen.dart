@@ -32,6 +32,7 @@ import '../../data/services/campaign_service.dart';
 import '../../data/services/loyalty_service.dart';
 import '../promotions/voucher_check.dart';
 import 'widgets/campaign_pricing.dart';
+import '../../core/reports/promo_attribution.dart';
 import 'widgets/combo_reward_picker_sheet.dart';
 import '../../core/domain/deleted_items.dart';
 import '../cash_shift/cash_shift_dialog.dart';
@@ -5318,7 +5319,18 @@ class _OrderCartScreenState extends State<OrderCartScreen> {
       staffFullName: staffName,
       items: _cart,
       subTotal: _subTotal,
-      discounts: _appliedDiscounts,
+      // Khuyến mãi kèm phần của từng NGƯỜI BẤM MÓN (báo cáo combo / khuyến mãi theo nhân viên)
+      discounts: CartCampaignPricing.withStaffShares(
+        _appliedDiscounts,
+        _campaignById,
+        cart: _cart,
+        products: _products,
+        branchId: _fb.currentStoreCode,
+        cashier: LineStaff(staffUser, staffName),
+        guestCount: _guestCount,
+        customerBirthday: _selectedCustomer?.birthday,
+        orderTimestampMs: widget.table.openedAt,
+      ),
       totalDiscount: _totalDiscount,
       pointsUsed: _pointsUsed,
       pointsDiscount: _pointsDiscount,

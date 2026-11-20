@@ -1,0 +1,122 @@
+{
+ "Combo: bánh của Bình và Chi, nước của An": {
+  "combo": [
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 10000,
+    "combo": 1
+   },
+   {
+    "u": "chi",
+    "n": "Chi",
+    "amount": 10000,
+    "combo": 1
+   }
+  ]
+ },
+ "Combo + giảm 20% đơn chia theo dòng của 3 người": {
+  "combo": [
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 10000,
+    "combo": 1
+   }
+  ],
+  "bill20": [
+   {
+    "u": "an",
+    "n": "An",
+    "amount": 6000,
+    "combo": 0
+   },
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 3000,
+    "combo": 0
+   },
+   {
+    "u": "chi",
+    "n": "Chi",
+    "amount": 6600,
+    "combo": 0
+   }
+  ]
+ },
+ "Xoài giảm 16K: người bấm ly xoài": {
+  "xoai": [
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 16000,
+    "combo": 0
+   }
+  ]
+ },
+ "Tặng chanh: người thêm ly tặng": {
+  "gift": [
+   {
+    "u": "chi",
+    "n": "Chi",
+    "amount": 22000,
+    "combo": 1
+   }
+  ]
+ },
+ "Giảm tay trên dòng không tính vào khuyến mãi": {
+  "bill20": [
+   {
+    "u": "an",
+    "n": "An",
+    "amount": 9000,
+    "combo": 0
+   },
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 6600,
+    "combo": 0
+   }
+  ]
+ },
+ "Dòng không rõ người bấm → thu ngân": {
+  "bill20": [
+   {
+    "u": "thu",
+    "n": "Thu ngân",
+    "amount": 6000,
+    "combo": 0
+   },
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 6600,
+    "combo": 0
+   }
+  ]
+ },
+ "Tiền đã lưu lệch 1đ → làm tròn khớp": {
+  "bill20": [
+   {
+    "u": "an",
+    "n": "An",
+    "amount": 6000,
+    "combo": 0
+   },
+   {
+    "u": "binh",
+    "n": "Bình",
+    "amount": 6601,
+    "combo": 0
+   },
+   {
+    "u": "chi",
+    "n": "Chi",
+    "amount": 6600,
+    "combo": 0
+   }
+  ]
+ }
+}

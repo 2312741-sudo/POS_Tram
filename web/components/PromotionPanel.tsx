@@ -1,4 +1,5 @@
 "use client";
+import { promoStaffShares } from "@/lib/promo-attribution";
 import { parseTableDiscounts, serializeTableDiscounts, splitTableDiscounts } from "@/lib/table-discounts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { get, onValue, ref } from "firebase/database";
@@ -136,7 +137,32 @@ export function usePromotions(args: {
     () => (campaignsLoaded ? recalculateDiscounts(chosen, byId, lines, ctx, { dedicatedOnlyFor: giftOnly }) : { discounts: chosen, dropped: [] as string[] }),
     [chosen, byId, lines, ctx, campaignsLoaded, giftOnly]
   );
-  const effective = useMemo(() => applied.filter((d) => d.amount > 0), [applied]);
+  // Kèm phần của từng NGƯỜI BẤM MÓN được ưu đãi → hóa đơn lưu staffShares (báo cáo combo / khuyến mãi theo nhân viên)
+  const effective = useMemo(() => {
+    const list = applied.filter((d) => d.amount > 0);
+    const camps = list.map((d) => byId[d.campaignId]).filter((c): c is Campaign => !!c);
+    if (camps.length === 0) return list;
+    try {
+      const quotes = quoteStacked(camps, lines, ctx, {
+        ignoreScheduleFor: new Set(camps.map((c) => c.campaignId)),
+        dedicatedOnlyFor: giftOnly,
+      });
+      const staffOf = (lineId: string) => {
+        const it = items[Number(lineId.slice(1))] as { orderedBy?: unknown; orderedByName?: unknown } | undefined;
+        if (!it) return null;
+        const u = String(it.orderedBy ?? "").trim();
+        const n = String(it.orderedByName ?? "").trim();
+        return { u, n: n || u };
+      };
+      const cashier = { u: String(actor?.username ?? ""), n: String(actor?.fullName ?? actor?.username ?? "") };
+      return list.map((d) => {
+        const q = quotes[d.campaignId];
+        return q ? { ...d, staffShares: promoStaffShares(q, lines, d.campaignId, staffOf, cashier, d.amount) } : d;
+      });
+    } catch {
+      return list;
+    }
+  }, [applied, byId, lines, ctx, giftOnly, items, actor]);
   // Tổng / danh sách đưa vào hóa đơn gồm cả giảm giá do app áp (không phải chương trình) đang lưu trên bàn
   const withExtras = useMemo(() => [...effective, ...extras.filter((d) => d.amount > 0)], [effective, extras]);
   const total = withExtras.reduce((s, d) => s + d.amount, 0);

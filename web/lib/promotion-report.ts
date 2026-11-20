@@ -6,6 +6,7 @@
  * dữ liệu cũ có thể chỉ có promoId / promoCode / promoName / name / description.
  * Nhóm theo campaignId → promoId → mã (programCode/promoCode) → tên.
  */
+import { discountStaffShares } from "./promo-attribution";
 import { deduplicateBills, getBillTimestamp, type HistoryOrder } from "./reports";
 
 export interface CampaignBillRow {
@@ -156,7 +157,7 @@ function discountsOf(b: HistoryOrder): DiscountLike[] {
 
 /** Tổng hợp khuyến mãi theo chiến dịch cho các hóa đơn PAID */
 export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
-  const map = new Map<string, CampaignSummary & { _bills: Map<string, CampaignBillRow>; _codes: Set<string> }>();
+  const map = new Map<string, CampaignSummary & { _bills: Map<string, CampaignBillRow>; _codes: Set<string>; _staff: CampaignBillRow[] }>();
   const promoBills = new Map<string, number>();
   let vouchersUsed = 0;
   let totalDiscount = 0;
@@ -190,6 +191,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
           staffRows: [],
           _bills: new Map(),
           _codes: new Set(),
+          _staff: [],
         };
         map.set(id.key, c);
       }
@@ -199,6 +201,16 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
         c.typeLabel = campaignTypeLabel(id.type);
       }
       const voucher = str(d.voucherCode);
+      // Theo NGƯỜI BẤM MÓN được ưu đãi (staffShares lưu lúc thanh toán; hóa đơn cũ: người bấm duy nhất / thu ngân)
+      const shares = discountStaffShares(b, d as never);
+      const staffNames = Array.from(new Set(shares.map((s) => s.n || s.u).filter(Boolean)));
+      shares.forEach((sh, i) =>
+        c!._staff.push({
+          billId: b.id, billCode: b.billCode || b.orderCode || b.id, timestamp: getBillTimestamp(b), tableName: b.tableName || "",
+          voucherCode: i === 0 ? voucher : "", discount: sh.amount, comboCount: sh.combo > 0 ? sh.combo : undefined, finalAmount,
+          staff: sh.n || sh.u, storeCode: b.storeCode,
+        }),
+      );
       c.totalDiscount += amount;
       totalDiscount += amount;
       if (comboCount > 0) {
@@ -227,7 +239,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
           discount: amount,
           comboCount: comboCount > 0 ? comboCount : undefined,
           finalAmount,
-          staff: b.cashierName || b.staffFullName || b.staffUsername || "",
+          staff: staffNames.join(", ") || b.cashierName || b.staffFullName || b.staffUsername || "",
           storeCode: b.storeCode,
         });
         c.billCount += 1;
@@ -249,7 +261,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     if (!c) {
       c = {
         key: POINTS_ROW_KEY, campaignId: "", name: "Đổi điểm tích lũy", code: "DOI_DIEM", type: "POINTS", typeLabel: campaignTypeLabel("POINTS"),
-        billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], staffRows: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(),
+        billCount: 0, comboCount: 0, totalDiscount: 0, revenue: 0, vouchersUsed: 0, voucherCodes: [], bills: [], staffRows: [], pointsUsed: 0, _bills: new Map(), _codes: new Set(), _staff: [],
       };
       map.set(POINTS_ROW_KEY, c);
     }
@@ -259,29 +271,36 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     c.revenue += finalAmount;
     pointsUsedTotal += pUsed;
     totalDiscount += pDisc;
-    c._bills.set(b.id, {
+    const pointsRow: CampaignBillRow = {
       billId: b.id, billCode: b.billCode || b.orderCode || b.id, timestamp: getBillTimestamp(b), tableName: b.tableName || "",
       voucherCode: "", discount: pDisc, finalAmount, staff: b.cashierName || b.staffFullName || b.staffUsername || "", storeCode: b.storeCode, pointsUsed: pUsed,
-    });
+    };
+    c._bills.set(b.id, pointsRow);
+    c._staff.push(pointsRow); // đổi điểm áp cho cả hóa đơn → tính cho thu ngân
     promoBills.set(b.id, finalAmount);
   }
 
-  const campaigns: CampaignSummary[] = Array.from(map.values())
+  const campaigns: (CampaignSummary & { _staff: CampaignBillRow[] })[] = Array.from(map.values())
     .map((c) => {
-      const { _bills, _codes, ...rest } = c;
+      const { _bills, _codes, _staff, ...rest } = c;
       const billRows = Array.from(_bills.values()).sort((a, b) => b.timestamp - a.timestamp);
       return {
         ...rest,
         voucherCodes: Array.from(_codes).sort(),
         bills: billRows,
-        staffRows: staffBreakdown(billRows),
+        staffRows: staffBreakdown(_staff),
+        _staff,
       };
     })
     .sort((a, b) => b.totalDiscount - a.totalDiscount || a.name.localeCompare(b.name, "vi"));
 
+  const staffTotals = staffBreakdown(campaigns.flatMap((c) => c._staff));
   return {
-    campaigns,
-    staffTotals: staffBreakdown(campaigns.flatMap((c) => c.bills)),
+    campaigns: campaigns.map(({ _staff, ...rest }) => {
+      void _staff;
+      return rest;
+    }),
+    staffTotals,
     totalDiscount,
     billCount: promoBills.size,
     comboCount: totalComboCount,
