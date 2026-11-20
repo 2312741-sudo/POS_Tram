@@ -157,7 +157,11 @@ export function usePromotions(args: {
       const cashier = { u: String(actor?.username ?? ""), n: String(actor?.fullName ?? actor?.username ?? "") };
       return list.map((d) => {
         const q = quotes[d.campaignId];
-        return q ? { ...d, staffShares: promoStaffShares(q, lines, d.campaignId, staffOf, cashier, d.amount) } : d;
+        if (!q) return d;
+        const staffShares = promoStaffShares(q, lines, d.campaignId, staffOf, cashier, d.amount);
+        // Số combo theo giỏ hiện tại (cùng nguồn với phần chia nhân viên) — không giữ số cũ lưu trên bàn
+        const combo = staffShares.reduce((s, x) => s + x.combo, 0);
+        return { ...d, staffShares, comboCount: combo > 0 ? combo : undefined };
       });
     } catch {
       return list;

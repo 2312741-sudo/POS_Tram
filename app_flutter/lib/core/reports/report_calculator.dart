@@ -10,6 +10,7 @@ import '../../data/models/shift_model.dart';
 import '../../data/models/table_model.dart';
 import 'report_date_utils.dart';
 import 'report_models.dart';
+import 'promo_attribution.dart';
 
 class ReportCalculator {
   /// Default topping cost mapping (trường hợp catalogue không truyền riêng)
@@ -773,7 +774,7 @@ class ReportCalculator {
         ));
         campaignMap[key]!.usedCount += 1;
         campaignMap[key]!.discountAmount += d.amount;
-        final comboCnt = d.comboCount ?? (d.toMap()['comboCount'] as num?)?.toInt() ?? 0;
+        final comboCnt = PromoAttribution.comboCountOf(d);
         campaignMap[key]!.comboCount += comboCnt;
       }
 
@@ -1031,7 +1032,7 @@ class ReportCalculator {
         );
         final amount = (m['amount'] as num?)?.toInt() ?? d.amount;
         acc.discountAmount += amount;
-        final comboCnt = d.comboCount ?? (m['comboCount'] as num?)?.toInt() ?? 0;
+        final comboCnt = PromoAttribution.comboCountOf(d);
         acc.comboCount += comboCnt;
         if (voucherCode.isNotEmpty) acc.voucherCodesUsed += 1;
         if (seenInBill.add(key)) {

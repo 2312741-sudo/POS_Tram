@@ -132,6 +132,27 @@ export function discountStaffShares(bill: HistoryOrder, d: DiscountLike): StaffS
 }
 
 /**
+ * Số combo của một khuyến mãi: có phần chia theo người bấm món (staffShares) thì lấy tổng từ đó — cùng nguồn với bảng
+ * "theo nhân viên" nên hai bảng luôn khớp (web trước đây không ghi / không cập nhật comboCount); hóa đơn cũ: comboCount.
+ */
+export function discountComboCount(d: DiscountLike): number {
+  const raw = (d as { staffShares?: unknown }).staffShares;
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>) : [];
+  let combo = 0;
+  let any = false;
+  for (const x of list) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const a = Math.max(0, Number(o.amount) || 0);
+    const c = Math.max(0, Math.trunc(Number(o.combo) || 0));
+    if (a <= 0 && c <= 0) continue;
+    any = true;
+    combo += c;
+  }
+  return any ? combo : Math.max(0, Math.trunc(Number((d as { comboCount?: unknown }).comboCount) || 0));
+}
+
+/**
  * Hóa đơn chỉ giữ phần khuyến mãi của nhân viên [matches] (theo người bấm món) — để báo cáo khuyến mãi / chương trình
  * lọc theo nhân viên. Đổi điểm (cả hóa đơn) tính cho thu ngân; giảm tay trên món tính cho người bấm món đó.
  */

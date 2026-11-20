@@ -125,6 +125,17 @@ class PromoAttribution {
     return d.amount > 0 || combo > 0 ? [PromoStaffShare(u: w.u, n: w.n, amount: d.amount, combo: combo)] : const [];
   }
 
+  /// Số combo của một khuyến mãi: có staffShares thì lấy tổng từ đó (cùng nguồn bảng "theo nhân viên" → luôn khớp),
+  /// hóa đơn cũ: comboCount. Khớp discountComboCount (web).
+  static int comboCountOf(BillDiscountModel d) {
+    final saved = d.staffShares;
+    if (saved != null && saved.any((s) => s.amount > 0 || s.combo > 0)) {
+      return saved.fold<int>(0, (a, s) => a + (s.combo > 0 ? s.combo : 0));
+    }
+    final c = d.comboCount ?? 0;
+    return c > 0 ? c : 0;
+  }
+
   /// Hóa đơn chỉ giữ phần khuyến mãi của nhân viên [matches] (theo người bấm món) — cho báo cáo khuyến mãi / chương trình
   /// lọc theo nhân viên. Đổi điểm (cả hóa đơn) tính cho thu ngân; giảm tay trên món tính cho người bấm món đó.
   static List<BillModel> attributeBillsToStaff(List<BillModel> bills, bool Function(LineStaff) matches) {

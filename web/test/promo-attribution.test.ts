@@ -61,4 +61,22 @@ describe("Khuyến mãi tính cho người bấm món", () => {
     // Bảng theo nhân viên: người bấm món, không phải thu ngân
     expect(all.staffTotals.map((s) => [s.staff, s.comboCount]).sort()).toEqual([["Bình", 1], ["Chi", 1]]);
   });
+
+  it("số combo theo chương trình = tổng theo nhân viên (hóa đơn web thiếu / lệch comboCount)", () => {
+    const mk = (id: string, comboCount: number | undefined, shares: { u: string; n: string; amount: number; combo: number }[]): HistoryOrder =>
+      ({
+        id, status: "PAID", staffUsername: "thu", staffFullName: "Thu", totalAmount: 100000, finalAmount: 80000,
+        items: [{ name: "Trà tắc", price: 25000, quantity: 4, orderedBy: "a", orderedByName: "A" }],
+        discounts: [{ campaignId: "C1", campaignType: "BUY_X_GET_Y", description: "Combo", amount: 20000, ...(comboCount ? { comboCount } : {}), staffShares: shares }],
+      }) as unknown as HistoryOrder;
+    const bills = [
+      mk("W1", undefined, [{ u: "a", n: "A", amount: 10000, combo: 1 }, { u: "b", n: "B", amount: 10000, combo: 1 }]),
+      mk("W2", 1, [{ u: "a", n: "A", amount: 20000, combo: 2 }]),
+      { ...mk("OLD", 3, []), discounts: [{ campaignId: "C1", campaignType: "BUY_X_GET_Y", description: "Combo", amount: 30000, comboCount: 3 }] } as HistoryOrder,
+    ];
+    const r = calculateCampaignReport(bills);
+    expect(r.comboCount).toBe(7);
+    expect(r.campaigns[0].comboCount).toBe(7);
+    expect(r.staffTotals.reduce((s, x) => s + x.comboCount, 0)).toBe(7);
+  });
 });

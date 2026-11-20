@@ -6,7 +6,7 @@
  * dữ liệu cũ có thể chỉ có promoId / promoCode / promoName / name / description.
  * Nhóm theo campaignId → promoId → mã (programCode/promoCode) → tên.
  */
-import { discountStaffShares } from "./promo-attribution";
+import { discountStaffShares, discountComboCount } from "./promo-attribution";
 import { deduplicateBills, getBillTimestamp, type HistoryOrder } from "./reports";
 
 export interface CampaignBillRow {
@@ -170,7 +170,7 @@ export function calculateCampaignReport(bills: HistoryOrder[]): CampaignReport {
     const finalAmount = Number(b.finalAmount != null ? b.finalAmount : b.totalAmount || 0) || 0;
     for (const d of discounts) {
       const amount = Math.max(0, Number(d.amount) || 0);
-      const comboCount = Math.max(0, Number(d.comboCount) || 0);
+      const comboCount = discountComboCount(d as never);
       const id = campaignIdentity(d);
       let c = map.get(id.key);
       if (!c) {

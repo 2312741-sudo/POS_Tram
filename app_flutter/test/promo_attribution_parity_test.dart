@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tram_flutter/core/domain/pricing_engine.dart';
 import 'package:tram_flutter/core/reports/promo_attribution.dart';
+import 'package:tram_flutter/core/reports/report_calculator.dart';
 import 'package:tram_flutter/data/models/bill_model.dart';
 import 'package:tram_flutter/data/models/campaign_models.dart';
 import 'package:tram_flutter/data/models/promotion_model.dart';
@@ -117,6 +118,21 @@ void main() {
         discounts: [{'campaignId': 'combo', 'description': 'Combo', 'amount': 10000, 'comboCount': 1}],
       );
       expect(PromoAttribution.discountShares(oneOrderer, oneOrderer.discounts.single).single.u, 'an');
+    });
+
+    test('số combo theo chương trình = tổng theo nhân viên (comboCount thiếu / lệch)', () {
+      final shares = [
+        {'u': 'an', 'n': 'An', 'amount': 10000, 'combo': 1},
+        {'u': 'binh', 'n': 'Bình', 'amount': 10000, 'combo': 2},
+      ];
+      final noCount = bill(discounts: [{'campaignId': 'combo', 'description': 'Combo', 'amount': 20000, 'staffShares': shares}]);
+      final stale = bill(discounts: [{'campaignId': 'combo', 'description': 'Combo', 'amount': 20000, 'comboCount': 1, 'staffShares': shares}]);
+      final old = bill(discounts: [{'campaignId': 'combo', 'description': 'Combo', 'amount': 20000, 'comboCount': 2}]);
+      expect(PromoAttribution.comboCountOf(noCount.discounts.single), 3);
+      expect(PromoAttribution.comboCountOf(stale.discounts.single), 3);
+      expect(PromoAttribution.comboCountOf(old.discounts.single), 2);
+      expect(ReportCalculator.calculateCampaignReport([noCount]).single.comboCount, 3);
+      expect(ReportCalculator.calculatePromotionsReport([stale]).campaigns.single.comboCount, 3);
     });
 
     test('staffShares lưu / đọc lại trên hóa đơn', () {

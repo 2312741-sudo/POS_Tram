@@ -560,15 +560,22 @@ class CartCampaignPricing {
       return [
         for (final d in applied)
           if (d.campaignId != null && stacked[d.campaignId] != null)
-            d.copyWith(
-                staffShares: PromoAttribution.shares(stacked[d.campaignId]!, lns, d.campaignId!, staffOf, cashier,
-                    storedAmount: d.amount))
+            _withShares(d, PromoAttribution.shares(stacked[d.campaignId]!, lns, d.campaignId!, staffOf, cashier, storedAmount: d.amount))
           else
             d,
       ];
     } catch (_) {
       return applied;
     }
+  }
+
+  /// Gắn phần chia nhân viên + số combo cùng nguồn (báo cáo theo chương trình và theo nhân viên luôn khớp)
+  static BillDiscountModel _withShares(BillDiscountModel d, List<PromoStaffShare> shares) {
+    final combo = shares.fold<int>(0, (a, s) => a + s.combo);
+    final copy = combo > 0 || d.comboCount == null
+        ? d.copyWith(staffShares: shares, comboCount: combo > 0 ? combo : null)
+        : BillDiscountModel.fromMap({...d.toMap(), 'comboCount': null}).copyWith(staffShares: shares);
+    return copy;
   }
 
   static ({List<BillDiscountModel> discounts, List<String> dropped}) recalculate(
