@@ -28,6 +28,8 @@ const input = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1
 const fmtTime = (ms?: number) => (ms ? new Date(ms).toLocaleString("vi-VN") : "—");
 
 /** Ca / két của tài khoản đang đăng nhập: mở ca (tiền đầu ca) và chốt két cuối ca */
+const DEFAULT_INITIAL_CASH = "250,000";
+
 export default function MyShiftPage() {
   const { user } = useAuth();
   const { stores, currentStoreCode, cashShifts } = useDashboardData();
@@ -45,7 +47,8 @@ export default function MyShiftPage() {
   const open = findOwnOpenShift(mine, { uid: actor.uid, username: actor.username }, storeCode);
   const history = useMemo(() => mine.filter((s) => !isShiftOpen(s)).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0)).slice(0, 10), [mine]);
 
-  const [initialCash, setInitialCash] = useState("");
+  // Tiền đầu ca mặc định 250,000 (khớp app POS) — sửa được
+  const [initialCash, setInitialCash] = useState(DEFAULT_INITIAL_CASH);
   const [actualCash, setActualCash] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export default function MyShiftPage() {
     try {
       await update(ref(db), r.updates);
       setMessage(okMsg);
-      setInitialCash("");
+      setInitialCash(DEFAULT_INITIAL_CASH);
       setActualCash("");
       setNotes("");
     } catch (e) {

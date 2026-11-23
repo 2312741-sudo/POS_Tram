@@ -43,7 +43,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
   StreamSubscription<List<BillModel>>? _billsSub;
   List<BillModel> _shiftBills = [];
 
-  final _initialCashCtrl = TextEditingController(text: '1,000,000');
+  final _initialCashCtrl = TextEditingController(text: '250,000');
   final _adjustAmountCtrl = TextEditingController();
   final _adjustReasonCtrl = TextEditingController();
   final _actualCashCtrl = TextEditingController();
@@ -448,7 +448,7 @@ class _CashShiftDialogState extends State<CashShiftDialog> with SingleTickerProv
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [0, 500000, 1000000, 2000000, 3000000, 5000000].map((amt) {
+          children: [0, 250000, 500000, 1000000, 2000000, 3000000].map((amt) {
             return ActionChip(
               backgroundColor: context.tc.primaryLight.withValues(alpha: 0.4),
               label: Text(
