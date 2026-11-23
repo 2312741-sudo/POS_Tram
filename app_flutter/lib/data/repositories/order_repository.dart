@@ -32,7 +32,8 @@ class OrderRepository {
   final DatabaseReference Function() _getKitchenOrdersRef;
   final DatabaseReference Function() _getOnlineOrdersRef;
   final Future<void> Function(AuditLogModel log) _logAction;
-  final Future<void> Function(String paymentMethod, int amount)? _onDeductCashShift;
+  /// Hủy / xóa hóa đơn đã thanh toán → trừ ở ca đã thu tiền (ReportRepository.reverseBillFromShift), trả mô tả
+  final Future<String> Function(BillModel bill)? _onReverseBillShift;
 
   OrderRepository({
     required DatabaseReference Function() getRoot,
@@ -44,7 +45,7 @@ class OrderRepository {
     required DatabaseReference Function() getKitchenOrdersRef,
     required DatabaseReference Function() getOnlineOrdersRef,
     required Future<void> Function(AuditLogModel log) logAction,
-    Future<void> Function(String paymentMethod, int amount)? onDeductCashShift,
+    Future<String> Function(BillModel bill)? onReverseBillShift,
   })  : _getRoot = getRoot,
         _getCurrentStoreCode = getCurrentStoreCode,
         _getTablesRef = getTablesRef,
@@ -54,7 +55,7 @@ class OrderRepository {
         _getKitchenOrdersRef = getKitchenOrdersRef,
         _getOnlineOrdersRef = getOnlineOrdersRef,
         _logAction = logAction,
-        _onDeductCashShift = onDeductCashShift;
+        _onReverseBillShift = onReverseBillShift;
 
   DatabaseReference get _root => _getRoot();
   String get _currentStoreCode => _getCurrentStoreCode();
@@ -1923,8 +1924,10 @@ class OrderRepository {
       rethrow;
     }
 
-    if (_onDeductCashShift != null) {
-      await _onDeductCashShift(bill.paymentMethod, bill.finalAmount);
+    // Chỉ hóa đơn ĐANG đã thanh toán mới trừ ca (hủy lại hóa đơn đã hủy không trừ lần 2)
+    String shiftNote = '';
+    if (previousStatus == 'PAID' && _onReverseBillShift != null) {
+      shiftNote = await _onReverseBillShift(bill).catchError((Object e) => 'lỗi trừ ca: $e');
     }
 
     await _safeLog(AuditLogModel(
@@ -1935,7 +1938,8 @@ class OrderRepository {
       action: 'CANCEL_BILL',
       targetType: 'BILL',
       targetId: bill.billCode,
-      details: 'Hủy hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason',
+      details: 'Hủy hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason'
+          '${shiftNote.isNotEmpty ? '. Ca két: $shiftNote' : ''}',
       isSuspicious: true,
     ));
   }
@@ -1965,8 +1969,9 @@ class OrderRepository {
       'xóa hóa đơn ${bill.billCode}',
     );
 
-    if (bill.status == 'PAID' && _onDeductCashShift != null) {
-      await _onDeductCashShift(bill.paymentMethod, bill.finalAmount);
+    String shiftNote = '';
+    if (bill.status == 'PAID' && _onReverseBillShift != null) {
+      shiftNote = await _onReverseBillShift(bill).catchError((Object e) => 'lỗi trừ ca: $e');
     }
 
     await _safeLog(AuditLogModel(
@@ -1977,7 +1982,8 @@ class OrderRepository {
       action: 'DELETE_BILL',
       targetType: 'BILL',
       targetId: bill.billCode,
-      details: 'Xóa vĩnh viễn hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason',
+      details: 'Xóa vĩnh viễn hóa đơn ${bill.billCode} (Mã đơn: ${bill.orderCode ?? bill.billCode}) bàn ${bill.tableName} (${FormatUtils.vnd(bill.finalAmount)}). Lý do: $reason'
+          '${shiftNote.isNotEmpty ? '. Ca két: $shiftNote' : ''}',
       isSuspicious: true,
     ));
   }

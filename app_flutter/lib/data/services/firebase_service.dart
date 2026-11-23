@@ -57,7 +57,7 @@ class FirebaseService {
       getKitchenOrdersRef: () => kitchenOrdersRef,
       getOnlineOrdersRef: () => onlineOrdersRef,
       logAction: (log) => _reportRepo.logAction(log),
-      onDeductCashShift: (method, amount) => _reportRepo.deductCashShiftSale(method, amount),
+      onReverseBillShift: (bill) => _reportRepo.reverseBillFromShift(bill),
     );
   }
 

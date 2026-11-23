@@ -164,3 +164,59 @@ List<ShiftOwnerSummary> summarizeShiftsByOwner(Iterable<CashShiftModel> shifts) 
     ..sort((a, b) => b.totalRevenue.compareTo(a.totalRevenue));
   return out;
 }
+
+// ==================== HỦY / XÓA HÓA ĐƠN ĐÃ THANH TOÁN → TRỪ Ở CA ĐÃ THU TIỀN ====================
+// Quy tắc: tiền hóa đơn bị hủy luôn trừ ở CA ĐÃ THU TIỀN hóa đơn đó (nhân viên thu tiền), dù Chủ / Quản lý hủy hộ.
+// Ca đó đã chốt (đã bàn giao) → không sửa ca cũ; phần TIỀN MẶT hoàn cho khách ghi thành khoản CHI của ca đang mở
+// của người hủy (tiền ra từ két hiện tại). Bản TS song song: web/lib/cash-shift.ts (billShiftPortions / findBillShift).
+
+/// Tiền hóa đơn đã cộng vào ca lúc thanh toán, theo nhóm (khớp _fireBackgroundPaymentTasks + recordShiftSale web):
+/// hỗn hợp theo paymentSplits (CASH / TRANSFER_QR / CARD, khác → tiền mặt); 1 phương thức theo tên phương thức.
+({int cash, int qr, int card}) billShiftPortions(BillModel b) {
+  var cash = 0, qr = 0, card = 0;
+  final splits = b.paymentSplits;
+  if (splits != null && splits.isNotEmpty) {
+    for (final sp in splits) {
+      if (sp.amount <= 0) continue;
+      final m = sp.method.toUpperCase();
+      if (m.contains('QR') || m.contains('TRANSFER')) {
+        qr += sp.amount;
+      } else if (m.contains('CARD') || m.contains('THẺ')) {
+        card += sp.amount;
+      } else {
+        cash += sp.amount;
+      }
+    }
+    return (cash: cash, qr: qr, card: card);
+  }
+  final amt = b.finalAmount > 0 ? b.finalAmount : 0;
+  final m = b.paymentMethod.toUpperCase();
+  if (m.contains('SPLIT')) return (cash: 0, qr: 0, card: 0); // hỗn hợp không có chi tiết: lúc thu cũng không cộng
+  if (m.contains('QR') || m.contains('TRANSFER') || m.contains('CHUYỂN')) return (cash: 0, qr: amt, card: 0);
+  if (m.contains('CARD') || m.contains('THẺ')) return (cash: 0, qr: 0, card: amt);
+  return (cash: amt, qr: 0, card: 0);
+}
+
+/// Ca đã thu tiền hóa đơn: theo shiftId (id / mã ca); hóa đơn không ghi ca (web / bản cũ): ca của NGƯỜI THU TIỀN
+/// (staffUid → staffUsername) bao trùm thời điểm thanh toán, mở gần nhất. Không tìm thấy → null.
+CashShiftModel? findBillShift(BillModel b, Iterable<CashShiftModel> shifts) {
+  final sid = (b.shiftId ?? '').trim();
+  if (sid.isNotEmpty) {
+    for (final s in shifts) {
+      if (s.id == sid || s.shiftCode == sid) return s;
+    }
+    return null;
+  }
+  final t = b.closedAt ?? b.createdAt;
+  final uid = (b.staffUid ?? '').trim();
+  CashShiftModel? best;
+  for (final s in shifts) {
+    final owner = uid.isNotEmpty && s.staffUid.isNotEmpty
+        ? s.staffUid == uid
+        : _norm(s.staffUsername).isNotEmpty && _norm(s.staffUsername) == _norm(b.staffUsername);
+    if (!owner || s.openedAt <= 0 || t < s.openedAt) continue;
+    if (s.closedAt != null && t > s.closedAt!) continue;
+    if (best == null || s.openedAt > best.openedAt) best = s;
+  }
+  return best;
+}

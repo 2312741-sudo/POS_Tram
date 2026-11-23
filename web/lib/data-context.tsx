@@ -11,7 +11,7 @@ import { httpsCallable } from "firebase/functions";
 import { buildCreateStorePayload, type CreateStorePayload } from "./create-store-payload";
 import { deduplicateBills, mergeHistoryAndBills } from "./reports";
 import { generateBillCode } from "./bill-code";
-import { recordShiftSale } from "./cash-shift-run";
+import { recordShiftSale, reverseShiftForBill } from "./cash-shift-run";
 import { parseOrderJson, summarizeOrderLines, type RawOrderLine } from "./order-math";
 import { CLEAR_PRE_PRINT, CLEAR_TABLE_CUSTOMER, baseTableName, buildOrderItemsPayload, prePrintPayload, tableCustomerOf } from "./table-status";
 import { errorMessage } from "./errors";
@@ -2420,12 +2420,20 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
             updates[`${basePath}/${node}/${orderId}/${field}`] = value;
           }
         }
+        const raw = (billSnap.exists() ? billSnap.val() : historySnap.val()) as Record<string, unknown> | null;
+        const wasPaid = String((raw?.status as string | undefined) ?? order.status ?? "PAID").toUpperCase() === "PAID";
         await update(ref(db), updates);
 
         // Optimistic update
         setAllHistory((prev) =>
           prev.map((h) => (h.id === orderId ? { ...h, ...patch } : h))
         );
+
+        // Trừ tiền ở CA ĐÃ THU TIỀN hóa đơn (kể cả Chủ / Quản lý hủy hộ) — ghi kết quả vào nhật ký thao tác
+        if (wasPaid && actingUser?.uid) {
+          const note = await reverseShiftForBill(db, targetStoreCode, { ...order, ...(raw ?? {}) }, { uid: actingUser.uid, username: actingUser.username });
+          void update(ref(db, `${basePath}/audit_logs/${logId}`), { details: `${auditPayload.details}. Ca két: ${note}` }).catch(() => {});
+        }
 
         return { success: true };
       } catch (e) {
@@ -2462,6 +2470,14 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
           details: `Xóa vĩnh viễn hóa đơn ${order?.billCode || order?.orderCode || orderId} khỏi hệ thống`,
         };
 
+        // Bản ghi gốc (để trừ tiền ở ca đã thu tiền nếu hóa đơn đang đã thanh toán)
+        const [bSnap, hSnap] = await Promise.all([
+          get(ref(db, `stores/${targetStoreCode}/bills/${orderId}`)).catch(() => null),
+          get(ref(db, `stores/${targetStoreCode}/history/${orderId}`)).catch(() => null),
+        ]);
+        const raw = ((bSnap?.exists() ? bSnap.val() : hSnap?.exists() ? hSnap.val() : null) ?? order ?? null) as Record<string, unknown> | null;
+        const wasPaid = !!raw && String((raw.status as string | undefined) ?? "PAID").toUpperCase() === "PAID";
+
         // Xóa history + bills và ghi audit log trong MỘT update() nguyên tử
         await update(ref(db), {
           [`stores/${targetStoreCode}/history/${orderId}`]: null,
@@ -2471,6 +2487,11 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
 
         // Optimistic update
         setAllHistory((prev) => prev.filter((h) => h.id !== orderId));
+
+        if (wasPaid && raw && actingUser?.uid) {
+          const note = await reverseShiftForBill(db, targetStoreCode, raw as never, { uid: actingUser.uid, username: actingUser.username });
+          void update(ref(db, `stores/${targetStoreCode}/audit_logs/${logId}`), { details: `${auditPayload.details}. Ca két: ${note}` }).catch(() => {});
+        }
 
         return { success: true };
       } catch (e) {

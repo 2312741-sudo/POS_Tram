@@ -717,25 +717,86 @@ class ReportRepository {
     ));
   }
 
-  /// Trừ doanh số khi hủy/xóa hóa đơn đã thanh toán: tiền hoàn ra từ két CỦA TÀI KHOẢN THỰC HIỆN
-  /// (ca đang mở của chính họ); không có ca mở thì bỏ qua như trước đây.
-  Future<void> deductCashShiftSale(String paymentMethod, int amount) async {
-    final shift = activeShiftCache ?? await getCurrentOpenShift();
-    if (shift == null || !shift.isOpen) return;
-    final m = paymentMethod.toUpperCase();
-    int cash = 0, qr = 0, card = 0;
-    if (m.contains('CASH') || m.contains('TIỀN MẶT')) {
-      cash = -amount;
-    } else if (m.contains('QR') || m.contains('TRANSFER')) {
-      qr = -amount;
-    } else if (m.contains('CARD') || m.contains('THẺ')) {
-      card = -amount;
-    }
+  /// HỦY / XÓA HÓA ĐƠN ĐÃ THANH TOÁN: trừ tiền ở ĐÚNG CA ĐÃ THU TIỀN hóa đơn (nhân viên thu tiền), dù Chủ / Quản lý
+  /// hủy hộ — tiền mặt trừ tiền mặt, chuyển khoản trừ chuyển khoản, hỗn hợp tách đúng từng phần (billShiftPortions).
+  /// Ca đó đã chốt / không tìm thấy / không ghi được: không sửa ca cũ; phần TIỀN MẶT hoàn cho khách ghi thành khoản CHI
+  /// của ca đang mở của người hủy (tiền ra từ két hiện tại). Không bao giờ ném lỗi; trả về mô tả cho nhật ký.
+  Future<String> reverseBillFromShift(BillModel bill) async {
+    final p = billShiftPortions(bill);
+    if (p.cash + p.qr + p.card <= 0) return 'không có tiền cần trừ ở ca';
+    CashShiftModel? target;
     try {
-      await _incrementShift(shift.id, cash: cash, qr: qr, card: card, what: 'trừ doanh số ca ${shift.id}');
+      final sid = (bill.shiftId ?? '').trim();
+      if (sid.isNotEmpty) {
+        final snap = await cashShiftsRef.child(sid).get().timeout(const Duration(seconds: 5));
+        if (snap.exists && snap.value is Map) {
+          target = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(snap.value as Map), sid);
+        }
+      }
+      if (target == null) {
+        final snap = await cashShiftsRef.limitToLast(300).get().timeout(const Duration(seconds: 5));
+        target = findBillShift(bill, snap.exists && snap.value != null ? _parseShifts(snap.value) : const <CashShiftModel>[]);
+      }
+    } catch (_) {
+      target = null;
+    }
+
+    final money = '${p.cash > 0 ? "TM ${p.cash}đ " : ""}${p.qr > 0 ? "CK ${p.qr}đ " : ""}${p.card > 0 ? "thẻ ${p.card}đ" : ""}'.trim();
+    String why;
+    if (target != null && target.isOpen) {
+      bool? done;
+      try {
+        done = await _decrementOpenShift(target.id, cash: p.cash, qr: p.qr, card: p.card, what: 'trừ HĐ ${bill.billCode} khỏi ca ${target.shiftCode}');
+      } catch (_) {
+        done = false; // vd nhân viên không có quyền ghi ca của người khác
+      }
+      // null = mất mạng, lệnh trừ vẫn chờ gửi → không ghi thêm khoản chi (tránh trừ 2 lần)
+      if (done != false) return 'trừ $money khỏi ca ${target.shiftCode} (${target.staffFullName.isNotEmpty ? target.staffFullName : target.staffUsername})';
+      why = 'không ghi được ca ${target.shiftCode}';
+    } else {
+      why = target == null ? 'không tìm thấy ca đã thu tiền' : 'ca ${target.shiftCode} đã chốt';
+    }
+    if (p.cash <= 0) return '$why — không có tiền mặt cần hoàn từ két';
+    final own = activeShiftCache ?? await getCurrentOpenShift();
+    if (own == null || !own.isOpen || own.id == target?.id) return '$why — người hủy không có ca mở, chưa ghi khoản chi ${p.cash}đ';
+    try {
+      await _incrementShift(own.id, cashOut: p.cash, what: 'chi hoàn tiền HĐ ${bill.billCode} ca ${own.id}');
+      return '$why — ghi CHI hoàn tiền ${p.cash}đ vào ca ${own.shiftCode}';
     } catch (e) {
-      // Không chặn thao tác hủy/xóa hóa đơn, nhưng ghi nhận để đối soát
-      _logSyncFailure('trừ doanh số ca ${shift.id} ($paymentMethod -$amount)', e);
+      _logSyncFailure('chi hoàn tiền HĐ ${bill.billCode} (${p.cash}đ) ca ${own.id}', e);
+      return '$why — lỗi ghi khoản chi ${p.cash}đ';
+    }
+  }
+
+  /// Trừ doanh số ở ca CHƯA CHỐT (transaction; ca đã chốt → hủy giao dịch). true: đã trừ; false: ca đã chốt / không có;
+  /// null: mất mạng (lệnh vẫn chờ gửi).
+  Future<bool?> _decrementOpenShift(String shiftId, {required int cash, required int qr, required int card, required String what}) async {
+    final fut = cashShiftsRef.child(shiftId).runTransaction((Object? current) {
+      if (current == null) return Transaction.success(null);
+      final m = Map<String, dynamic>.from(current as Map);
+      if ((m['status']?.toString().toUpperCase() ?? '') == 'CLOSED' || m['closedAt'] != null) return Transaction.abort();
+      int sub(String k, int d) {
+        final v = ((m[k] as num?)?.toInt() ?? 0) - d;
+        return v < 0 ? 0 : v;
+      }
+      m['totalCashSales'] = sub('totalCashSales', cash);
+      m['totalQrSales'] = sub('totalQrSales', qr);
+      m['totalCardSales'] = sub('totalCardSales', card);
+      return Transaction.success(m);
+    });
+    try {
+      final res = await fut.timeout(const Duration(seconds: 6));
+      final v = res.snapshot.value;
+      if (!res.committed || v == null) return false;
+      final updated = CashShiftModel.fromMap(Map<dynamic, dynamic>.from(v as Map), shiftId);
+      if (_optimisticOpenShift?.id == shiftId) _optimisticOpenShift = updated.isOpen ? updated : null;
+      if (_cachedCashShiftsList != null) {
+        _cachedCashShiftsList = _cachedCashShiftsList!.map((s) => s.id == shiftId ? updated : s).toList();
+      }
+      return true;
+    } on TimeoutException {
+      unawaited(fut.then((_) {}, onError: (Object e) => _logSyncFailure(what, e)));
+      return null;
     }
   }
 
