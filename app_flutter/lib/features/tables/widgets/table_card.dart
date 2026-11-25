@@ -65,6 +65,12 @@ class TableStatusStyle {
 }
 
 class TableCard extends StatelessWidget {
+  /// Chiều cao ô bàn trong lưới Phòng bàn: tăng theo cỡ chữ hệ thống (chữ to vẫn thấy đủ các dòng thông tin).
+  static double gridExtent(BuildContext context) {
+    final scale = (MediaQuery.textScalerOf(context).scale(14) / 14).clamp(1.0, 2.0);
+    return 156 * scale;
+  }
+
   final TableModel table;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -195,17 +201,23 @@ class TableCard extends StatelessWidget {
       final code = (table.currentBillId != null && table.currentBillId!.isNotEmpty)
           ? 'HĐ: ${table.currentBillId}'
           : ((table.currentOrderCode != null && table.currentOrderCode!.isNotEmpty) ? 'Đơn: ${table.currentOrderCode}' : null);
+      // Tách 2 dòng (phân khu / số khách + thời gian ngồi) để màn hình nhỏ hoặc cỡ chữ lớn vẫn thấy đủ
+      final metaStyle = GoogleFonts.beVietnamPro(fontSize: 12, color: style.ink, fontWeight: FontWeight.w600);
+      if (table.zone.trim().isNotEmpty) {
+        lines.add(Text(table.zone, maxLines: 1, overflow: TextOverflow.ellipsis, style: metaStyle));
+      }
       final meta = [
-        table.zone,
         if (table.guestCount != null && table.guestCount! > 0) '${table.guestCount} khách',
         if (table.durationInUse != null) '${table.durationInUse!.inMinutes} phút',
       ].join(' • ');
-      lines.add(Text(
-        meta,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.beVietnamPro(fontSize: 12, color: style.ink, fontWeight: FontWeight.w600),
-      ));
+      if (meta.isNotEmpty) {
+        // Ô hẹp / chữ to: thu nhỏ vừa ô thay vì cắt "…" (luôn thấy đủ số khách + thời gian)
+        lines.add(FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(meta, maxLines: 1, style: metaStyle),
+        ));
+      }
       if (code != null) {
         lines.add(Text(code, maxLines: 1, overflow: TextOverflow.ellipsis, style: small.copyWith(fontSize: 11)));
       }

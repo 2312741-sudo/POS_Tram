@@ -1,6 +1,7 @@
 "use client";
 import { tablePayableTotal } from "@/lib/order-math";
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import { businessDayStartFor } from "@/lib/business-day";
 import { useDashboardData, ProductItem } from "@/lib/data-context";
 import { activeStaffNameSet } from "@/lib/reports-hub";
@@ -782,6 +783,16 @@ export default function EndOfDayReportPage() {
                   <ReportRow label="Số khách phục vụ" value={`${zReport.tab1_tongHop.totalGuests} người`} />
                   <ReportRow label="Doanh thu TB / Đơn" value={formatVND(zReport.tab1_tongHop.avgRevenuePerBill)} isBold />
                 </div>
+                {/* Chuyển sang danh sách hóa đơn (Giao dịch / Hóa đơn) */}
+                <Link
+                  href="/dashboard/orders"
+                  style={{
+                    marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "10px",
+                    border: "1px solid var(--border)", borderRadius: "10px", fontSize: "13px", fontWeight: 700, color: "var(--primary)", textDecoration: "none",
+                  }}
+                >
+                  Xem danh sách hóa đơn →
+                </Link>
               </div>
 
               {/* Card 4: HÓA ĐƠN ĐÃ HỦY */}

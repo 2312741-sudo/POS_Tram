@@ -774,9 +774,9 @@ class _TableListScreenState extends State<TableListScreen> {
                       )
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 230,
-                          mainAxisExtent: 156,
+                          mainAxisExtent: TableCard.gridExtent(context),
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
