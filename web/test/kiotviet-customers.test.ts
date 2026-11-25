@@ -47,14 +47,16 @@ describe("Nhập khách hàng từ Excel KiotViet", () => {
     expect(a.invalid).toEqual([{ file: "a.xlsx", row: 5, name: "Lê C", reason: "SĐT không hợp lệ (091234567)" }]);
   });
 
-  it("gộp nhiều file: trùng SĐT giữ dòng điểm cao hơn; SĐT đã có trong POS → bỏ qua", () => {
+  it("gộp nhiều file: trùng SĐT → một khách, CỘNG điểm; SĐT đã có trong POS → bỏ qua", () => {
     const plan = planKvImport([parseKvSheet(sheetA, "a"), parseKvSheet(sheetB, "b")], ["0987 654 321"]);
     expect(plan.toCreate.map((c) => [c.phone, c.points])).toEqual([
-      ["0912345678", 100],
+      ["0912345678", 177],
       ["0912000002", 0],
       ["0352223333", 3],
     ]);
-    expect(plan.duplicates.map((c) => c.points)).toEqual([77]);
+    expect(plan.duplicates.map((c) => c.points)).toEqual([100]);
+    // giữ thông tin dòng đầu (ngày sinh / tên), không sửa dữ liệu gốc của từng file
+    expect(plan.toCreate[0].birthday).toBe("2000-12-21");
     expect(plan.existing.map((c) => c.phone)).toEqual(["0987654321"]);
     expect(plan.invalid).toHaveLength(1);
   });

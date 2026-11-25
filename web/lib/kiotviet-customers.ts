@@ -4,7 +4,8 @@
  * - Đọc theo TÊN CỘT ở dòng tiêu đề (Tên khách hàng, Điện thoại, Ngày sinh, Giới tính, Điểm hiện tại, Mã khách hàng…),
  *   bỏ dòng tổng cộng KiotViet (không tên / không SĐT).
  * - SĐT chuẩn hóa 10 số bắt đầu bằng 0; số 11 số đầu cũ (016x, 012x, 018x, 0199) đổi sang đầu số mới (2018).
- * - Gộp nhiều file: trùng SĐT → giữ một (dòng có điểm cao hơn). SĐT đã có khách trong POS → bỏ qua (không đè điểm).
+ * - Gộp nhiều file: trùng SĐT → gộp thành MỘT khách, CỘNG điểm các dòng (thiếu ngày sinh / giới tính thì lấy từ dòng
+ *   kia). SĐT đã có khách trong POS → bỏ qua (không đè điểm).
  * Phần ghi dữ liệu: components/KiotVietImportDialog.tsx (tạo khách như "Thêm khách", điểm qua adjustLoyaltyPoints).
  */
 import { normalizePhone } from "./loyalty";
@@ -33,7 +34,7 @@ export interface KvImportPlan {
   toCreate: KvCustomer[];
   /** SĐT đã có khách trong POS */
   existing: KvCustomer[];
-  /** Trùng SĐT giữa các dòng / file (đã gộp) */
+  /** Các dòng trùng SĐT đã gộp (cộng điểm) vào khách đầu tiên */
   duplicates: KvCustomer[];
   invalid: KvRowIssue[];
 }
@@ -144,11 +145,16 @@ export function planKvImport(
   for (const s of sheets) {
     for (const c of s.customers) {
       const prev = byPhone.get(c.phone);
-      if (!prev) byPhone.set(c.phone, c);
-      else if (c.points > prev.points) {
-        duplicates.push(prev);
-        byPhone.set(c.phone, c);
-      } else duplicates.push(c);
+      if (!prev) {
+        byPhone.set(c.phone, { ...c });
+        continue;
+      }
+      // Gộp: cộng điểm, bổ sung thông tin còn thiếu
+      prev.points += c.points;
+      if (!prev.birthday) prev.birthday = c.birthday;
+      if (prev.gender === "Khác") prev.gender = c.gender;
+      if (!prev.kvCode) prev.kvCode = c.kvCode;
+      duplicates.push(c);
     }
   }
   const toCreate: KvCustomer[] = [];

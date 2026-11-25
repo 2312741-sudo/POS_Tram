@@ -170,7 +170,7 @@ export default function KiotVietImportDialog({ targetStores, existingPhones, can
         <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
           {stat("Khách mới sẽ tạo", plan.toCreate.length, "var(--success, #137333)")}
           {stat("Đã có trong POS (theo SĐT) — bỏ qua, giữ nguyên điểm", plan.existing.length)}
-          {stat("Trùng SĐT giữa các dòng / file — đã gộp", plan.duplicates.length)}
+          {stat("Trùng SĐT giữa các dòng / file — đã gộp, cộng điểm", plan.duplicates.length)}
           {stat("Dòng lỗi (thiếu tên / SĐT sai) — bỏ qua", plan.invalid.length, plan.invalid.length ? "var(--danger)" : undefined)}
           {stat("Tổng điểm KiotViet của khách mới", totalPts)}
         </div>
