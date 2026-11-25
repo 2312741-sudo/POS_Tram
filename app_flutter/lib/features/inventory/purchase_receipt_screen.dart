@@ -308,7 +308,6 @@ class _PurchaseReceiptScreenState extends State<PurchaseReceiptScreen> {
         totalTaxMoney: 0,
         totalNetMoney: totalMoney,
         paidMoney: 0,
-        debtMoney: _currentDocType == 'PURCHASE_RECEIPT' ? totalMoney : 0,
         note: _noteCtrl.text.trim(),
         reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
         createdBy: _doc?.createdBy ?? _auth.currentUser?.username ?? 'system',

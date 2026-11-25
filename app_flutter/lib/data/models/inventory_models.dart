@@ -872,88 +872,6 @@ class SupplierModel {
 }
 
 // ---------------------------------------------------------------------------
-// 8. SupplierLedgerEntryModel
-// ---------------------------------------------------------------------------
-
-/// Sổ công nợ NCC.
-class SupplierLedgerEntryModel {
-  final String entryId;
-  final String supplierId;
-  final String branchId;
-  /// OPENING, PURCHASE, RETURN, PAYMENT, ADJUSTMENT
-  final String entryType;
-  /// Số tiền (dương = nợ tăng, âm = nợ giảm)
-  final int amountMoney;
-  /// Phiếu liên kết
-  final String? referenceDocId;
-  final String? referenceDocType;
-  final String? description;
-  /// CASH, TRANSFER, CARD
-  final String? paymentMethod;
-  final int occurredAt;
-  final int committedAt;
-  final String actorId;
-  final String? reversedBy;
-  final int version;
-
-  SupplierLedgerEntryModel({
-    required this.entryId,
-    required this.supplierId,
-    required this.branchId,
-    required this.entryType,
-    required this.amountMoney,
-    this.referenceDocId,
-    this.referenceDocType,
-    this.description,
-    this.paymentMethod,
-    required this.occurredAt,
-    required this.committedAt,
-    required this.actorId,
-    this.reversedBy,
-    this.version = 1,
-  });
-
-  factory SupplierLedgerEntryModel.fromMap(Map<String, dynamic> map) {
-    return SupplierLedgerEntryModel(
-      entryId: map['entryId'] as String? ?? '',
-      supplierId: map['supplierId'] as String? ?? '',
-      branchId: map['branchId'] as String? ?? '',
-      entryType: map['entryType'] as String? ?? '',
-      amountMoney: (map['amountMoney'] as num?)?.toInt() ?? 0,
-      referenceDocId: map['referenceDocId'] as String?,
-      referenceDocType: map['referenceDocType'] as String?,
-      description: map['description'] as String?,
-      paymentMethod: map['paymentMethod'] as String?,
-      occurredAt: (map['occurredAt'] as num?)?.toInt() ?? 0,
-      committedAt: (map['committedAt'] as num?)?.toInt() ?? 0,
-      actorId: map['actorId'] as String? ?? '',
-      reversedBy: map['reversedBy'] as String?,
-      version: (map['version'] as num?)?.toInt() ?? 1,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
-      'entryId': entryId,
-      'supplierId': supplierId,
-      'branchId': branchId,
-      'entryType': entryType,
-      'amountMoney': amountMoney,
-      'occurredAt': occurredAt,
-      'committedAt': committedAt,
-      'actorId': actorId,
-      'version': version,
-    };
-    if (referenceDocId != null) map['referenceDocId'] = referenceDocId;
-    if (referenceDocType != null) map['referenceDocType'] = referenceDocType;
-    if (description != null) map['description'] = description;
-    if (paymentMethod != null) map['paymentMethod'] = paymentMethod;
-    if (reversedBy != null) map['reversedBy'] = reversedBy;
-    return map;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // 9. InventoryDocumentModel + InventoryDocLine
 // ---------------------------------------------------------------------------
 
@@ -1104,8 +1022,6 @@ class InventoryDocumentModel {
   final int totalNetMoney;
   /// Đã thanh toán
   final int paidMoney;
-  /// Còn nợ
-  final int debtMoney;
   final String note;
   /// Username
   final String createdBy;
@@ -1145,7 +1061,6 @@ class InventoryDocumentModel {
     required this.totalTaxMoney,
     required this.totalNetMoney,
     required this.paidMoney,
-    required this.debtMoney,
     this.note = '',
     this.reason,
     required this.createdBy,
@@ -1186,7 +1101,6 @@ class InventoryDocumentModel {
       totalTaxMoney: (map['totalTaxMoney'] as num?)?.toInt() ?? 0,
       totalNetMoney: (map['totalNetMoney'] as num?)?.toInt() ?? 0,
       paidMoney: (map['paidMoney'] as num?)?.toInt() ?? 0,
-      debtMoney: (map['debtMoney'] as num?)?.toInt() ?? 0,
       note: map['note'] as String? ?? '',
       reason: map['reason'] as String?,
       createdBy: map['createdBy'] as String? ?? '',
@@ -1217,7 +1131,6 @@ class InventoryDocumentModel {
       'totalTaxMoney': totalTaxMoney,
       'totalNetMoney': totalNetMoney,
       'paidMoney': paidMoney,
-      'debtMoney': debtMoney,
       'note': note,
       'createdBy': createdBy,
       'createdByName': createdByName,
@@ -1264,7 +1177,6 @@ class InventoryDocumentModel {
     int? totalTaxMoney,
     int? totalNetMoney,
     int? paidMoney,
-    int? debtMoney,
     String? note,
     String? reason,
     String? createdBy,
@@ -1300,7 +1212,6 @@ class InventoryDocumentModel {
       totalTaxMoney: totalTaxMoney ?? this.totalTaxMoney,
       totalNetMoney: totalNetMoney ?? this.totalNetMoney,
       paidMoney: paidMoney ?? this.paidMoney,
-      debtMoney: debtMoney ?? this.debtMoney,
       note: note ?? this.note,
       reason: reason ?? this.reason,
       createdBy: createdBy ?? this.createdBy,

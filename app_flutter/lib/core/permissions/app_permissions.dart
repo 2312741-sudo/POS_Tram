@@ -223,7 +223,6 @@ class AppPermissions {
   static const String completeReceipt = 'COMPLETE_RECEIPT'; // Duyệt phiếu nhập
   static const String cancelReceipt = 'CANCEL_RECEIPT'; // Hủy phiếu nhập
   static const String createPurchaseReturn = 'CREATE_PURCHASE_RETURN';
-  static const String recordSupplierPayment = 'RECORD_SUPPLIER_PAYMENT'; // Nhạy cảm
 
   // 9. Kiểm kho & Vận hành kho
   static const String createStocktake = 'CREATE_STOCKTAKE';
@@ -283,7 +282,7 @@ class AppPermissions {
       'VIEW_REPORTS', 'MANAGE_PROMOTIONS', 'VIEW_INVENTORY',
       'EDIT_CATALOG_ITEM', 'VIEW_COST_PRICE', 'MANAGE_RECIPES', 'VIEW_SUPPLIERS',
       'EDIT_SUPPLIERS', 'CREATE_RECEIPT', 'INVENTORY_STOCK_IN', 'COMPLETE_RECEIPT',
-      'CREATE_PURCHASE_RETURN', 'RECORD_SUPPLIER_PAYMENT', 'CREATE_STOCKTAKE',
+      'CREATE_PURCHASE_RETURN', 'CREATE_STOCKTAKE',
       'APPROVE_STOCKTAKE', 'CREATE_TRANSFER', 'RECEIVE_TRANSFER', 'CREATE_WASTE',
       'INVENTORY_WASTE', 'CREATE_INTERNAL_USE', 'INVENTORY_STOCK_OUT', 'CREATE_PRODUCTION',
       'CREATE_CAMPAIGN', 'EDIT_CAMPAIGN', 'ACTIVATE_CAMPAIGN', 'MANAGE_CODES', 'COPY_MENU',
@@ -331,7 +330,6 @@ class AppPermissions {
       // Kho & NCC nhạy cảm
       viewCostPrice,
       approveStocktake,
-      recordSupplierPayment,
       cancelReceipt,
       // KM nâng cao nhạy cảm
       overrideManualDiscount,
@@ -577,7 +575,7 @@ class AppPermissions {
       key: completeReceipt,
       label: 'Duyệt phiếu nhập',
       category: catSupplier,
-      description: 'Hoàn thành phiếu nhập, tăng tồn kho và ghi công nợ.',
+      description: 'Hoàn thành phiếu nhập, tăng tồn kho.',
     ),
     AppPermission(
       key: cancelReceipt,
@@ -590,12 +588,6 @@ class AppPermissions {
       label: 'Trả hàng nhập',
       category: catSupplier,
       description: 'Tạo phiếu trả hàng cho nhà cung cấp.',
-    ),
-    AppPermission(
-      key: recordSupplierPayment,
-      label: 'Thanh toán công nợ NCC',
-      category: catSupplier,
-      description: 'Ghi nhận thanh toán cho nhà cung cấp (Nhạy cảm).',
     ),
 
     // Kiểm kho & Vận hành kho

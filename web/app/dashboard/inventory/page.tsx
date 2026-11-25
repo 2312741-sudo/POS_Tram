@@ -728,22 +728,6 @@ export default function InventoryPage() {
       });
     }
 
-    if (doc.docType === "PURCHASE_RECEIPT" && doc.supplierId) {
-      const ledgerId = `LED_${now}_${Math.random().toString(36).slice(2, 6)}`;
-      await set(ref(db, `stores/${targetStoreCode}/supplier_ledger/${ledgerId}`), {
-        entryId: ledgerId,
-        supplierId: doc.supplierId,
-        branchId: targetStoreCode,
-        entryType: "PURCHASE",
-        amountMoney: doc.totalNetMoney || doc.totalMoney,
-        referenceDocId: doc.documentId,
-        referenceDocType: doc.docType,
-        occurredAt: now,
-        committedAt: now,
-        actorId: user?.username || "admin",
-      });
-    }
-
     await update(ref(db, `stores/${targetStoreCode}/inventory_documents/${doc.documentId}`), {
       status: "COMPLETED",
       completedAt: now,

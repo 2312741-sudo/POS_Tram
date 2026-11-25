@@ -302,7 +302,7 @@ class InventoryService {
     await _storeRef.child('inventory_documents/${doc.documentId}').set(doc.toMap());
   }
 
-  /// Hoàn thành phiếu kho, xử lý biến động và công nợ
+  /// Hoàn thành phiếu kho, xử lý biến động tồn kho (không ghi công nợ nhà cung cấp)
   Future<void> completeInventoryDocument(InventoryDocumentModel doc) async {
     if (doc.status != 'DRAFT') {
       throw Exception('Chỉ có thể hoàn thành phiếu nháp.');
@@ -361,39 +361,6 @@ class InventoryService {
 
       // 3. Cập nhật StockBalance
       await _updateStockBalance(line.itemId, qtyDeltaBase, valueDeltaMoney);
-    }
-
-    // 4 & 5. Tạo SupplierLedgerEntry
-    if (doc.docType == 'PURCHASE_RECEIPT' && doc.supplierId != null) {
-      final entryId = 'LED_${now}_${Random().nextInt(10000)}';
-      final entry = SupplierLedgerEntryModel(
-        entryId: entryId,
-        supplierId: doc.supplierId!,
-        branchId: _currentStoreCode,
-        entryType: 'PURCHASE',
-        amountMoney: doc.totalNetMoney,
-        referenceDocId: doc.documentId,
-        referenceDocType: doc.docType,
-        occurredAt: now,
-        committedAt: now,
-        actorId: doc.createdBy,
-      );
-      await _storeRef.child('supplier_ledger/$entryId').set(entry.toMap());
-    } else if (doc.docType == 'PURCHASE_RETURN' && doc.supplierId != null) {
-      final entryId = 'LED_${now}_${Random().nextInt(10000)}';
-      final entry = SupplierLedgerEntryModel(
-        entryId: entryId,
-        supplierId: doc.supplierId!,
-        branchId: _currentStoreCode,
-        entryType: 'RETURN',
-        amountMoney: -doc.totalNetMoney,
-        referenceDocId: doc.documentId,
-        referenceDocType: doc.docType,
-        occurredAt: now,
-        committedAt: now,
-        actorId: doc.createdBy,
-      );
-      await _storeRef.child('supplier_ledger/$entryId').set(entry.toMap());
     }
 
     // Cập nhật trạng thái phiếu kho
@@ -774,47 +741,6 @@ class InventoryService {
     return const [];
   }
 
-  // ==================== CÔNG NỢ NHÀ CUNG CẤP (SUPPLIER LEDGER) ====================
-
-  /// Stream sổ công nợ nhà cung cấp
-  Stream<List<SupplierLedgerEntryModel>> supplierLedgerStream(String supplierId) {
-    return _storeRef.child('supplier_ledger').orderByChild('supplierId').equalTo(supplierId).onValue.map((event) {
-      if (event.snapshot.value == null) return [];
-      final Map<dynamic, dynamic> map = event.snapshot.value as Map<dynamic, dynamic>;
-      final list = map.values.map((e) => SupplierLedgerEntryModel.fromMap(Map<String, dynamic>.from(e))).toList();
-      list.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-      return list;
-    });
-  }
-
-  /// Ghi nhận thanh toán cho NCC
-  Future<void> recordSupplierPayment(String supplierId, int amount, String paymentMethod, String username) async {
-    final entry = SupplierLedgerEntryModel(
-      entryId: 'LED_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}',
-      supplierId: supplierId,
-      branchId: _currentStoreCode,
-      entryType: 'PAYMENT',
-      amountMoney: -amount,
-      paymentMethod: paymentMethod,
-      occurredAt: DateTime.now().millisecondsSinceEpoch,
-      committedAt: DateTime.now().millisecondsSinceEpoch,
-      actorId: username,
-    );
-    await _storeRef.child('supplier_ledger/${entry.entryId}').set(entry.toMap());
-  }
-
-  /// Lấy tổng công nợ hiện tại của NCC
-  Future<int> getSupplierDebt(String supplierId) async {
-    final snapshot = await _storeRef.child('supplier_ledger').orderByChild('supplierId').equalTo(supplierId).get();
-    if (snapshot.value == null) return 0;
-    final Map<dynamic, dynamic> map = snapshot.value as Map<dynamic, dynamic>;
-    int totalDebt = 0;
-    for (final e in map.values) {
-      final entry = SupplierLedgerEntryModel.fromMap(Map<String, dynamic>.from(e));
-      totalDebt += entry.amountMoney;
-    }
-    return totalDebt;
-  }
 }
 
 class StockConsumptionResult {
