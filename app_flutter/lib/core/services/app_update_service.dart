@@ -45,8 +45,8 @@ class AppUpdateService {
       return PackageInfo(
         appName: 'POS Trạm',
         packageName: 'com.example.tramapp',
-        version: '1.1.1',
-        buildNumber: '16',
+        version: '1.1.2',
+        buildNumber: '17',
       );
     }
   }
