@@ -6,7 +6,7 @@ import { resolveProductCode, type CodeLine, type ProductCodeMap } from "./produc
 import { splitLineParts, type ToppingLookup } from "./topping-split";
 import { billRemovedItems } from "./item-deletion";
 import { calculateCampaignReport } from "./promotion-report";
-import { attributeBillsToStaff, staffMatcher } from "./promo-attribution";
+import { attributeBillsToStaff, staffMatcher, goodsBillsForStaff } from "./promo-attribution";
 import { soldItemRows, staffItemSummary } from "./staff-sales-report";
 import {
   billItemDiscount,
@@ -421,6 +421,19 @@ export function promoHubBills(
 ): HistoryOrder[] {
   const byShift = filterHubBills(bills, shiftId, "ALL");
   return staff === "ALL" ? byShift : attributeBillsToStaff(byShift, staffMatcher(staff, opts.staffAliases));
+}
+
+/** Báo cáo hàng hóa: lọc nhân viên theo NGƯỜI BẤM MÓN (chỉ món người đó bấm, tiền hóa đơn tính lại theo các món đó) */
+export const GOODS_STAFF_KINDS: ReadonlySet<ReportKind> = new Set<ReportKind>(["category", "product", "staffItems"]);
+
+export function goodsHubBills(
+  bills: HistoryOrder[],
+  shiftId = "ALL",
+  staff = "ALL",
+  opts: { staffAliases?: Iterable<string> } = {},
+): HistoryOrder[] {
+  const byShift = filterHubBills(bills, shiftId, "ALL");
+  return staff === "ALL" ? byShift : goodsBillsForStaff(byShift, staffMatcher(staff, opts.staffAliases));
 }
 
 export interface HubStaffEntry {

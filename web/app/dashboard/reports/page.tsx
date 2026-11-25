@@ -59,6 +59,8 @@ import {
   buildHubStaffEntries,
   PROMO_STAFF_KINDS,
   promoHubBills,
+  goodsHubBills,
+  GOODS_STAFF_KINDS,
   filterHubBills,
   hubStaffOptions,
   paymentLabel,
@@ -227,13 +229,19 @@ export default function ReportsHubPage() {
   );
   // Báo cáo khuyến mãi / chương trình: lọc nhân viên theo NGƯỜI BẤM MÓN được ưu đãi (không phải người thu tiền)
   const tableBills = useMemo(
-    () => (PROMO_STAFF_KINDS.has(kind) ? promoHubBills(rangeBills, shiftId, staff, staffFilterOpts) : bills),
+    () =>
+      PROMO_STAFF_KINDS.has(kind)
+        ? promoHubBills(rangeBills, shiftId, staff, staffFilterOpts)
+        : GOODS_STAFF_KINDS.has(kind)
+          ? goodsHubBills(rangeBills, shiftId, staff, staffFilterOpts)
+          : bills,
     [kind, rangeBills, shiftId, staff, staffFilterOpts, bills]
   );
-  const prevBills = useMemo(
-    () => (compare ? filterHubBills(storeBills.filter((b) => inReportRange(b, prevRange)), shiftId, staff, staffFilterOpts) : []),
-    [compare, storeBills, prevRange, shiftId, staff, staffFilterOpts]
-  );
+  const prevBills = useMemo(() => {
+    if (!compare) return [];
+    const prev = storeBills.filter((b) => inReportRange(b, prevRange));
+    return GOODS_STAFF_KINDS.has(kind) ? goodsHubBills(prev, shiftId, staff, staffFilterOpts) : filterHubBills(prev, shiftId, staff, staffFilterOpts);
+  }, [compare, storeBills, prevRange, shiftId, staff, staffFilterOpts, kind]);
 
   const shifts = useMemo(() => {
     const cutoff = businessDayStartFor(currentStoreCode);
@@ -262,7 +270,8 @@ export default function ReportsHubPage() {
     return { storeCode: currentStoreCode, storeName: s?.storeName || (currentStoreCode === "ALL" ? "Tất cả chi nhánh" : currentStoreCode) };
   }, [stores, currentStoreCode]);
 
-  const overview = useMemo(() => calculateOverviewReport(bills), [bills]);
+  // Báo cáo hàng hóa lọc nhân viên: thẻ tổng cũng chỉ tính món người đó bấm (khớp bảng)
+  const overview = useMemo(() => calculateOverviewReport(GOODS_STAFF_KINDS.has(kind) ? tableBills : bills), [kind, tableBills, bills]);
   const prevOverview = useMemo(() => (compare ? calculateOverviewReport(prevBills) : null), [compare, prevBills]);
 
   const table = useMemo(

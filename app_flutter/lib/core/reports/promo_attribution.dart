@@ -168,6 +168,30 @@ class PromoAttribution {
     return out;
   }
 
+  /// BÁO CÁO HÀNG HÓA / NHÓM HÀNG lọc theo nhân viên: mỗi hóa đơn chỉ giữ MÓN NHÂN VIÊN ĐÓ BẤM (món không ghi người
+  /// bấm → thu ngân) cùng phần khuyến mãi của họ (staffShares), và tính lại tiền hóa đơn theo đúng các món đó
+  /// (tạm tính, giảm giá, VAT theo tỷ lệ, thực thu) — cộng mọi nhân viên lại đúng bằng tổng của quán.
+  /// Bỏ hóa đơn không có món nào của nhân viên. Bản TS song song: goodsBillsForStaff (web/lib/promo-attribution.ts).
+  static List<BillModel> goodsBillsForStaff(List<BillModel> bills, bool Function(LineStaff) matches) {
+    final out = <BillModel>[];
+    for (final b in attributeBillsToStaff(bills, matches)) {
+      if (b.items.isEmpty) continue;
+      final origSub = b.subTotal;
+      final sub = b.items.fold<int>(0, (s, it) => s + it.lineGross);
+      final lineDisc = b.items.fold<int>(0, (s, it) => s + it.lineDiscountTotal);
+      final promo = b.discounts.fold<int>(0, (s, d) => s + (d.amount > 0 ? d.amount : 0));
+      final disc = (lineDisc + promo + (b.pointsDiscount > 0 ? b.pointsDiscount : 0)).clamp(0, sub);
+      final vat = origSub > 0 ? (b.vatAmount * sub / origSub).round() : 0;
+      b
+        ..subTotal = sub
+        ..totalDiscount = disc
+        ..vatAmount = vat
+        ..finalAmount = sub - disc + vat;
+      out.add(b);
+    }
+    return out;
+  }
+
   /// So khớp nhân viên theo username / tên / bí danh (giống lọc nhân viên của Trung tâm báo cáo)
   static bool Function(LineStaff) matcher(String staff, [Iterable<String>? aliases]) {
     final targets = <String>{

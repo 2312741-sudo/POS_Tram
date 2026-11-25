@@ -411,6 +411,15 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       );
     }
 
+    // Báo cáo hàng hóa (nhóm hàng, món, chi tiết món): lọc nhân viên theo NGƯỜI BẤM MÓN — chỉ giữ món người đó bấm,
+    // tiền hóa đơn tính lại theo các món đó (không lấy cả hóa đơn người đó thu tiền / có bấm 1 món).
+    if (_selectedStaff != 'ALL' && _goodsKinds.contains(_selectedKind) && cashierOnly == null) {
+      return PromoAttribution.goodsBillsForStaff(
+        ReportCalculator.filterHubBills(dateFiltered, shiftId: _selectedShiftId),
+        PromoAttribution.matcher(_selectedStaff, selectedOpt.aliases),
+      );
+    }
+
     return ReportCalculator.filterHubBills(
       dateFiltered,
       shiftId: _selectedShiftId,
@@ -418,6 +427,8 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       staffAliases: _selectedStaff == 'ALL' ? null : selectedOpt.aliases,
     );
   }
+
+  static const _goodsKinds = {ReportKind.category, ReportKind.product, ReportKind.billItems};
 
   /// Danh sách hóa đơn của kỳ hiện tại
   List<BillModel> get _currentBills => _filterBills(_allBills);

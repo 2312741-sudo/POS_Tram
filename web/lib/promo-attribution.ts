@@ -9,7 +9,8 @@
  * Bản Dart song song: app_flutter/lib/core/reports/promo_attribution.dart (test đối chiếu: docs/promo_attribution_parity.json).
  */
 import { manualLineDiscount, type PriceQuote, type PricingLine } from "./pricing-engine";
-import { extractBillItems, type HistoryOrder } from "./reports";
+import { billSubTotal, extractBillItems, itemLineDiscount, type HistoryOrder } from "./reports";
+import { lineGross, type RawOrderLine } from "./order-math";
 
 export interface StaffShare {
   /** username người bấm món ("" nếu không rõ) */
@@ -187,6 +188,41 @@ export function attributeBillsToStaff(bills: HistoryOrder[], matches: (s: LineSt
       pointsDiscount: points ? b.pointsDiscount : 0,
       pointsUsed: points ? b.pointsUsed : 0,
     });
+  }
+  return out;
+}
+
+/**
+ * BÁO CÁO HÀNG HÓA / NHÓM HÀNG lọc theo nhân viên: mỗi hóa đơn chỉ giữ MÓN NHÂN VIÊN ĐÓ BẤM (món không ghi người bấm →
+ * thu ngân) cùng phần khuyến mãi của họ, và tính lại tiền hóa đơn theo đúng các món đó (tạm tính, giảm giá, VAT theo tỷ
+ * lệ, thực thu) — cộng mọi nhân viên lại đúng bằng tổng của quán. Bỏ hóa đơn không có món nào của nhân viên.
+ * Bản Dart song song: PromoAttribution.goodsBillsForStaff.
+ */
+export function goodsBillsForStaff(bills: HistoryOrder[], matches: (s: LineStaff) => boolean): HistoryOrder[] {
+  const out: HistoryOrder[] = [];
+  const byId = new Map(bills.map((b) => [b.id, b]));
+  for (const b of attributeBillsToStaff(bills, matches)) {
+    const items = extractBillItems(b);
+    if (items.length === 0) continue;
+    const orig = byId.get(b.id);
+    const origSub = orig ? billSubTotal(orig) : 0;
+    const sub = items.reduce((s, it) => s + (it.lineGrossAmount != null ? Number(it.lineGrossAmount) || 0 : lineGross(it as unknown as RawOrderLine)), 0);
+    const lineDisc = items.reduce((s, it) => s + itemLineDiscount(it), 0);
+    const raw = b.discounts as unknown;
+    const ds = (Array.isArray(raw) ? raw : []) as { amount?: unknown }[];
+    const promo = ds.reduce((s, d) => s + Math.max(0, Number(d.amount) || 0), 0);
+    const disc = Math.min(sub, lineDisc + promo + Math.max(0, Number(b.pointsDiscount) || 0));
+    const vat = origSub > 0 ? Math.round(((Number(b.vatAmount) || 0) * sub) / origSub) : 0;
+    out.push({
+      ...b,
+      subTotal: sub,
+      itemDiscounts: lineDisc,
+      billDiscounts: undefined,
+      totalDiscount: disc,
+      afterDiscount: sub - disc,
+      vatAmount: vat,
+      finalAmount: sub - disc + vat,
+    } as HistoryOrder);
   }
   return out;
 }
