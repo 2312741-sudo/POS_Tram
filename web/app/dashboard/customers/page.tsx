@@ -4,6 +4,7 @@ import {
   Users,
   Search,
   FileSpreadsheet,
+  FileUp,
   Settings,
   Sparkles,
   Phone,
@@ -51,6 +52,7 @@ import { searchCustomers } from "@/lib/customer-search";
 import { errorMessage } from "@/lib/errors";
 import { deleteCustomer, deleteSuccessMessage, isDeleteConfirmed, DELETE_CUSTOMER_CONFIRM } from "@/lib/customer-delete-client";
 import CustomerFormDialog from "@/components/CustomerFormDialog";
+import KiotVietImportDialog from "@/components/KiotVietImportDialog";
 import PointAdjustDialog from "@/components/PointAdjustDialog";
 import LoyaltyTierDialog from "@/components/LoyaltyTierDialog";
 import ModalShell, { btnGhost, btnPrimary, errorBox } from "@/components/ModalShell";
@@ -72,6 +74,7 @@ export default function CustomersPage() {
 
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [showKvImport, setShowKvImport] = useState(false);
   const [showTierDialog, setShowTierDialog] = useState(false);
   // Cấu hình điểm TOÀN CHUỖI (loyalty_config, Chủ đặt qua callable) — ưu tiên hơn cấu hình riêng chi nhánh
   const [chainConfig, setChainConfig] = useState<ChainLoyaltyConfig>({});
@@ -538,6 +541,19 @@ export default function CustomersPage() {
             >
               <UserPlus size={15} /> Thêm khách hàng
             </button>
+            {canManageCustomers && (
+              <button
+                onClick={() => setShowKvImport(true)}
+                disabled={!canRead}
+                title="Nhập danh sách khách hàng từ file Excel xuất từ KiotViet"
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", background: "var(--bg)", color: "var(--primary)",
+                  border: "1px solid var(--border)", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer",
+                }}
+              >
+                <FileUp size={15} /> Nhập từ KiotViet
+              </button>
+            )}
             <Link
               href="/dashboard/reports/loyalty"
               style={{
@@ -984,6 +1000,23 @@ export default function CustomersPage() {
         </ModalShell>
       )}
 
+      {showKvImport && (
+        <KiotVietImportDialog
+          targetStores={
+            ["TRAM01", "TRAM02", "TRAM03", "TRAM04"].includes(currentStoreCode) || currentStoreCode === "ALL"
+              ? ["TRAM01", "TRAM02", "TRAM03", "TRAM04"]
+              : [currentStoreCode]
+          }
+          existingPhones={customers.map((c) => c.soDienThoai)}
+          canTransferPoints={canAdjust}
+          actor={actor}
+          onClose={() => setShowKvImport(false)}
+          onDone={(msg) => {
+            setShowKvImport(false);
+            flash(msg);
+          }}
+        />
+      )}
       {showCustomerForm && (
         <CustomerFormDialog
           storeCode={specificStore ? currentStoreCode : "TRAM01"}
