@@ -725,9 +725,8 @@ class _TableListScreenState extends State<TableListScreen> {
                         color: isSelected ? Colors.white : context.tc.textPrimary,
                         fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                       ),
-                      onSelected: (val) {
-                        if (val) setState(() => _selectedZone = z);
-                      },
+                      // Bấm lại khu vực đang chọn → trở về "Tất cả"
+                      onSelected: (val) => setState(() => _selectedZone = val ? z : 'Tất cả'),
                     );
                   },
                 ),
