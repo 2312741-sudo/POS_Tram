@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../manager/manager_hub_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -1582,22 +1583,6 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
             _buildReportRow('Số hóa đơn hoàn tất', '${_paidBills.length} đơn', isBold: true),
             _buildReportRow('Số khách phục vụ', '$_totalPaidGuests người'),
             _buildReportRow('Doanh thu TB / Đơn', FormatUtils.vnd(_avgRevenuePerBill), isBold: true),
-            // Nút chuyển sang Lịch sử hóa đơn (xem / in lại / hủy từng hóa đơn)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 6),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _openBillHistory,
-                  icon: const Icon(LucideIcons.receipt, size: 16),
-                  label: Text('Xem danh sách hóa đơn', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
 
@@ -2517,7 +2502,7 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   /// Giống mục "Lịch sử hóa đơn đã thanh toán" ở menu Phòng bàn.
   void _openBillHistory() {
     if (_auth.canAccessManagerHub) {
-      context.go('/manager-hub?tab=3');
+      context.go(ManagerHubScreen.location(3));
     } else {
       context.push('/history');
     }

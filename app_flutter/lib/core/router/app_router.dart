@@ -70,7 +70,7 @@ class AppRouter {
         builder: (_, state) {
           final tabStr = state.uri.queryParameters['tab'];
           final initialTab = int.tryParse(tabStr ?? '0') ?? 0;
-          return ManagerHubScreen(initialTab: initialTab);
+          return ManagerHubScreen(initialTab: initialTab, tabRequest: state.uri.queryParameters['r']);
         },
       ),
       GoRoute(path: '/tables', builder: (_, __) => const TableListScreen()),

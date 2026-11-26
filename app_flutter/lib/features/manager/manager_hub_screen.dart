@@ -22,8 +22,13 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ManagerHubScreen extends StatefulWidget {
   final int initialTab;
+  /// Mã lần yêu cầu mở tab (đổi mỗi lần điều hướng) → bấm lại cùng một lối tắt vẫn chuyển đúng tab
+  final String? tabRequest;
 
-  const ManagerHubScreen({super.key, this.initialTab = 0});
+  const ManagerHubScreen({super.key, this.initialTab = 0, this.tabRequest});
+
+  /// Đường dẫn mở màn Quản lý ở tab [tab]; luôn kèm mã mới để màn đang mở cũng chuyển tab
+  static String location(int tab) => '/manager-hub?tab=$tab&r=${DateTime.now().microsecondsSinceEpoch}';
 
   @override
   State<ManagerHubScreen> createState() => _ManagerHubScreenState();
@@ -48,7 +53,7 @@ class _ManagerHubScreenState extends State<ManagerHubScreen> {
   @override
   void didUpdateWidget(ManagerHubScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialTab != widget.initialTab) {
+    if (oldWidget.initialTab != widget.initialTab || oldWidget.tabRequest != widget.tabRequest) {
       setState(() => _currentIndex = widget.initialTab);
     }
   }

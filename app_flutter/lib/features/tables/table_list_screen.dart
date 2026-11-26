@@ -2,6 +2,7 @@
 import '../../core/utils/text_formatters.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../manager/manager_hub_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1748,7 +1749,7 @@ class _TableListScreenState extends State<TableListScreen> {
             onTap: () {
               Navigator.pop(context);
               if (_auth.canAccessManagerHub) {
-                context.go('/manager-hub?tab=3');
+                context.go(ManagerHubScreen.location(3));
               } else {
                 context.push('/history');
               }
@@ -1797,7 +1798,7 @@ class _TableListScreenState extends State<TableListScreen> {
               onTap: () {
                 Navigator.pop(context);
                 if (_auth.canAccessManagerHub) {
-                  context.go('/manager-hub?tab=4');
+                  context.go(ManagerHubScreen.location(4));
                 } else {
                   context.push('/audit-logs');
                 }
@@ -1840,7 +1841,7 @@ class _TableListScreenState extends State<TableListScreen> {
               onTap: () {
                 Navigator.pop(context);
                 if (_auth.canAccessManagerHub) {
-                  context.go('/manager-hub?tab=1');
+                  context.go(ManagerHubScreen.location(1));
                 } else {
                   context.push('/dashboard');
                 }
