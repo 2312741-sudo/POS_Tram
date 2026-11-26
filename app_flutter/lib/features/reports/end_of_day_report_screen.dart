@@ -2513,8 +2513,15 @@ class _EndOfDayReportScreenState extends State<EndOfDayReportScreen>
   }
 
   // ==================== REUSABLE CARD & ROW BUILDERS ====================
-  /// Chuyển sang Lịch sử hóa đơn (màn /history)
-  void _openBillHistory() => context.push('/history');
+  /// Chuyển sang trang Hóa đơn của màn Quản lý (tab "Hóa đơn"); tài khoản không vào được màn Quản lý → Lịch sử hóa đơn.
+  /// Giống mục "Lịch sử hóa đơn đã thanh toán" ở menu Phòng bàn.
+  void _openBillHistory() {
+    if (_auth.canAccessManagerHub) {
+      context.go('/manager-hub?tab=3');
+    } else {
+      context.push('/history');
+    }
+  }
 
   Widget _buildSectionCard({
     required String title,
